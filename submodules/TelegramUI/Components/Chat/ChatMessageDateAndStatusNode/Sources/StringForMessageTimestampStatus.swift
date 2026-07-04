@@ -210,14 +210,20 @@ public func stringForMessageTimestampStatus(accountPeerId: EnginePeer.Id, messag
     if ignoreAuthor {
         authorTitle = nil
     }
-    
+
     if case .minimal = format {
-        
+
     } else {
         if let authorTitle = authorTitle, !authorTitle.isEmpty {
             dateText = "\(authorTitle), \(dateText)"
         }
     }
-    
+
+    // AyuGram anti-delete: show a trash badge next to the timestamp for messages
+    // that were deleted by the other side but kept locally.
+    if message.attributes.contains(where: { $0 is DeletedMessageAttribute }) {
+        dateText = "🗑 \(dateText)"
+    }
+
     return dateText
 }
