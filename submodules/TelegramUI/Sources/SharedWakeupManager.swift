@@ -1147,7 +1147,15 @@ public final class SharedWakeupManager {
                     account.shouldBeServiceTaskMaster.set(.single(.never))
                 }
                 account.shouldExplicitelyKeepWorkerConnections.set(.single(tasks.backgroundAudio || tasks.backgroundLocation || tasks.importantTasks.pendingStoryCount != 0 || tasks.importantTasks.pendingMessageCount != 0))
-                account.shouldKeepOnlinePresence.set(.single(primary && self.inForeground))
+                // AyuGram: when "hide online status" is on, never advertise online
+                // presence to the server (the presence manager then reports offline).
+                let ayuBaseKeepOnline = primary && self.inForeground
+                account.shouldKeepOnlinePresence.set(
+                    ayuGramSettings(postbox: account.postbox)
+                    |> map { settings -> Bool in
+                        return ayuBaseKeepOnline && !settings.hideOnlineStatus
+                    }
+                )
                 account.shouldKeepBackgroundDownloadConnections.set(.single(tasks.backgroundDownloads))
             }
             
