@@ -50,6 +50,8 @@ extension PeerInfoScreenNode {
             self.headerNode.navigationButtonContainer.performAction?(.edit, nil, nil)
         case .proxy:
             self.controller?.push(proxySettingsController(context: self.context))
+        case .ayugram:
+            self.controller?.push(ayuGramSettingsController(context: self.context))
         case .profile:
             self.controller?.push(PeerInfoScreenImpl(
                 context: self.context,
