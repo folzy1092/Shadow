@@ -641,9 +641,18 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             isICloudEnabled: buildConfig.isICloudEnabled
         )
         
-        guard let appGroupUrl = maybeAppGroupUrl else {
-            self.mainWindow?.presentNative(UIAlertController(title: nil, message: "Error 2", preferredStyle: .alert))
-            return true
+        // AyuGram fork: sideloaded builds signed with a free Apple ID cannot
+        // provision an App Group, so the shared container is nil. Instead of
+        // bailing out (which left a black screen), fall back to a directory in
+        // the app's own sandbox. The app works standalone; extensions (share,
+        // notifications) just won't share data with it.
+        let appGroupUrl: URL
+        if let maybeAppGroupUrl = maybeAppGroupUrl {
+            appGroupUrl = maybeAppGroupUrl
+        } else {
+            let fallbackPath = NSHomeDirectory() + "/Documents/appdata"
+            let _ = try? FileManager.default.createDirectory(atPath: fallbackPath, withIntermediateDirectories: true, attributes: nil)
+            appGroupUrl = URL(fileURLWithPath: fallbackPath)
         }
         
         var isDebugConfiguration = false
