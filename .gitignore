@@ -83,3 +83,6 @@ xcode-files
 /buildbox/*
 **/node_modules/
 tools/sim-watcher/dist/
+
+# AyuGram: personal build config (contains api_hash) — do not commit
+build-system/personal-configuration.json
