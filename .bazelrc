@@ -15,6 +15,10 @@ build:macos --features=swift.debug_prefix_map
 build:macos --features=swift.enable_vfsoverlays
 build:dbg --features=swift.emit_swiftsourceinfo
 
+# AyuGram fork: ad-hoc codesign (no keychain identity required). The resulting
+# IPA is re-signed by Sideloadly with your Apple ID at install time.
+build --ios_signing_cert_name="-"
+
 # Linux-specific settings (auto-applied on Linux via --enable_platform_specific_config)
 build:linux --action_env=CC
 build:linux --action_env=CXX
