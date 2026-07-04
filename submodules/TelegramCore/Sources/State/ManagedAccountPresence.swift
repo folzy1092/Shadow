@@ -44,19 +44,21 @@ private final class AccountPresenceManagerImpl {
     
     private func updatePresence(_ isOnline: Bool) {
         let request: Signal<Api.Bool, MTRpcError>
+        self.onlineTimer?.invalidate()
+        // AyuGram: re-assert presence on a timer in BOTH directions. Upstream only
+        // re-armed the online keep-alive; we also keep re-sending "offline" so a
+        // hidden online status can never resurface between updates.
+        let timer = SignalKitTimer(timeout: 30.0, repeat: false, completion: { [weak self] in
+            guard let strongSelf = self else {
+                return
+            }
+            strongSelf.updatePresence(isOnline)
+        }, queue: self.queue)
+        self.onlineTimer = timer
+        timer.start()
         if isOnline {
-            let timer = SignalKitTimer(timeout: 30.0, repeat: false, completion: { [weak self] in
-                guard let strongSelf = self else {
-                    return
-                }
-                strongSelf.updatePresence(true)
-            }, queue: self.queue)
-            self.onlineTimer = timer
-            timer.start()
             request = self.network.request(Api.functions.account.updateStatus(offline: .boolFalse))
         } else {
-            self.onlineTimer?.invalidate()
-            self.onlineTimer = nil
             request = self.network.request(Api.functions.account.updateStatus(offline: .boolTrue))
         }
         self.isPerformingUpdate.set(true)
