@@ -19,6 +19,11 @@ build:dbg --features=swift.emit_swiftsourceinfo
 # IPA is re-signed by Sideloadly with your Apple ID at install time.
 build --ios_signing_cert_name="-"
 
+# AyuGram fork: drop app extensions. Free Apple IDs can't reliably re-sign the
+# 6 extensions in Sideloadly (App-ID quota / resign crashes), and the main app
+# doesn't need them. This makes the IPA a single app bundle.
+build --//Telegram:disableExtensions
+
 # Linux-specific settings (auto-applied on Linux via --enable_platform_specific_config)
 build:linux --action_env=CC
 build:linux --action_env=CXX
