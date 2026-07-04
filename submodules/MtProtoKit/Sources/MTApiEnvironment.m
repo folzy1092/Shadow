@@ -418,7 +418,25 @@ NSString *suffix = @"";
 
 - (void)setAppVersion:(NSString *)appVersion {
     _appVersion = appVersion;
-    
+
+    [self _updateApiInitializationHash];
+}
+
+- (void)setDeviceModel:(NSString *)deviceModel {
+    _deviceModel = deviceModel;
+
+    [self _updateApiInitializationHash];
+}
+
+- (void)setSystemVersion:(NSString *)systemVersion {
+    _systemVersion = systemVersion;
+
+    [self _updateApiInitializationHash];
+}
+
+- (void)setSystemLangCode:(NSString *)systemLangCode {
+    _systemLangCode = systemLangCode;
+
     [self _updateApiInitializationHash];
 }
 

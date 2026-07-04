@@ -54,12 +54,12 @@
 @interface MTApiEnvironment : NSObject
 
 @property (nonatomic) int32_t apiId;
-@property (nonatomic, strong, readonly) NSString * _Nullable deviceModel;
+@property (nonatomic, strong) NSString * _Nullable deviceModel;
 @property (nonatomic, strong, readonly) NSString * _Nullable deviceModelName;
 
-@property (nonatomic, strong, readonly) NSString * _Nullable systemVersion;
+@property (nonatomic, strong) NSString * _Nullable systemVersion;
 @property (nonatomic, strong) NSString * _Nullable appVersion;
-@property (nonatomic, strong, readonly) NSString * _Nullable systemLangCode;
+@property (nonatomic, strong) NSString * _Nullable systemLangCode;
 @property (nonatomic, strong) NSNumber * _Nullable layer;
 @property (nonatomic, strong, readonly) NSData * _Nullable systemCode;
     

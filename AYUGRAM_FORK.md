@@ -358,6 +358,44 @@ beyond the anchor lines named in §2, so re-anchoring is mechanical.
 
 ---
 
+## 8. Client fingerprint / "appear as Windows Desktop"
+
+Goal: make the second account's session show as **Telegram Desktop on Windows**
+to reduce freeze risk.
+
+**Honest expectation first:** `device_model` / `system_version` are cosmetic
+display strings shown in *Settings → Devices*. On their own they barely move the
+freeze odds — reporting iOS vs Windows is **~the same**. What actually matters:
+the phone number, account behavior, IP, and the **`api_id`** (a custom api_id is
+the "third-party client" signal; official Telegram Desktop is api_id `2040`).
+Changing only `device_model` while keeping an iOS-shaped `app_version` and a
+custom `api_id` produces an *inconsistent* fingerprint that can look **more**
+suspicious. So this fork spoofs the **whole** fingerprint together or not at all.
+
+**Where it's built:** `initConnection` params come from `MTApiEnvironment`
+(`submodules/MtProtoKit`), populated once at session/login creation in
+`submodules/TelegramCore/Sources/Network/Network.swift:474`.
+
+**Implemented (on `ayugram`):**
+- `MTApiEnvironment.h/.m` — made `deviceModel` / `systemVersion` / `systemLangCode`
+  writable (added setters that refresh the init hash), mirroring the existing
+  `appVersion` / `langPack` setters.
+- `AyuGramClientProfile.swift` (new) — a build-time constant holding a coherent
+  desktop profile: `deviceModel="Desktop"`, `systemVersion="Windows 10"`,
+  `appVersion="5.10.3 x64"`, `systemLangCode="en-US"`, `langPack="tdesktop"`.
+  `spoofDesktopWindows` defaults **true**; set it `false` to report genuine iOS.
+- `Network.swift` — applies the profile at construction when the flag is on.
+
+It's a **build-time** constant (not a runtime toggle) because the fingerprint is
+fixed at login and applies to every account in the build.
+
+**The real lever, deliberately left to you:** to fully blend in as official
+desktop you'd also set `api_id`/`api_hash` to the official Telegram Desktop pair
+in your build config. That is **not** hardcoded here — using another app's
+`api_id` violates Telegram's ToS and can itself be flagged. Decide that in your
+`--configurationPath` JSON. Non-technical hygiene (clean number, warm-up period,
+no mass actions) protects a second account far more than any string here.
+
 ## 7. Open follow-ups
 - Compile the branch on `debug_sim_arm64` and fix any `-warnings-as-errors`
   issues (TelegramCore treats warnings as errors).

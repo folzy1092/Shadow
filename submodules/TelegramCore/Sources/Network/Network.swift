@@ -478,7 +478,19 @@ func initializedNetwork(accountId: AccountRecordId, arguments: NetworkInitializa
             apiEnvironment.layer = NSNumber(value: Int(serialization.currentLayer()))
             apiEnvironment.disableUpdates = supplementary
             apiEnvironment = apiEnvironment.withUpdatedLangPackCode(languageCode ?? "en")
-            
+
+            // AyuGram: optional coherent "Telegram Desktop for Windows" fingerprint,
+            // applied once at session/login creation (device_model/system_version/
+            // app_version/system_lang_code/lang_pack all set together so the
+            // reported client is internally consistent). See AyuGramClientProfile.
+            if AyuGramClientProfile.spoofDesktopWindows {
+                apiEnvironment.deviceModel = AyuGramClientProfile.deviceModel
+                apiEnvironment.systemVersion = AyuGramClientProfile.systemVersion
+                apiEnvironment.appVersion = AyuGramClientProfile.appVersion
+                apiEnvironment.systemLangCode = AyuGramClientProfile.systemLangCode
+                apiEnvironment.langPack = AyuGramClientProfile.langPack
+            }
+
             if let effectiveActiveServer = proxySettings?.effectiveActiveServer {
                 apiEnvironment = apiEnvironment.withUpdatedSocksProxySettings(effectiveActiveServer.mtProxySettings)
             }
