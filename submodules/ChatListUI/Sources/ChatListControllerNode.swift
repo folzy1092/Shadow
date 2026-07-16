@@ -1139,6 +1139,9 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
     var toolbarData: Toolbar?
     var toolbarActionSelected: ((ToolbarActionOption) -> Void)?
     
+    // Shadow: floating folder-tab panel rendered above the bottom tab bar when
+    // the "folders at bottom" toggle is on.
+    private let sgFoldersView = ComponentView<Empty>()
     private var isSearchDisplayControllerActive: ChatListNavigationBar.ActiveSearch?
     private var skipSearchDisplayControllerLayout: Bool = false
     private(set) var searchDisplayController: SearchDisplayController?
@@ -1398,8 +1401,13 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
         self.searchDisplayController?.updatePresentationData(presentationData)
     }
     
-    private func updateNavigationBar(layout: ContainerViewLayout, deferScrollApplication: Bool, transition: ComponentTransition) -> (navigationHeight: CGFloat, storiesInset: CGFloat) {
+    private func updateNavigationBar(layout: ContainerViewLayout, deferScrollApplication: Bool, transition: ComponentTransition) -> (tabs: AnyComponent<Empty>?, navigationHeight: CGFloat, storiesInset: CGFloat) {
         let headerContent = self.controller?.updateHeaderContent()
+        // Shadow: when "folders at bottom" is on, the tab strip is rendered by
+        // the container layout as a floating bottom panel instead of inside the
+        // navigation bar. `outTabs` carries the built tabs component back out.
+        let sgDisplayTabsAtBottom = self.controller?.tabContainerData?.1 ?? false
+        var outTabs: AnyComponent<Empty>?
         
         var panels: [HeaderPanelContainerComponent.Panel] = []
         if let chatListNotice = self.controller?.globalControlPanelsContextState?.chatListNotice {
@@ -1640,9 +1648,10 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
                 ))
             }
                 
+            outTabs = tabs
             navigationHeaderPanels = AnyComponent(HeaderPanelContainerComponent(
                 theme: self.presentationData.theme,
-                tabs: tabs,
+                tabs: sgDisplayTabsAtBottom ? nil : tabs,
                 panels: panels
             ))
         }
@@ -1724,9 +1733,9 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
             }
             transition.setFrame(view: navigationBarComponentView, frame: CGRect(origin: CGPoint(), size: navigationBarSize))
             
-            return (navigationBarSize.height, 0.0)
+            return (outTabs, navigationBarSize.height, 0.0)
         } else {
-            return (0.0, 0.0)
+            return (nil, 0.0, 0.0)
         }
     }
     
@@ -1838,6 +1847,28 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
         insets.top += navigationBarHeight
         insets.left += layout.safeInsets.left
         insets.right += layout.safeInsets.right
+
+        // Shadow: reserve room for the floating "folders at bottom" panel so the
+        // chat list content isn't hidden underneath it. Rendered/positioned near
+        // the end of this method.
+        let sgBottomFoldersActive = (self.controller?.tabContainerData?.1 ?? false) && self.isSearchDisplayControllerActive == nil
+        let sgBottomFoldersTransition = ComponentTransition(transition)
+        var sgBottomFoldersSize = CGSize()
+        if sgBottomFoldersActive, let sgTabs = navigationBarLayout.tabs {
+            sgBottomFoldersSize = self.sgFoldersView.update(
+                transition: sgBottomFoldersTransition,
+                component: AnyComponent(HeaderPanelContainerComponent(
+                    theme: self.presentationData.theme,
+                    tabs: sgTabs,
+                    panels: []
+                )),
+                environment: {},
+                containerSize: layout.size
+            )
+            if sgBottomFoldersSize.height > 0.0 {
+                insets.bottom += sgBottomFoldersSize.height + 16.0 + 8.0
+            }
+        }
         
         if let toolbarData = self.toolbarData {
             var panelsBottomInset: CGFloat = layout.insets(options: []).bottom
@@ -1998,6 +2029,28 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
         if let navigationBarComponentView = self.navigationBarView.view as? ChatListNavigationBar.View {
             navigationBarComponentView.deferScrollApplication = false
             navigationBarComponentView.applyCurrentScroll(transition: ComponentTransition(transition))
+        }
+        
+        // Shadow: position (or fade out) the floating "folders at bottom" panel.
+        if let sgFoldersView = self.sgFoldersView.view as? HeaderPanelContainerComponent.View {
+            if sgBottomFoldersActive && sgBottomFoldersSize.height > 0.0 {
+                sgFoldersView.layer.removeAnimation(forKey: "opacity")
+                sgFoldersView.alpha = 1.0
+                if sgFoldersView.superview == nil {
+                    self.view.addSubview(sgFoldersView)
+                    if transition.isAnimated {
+                        sgFoldersView.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.23)
+                    }
+                }
+                let bottomInset: CGFloat = layout.insets(options: []).bottom
+                sgBottomFoldersTransition.setFrame(view: sgFoldersView, frame: CGRect(origin: CGPoint(x: 0.0, y: layout.size.height - bottomInset - sgBottomFoldersSize.height - 16.0), size: sgBottomFoldersSize))
+            } else if sgFoldersView.superview != nil {
+                sgFoldersView.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2, removeOnCompletion: false, completion: { [weak sgFoldersView] completed in
+                    if completed {
+                        sgFoldersView?.removeFromSuperview()
+                    }
+                })
+            }
         }
     }
     

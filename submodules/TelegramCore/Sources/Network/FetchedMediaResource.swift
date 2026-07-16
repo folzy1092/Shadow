@@ -94,13 +94,20 @@ public func fetchedMediaResource(
     }
     
     let location = MediaResourceStorageLocation(userLocation: userLocation, reference: reference)
-    
+
     var ranges = ranges
-    
+
     if let rangesValue = ranges, rangesValue.count == 1, rangesValue[0].0 == 0 ..< Int64.max {
         ranges = nil
     }
-    
+
+    // AyuGram: auto-save all incoming media (3b). This funnel is the single point
+    // every media download passes through, so we tap its completion. The hook is
+    // nil unless the fetch is for an incoming user-message media and the setting
+    // is on, so the common case adds only a cheap check. The actual link/copy is
+    // deferred to a background queue inside the hook.
+    let ayuAutoSaveHook = AyuSavedMedia.autoSaveIncomingHook(mediaBox: mediaBox, reference: reference)
+
     if let ranges = ranges {
         let signals = ranges.map { (range, priority) -> Signal<Void, FetchResourceError> in
             return mediaBox.fetchedResourceData(reference.resource, in: range, priority: priority, parameters: MediaResourceFetchParameters(
@@ -111,18 +118,30 @@ public func fetchedMediaResource(
                 isRandomAccessAllowed: isRandomAccessAllowed
             ))
         }
-        return combineLatest(signals)
+        var result: Signal<FetchResourceSourceType, FetchResourceError> = combineLatest(signals)
         |> ignoreValues
         |> map { _ -> FetchResourceSourceType in }
         |> then(.single(.local))
+        if let ayuAutoSaveHook = ayuAutoSaveHook {
+            result = result |> afterCompleted {
+                ayuAutoSaveHook()
+            }
+        }
+        return result
     } else {
-        return mediaBox.fetchedResource(reference.resource, parameters: MediaResourceFetchParameters(
+        var result = mediaBox.fetchedResource(reference.resource, parameters: MediaResourceFetchParameters(
             tag: TelegramMediaResourceFetchTag(statsCategory: statsCategory, userContentType: userContentType),
             info: TelegramCloudMediaResourceFetchInfo(reference: reference, preferBackgroundReferenceRevalidation: preferBackgroundReferenceRevalidation, continueInBackground: continueInBackground),
             location: location,
             contentType: userContentType,
             isRandomAccessAllowed: isRandomAccessAllowed
         ), implNext: reportResultStatus)
+        if let ayuAutoSaveHook = ayuAutoSaveHook {
+            result = result |> afterCompleted {
+                ayuAutoSaveHook()
+            }
+        }
+        return result
     }
 }
 

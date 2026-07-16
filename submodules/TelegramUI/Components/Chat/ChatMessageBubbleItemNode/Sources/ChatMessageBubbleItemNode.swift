@@ -1653,7 +1653,14 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         
         var allowFullWidth = false
         let chatLocationPeerId: PeerId = item.chatLocation.peerId ?? item.content.firstMessage.id.peerId
-        
+
+        // AyuGram fork: wide channel posts. Broadcast-channel messages fill the
+        // full bubble width (like inline articles) so long posts read better.
+        // Only broadcast channels — private chats and groups are untouched.
+        if ayuGramSettingsCurrent.wideChannelPosts, item.content.firstMessage.id.peerId.namespace == Namespaces.Peer.CloudChannel, let channelPeer = item.content.firstMessage.peers[item.content.firstMessage.id.peerId] as? TelegramChannel, case .broadcast = channelPeer.info {
+            allowFullWidth = true
+        }
+
         /*let isInlinePage = false
         for attribute in item.message.attributes {
             if attribute is RichTextMessageAttribute {
@@ -1982,7 +1989,15 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             }
         }
         maximumContentWidth = max(0.0, maximumContentWidth)
-        
+
+        // AyuGram fork: wide channel posts. Broadcast-channel posts already take
+        // the full-width path above; here we additionally reclaim the residual
+        // side padding so long posts sit closer to the screen edges.
+        if ayuGramSettingsCurrent.wideChannelPosts, item.content.firstMessage.id.peerId.namespace == Namespaces.Peer.CloudChannel, let channelPeer = item.content.firstMessage.peers[item.content.firstMessage.id.peerId] as? TelegramChannel, case .broadcast = channelPeer.info {
+            let wideWidth = floor(tmpWidth - layoutConstants.bubble.edgeInset - layoutConstants.bubble.contentInsets.left - avatarInset)
+            maximumContentWidth = max(maximumContentWidth, max(0.0, wideWidth))
+        }
+
         var contentPropertiesAndPrepareLayouts: [(Message, Bool, ChatMessageEntryAttributes, BubbleItemAttributes, (_ item: ChatMessageBubbleContentItem, _ layoutConstants: ChatMessageItemLayoutConstants, _ preparePosition: ChatMessageBubblePreparePosition, _ messageSelection: Bool?, _ constrainedSize: CGSize, _ avatarInset: CGFloat) -> (ChatMessageBubbleContentProperties, CGSize?, CGFloat, (CGSize, ChatMessageBubbleContentPosition) -> (CGFloat, (CGFloat) -> (CGSize, (ListViewItemUpdateAnimation, Bool, ListViewItemApply?) -> Void))))] = []
         var addedContentNodes: [(Message, Bool, ChatMessageBubbleContentNode, Int?)]?
         for contentNodeItemValue in contentNodeMessagesAndClasses {
@@ -5541,7 +5556,13 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                     case let .optionalAction(f):
                         f()
                     case let .openContextMenu(openContextMenu):
-                        if canAddMessageReactions(message: EngineMessage(openContextMenu.tapMessage)) {
+                        // AyuGram: a double-tap on a normal bubble actually lands here
+                        // (gestureRecognized returns .openContextMenu). If the option is on
+                        // and it's your own editable message, open the editor instead of
+                        // adding the quick reaction. Works in every chat type incl. secret.
+                        if case .doubleTap = gesture, ayuGramSettingsCurrent.doubleTapToEdit, !openContextMenu.tapMessage.flags.contains(.Incoming), (openContextMenu.tapMessage.id.namespace == Namespaces.Message.Cloud || openContextMenu.tapMessage.id.peerId.namespace == Namespaces.Peer.SecretChat), let requestEditMessage = item.controllerInteraction.requestEditMessage {
+                            requestEditMessage(openContextMenu.tapMessage.id)
+                        } else if canAddMessageReactions(message: EngineMessage(openContextMenu.tapMessage)) {
                             item.controllerInteraction.updateMessageReaction(openContextMenu.tapMessage, .default, false, nil)
                         } else {
                             item.controllerInteraction.openMessageContextMenu(openContextMenu.tapMessage, openContextMenu.selectAll, self, openContextMenu.subFrame, nil, nil)
@@ -5550,7 +5571,15 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 } else if case .tap = gesture {
                     item.controllerInteraction.clickThroughMessage(self.view, location)
                 } else if case .doubleTap = gesture {
-                    if canAddMessageReactions(message: EngineMessage(item.message)) {
+                    // AyuGram: double-tap on your own message opens the edit interface
+                    // (works in every chat type, including secret chats). Falls back to
+                    // the quick reaction otherwise.
+                    if ayuGramSettingsCurrent.doubleTapToEdit,
+                       !item.message.flags.contains(.Incoming),
+                       item.message.id.namespace == Namespaces.Message.Cloud || item.message.id.peerId.namespace == Namespaces.Peer.SecretChat,
+                       let requestEditMessage = item.controllerInteraction.requestEditMessage {
+                        requestEditMessage(item.message.id)
+                    } else if canAddMessageReactions(message: EngineMessage(item.message)) {
                         item.controllerInteraction.updateMessageReaction(item.message, .default, false, nil)
                     }
                 }

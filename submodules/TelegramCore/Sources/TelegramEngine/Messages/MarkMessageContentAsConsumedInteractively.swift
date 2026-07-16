@@ -3,9 +3,19 @@ import Postbox
 import TelegramApi
 import SwiftSignalKit
 
-func _internal_markMessageContentAsConsumedInteractively(postbox: Postbox, messageId: MessageId) -> Signal<Void, NoError> {
+func _internal_markMessageContentAsConsumedInteractively(postbox: Postbox, messageId: MessageId, force: Bool = false) -> Signal<Void, NoError> {
     return postbox.transaction { transaction -> Void in
         if let message = transaction.getMessage(messageId), message.flags.contains(.Incoming) {
+            // AyuGram: keep opened self-destruct / view-once media in the chat.
+            // For cloud chats, opening such media normally reports the view to the
+            // server (starting the expiry countdown and notifying the sender). When
+            // enabled, we skip consuming entirely so the media stays viewable and the
+            // sender is never told it was opened. Secret chats are left untouched —
+            // their self-destruct is enforced by the protocol itself. `force` is set
+            // by the manual "Burn" action, which deliberately reports the view.
+            if !force, message.id.peerId.namespace != Namespaces.Peer.SecretChat, message.containsSecretMedia, currentAyuGramSettings(transaction: transaction).keepSelfDestructMedia {
+                return
+            }
             var updateMessage = false
             var updatedAttributes = message.attributes
             
@@ -38,7 +48,15 @@ func _internal_markMessageContentAsConsumedInteractively(postbox: Postbox, messa
                                 }
                             }
                         } else {
-                            addSynchronizeConsumeMessageContentsOperation(transaction: transaction, messageIds: [message.id])
+                            // AyuGram: silent listening / watching. When Ghost Mode is on,
+                            // the voice / round-video message is still marked consumed
+                            // locally (done just above, so it never shows as "unplayed" on
+                            // our side), but we skip the server sync — so the sender is
+                            // never told we listened / watched. Cloud chats only; secret
+                            // chats are protocol-enforced in the branch above.
+                            if !currentAyuGramSettings(transaction: transaction).effectiveHideConsumed {
+                                addSynchronizeConsumeMessageContentsOperation(transaction: transaction, messageIds: [message.id])
+                            }
                         }
                     }
                 } else if let attribute = updatedAttributes[i] as? ConsumablePersonalMentionMessageAttribute, !attribute.consumed {
@@ -173,13 +191,25 @@ func _internal_markReactionsOrPollVotesAsSeenInteractively(postbox: Postbox, mes
     }
 }
 
-func markMessageContentAsConsumedRemotely(transaction: Transaction, messageId: MessageId, consumeDate: Int32?) {
+func markMessageContentAsConsumedRemotely(transaction: Transaction, mediaBox: MediaBox? = nil, messageId: MessageId, consumeDate: Int32?) {
     if let message = transaction.getMessage(messageId) {
         var updateMessage = false
         var updatedAttributes = message.attributes
         var updatedMedia = message.media
         var updatedTags = message.tags
-        
+        // AyuGram: when keeping self-destruct media, never begin the expiry
+        // countdown or swap cloud media for the "expired" placeholder, even if the
+        // server or another device reports it as consumed.
+        let ayuKeepSelfDestructMedia = message.id.peerId.namespace != Namespaces.Peer.SecretChat && currentAyuGramSettings(transaction: transaction).keepSelfDestructMedia
+
+        // AyuGram: back up the media into the private gallery before it is (possibly)
+        // swapped for the "expired" placeholder further down. Runs even when the
+        // message is already marked for deletion; a no-op if the resource isn't
+        // downloaded or was already saved.
+        if let mediaBox = mediaBox, message.containsSecretMedia, currentAyuGramSettings(transaction: transaction).saveDestructingMedia {
+            AyuSavedMedia.saveMessageMedia(mediaBox: mediaBox, message: message)
+        }
+
         for i in 0 ..< updatedAttributes.count {
             if let attribute = updatedAttributes[i] as? ConsumableContentMessageAttribute {
                 if !attribute.consumed {
@@ -200,11 +230,14 @@ func markMessageContentAsConsumedRemotely(transaction: Transaction, messageId: M
         let countdownBeginTime = consumeDate ?? timestamp
         
         for i in 0 ..< updatedAttributes.count {
+            if ayuKeepSelfDestructMedia && ((updatedAttributes[i] is AutoremoveTimeoutMessageAttribute) || (updatedAttributes[i] is AutoclearTimeoutMessageAttribute)) {
+                continue
+            }
             if let attribute = updatedAttributes[i] as? AutoremoveTimeoutMessageAttribute {
                 if (attribute.countdownBeginTime == nil || attribute.countdownBeginTime == 0) && message.containsSecretMedia {
                     updatedAttributes[i] = AutoremoveTimeoutMessageAttribute(timeout: attribute.timeout, countdownBeginTime: countdownBeginTime)
                     updateMessage = true
-                                 
+
                     if message.id.peerId.namespace == Namespaces.Peer.SecretChat {
                     } else {
                         if attribute.timeout == viewOnceTimeout || timestamp >= countdownBeginTime + attribute.timeout {

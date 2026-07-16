@@ -3934,12 +3934,17 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         self.filterDisposable.set((combineLatest(queue: .mainQueue(),
             filterItems,
             self.context.account.postbox.peerView(id: self.context.account.peerId),
-            self.context.engine.data.get(TelegramEngine.EngineData.Item.Configuration.UserLimits(isPremium: false))
+            self.context.engine.data.get(TelegramEngine.EngineData.Item.Configuration.UserLimits(isPremium: false)),
+            ayuGramSettings(postbox: self.context.account.postbox)
         )
-        |> deliverOnMainQueue).startStrict(next: { [weak self] countAndFilterItems, peerView, limits in
+        |> deliverOnMainQueue).startStrict(next: { [weak self] countAndFilterItems, peerView, limits, ayuGramSettingsValue in
             guard let strongSelf = self else {
                 return
             }
+            // AyuGram: read the persisted setting from the signal (not the async
+            // global snapshot) so the tab list rebuilds the moment it changes and is
+            // correct on first launch.
+            let ayuHideAllChats = ayuGramSettingsValue.hideAllChatsFolder
             
             let isPremium = peerView.peers[peerView.peerId]?.isPremium
             strongSelf.isPremium = isPremium ?? false
@@ -3965,7 +3970,23 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
             } else {
                 resolvedItems = []
             }
-            
+            // AyuGram: hide the "All Chats" tab from the strip when requested. We only
+            // remove it from the visible tabs — the pager's availableFilters (below)
+            // still keeps its all-chats pane, so nothing downstream breaks. Keep it if
+            // it would be the sole tab, so the strip never ends up empty.
+            if ayuHideAllChats {
+                let withoutAllChats = resolvedItems.filter { entry in
+                    if case .all = entry {
+                        return false
+                    } else {
+                        return true
+                    }
+                }
+                if !withoutAllChats.isEmpty {
+                    resolvedItems = withoutAllChats
+                }
+            }
+
             let firstItem = countAndFilterItems.1.first?.0 ?? .allChats
             let firstItemEntryId: ChatListFilterTabEntryId
             switch firstItem {
@@ -3977,6 +3998,13 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
             
             var selectedEntryId = !strongSelf.initializedFilters ? firstItemEntryId : strongSelf.chatListDisplayNode.mainContainerNode.currentItemFilter
             var resetCurrentEntry = false
+            // AyuGram: if the selected tab is the now-hidden All Chats (or otherwise no
+            // longer visible), redirect to the first visible tab before the general
+            // fallback runs — this also avoids that fallback's fragile index math.
+            if ayuHideAllChats, let firstVisible = resolvedItems.first, !resolvedItems.contains(where: { $0.id == selectedEntryId }) {
+                selectedEntryId = firstVisible.id
+                resetCurrentEntry = true
+            }
             if !resolvedItems.contains(where: { $0.id == selectedEntryId }) {
                 resetCurrentEntry = true
                 if let tabContainerData = strongSelf.tabContainerData {
@@ -3998,7 +4026,8 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                 }
             }
             let filtersLimit = isPremium == false ? limits.maxFoldersCount : nil
-            strongSelf.tabContainerData = (resolvedItems, false, filtersLimit)
+            // Shadow: 2nd tuple element = display folder tabs at the bottom.
+            strongSelf.tabContainerData = (resolvedItems, ayuGramSettingsValue.foldersAtBottom, filtersLimit)
             var availableFilters: [ChatListContainerNodeFilter] = []
             var hasAllChats = false
             for item in items {
@@ -6714,11 +6743,18 @@ private final class ChatListLocationContext {
     var rightButton: AnyComponentWithIdentity<NavigationButtonComponentEnvironment>?
     var proxyButton: AnyComponentWithIdentity<NavigationButtonComponentEnvironment>?
     var storyButton: AnyComponentWithIdentity<NavigationButtonComponentEnvironment>?
-    
+    // AyuGram: Ghost Mode master toggle, shown on the root chat list navbar.
+    var ghostButton: AnyComponentWithIdentity<NavigationButtonComponentEnvironment>?
+
     var rightButtons: [AnyComponentWithIdentity<NavigationButtonComponentEnvironment>] {
         var result: [AnyComponentWithIdentity<NavigationButtonComponentEnvironment>] = []
         if let rightButton = self.rightButton {
             result.append(rightButton)
+        }
+        // AyuGram: place the Ghost toggle right after the primary right button
+        // (compose/edit) so it sits next to the standard controls.
+        if let ghostButton = self.ghostButton {
+            result.append(ghostButton)
         }
         if let storyButton = self.storyButton {
             result.append(storyButton)
@@ -6830,6 +6866,11 @@ private final class ChatListLocationContext {
         switch location {
         case .chatList:
             if !hideNetworkActivityStatus {
+                // AyuGram: track Ghost Mode so the navbar toggle reflects (and can
+                // flip) the master flag reactively.
+                let ghostModeSignal = ayuGramSettings(postbox: context.account.postbox)
+                |> map { $0.ghostMode }
+                |> distinctUntilChanged
                 self.titleDisposable = combineLatest(queue: .mainQueue(),
                     networkState,
                     hasProxy,
@@ -6838,12 +6879,13 @@ private final class ChatListLocationContext {
                     isReorderingTabs,
                     peerStatus,
                     parentController.updatedPresentationData.1,
-                    storyPostingAvailable
-                ).startStrict(next: { [weak self] networkState, proxy, passcode, stateAndFilterId, isReorderingTabs, peerStatus, presentationData, storyPostingAvailable in
+                    storyPostingAvailable,
+                    ghostModeSignal
+                ).startStrict(next: { [weak self] networkState, proxy, passcode, stateAndFilterId, isReorderingTabs, peerStatus, presentationData, storyPostingAvailable, ghostMode in
                     guard let self else {
                         return
                     }
-                    
+
                     self.updateChatList(
                         networkState: networkState,
                         proxy: proxy,
@@ -6852,7 +6894,8 @@ private final class ChatListLocationContext {
                         isReorderingTabs: isReorderingTabs,
                         peerStatus: peerStatus,
                         presentationData: presentationData,
-                        storyPostingAvailable: storyPostingAvailable
+                        storyPostingAvailable: storyPostingAvailable,
+                        ghostMode: ghostMode
                     )
                 })
             } else {
@@ -7079,7 +7122,8 @@ private final class ChatListLocationContext {
         isReorderingTabs: Bool,
         peerStatus: NetworkStatusTitle.Status?,
         presentationData: PresentationData,
-        storyPostingAvailable: Bool
+        storyPostingAvailable: Bool,
+        ghostMode: Bool = false
     ) {
         let defaultTitle: String
         switch location {
@@ -7103,6 +7147,7 @@ private final class ChatListLocationContext {
                 self.rightButton = nil
                 self.storyButton = nil
                 self.proxyButton = nil
+                self.ghostButton = nil
             }
             let title = !stateAndFilterId.state.selectedPeerIds.isEmpty ? presentationData.strings.ChatList_SelectedChats(Int32(stateAndFilterId.state.selectedPeerIds.count)) : defaultTitle
             
@@ -7119,6 +7164,7 @@ private final class ChatListLocationContext {
                 self.rightButton = nil
                 self.storyButton = nil
                 self.proxyButton = nil
+                self.ghostButton = nil
             }
             self.leftButton = AnyComponentWithIdentity(id: "done", component: AnyComponent(NavigationButtonComponent(
                 content: .text(title: presentationData.strings.Common_Done, isBold: true),
@@ -7197,7 +7243,7 @@ private final class ChatListLocationContext {
                             guard let self, let parentController = self.parentController else {
                                 return
                             }
-                            
+
                             if let componentView = parentController.chatListHeaderView(), let storyPeerListView = componentView.storyPeerListView(), storyPeerListView.isLiveStreaming {
                                 parentController.displayContinueLiveStream()
                             } else {
@@ -7208,6 +7254,22 @@ private final class ChatListLocationContext {
                 } else {
                     self.storyButton = nil
                 }
+
+                // AyuGram: Ghost Mode master toggle. The icon reflects the current
+                // state (checkmark when active) and tapping it flips ghostMode for
+                // the active account. The distinct identity forces the header to
+                // re-render the icon when the state changes.
+                let ghostContext = self.context
+                self.ghostButton = AnyComponentWithIdentity(id: ghostMode ? "ghost_on" : "ghost_off", component: AnyComponent(NavigationButtonComponent(
+                    content: .icon(imageName: ghostMode ? "Chat List/GhostActiveIcon" : "Chat List/GhostIcon"),
+                    pressed: { _ in
+                        let _ = updateAyuGramSettings(postbox: ghostContext.account.postbox, { settings in
+                            var settings = settings
+                            settings.ghostMode = !settings.ghostMode
+                            return settings
+                        }).startStandalone()
+                    }
+                )))
             } else {
                 let parentController = self.parentController
                 self.rightButton = AnyComponentWithIdentity(id: "more", component: AnyComponent(NavigationButtonComponent(

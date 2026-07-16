@@ -11,13 +11,21 @@ private final class AccountPresenceManagerImpl {
     private let queue: Queue
     private let network: Network
     let isPerformingUpdate = ValuePromise<Bool>(false, ignoreRepeated: true)
-    
+
     private var shouldKeepOnlinePresenceDisposable: Disposable?
+    // Shadow fork: subscription to the "re-assert offline now" trigger fired
+    // right after a send while "send without appearing online" is on.
+    private var offlineReassertDisposable: Disposable?
     private let currentRequestDisposable = MetaDisposable()
     private var onlineTimer: SignalKitTimer?
     
-    private var wasOnline: Bool = false
-    
+    // AyuGram: start as "unknown" (nil) so the very first value — including a
+    // `false` when online is hidden from launch — actually triggers updatePresence
+    // and arms the re-assert timer. Previously an initial `false == false` was
+    // skipped, so the aggressive "stay offline" never started for a boot-hidden
+    // account and reading a chat could leave you online.
+    private var wasOnline: Bool? = nil
+
     init(queue: Queue, shouldKeepOnlinePresence: Signal<Bool, NoError>, network: Network) {
         self.queue = queue
         self.network = network
@@ -33,11 +41,26 @@ private final class AccountPresenceManagerImpl {
                 self.updatePresence(value)
             }
         })
+
+        // Shadow fork: when a send fires the offline re-assert trigger, and we
+        // are currently meant to be hidden/offline, re-send "offline" right away
+        // (bypassing the 30s timer and the same-value `wasOnline` guard) so the
+        // brief server-side online blip from the send RPC is cleared immediately.
+        self.offlineReassertDisposable = (ayuOfflineReassertPipe.signal()
+        |> deliverOn(self.queue)).start(next: { [weak self] in
+            guard let self else {
+                return
+            }
+            if self.wasOnline != true {
+                self.updatePresence(false)
+            }
+        })
     }
-    
+
     deinit {
         assert(self.queue.isCurrent())
         self.shouldKeepOnlinePresenceDisposable?.dispose()
+        self.offlineReassertDisposable?.dispose()
         self.currentRequestDisposable.dispose()
         self.onlineTimer?.invalidate()
     }
@@ -47,8 +70,12 @@ private final class AccountPresenceManagerImpl {
         self.onlineTimer?.invalidate()
         // AyuGram: re-assert presence on a timer in BOTH directions. Upstream only
         // re-armed the online keep-alive; we also keep re-sending "offline" so a
-        // hidden online status can never resurface between updates.
-        let timer = SignalKitTimer(timeout: 30.0, repeat: false, completion: { [weak self] in
+        // hidden online status can never resurface between updates. Under Ghost
+        // Mode, shorten the period so this timer acts as a backstop in case the
+        // event-driven reassert (ayuReassertOfflineAfterSendIfNeeded, fired from
+        // PendingMessageManager right after a send RPC completes) is ever missed.
+        let timerPeriod: Double = ayuGramSettingsCurrent.ghostMode ? 5.0 : 30.0
+        let timer = SignalKitTimer(timeout: timerPeriod, repeat: false, completion: { [weak self] in
             guard let strongSelf = self else {
                 return
             }

@@ -1498,7 +1498,14 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                         }
                     } |> mapToSignal { otherAccountName -> Signal<[ApplicationShortcutItem], NoError> in
                         let presentationData = context.context.sharedContext.currentPresentationData.with { $0 }
-                        return .single(applicationShortcutItems(strings: presentationData.strings, otherAccountName: otherAccountName))
+                        // AyuGram: keep the Ghost Mode quick action's subtitle live so
+                        // it always shows the current On/Off state.
+                        return ayuGramSettings(postbox: context.context.account.postbox)
+                        |> map { $0.ghostMode }
+                        |> distinctUntilChanged
+                        |> map { ghostModeEnabled -> [ApplicationShortcutItem] in
+                            return applicationShortcutItems(strings: presentationData.strings, otherAccountName: otherAccountName, ghostModeEnabled: ghostModeEnabled)
+                        }
                     }
                 } else {
                     return .single([])
@@ -2725,7 +2732,8 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         |> take(1)
         |> deliverOnMainQueue).start(next: { sharedContext in
             let type = ApplicationShortcutItemType(rawValue: shortcutItem.type)
-            let immediately = type == .account
+            // AyuGram: Ghost Mode toggle should work even while the app is locked.
+            let immediately = type == .account || type == .ghost
             let proceed: () -> Void = {
                 let _ = (self.context.get()
                 |> take(1)
@@ -2745,6 +2753,15 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                                     context.switchAccount()
                                 case .appIcon:
                                     context.openAppIcon()
+                                case .ghost:
+                                    // AyuGram: flip the Ghost Master flag for the
+                                    // active account. Fire-and-forget; the navbar
+                                    // toggle and settings screen reflect the change.
+                                    let _ = updateAyuGramSettings(postbox: context.context.account.postbox, { settings in
+                                        var settings = settings
+                                        settings.ghostMode = !settings.ghostMode
+                                        return settings
+                                    }).startStandalone()
                             }
                         }
                     }

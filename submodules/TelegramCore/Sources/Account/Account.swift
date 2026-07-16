@@ -1422,7 +1422,16 @@ public class Account {
         self.managedOperationsDisposable.add(managedSynchronizeViewStoriesOperations(postbox: self.postbox, network: self.network, stateManager: self.stateManager).start())
         self.managedOperationsDisposable.add(managedSynchronizePeerStoriesOperations(postbox: self.postbox, network: self.network, stateManager: self.stateManager).start())
         self.managedOperationsDisposable.add(managedLocalTypingActivities(activities: self.localInputActivityManager.allActivities(), postbox: self.stateManager.postbox, network: self.stateManager.network, accountPeerId: self.stateManager.accountPeerId).start())
-        
+        // AyuGram: keep the process-wide settings snapshot in sync with the
+        // persisted preferences so UI-render-path features can read it synchronously.
+        self.managedOperationsDisposable.add(keepAyuGramSettingsUpdated(postbox: self.postbox).start())
+        // AyuGram: periodically auto-clean the private saved-media gallery
+        // (respects the configured interval and the pinned-chat whitelist).
+        self.managedOperationsDisposable.add(managedAyuMediaAutoClean(postbox: self.postbox).start())
+        // AyuGram: fetch the remote badge config (cache-first, background refresh).
+        // Fire-and-forget; failures never affect the UI.
+        startGitConfigIfNeeded()
+
         let extractedExpr1: [Signal<AccountRunningImportantTasks, NoError>] = [
             managedSynchronizeChatInputStateOperations(postbox: self.postbox, network: self.network) |> map { inputStates in
                 return AccountRunningImportantTasks(

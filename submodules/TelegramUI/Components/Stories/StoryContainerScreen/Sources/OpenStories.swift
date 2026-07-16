@@ -4,6 +4,7 @@ import Display
 import AccountContext
 import SwiftSignalKit
 import TelegramCore
+import TelegramPresentationData
 import AvatarNode
 
 public extension StoryContainerScreen {
@@ -172,6 +173,87 @@ public extension StoryContainerScreen {
         setFocusedItem: @escaping (Signal<EngineStoryId?, NoError>) -> Void,
         setProgress: @escaping (Signal<Never, NoError>) -> Void,
         completion: @escaping (StoryContainerScreen) -> Void = { _ in }
+    ) {
+        // AyuGram: optionally confirm before viewing someone else's story if
+        // view-hiding is currently off, offering to turn it on first. Never
+        // asked for the user's own stories, and never asked at all once
+        // hideStoryViews is already on. Gated by Ghost Mode via
+        // effectiveAskBeforeStoryView/effectiveHideStoryViews — with the master
+        // switch off, this prompt never appears regardless of the raw toggles.
+        let ayuSettings = ayuGramSettingsCurrent
+        if ayuSettings.effectiveAskBeforeStoryView, !ayuSettings.effectiveHideStoryViews, peerId != context.account.peerId {
+            let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+            let proceed = { [weak parentController] in
+                guard let parentController else {
+                    return
+                }
+                openPeerStoriesCustomProceed(
+                    context: context,
+                    peerId: peerId,
+                    focusOnId: focusOnId,
+                    isHidden: isHidden,
+                    initialOrder: initialOrder,
+                    singlePeer: singlePeer,
+                    parentController: parentController,
+                    transitionIn: transitionIn,
+                    transitionOut: transitionOut,
+                    setFocusedItem: setFocusedItem,
+                    setProgress: setProgress,
+                    completion: completion
+                )
+            }
+            let alertController = standardTextAlertController(
+                theme: AlertControllerTheme(presentationData: presentationData),
+                title: nil,
+                text: "Вы собираетесь просмотреть историю.\n\nСкрыть просмотр истории?",
+                actions: [
+                    TextAlertAction(type: .genericAction, title: "Нет", action: {
+                        proceed()
+                    }),
+                    TextAlertAction(type: .defaultAction, title: "Да, скрыть", action: {
+                        let _ = updateAyuGramSettings(postbox: context.account.postbox, { settings in
+                            var settings = settings
+                            settings.hideStoryViews = true
+                            return settings
+                        }).start(completed: {
+                            proceed()
+                        })
+                    })
+                ]
+            )
+            parentController.present(alertController, in: .window(.root))
+            return
+        }
+
+        openPeerStoriesCustomProceed(
+            context: context,
+            peerId: peerId,
+            focusOnId: focusOnId,
+            isHidden: isHidden,
+            initialOrder: initialOrder,
+            singlePeer: singlePeer,
+            parentController: parentController,
+            transitionIn: transitionIn,
+            transitionOut: transitionOut,
+            setFocusedItem: setFocusedItem,
+            setProgress: setProgress,
+            completion: completion
+        )
+    }
+
+    private static func openPeerStoriesCustomProceed(
+        context: AccountContext,
+        peerId: EnginePeer.Id,
+        focusOnId: Int32?,
+        isHidden: Bool,
+        initialOrder: [EnginePeer.Id],
+        singlePeer: Bool,
+        parentController: ViewController,
+        transitionIn: @escaping () -> StoryContainerScreen.TransitionIn?,
+        transitionOut: @escaping (EnginePeer.Id) -> StoryContainerScreen.TransitionOut?,
+        setFocusedItem: @escaping (Signal<EngineStoryId?, NoError>) -> Void,
+        setProgress: @escaping (Signal<Never, NoError>) -> Void,
+        completion: @escaping (StoryContainerScreen) -> Void
     ) {
         let storyContent = StoryContentContextImpl(context: context, isHidden: isHidden, focusedPeerId: peerId, focusedStoryId: focusOnId, singlePeer: singlePeer, fixedOrder: initialOrder)
         let signal = storyContent.state

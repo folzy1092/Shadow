@@ -337,6 +337,19 @@ private final class CameraContext {
                 self.additionalDeviceContext = CameraDeviceContext(session: self.session, exclusive: false, additional: true, ciContext: self.ciContext, colorSpace: self.colorSpace, isRoundVideo: self.initialConfiguration.isRoundVideo)
                 self.additionalDeviceContext?.configure(position: .front, previewView: self.secondaryPreviewView, audio: false, photo: true, metadata: false)
             }
+            // AyuGram fork: dual camera always physically binds mainDeviceContext to
+            // the back device and additionalDeviceContext to the front one (see the
+            // two `.configure(position:...)` calls above) — that's independent of
+            // which one the caller actually asked to start on. The output
+            // compositor (CameraOutput.currentPosition, used by
+            // processVideoRecording for round video) defaults to `.front` and is
+            // otherwise only ever updated by a live togglePosition(), so a session
+            // that starts on `.back` (e.g. roundVideoUseBackCamera) recorded from
+            // the front camera into the saved file despite the live preview
+            // correctly showing the back camera. Sync it to the actually requested
+            // initial position here, matching what togglePosition() already does
+            // on every manual flip.
+            self.mainDeviceContext?.output.markPositionChange(position: self.positionValue)
             self.mainDeviceContext?.output.processSampleBuffer = { [weak self] sampleBuffer, pixelBuffer, connection in
                 guard let self, let mainDeviceContext = self.mainDeviceContext else {
                     return

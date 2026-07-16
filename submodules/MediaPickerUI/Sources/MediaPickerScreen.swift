@@ -709,10 +709,23 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                     break
                 }
             }
-            
+            // Shadow fork (Swiftgram parity: disableGalleryCamera): let the user
+            // turn off the in-grid camera tile entirely from Кастомизация. Gates
+            // both the legacy grid tile and the modern sticker/avatar camera, same
+            // as Swiftgram gates both call sites on the same flag.
+            if !ayuGramSettingsCurrent.showCameraTile {
+                useLegacyCamera = false
+                useModernCamera = false
+            }
+
             if useLegacyCamera {
-                let enableAnimations = self.controller?.context.sharedContext.energyUsageSettings.fullTranslucency ?? true
-  
+                // Shadow fork (Swiftgram parity: disableGalleryCameraPreview).
+                // Matches Swiftgram exactly: live preview only starts when energy
+                // saving mode is off AND the user's preview toggle is on — stock
+                // Telegram's own energy-saving gate still applies, we don't override
+                // it.
+                let enableAnimations = (controller.context.sharedContext.energyUsageSettings.fullTranslucency) && ayuGramSettingsCurrent.cameraTileLivePreview
+
                 let cameraView = TGAttachmentCameraView(forSelfPortrait: false, videoModeByDefault: controller.bannedSendPhotos != nil && controller.bannedSendVideos == nil)!
                 cameraView.clipsToBounds = true
                 cameraView.removeCorners()
@@ -720,18 +733,18 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                     if let strongSelf = self, !strongSelf.openingMedia {
                         strongSelf.dismissInput()
                         strongSelf.controller?.openCamera?(strongSelf.cameraView)
-                        
+
                         if !enableAnimations {
                             cameraView?.startPreview()
                         }
                     }
                 }
                 self.cameraView = cameraView
-                
+
                 if enableAnimations {
                     cameraView.startPreview()
                 }
-                
+
                 self.gridNode.scrollView.addSubview(cameraView)
                 self.gridNode.addSubnode(self.cameraActivateAreaNode)
             } else if useModernCamera, !Camera.isIpad {
@@ -899,14 +912,20 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
             let isCameraActive = !self.isSuspended && !self.hasGallery && self.isCameraPreviewVisible
             if let cameraView = self.cameraView {
                 if isCameraActive {
-                    cameraView.resumePreview()
+                    // Shadow fork (Swiftgram parity): don't resume a live feed the
+                    // user has explicitly turned off — leave it paused/static.
+                    if ayuGramSettingsCurrent.cameraTileLivePreview {
+                        cameraView.resumePreview()
+                    }
                 } else {
                     cameraView.pausePreview()
                 }
             } else if let camera = self.modernCamera, let cameraView = self.modernCameraView {
                 if isCameraActive {
-                    cameraView.isEnabled = true
-                    camera.startCapture()
+                    if ayuGramSettingsCurrent.cameraTileLivePreview {
+                        cameraView.isEnabled = true
+                        camera.startCapture()
+                    }
                 } else {
                     cameraView.isEnabled = false
                     camera.stopCapture()

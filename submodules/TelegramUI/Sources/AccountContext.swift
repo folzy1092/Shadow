@@ -820,10 +820,33 @@ public final class AccountContextImpl: AccountContext {
     }
     
     public func requestCall(peerId: PeerId, isVideo: Bool, completion: @escaping () -> Void) {
+        // Shadow fork (adapted from Swiftgram's AccountContext.swift
+        // requestCall): the whole existing body becomes `makeCall`, only run
+        // directly when confirmation is off, otherwise gated behind an alert.
+        // Never touches incoming calls — this function is only ever reached from
+        // an outgoing call request.
+        let makeCall = { [weak self] in
+            self?.requestCallUnconfirmed(peerId: peerId, isVideo: isVideo, completion: completion)
+        }
+        if ayuGramSettingsCurrent.confirmCalls {
+            let presentationData = self.sharedContext.currentPresentationData.with { $0 }
+            let text = isVideo ? "Начать видеозвонок?" : "Позвонить пользователю?"
+            self.sharedContext.mainWindow?.present(textAlertController(context: self, title: nil, text: text, actions: [
+                TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_Cancel, action: {}),
+                TextAlertAction(type: .genericAction, title: "Позвонить", action: {
+                    makeCall()
+                })
+            ]), on: .root)
+        } else {
+            makeCall()
+        }
+    }
+
+    private func requestCallUnconfirmed(peerId: PeerId, isVideo: Bool, completion: @escaping () -> Void) {
         guard let callResult = self.sharedContext.callManager?.requestCall(context: self, peerId: peerId, isVideo: isVideo, endCurrentIfAny: false) else {
             return
         }
-        
+
         if case let .alreadyInProgress(currentCallType) = callResult {
             if case let .peer(currentPeerId) = currentCallType, currentPeerId == peerId {
                 completion()

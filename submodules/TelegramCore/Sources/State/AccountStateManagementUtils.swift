@@ -4465,6 +4465,10 @@ func replayFinalState(
                 // AyuGram anti-delete: keep the local copy (and its media) that the
                 // server told us to remove. Media survives because the message keeps
                 // referencing it, so it is not garbage-collected.
+                // Anti-delete is peer-type agnostic: deleted messages, media and
+                // files from BOTS are always kept too. The "Исключить ботов"
+                // toggle only protects saved-gallery media from auto-cleanup
+                // (see managedAyuMediaAutoClean) and never gates this save path.
                 if !currentAyuGramSettings(transaction: transaction).keepDeletedMessages {
                     var resourceIds: [MediaResourceId] = []
                     transaction.deleteMessagesWithGlobalIds(ids, forEachMedia: { media in
@@ -4517,6 +4521,7 @@ func replayFinalState(
                 }
             case let .EditMessage(id, message):
                 var generatedEvent: (reactionAuthor: Peer, reaction: MessageReaction.Reaction, message: Message, timestamp: Int32)?
+                var ayuDidCaptureEditHistory = false
                 transaction.updateMessage(id, update: { previousMessage in
                     var updatedFlags = message.flags
                     var updatedLocalTags = message.localTags
@@ -4561,9 +4566,24 @@ func replayFinalState(
                     if let previousPaidContent = previousMessage.media.first(where: { $0 is TelegramMediaPaidContent }) as? TelegramMediaPaidContent, case .full = previousPaidContent.extendedMedia.first {
                         updatedMedia = previousMessage.media
                     }
-                    
+
+                    // AyuGram: capture edit history (text/caption + previous media).
+                    // All logic lives in ayuBuildEditHistoryVersions to keep this
+                    // touch point minimal; it returns nil when nothing is worth saving.
+                    if let ayuVersions = ayuBuildEditHistoryVersions(mediaBox: mediaBox, previousMessage: previousMessage, newText: message.text, newMedia: message.media) {
+                        updatedAttributes.removeAll(where: { $0 is SavedMessageEditsAttribute })
+                        updatedAttributes.append(SavedMessageEditsAttribute(versions: ayuVersions))
+                        ayuDidCaptureEditHistory = true
+                    }
+
                     return .update(message.withUpdatedLocalTags(updatedLocalTags).withUpdatedFlags(updatedFlags).withUpdatedAttributes(updatedAttributes).withUpdatedMedia(updatedMedia))
                 })
+                // AyuGram: index this message (outside the update closure to avoid
+                // reentrant preference writes) so the fork-storage screen can count
+                // and clear stored edit history without a full scan.
+                if ayuDidCaptureEditHistory {
+                    ayuForkStoreRecordEditHistory(transaction: transaction, id: id)
+                }
                 if let generatedEvent = generatedEvent {
                     addedReactionEvents.append(generatedEvent)
                 }
@@ -5107,11 +5127,11 @@ func replayFinalState(
 
                 if let peerId = peerId {
                     for id in messageIds {
-                        markMessageContentAsConsumedRemotely(transaction: transaction, messageId: MessageId(peerId: peerId, namespace: Namespaces.Message.Cloud, id: id), consumeDate: date)
+                        markMessageContentAsConsumedRemotely(transaction: transaction, mediaBox: mediaBox, messageId: MessageId(peerId: peerId, namespace: Namespaces.Message.Cloud, id: id), consumeDate: date)
                     }
                 } else {
                     for messageId in transaction.messageIdsForGlobalIds(messageIds) {
-                        markMessageContentAsConsumedRemotely(transaction: transaction, messageId: messageId, consumeDate: date)
+                        markMessageContentAsConsumedRemotely(transaction: transaction, mediaBox: mediaBox, messageId: messageId, consumeDate: date)
                     }
                 }
             case let .UpdateMessageImpressionCount(id, count):

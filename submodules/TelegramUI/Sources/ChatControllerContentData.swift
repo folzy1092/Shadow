@@ -1072,6 +1072,10 @@ extension ChatControllerImpl {
                     strongSelf.state.canStopIncomingStreamingMessage = canStopIncomingStreamingMessage
                     strongSelf.state.autoremoveTimeout = autoremoveTimeout
                     strongSelf.state.currentSendAsPeerId = currentSendAsPeerId
+                    // AyuGram: allow saving restricted content by disabling copy protection.
+                    if ayuGramSettingsCurrent.allowSaveRestrictedContent {
+                        copyProtectionEnabled = false
+                    }
                     strongSelf.state.copyProtectionEnabled = copyProtectionEnabled
                     strongSelf.state.myCopyProtectionEnabled = myCopyProtectionEnabled
                     strongSelf.state.hasSearchTags = hasSearchTags
@@ -1774,6 +1778,10 @@ extension ChatControllerImpl {
                         strongSelf.state.explicitelyCanPinMessages = explicitelyCanPinMessages
                         strongSelf.state.hasScheduledMessages = hasScheduledMessages
                         strongSelf.state.currentSendAsPeerId = currentSendAsPeerId
+                        // AyuGram: allow saving restricted content by disabling copy protection.
+                        if ayuGramSettingsCurrent.allowSaveRestrictedContent {
+                            copyProtectionEnabled = false
+                        }
                         strongSelf.state.copyProtectionEnabled = copyProtectionEnabled
                         strongSelf.state.hasSearchTags = hasSearchTags
                         strongSelf.state.isPremiumRequiredForMessaging = isPremiumRequiredForMessaging

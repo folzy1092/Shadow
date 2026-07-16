@@ -341,6 +341,9 @@ public final class ChatControllerInteraction: ChatControllerInteractionProtocol 
     public let presentationContext: ChatPresentationContext
     public var playNextOutgoingGift: Bool = false
     public var recommendedChannelsOpenUp: Bool = false
+    // AyuGram: double-tap-to-edit routes here. Wired by ChatController after
+    // construction (nil elsewhere), so it needs no initializer changes.
+    public var requestEditMessage: ((EngineMessage.Id) -> Void)?
     public var enableFullTranslucency: Bool = true
     public var chatIsRotated: Bool = true
     public var canReadHistory: Bool = false

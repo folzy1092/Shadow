@@ -542,7 +542,12 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
                 updatedDateText = "\(arguments.presentationData.strings.Conversation_MessageEditedLabel) \(updatedDateText)"
             }
             if let impressionCount = arguments.impressionCount {
-                updatedDateText = compactNumericCountString(impressionCount, decimalSeparator: arguments.presentationData.dateTimeFormat.decimalSeparator) + " " + updatedDateText
+                // Shadow fork: show the exact view count ("5678") instead of the
+                // abbreviated form ("5.6K") when the user opted into it. Scoped to
+                // post views only — reply/reaction/forward counts are formatted
+                // elsewhere and untouched.
+                let impressionCountText = ayuGramSettingsCurrent.showExactViewCounts ? "\(impressionCount)" : compactNumericCountString(impressionCount, decimalSeparator: arguments.presentationData.dateTimeFormat.decimalSeparator)
+                updatedDateText = impressionCountText + " " + updatedDateText
             }
             
             let dateFont = Font.regular(floor(arguments.presentationData.fontSize.baseDisplaySize * 11.0 / 17.0))

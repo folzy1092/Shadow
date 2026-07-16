@@ -487,7 +487,6 @@ func initializedNetwork(accountId: AccountRecordId, arguments: NetworkInitializa
                 apiEnvironment.deviceModel = AyuGramClientProfile.deviceModel
                 apiEnvironment.systemVersion = AyuGramClientProfile.systemVersion
                 apiEnvironment.appVersion = AyuGramClientProfile.appVersion
-                apiEnvironment.systemLangCode = AyuGramClientProfile.systemLangCode
                 apiEnvironment.langPack = AyuGramClientProfile.langPack
             }
 

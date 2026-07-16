@@ -2083,6 +2083,17 @@ extension ChatControllerImpl {
                 let forwardMessageIds = messages.map { $0.id }.sorted()
                 strongSelf.forwardMessages(messageIds: forwardMessageIds)
             }
+        }, forwardMessagesWithoutAuthor: { [weak self] messages in
+            // AyuGram: forward with sender names hidden, for any chat.
+            if let strongSelf = self, !messages.isEmpty {
+                guard !strongSelf.presentAccountFrozenInfoIfNeeded(delay: true) else {
+                    return
+                }
+
+                strongSelf.commitPurposefulAction()
+                let forwardMessageIds = messages.map { $0.id }.sorted()
+                strongSelf.forwardMessages(messageIds: forwardMessageIds, options: ChatInterfaceForwardOptionsState(hideNames: true, hideCaptions: false, unhideNamesOnCaptionChange: false))
+            }
         }, updateForwardOptionsState: { [weak self] f in
             if let strongSelf = self {
                 strongSelf.updateChatPresentationInterfaceState(animated: true, interactive: true, { $0.updatedInterfaceState({ $0.withUpdatedForwardOptionsState(f($0.forwardOptionsState ?? ChatInterfaceForwardOptionsState(hideNames: false, hideCaptions: false, unhideNamesOnCaptionChange: false))) }) })
@@ -4795,7 +4806,22 @@ extension ChatControllerImpl {
         }, statuses: ChatPanelInterfaceInteractionStatuses(editingMessage: self.editingMessage.get(), startingBot: self.startingBot.get(), unblockingPeer: self.unblockingPeer.get(), searching: self.searching.get(), loadingMessage: self.loadingMessage.get(), inlineSearch: self.performingInlineSearch.get()))
         
         self.interfaceInteraction = interfaceInteraction
-        
+
+        // AyuGram: double-tap on an own, editable message opens the edit interface.
+        // The bubble node only does a lightweight own-message check; the real
+        // editability gate lives here (this module can see `canEditMessage`).
+        self.controllerInteraction?.requestEditMessage = { [weak self] messageId in
+            guard let self else {
+                return
+            }
+            guard let message = self.chatDisplayNode.historyNode.messageInCurrentHistoryView(messageId)?._asMessage() else {
+                return
+            }
+            if canEditMessage(context: self.context, limitsConfiguration: self.context.currentLimitsConfiguration.with { EngineConfiguration.Limits($0) }, message: message) {
+                self.interfaceInteraction?.setupEditMessage(messageId, { _ in })
+            }
+        }
+
         if let search = self.focusOnSearchAfterAppearance {
             self.focusOnSearchAfterAppearance = nil
             self.interfaceInteraction?.beginMessageSearch(search.0, search.1)

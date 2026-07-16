@@ -1183,7 +1183,7 @@ func peerInfoScreenData(
                 case bot(subscriberCount: Int32?)
                 case support
             }
-            let status = Signal<PeerInfoStatusData?, NoError> { subscriber in
+            let baseStatus = Signal<PeerInfoStatusData?, NoError> { subscriber in
                 class Manager {
                     var currentValue: TelegramUserPresence? = nil
                     var updateManager: QueueLocalObject<PeerPresenceStatusManager>? = nil
@@ -1271,7 +1271,24 @@ func peerInfoScreenData(
                 return disposable
             }
             |> distinctUntilChanged
-            
+
+            // AyuGram (Этап 4b): when last seen is hidden, replace the vague
+            // "recently / within a week" text with an approximate "was online
+            // ~<time>" derived from the user's most recent message in shared chats.
+            let status = combineLatest(queue: .mainQueue(),
+                baseStatus,
+                ayuApproximateLastActivity(postbox: context.account.postbox, peerId: userPeerId)
+            )
+            |> map { statusData, ayuEstimate -> PeerInfoStatusData? in
+                if let statusData = statusData, statusData.isHiddenStatus, let ayuEstimate = ayuEstimate {
+                    let now = Int32(CFAbsoluteTimeGetCurrent() + NSTimeIntervalSince1970)
+                    let text = ayuApproximateLastSeenString(strings: strings, dateTimeFormat: dateTimeFormat, activityTimestamp: ayuEstimate, relativeTo: now)
+                    return PeerInfoStatusData(text: text, isActivity: false, isHiddenStatus: true, key: statusData.key)
+                }
+                return statusData
+            }
+            |> distinctUntilChanged
+
             var secretChatKeyFingerprint: Signal<EngineSecretChatKeyFingerprint?, NoError> = .single(nil)
             if let secretChatId {
                 secretChatKeyFingerprint = context.engine.data.subscribe(TelegramEngine.EngineData.Item.Peer.SecretChatKeyFingerprint(id: secretChatId))

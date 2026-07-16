@@ -1153,7 +1153,7 @@ public final class SharedWakeupManager {
                 account.shouldKeepOnlinePresence.set(
                     ayuGramSettings(postbox: account.postbox)
                     |> map { settings -> Bool in
-                        return ayuBaseKeepOnline && !settings.hideOnlineStatus
+                        return ayuBaseKeepOnline && !settings.effectiveHideOnline
                     }
                 )
                 account.shouldKeepBackgroundDownloadConnections.set(.single(tasks.backgroundDownloads))

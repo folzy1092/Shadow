@@ -2040,8 +2040,24 @@ private final class NotificationServiceHandler {
                                 
                                 let reportDeliverySignal: Signal<Bool, NoError>
                                 if reportDelivery, let messageId {
-                                    reportDeliverySignal = _internal_reportMessageDelivery(postbox: stateManager.postbox, network: stateManager.network, messageIds: [messageId], fromPushNotification: true)
-                                    |> then(.single(true))
+                                    // AyuGram: the delivery report is the extension's only
+                                    // server-facing "I received / saw this" signal. When
+                                    // read receipts are suppressed (Ghost Master forces this
+                                    // on), skip it so the sender is never told the push
+                                    // reached this device. Read from the postbox because the
+                                    // extension is a separate process without the in-memory
+                                    // settings snapshot.
+                                    reportDeliverySignal = stateManager.postbox.transaction { transaction -> Bool in
+                                        return currentAyuGramSettings(transaction: transaction).suppressReadReceipts
+                                    }
+                                    |> mapToSignal { suppress -> Signal<Bool, NoError> in
+                                        if suppress {
+                                            return .single(true)
+                                        } else {
+                                            return _internal_reportMessageDelivery(postbox: stateManager.postbox, network: stateManager.network, messageIds: [messageId], fromPushNotification: true)
+                                            |> then(.single(true))
+                                        }
+                                    }
                                 } else {
                                     reportDeliverySignal = .single(true)
                                 }

@@ -255,6 +255,13 @@ public extension TelegramEngine {
             return _internal_markMessageContentAsConsumedInteractively(postbox: self.account.postbox, messageId: messageId)
         }
 
+        // AyuGram: manual "Burn" — report a kept view-once/self-destruct message as
+        // viewed (so the sender sees it as opened), while keeping the media locally
+        // as a regular photo/video that can be forwarded, copied and saved.
+        public func forceConsumeViewOnceMedia(messageId: MessageId) -> Signal<Void, NoError> {
+            return _internal_ayuBurnViewOnceMedia(postbox: self.account.postbox, messageId: messageId)
+        }
+
         public func installInteractiveReadMessagesAction(peerId: PeerId, threadId: Int64?) -> Disposable {
             return _internal_installInteractiveReadMessagesAction(postbox: self.account.postbox, stateManager: self.account.stateManager, peerId: peerId, threadId: threadId)
         }

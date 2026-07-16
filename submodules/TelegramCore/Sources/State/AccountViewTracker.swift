@@ -940,6 +940,12 @@ public final class AccountViewTracker {
     }
     
     public func updateSeenLiveLocationForMessageIds(messageIds: Set<MessageId>) {
+        // AyuGram: Ghost Mode also covers "seen live location" — the request below
+        // is a plain readMessageContents that tells the sender we watched their
+        // location. Purely fire-and-forget, so skipping it has no local effect.
+        if ayuGramSettingsCurrent.effectiveHideConsumed {
+            return
+        }
         self.queue.async {
             var addedMessageIds: [MessageId] = []
             let timestamp = Int32(CFAbsoluteTimeGetCurrent())

@@ -19,14 +19,26 @@ import Foundation
 // The fingerprint is fixed at session creation (login), so this is a build-time
 // constant rather than a runtime toggle. It applies to every account added in
 // this build.
+//
+// `systemLangCode` is deliberately NOT part of this profile. Unlike the fields
+// below (which are cosmetic display strings with no functional effect on the
+// client), `system_lang_code` is what the server uses to decide
+// `suggestedLangCode` in Config (and drives the "Continue in <language>"
+// onboarding prompt / auto-detection of the device's language). Hardcoding it
+// breaks Telegram's own language auto-detection for this device regardless of
+// the user's actual iOS language — so it must keep reflecting the real system
+// locale (MTApiEnvironment already derives it from the device by default).
 public enum AyuGramClientProfile {
-    // Set to false to report the genuine iOS client instead.
-    public static let spoofDesktopWindows: Bool = true
+    // Disabled: report the genuine iOS client. Even with `systemLangCode` no
+    // longer overridden, this fingerprint spoof was the only variable still
+    // separating this build's session/network setup from stock — turning it
+    // off removes it entirely as a suspect while the interface-language bug
+    // is investigated further.
+    public static let spoofDesktopWindows: Bool = false
 
     // A plausible, internally-consistent Telegram Desktop / Windows fingerprint.
     public static let deviceModel: String = "Desktop"
     public static let systemVersion: String = "Windows 10"
     public static let appVersion: String = "5.10.3 x64"
-    public static let systemLangCode: String = "en-US"
     public static let langPack: String = "tdesktop"
 }

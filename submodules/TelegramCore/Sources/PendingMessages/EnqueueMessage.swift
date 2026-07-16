@@ -398,6 +398,17 @@ private func opportunisticallyTransformOutgoingMedia(network: Network, postbox: 
 }
 
 public func enqueueMessages(account: Account, peerId: PeerId, messages: [EnqueueMessage]) -> Signal<[MessageId?], NoError> {
+    // Shadow fork: delayed send. When the full Ghost Mode + "send via
+    // scheduled" is on, re-route eligible outgoing messages through Telegram's
+    // native Scheduled Messages so the account never flashes online at send time.
+    // This is a no-op when the feature is off or the peer can't be scheduled to.
+    let messages = AyuDelayedSend.transform(messages: messages, peerId: peerId, now: Int32(Date().timeIntervalSince1970))
+    // Shadow fork: the "offline" re-assert after a send now fires from
+    // PendingMessageManager once the real send RPC's round trip actually
+    // completes (see `ayuReassertOfflineAfterSendIfNeeded`), not from here —
+    // enqueue time is long before the RPC is dispatched (media upload,
+    // transaction commit, queueing behind other sends), so a trigger fired at
+    // this point cannot reliably be ordered against the RPC's online side effect.
     let signal: Signal<[(Bool, EnqueueMessage)], NoError>
     if let transformOutgoingMessageMedia = account.transformOutgoingMessageMedia {
         signal = opportunisticallyTransformOutgoingMedia(network: account.network, postbox: account.postbox, transformOutgoingMessageMedia: transformOutgoingMessageMedia, messages: messages, userInteractive: true)

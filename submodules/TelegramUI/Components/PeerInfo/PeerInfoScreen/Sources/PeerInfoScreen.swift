@@ -314,6 +314,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
     let twoStepAuthData = Promise<TwoStepAuthData?>(nil)
     let supportPeerDisposable = MetaDisposable()
     let tipsPeerDisposable = MetaDisposable()
+    let gitConfigDisposable = MetaDisposable()
     
     let cachedFaq = Promise<ResolvedUrl?>(nil)
     var didSetCachedFaq = false
@@ -415,7 +416,14 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
         self.paneContainerNode = PeerInfoPaneContainerNode(context: context, updatedPresentationData: controller.updatedPresentationData, peerId: peerId, chatLocation: chatLocation, sharedMediaFromForumTopic: sharedMediaFromForumTopic, chatLocationContextHolder: chatLocationContextHolder, isMediaOnly: self.isMediaOnly, initialPaneKey: initialPaneKey, initialStoryFolderId: switchToStoryFolder, initialGiftCollectionId: switchToGiftCollection, switchToMediaTarget: switchToMediaTarget)
         
         super.init()
-        
+
+        // AyuGram: rebuild the profile when the remote badge config
+        // arrives (it loads asynchronously, possibly after the screen is built).
+        self.gitConfigDisposable.set((gitConfigUpdates()
+        |> deliverOnMainQueue).startStrict(next: { [weak self] _ in
+            self?.requestLayout(animated: false)
+        }))
+
         self.paneContainerNode.parentController = controller
         
         self._interaction = PeerInfoInteraction(
@@ -2667,6 +2675,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
         self.enqueueMediaMessageDisposable.dispose()
         self.supportPeerDisposable.dispose()
         self.tipsPeerDisposable.dispose()
+        self.gitConfigDisposable.dispose()
         self.shareStatusDisposable?.dispose()
         self.customStatusDisposable?.dispose()
         self.refreshMessageTagStatsDisposable?.dispose()

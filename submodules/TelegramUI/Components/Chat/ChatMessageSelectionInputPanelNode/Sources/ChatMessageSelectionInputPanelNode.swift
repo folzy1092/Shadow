@@ -184,6 +184,10 @@ public final class ChatMessageSelectionInputPanelNode: ChatInputPanelNode {
     private let shareButton: GlassButtonView
     private let tagButton: GlassButtonView
     private let tagEditButton: GlassButtonView
+    // Shadow: informational notice shown under the action buttons when the chat
+    // has content protection (regular forwarding restricted). Ported concept
+    // from Swiftgram — persistent text instead of only a transient tooltip.
+    private let restrictedForwardInfoNode: ImmediateTextNode
     
     private let reactionOverlayContainer: ChatMessageSelectionInputPanelNodeViewForOverlayContent
     
@@ -240,9 +244,16 @@ public final class ChatMessageSelectionInputPanelNode: ChatInputPanelNode {
         self.tagEditButton.isAccessibilityElement = true
         self.tagEditButton.accessibilityLabel = strings.VoiceOver_MessageSelectionButtonTag
         
+        self.restrictedForwardInfoNode = ImmediateTextNode()
+        self.restrictedForwardInfoNode.maximumNumberOfLines = 2
+        self.restrictedForwardInfoNode.textAlignment = .center
+        self.restrictedForwardInfoNode.isHidden = true
+        
         self.reactionOverlayContainer = ChatMessageSelectionInputPanelNodeViewForOverlayContent()
         
         super.init()
+        
+        self.addSubnode(self.restrictedForwardInfoNode)
         
         self.view.addSubview(self.deleteButton)
         self.view.addSubview(self.reportButton)
@@ -456,7 +467,7 @@ public final class ChatMessageSelectionInputPanelNode: ChatInputPanelNode {
         leftInset += compactBottomSideInset
         rightInset += compactBottomSideInset
         
-        let panelHeight = defaultHeight(metrics: metrics)
+        var panelHeight = defaultHeight(metrics: metrics)
         
         if self.presentationInterfaceState != interfaceState {
             self.presentationInterfaceState = interfaceState
@@ -595,6 +606,21 @@ public final class ChatMessageSelectionInputPanelNode: ChatInputPanelNode {
             button.update(theme: interfaceState.theme, preferClearGlass: interfaceState.preferredGlassType == .clear, size: buttonFrame.size, transition: ComponentTransition(transition))
             
             offset += buttonSize.width + spacing
+        }
+        
+        // Shadow: content-protection notice under the buttons.
+        if interfaceState.copyProtectionEnabled {
+            let buttonsBottom = buttonSize.height
+            let noticeText = "Обычная пересылка в этом чате запрещена защитой контента."
+            self.restrictedForwardInfoNode.attributedText = NSAttributedString(string: noticeText, font: Font.regular(13.0), textColor: interfaceState.theme.chat.inputPanel.secondaryTextColor, paragraphAlignment: .center)
+            let noticeInset: CGFloat = 16.0
+            let noticeSize = self.restrictedForwardInfoNode.updateLayout(CGSize(width: width - leftInset - rightInset - noticeInset * 2.0, height: 44.0))
+            let noticeSpacing: CGFloat = 6.0
+            self.restrictedForwardInfoNode.isHidden = false
+            transition.updateFrame(node: self.restrictedForwardInfoNode, frame: CGRect(origin: CGPoint(x: floor((width - noticeSize.width) / 2.0), y: buttonsBottom + noticeSpacing), size: noticeSize))
+            panelHeight += noticeSpacing + noticeSize.height + 4.0
+        } else {
+            self.restrictedForwardInfoNode.isHidden = true
         }
         
         if let reactionContextNode = self.reactionOverlayContainer.reactionContextNode, let tagButton {

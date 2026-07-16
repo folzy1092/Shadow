@@ -814,8 +814,10 @@ NSString *suffix = @"";
 
 - (MTApiEnvironment *)withUpdatedLangPackCode:(NSString *)langPackCode {
     MTApiEnvironment *result = [[MTApiEnvironment alloc] initWithDeviceModelName:_deviceModelName];
-    
+
     result.apiId = self.apiId;
+    result.deviceModel = self.deviceModel;
+    result.systemVersion = self.systemVersion;
     result.appVersion = self.appVersion;
     result.layer = self.layer;
     
@@ -840,9 +842,11 @@ NSString *suffix = @"";
     MTApiEnvironment *result =  [[MTApiEnvironment alloc] initWithDeviceModelName:_deviceModelName];
     
     result.apiId = self.apiId;
+    result.deviceModel = self.deviceModel;
+    result.systemVersion = self.systemVersion;
     result.appVersion = self.appVersion;
     result.layer = self.layer;
-    
+
     result.langPack = self.langPack;
     
     result->_langPackCode = self.langPackCode;
@@ -864,9 +868,11 @@ NSString *suffix = @"";
     MTApiEnvironment *result =  [[MTApiEnvironment alloc] initWithDeviceModelName:_deviceModelName];
     
     result.apiId = self.apiId;
+    result.deviceModel = self.deviceModel;
+    result.systemVersion = self.systemVersion;
     result.appVersion = self.appVersion;
     result.layer = self.layer;
-    
+
     result.langPack = self.langPack;
     
     result->_langPackCode = self.langPackCode;
@@ -888,9 +894,11 @@ NSString *suffix = @"";
     MTApiEnvironment *result =  [[MTApiEnvironment alloc] initWithDeviceModelName:_deviceModelName];
     
     result.apiId = self.apiId;
+    result.deviceModel = self.deviceModel;
+    result.systemVersion = self.systemVersion;
     result.appVersion = self.appVersion;
     result.layer = self.layer;
-    
+
     result.langPack = self.langPack;
     
     result->_langPackCode = self.langPackCode;
@@ -912,9 +920,11 @@ NSString *suffix = @"";
     MTApiEnvironment *result =  [[MTApiEnvironment alloc] initWithDeviceModelName:_deviceModelName];
     
     result.apiId = self.apiId;
+    result.deviceModel = self.deviceModel;
+    result.systemVersion = self.systemVersion;
     result.appVersion = self.appVersion;
     result.layer = self.layer;
-    
+
     result.langPack = self.langPack;
     
     result->_langPackCode = self.langPackCode;

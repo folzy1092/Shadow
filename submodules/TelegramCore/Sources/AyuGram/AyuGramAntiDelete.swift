@@ -20,4 +20,7 @@ func ayuGramMarkMessagesDeleted(transaction: Transaction, ids: [MessageId]) {
             return .update(StoreMessage(id: currentMessage.id, customStableId: nil, globallyUniqueId: currentMessage.globallyUniqueId, groupingKey: currentMessage.groupingKey, threadId: currentMessage.threadId, timestamp: currentMessage.timestamp, flags: StoreMessageFlags(currentMessage.flags), tags: currentMessage.tags, globalTags: currentMessage.globalTags, localTags: currentMessage.localTags, forwardInfo: storeForwardInfo, authorId: currentMessage.author?.id, text: currentMessage.text, attributes: attributes, media: currentMessage.media))
         }
     }
+    // AyuGram: index the kept messages so the fork-storage screen can count and
+    // clear them without scanning the whole database.
+    ayuForkStoreRecordKeptDeleted(transaction: transaction, ids: ids)
 }

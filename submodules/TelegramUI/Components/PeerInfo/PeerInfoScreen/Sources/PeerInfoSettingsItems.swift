@@ -220,7 +220,7 @@ func settingsItems(data: PeerInfoScreenData?, context: AccountContext, presentat
     items[.shortcuts]!.append(PeerInfoScreenDisclosureItem(id: 4, text: presentationData.strings.Settings_ChatFolders, icon: PresentationResourcesSettings.chatFolders, action: {
         interaction.openSettings(.chatFolders)
     }))
-    items[.shortcuts]!.append(PeerInfoScreenDisclosureItem(id: 5, text: "AyuGram", icon: PresentationResourcesSettings.devices, action: {
+    items[.shortcuts]!.append(PeerInfoScreenDisclosureItem(id: 5, text: "Shadow", icon: PresentationResourcesSettings.shadow, action: {
         interaction.openSettings(.ayugram)
     }))
 
@@ -447,9 +447,22 @@ func settingsEditingItems(data: PeerInfoScreenData?, state: PeerInfoState, conte
     }
     
     if case let .user(user) = data.peer {
-        items[.info]!.append(PeerInfoScreenDisclosureItem(id: ItemPhoneNumber, label: .text(user.phone.flatMap({ formatPhoneNumber(context: context, number: $0) }) ?? ""), text: presentationData.strings.Settings_PhoneNumber, icon: PresentationResourcesSettings.recentCalls, action: {
-            interaction.openSettings(.phoneNumber)
-        }))
+        // Shadow: "hide own phone number" removes the plate entirely; it takes
+        // precedence over the visual phone spoof.
+        if !ayuGramSettingsCurrent.hideOwnPhoneNumber {
+            // Visual-only phone spoof (own settings, for screenshots). The spoofed
+            // digits are run through the normal formatter; the real phone number
+            // is never modified or sent anywhere.
+            let ayuPhoneNumber: String
+            if let spoofedDigits = ayuGramSettingsCurrent.spoofedPhoneDigitsForDisplay() {
+                ayuPhoneNumber = formatPhoneNumber(context: context, number: spoofedDigits)
+            } else {
+                ayuPhoneNumber = user.phone.flatMap({ formatPhoneNumber(context: context, number: $0) }) ?? ""
+            }
+            items[.info]!.append(PeerInfoScreenDisclosureItem(id: ItemPhoneNumber, label: .text(ayuPhoneNumber), text: presentationData.strings.Settings_PhoneNumber, icon: PresentationResourcesSettings.recentCalls, action: {
+                interaction.openSettings(.phoneNumber)
+            }))
+        }
     }
     var username = ""
     if let addressName = data.peer?.addressName, !addressName.isEmpty {

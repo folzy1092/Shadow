@@ -88,6 +88,11 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
     
     private var applicationInFocusDisposable: Disposable?
     private var storyUploadEventsDisposable: Disposable?
+    // Shadow: keeps the bottom tab bar in sync with the compact / hide-search
+    // toggles across launches (mirrors them into UserDefaults for the low-level
+    // tab-bar modules and forces a relayout so they apply immediately and on
+    // cold start, not only after the next unrelated layout pass).
+    private var ayuBottomBarDisposable: Disposable?
     
     override public var minimizedContainer: MinimizedContainer? {
         didSet {
@@ -146,6 +151,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         self.presentationDataDisposable?.dispose()
         self.applicationInFocusDisposable?.dispose()
         self.storyUploadEventsDisposable?.dispose()
+        self.ayuBottomBarDisposable?.dispose()
     }
     
     public func getContactsController() -> ViewController? {
@@ -247,6 +253,26 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         self.accountSettingsController = accountSettingsController
         self.rootTabController = tabBarController
         self.pushViewController(tabBarController, animated: false)
+
+        // Shadow: drive the "compact bottom bar" / "hide bottom search" toggles
+        // reactively from the persisted settings, exactly like folders-at-bottom.
+        // On every emission (including the initial one at cold start) mirror the
+        // values into UserDefaults — the source the low-level tab-bar modules
+        // read — and force the tab bar to relayout so the state is correct on
+        // launch and updates live, instead of reverting until the next layout.
+        self.ayuBottomBarDisposable?.dispose()
+        self.ayuBottomBarDisposable = (ayuGramSettings(postbox: self.context.account.postbox)
+        |> map { settings -> (Bool, Bool) in
+            return (settings.compactBottomBar, settings.hideBottomSearch)
+        }
+        |> distinctUntilChanged(isEqual: { $0 == $1 })
+        |> deliverOnMainQueue).start(next: { [weak self] valuePair in
+            let (compact, hideSearch) = valuePair
+            let defaults = UserDefaults.standard
+            defaults.set(compact, forKey: "shadow.compactBottomBar")
+            defaults.set(hideSearch, forKey: "shadow.hideBottomSearch")
+            (self?.rootTabController as? TabBarControllerImpl)?.updateLayout(transition: .animated(duration: 0.25, curve: .easeInOut))
+        })
     }
         
     public func updateRootControllers(showCallsTab: Bool) {

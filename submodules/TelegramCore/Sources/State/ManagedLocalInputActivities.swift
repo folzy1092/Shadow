@@ -143,10 +143,28 @@ private func actionFromActivity(_ activity: PeerInputActivity?) -> Api.SendMessa
 
 private func requestActivity(postbox: Postbox, network: Network, accountPeerId: PeerId, peerId: PeerId, threadId: Int64?, activity: PeerInputActivity?) -> Signal<Void, NoError> {
     return postbox.transaction { transaction -> Signal<Void, NoError> in
-        // AyuGram: suppress outgoing typing/recording/etc. activity when enabled.
-        // Incoming activities of other users are unaffected (handled elsewhere).
-        if currentAyuGramSettings(transaction: transaction).hideTyping {
-            return .complete()
+        // AyuGram: suppress outgoing typing/recording/uploading activity when
+        // Ghost Mode (or a granular presence toggle) is enabled. The gate is split
+        // by activity type so recording and uploading can be hidden independently
+        // of plain typing. Incoming activities of other users are unaffected
+        // (handled elsewhere). A nil activity is a "cancel" — always let it through
+        // so a previously-sent indicator can still be cleared.
+        if let activity = activity {
+            let ayuSettings = currentAyuGramSettings(transaction: transaction)
+            let ayuSuppress: Bool
+            switch activity {
+                case .typingText, .choosingSticker, .interactingWithEmoji, .seeingEmojiInteraction:
+                    ayuSuppress = ayuSettings.effectiveHideTyping
+                case .recordingVoice, .recordingInstantVideo:
+                    ayuSuppress = ayuSettings.effectiveHideRecording
+                case .uploadingFile, .uploadingPhoto, .uploadingVideo, .uploadingInstantVideo:
+                    ayuSuppress = ayuSettings.effectiveHideUploading
+                case .playingGame, .speakingInGroupCall:
+                    ayuSuppress = false
+            }
+            if ayuSuppress {
+                return .complete()
+            }
         }
         if let peer = transaction.getPeer(peerId) {
             if peerId == accountPeerId {

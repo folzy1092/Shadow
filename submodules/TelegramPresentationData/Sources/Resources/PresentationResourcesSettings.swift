@@ -115,6 +115,11 @@ let colorOrange = UIColor(rgb: 0xFF9F0A)
 let colorPurple = UIColor(rgb: 0xAF52DE)
 let colorGray = UIColor(rgb: 0x8E8E93)
 let colorViolet = UIColor(rgb: 0x5E5CE6)
+// Shadow fork: near-black -> neon blue, dark/premium/minimalist. Distinct from
+// the stock palette above so the Shadow settings row doesn't blend into a
+// regular Telegram feature.
+let colorShadowDark = UIColor(rgb: 0x0A0E14)
+let colorShadowNeonBlue = UIColor(rgb: 0x2B8CFF)
 
 public struct PresentationResourcesSettings {
     public static let proxy = renderSettingsIcon(name: "Item List/Icons/Proxy", backgroundColors: [colorGreen])
@@ -131,6 +136,10 @@ public struct PresentationResourcesSettings {
     public static let powerSaving = renderSettingsIcon(name: "Item List/Icons/PowerSaving", backgroundColors: [colorOrange])
     public static let business = renderSettingsIcon(name: "Item List/Icons/Business", backgroundColors: [UIColor(rgb: 0xA95CE3), UIColor(rgb: 0xF16B80)])
     public static let myProfile = renderSettingsIcon(name: "Item List/Icons/Profile", backgroundColors: [colorRed])
+    // Shadow fork: dedicated icon for the "Shadow" settings row (was reusing
+    // the stock Devices icon). Paper-plane glyph on a dark-to-neon-blue
+    // gradient — dark, minimalist, no ghost imagery, not a Swiftgram asset.
+    public static let shadow = renderSettingsIcon(name: "Item List/Icons/Shadow", backgroundColors: [colorShadowDark, colorShadowNeonBlue])
     
     public static let birthday = renderSettingsIcon(name: "Item List/Icons/Cake", backgroundColors: [colorBlue])
     public static let aiTools = renderSettingsIcon(name: "Item List/Icons/AITools", backgroundColors: [colorPurple])

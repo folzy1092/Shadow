@@ -574,6 +574,14 @@ public func stringAndActivityForUserPresence(strings: PresentationStrings, dateT
         if statusTimestamp >= timestamp {
             return (strings.Presence_online, true)
         } else {
+            // Shadow fork: when the user wants the exact last-seen clock time
+            // instead of Telegram's fuzzy "N minutes/hours ago" bucket, treat this
+            // case as `expanded` — that already skips straight to the precise
+            // "today/yesterday at HH:MM" formatting below instead of the relative
+            // phrasing. Only applies where an exact timestamp actually exists
+            // (the `.present` case); the `.recently`/`.lastWeek`/`.lastMonth`/
+            // `.longTimeAgo` buckets below have no timestamp to be exact about.
+            let expanded = expanded || ayuGramSettingsCurrent.showExactLastSeen
             let difference = timestamp - statusTimestamp
             if difference < 60 {
                 return (strings.LastSeen_JustNow, false)
@@ -584,15 +592,15 @@ public func stringAndActivityForUserPresence(strings: PresentationStrings, dateT
                 var t: time_t = time_t(statusTimestamp)
                 var timeinfo: tm = tm()
                 localtime_r(&t, &timeinfo)
-                
+
                 var now: time_t = time_t(timestamp)
                 var timeinfoNow: tm = tm()
                 localtime_r(&now, &timeinfoNow)
-                
+
                 if timeinfo.tm_year != timeinfoNow.tm_year {
                     return (strings.LastSeen_AtDate(stringForTimestamp(day: timeinfo.tm_mday, month: timeinfo.tm_mon + 1, year: timeinfo.tm_year, dateTimeFormat: dateTimeFormat)).string, false)
                 }
-                
+
                 let dayDifference = timeinfo.tm_yday - timeinfoNow.tm_yday
                 if dayDifference == 0 || dayDifference == -1 {
                     let day: RelativeTimestampFormatDay
@@ -626,6 +634,16 @@ public func stringAndActivityForUserPresence(strings: PresentationStrings, dateT
     case .longTimeAgo:
         return (strings.LastSeen_ALongTimeAgo, false)
     }
+}
+
+// AyuGram (Этап 4b): format an approximate "last seen" from a user's most recent
+// activity in shared chats, used when the real last seen is hidden. We reuse the
+// standard formatter by presenting the activity timestamp as a past ".present"
+// status, then mark the result as approximate with a leading "~".
+public func ayuApproximateLastSeenString(strings: PresentationStrings, dateTimeFormat: PresentationDateTimeFormat, activityTimestamp: Int32, relativeTo timestamp: Int32) -> String {
+    let presence = EnginePeer.Presence(status: .present(until: activityTimestamp), lastActivity: activityTimestamp)
+    let (base, _) = stringAndActivityForUserPresence(strings: strings, dateTimeFormat: dateTimeFormat, presence: presence, relativeTo: timestamp, expanded: true)
+    return "~\(base)"
 }
 
 public func peerStatusExpirationString(statusTimestamp: Int32, relativeTo timestamp: Int32, strings: PresentationStrings, dateTimeFormat: PresentationDateTimeFormat) -> String {

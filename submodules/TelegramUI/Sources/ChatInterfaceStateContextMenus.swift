@@ -1901,9 +1901,87 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                     interfaceInteraction.forwardMessages(selectAll || isImage ? messages : [message])
                     f(.dismissWithoutContent)
                 })))
+                // AyuGram: forward with sender names hidden, available for any chat.
+                actions.append(.action(ContextMenuActionItem(text: "Forward without author", icon: { theme in
+                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Forward"), color: theme.actionSheet.primaryTextColor)
+                }, action: { _, f in
+                    interfaceInteraction.forwardMessagesWithoutAuthor(selectAll || isImage ? messages : [message])
+                    f(.dismissWithoutContent)
+                })))
             }
         }
-        
+
+        // AyuGram: "Burn" a kept view-once / self-destruct message — report it as
+        // viewed to the sender (and let it expire), on demand. Shown only for an
+        // incoming self-destruct media message that hasn't been burned yet.
+        if messages.count == 1, message.flags.contains(.Incoming), message.containsSecretMedia, message.id.peerId.namespace != Namespaces.Peer.SecretChat {
+            let alreadyBurned = message.attributes.contains(where: { attribute in
+                if let attribute = attribute as? AutoclearTimeoutMessageAttribute {
+                    return attribute.countdownBeginTime != nil && attribute.countdownBeginTime != 0
+                } else if let attribute = attribute as? AutoremoveTimeoutMessageAttribute {
+                    return attribute.countdownBeginTime != nil && attribute.countdownBeginTime != 0
+                }
+                return false
+            })
+            if !alreadyBurned {
+                actions.append(.action(ContextMenuActionItem(text: "Сжечь", textColor: .destructive, icon: { theme in
+                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Timer"), color: theme.actionSheet.destructiveActionTextColor)
+                }, action: { _, f in
+                    let _ = context.engine.messages.forceConsumeViewOnceMedia(messageId: message.id).start()
+                    f(.dismissWithoutContent)
+                })))
+            }
+        }
+
+        // AyuGram: "Edit history" — show previous versions captured before edits.
+        if messages.count == 1, let editHistory = message.attributes.first(where: { $0 is SavedMessageEditsAttribute }) as? SavedMessageEditsAttribute, !editHistory.versions.isEmpty {
+            actions.append(.action(ContextMenuActionItem(text: "История изменений", icon: { theme in
+                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Time"), color: theme.actionSheet.primaryTextColor)
+            }, action: { c, _ in
+                let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+                var subItems: [ContextMenuItem] = []
+                subItems.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Common_Back, textColor: .primary, icon: { theme in
+                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Back"), color: theme.actionSheet.primaryTextColor)
+                }, iconPosition: .left, action: { c, _ in
+                    c?.popItems()
+                })))
+                subItems.append(.separator)
+
+                let editHistoryDateFormatter = DateFormatter()
+                editHistoryDateFormatter.dateFormat = "dd.MM.yy HH:mm"
+                let versionFont: ContextMenuActionItemFont = .custom(font: Font.regular(floor(presentationData.listsFontSize.baseDisplaySize * 0.9)), height: nil, verticalOffset: nil)
+                for version in editHistory.versions {
+                    let dateString = editHistoryDateFormatter.string(from: Date(timeIntervalSince1970: Double(version.date)))
+                    // AyuGram: prefix a marker when this version also carried media
+                    // (its previous media was backed up into the private gallery).
+                    var mediaMarker = ""
+                    switch version.mediaKind {
+                    case "image":
+                        mediaMarker = "🖼 "
+                    case "video":
+                        mediaMarker = "🎥 "
+                    case "roundVideo":
+                        mediaMarker = "⭕️ "
+                    case "voice":
+                        mediaMarker = "🎤 "
+                    case "file":
+                        mediaMarker = "📎 "
+                    default:
+                        mediaMarker = ""
+                    }
+                    let bodyText = version.text.isEmpty && !mediaMarker.isEmpty ? "\(mediaMarker)[media]" : "\(mediaMarker)\(version.text)"
+                    subItems.append(.action(ContextMenuActionItem(text: "\(dateString)\n\(bodyText)", textColor: .primary, textLayout: .multiline, textFont: versionFont, badge: nil, icon: { _ in nil }, action: { _, f in
+                        f(.default)
+                    })))
+                }
+                subItems.append(.action(ContextMenuActionItem(text: "→ \(message.text)", textColor: .primary, textLayout: .multiline, textFont: versionFont, badge: nil, icon: { _ in nil }, action: { _, f in
+                    f(.default)
+                })))
+
+                c?.pushItems(items: .single(ContextController.Items(content: .list(subItems))))
+            })))
+        }
+
         if data.messageActions.options.contains(.report) {
             actions.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Conversation_ContextMenuReport, icon: { theme in
                 return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Report"), color: theme.actionSheet.primaryTextColor)
