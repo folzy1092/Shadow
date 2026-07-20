@@ -2066,6 +2066,19 @@ extension ChatControllerImpl {
                     strongSelf.forwardMessages(messageIds: forwardMessageIds)
                 }
             }
+        }, forwardSelectedMessagesWithoutAuthor: { [weak self] in
+            // Shadow: anonymous forward of the current selection (hideNames = true),
+            // triggered by the incognito button in the multi-select panel. Same
+            // selection source as forwardSelectedMessages, but forces the
+            // "forward without author" option so the picker opens like a normal
+            // forward and the messages are sent with sender names hidden.
+            if let strongSelf = self {
+                strongSelf.commitPurposefulAction()
+                if let forwardMessageIdsSet = strongSelf.presentationInterfaceState.interfaceState.selectionState?.selectedIds {
+                    let forwardMessageIds = Array(forwardMessageIdsSet).sorted()
+                    strongSelf.forwardMessages(messageIds: forwardMessageIds, options: ChatInterfaceForwardOptionsState(hideNames: true, hideCaptions: false, unhideNamesOnCaptionChange: false))
+                }
+            }
         }, forwardCurrentForwardMessages: { [weak self] in
             if let strongSelf = self {
                 strongSelf.commitPurposefulAction()

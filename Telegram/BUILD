@@ -351,6 +351,16 @@ composer_icon_folders = ["Telegram"]
     ) for name in composer_icon_folders
 ]
 
+# Shadow fork: primary app icon (paper-plane glyph on the #0A0E14 -> #2B8CFF
+# gradient, matching the "Shadow" settings-row icon). Replaces the stock
+# Telegram.icon Icon Composer bundle as the app's main icon.
+filegroup(
+    name = "ShadowAppIcon",
+    srcs = glob([
+        "Telegram-iOS/ShadowAppIcon.xcassets/**/*",
+    ], exclude = ["Telegram-iOS/ShadowAppIcon.xcassets/**/.*"]),
+)
+
 filegroup(
     name = "LaunchScreen",
     srcs = glob([
@@ -1776,7 +1786,7 @@ ios_application(
         ":RequiredDeviceCapabilitiesPlist",
         ":UrlTypesInfoPlist",
     ],
-    app_icons = [ ":{}_icon".format(name) for name in composer_icon_folders ],
+    app_icons = [ ":ShadowAppIcon" ],
     alternate_icons = [
         ":{}".format(name) for name in alternate_icon_folders
     ],

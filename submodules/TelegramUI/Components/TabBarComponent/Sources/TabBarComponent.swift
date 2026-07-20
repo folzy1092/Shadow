@@ -14,11 +14,21 @@ import LiquidLens
 import AppBundle
 import SearchBarNode
 
-// Shadow: "compact bottom bar" toggle mirror. Read from UserDefaults (written by
-// TelegramCore's AyuGram settings) so this low-level module needs no TelegramCore
-// dependency. Key must match AyuBottomBarDefaultsKeys.compactBottomBar.
-private var shadowShowTabNames: Bool {
-    return !UserDefaults.standard.bool(forKey: "shadow.compactBottomBar")
+// Shadow: "compact bottom bar" no longer shrinks the bar's geometry (shorter +
+// narrower + no labels). Instead it keeps the FULL normal layout (full width,
+// tab names, 56pt rows) and visually "flattens" the whole bar with a vertical
+// scale transform — see shadowCompactFlattenScaleY and its application at the
+// end of update(). So tab names are now always laid out at full size; the
+// flatten happens purely as a scaleY on the rendered bar.
+private let shadowShowTabNames: Bool = true
+
+// Vertical flatten factor for the compact bottom bar. 1.0 = no flatten. When
+// the compact toggle is on we squash the full-width bar to this fraction of its
+// height (kept close to the old compact footprint of ~40/56). Read from
+// UserDefaults (written by TelegramCore's AyuGram settings); key must match
+// AyuBottomBarDefaultsKeys.compactBottomBar.
+private var shadowCompactFlattenScaleY: CGFloat {
+    return UserDefaults.standard.bool(forKey: "shadow.compactBottomBar") ? 0.72 : 1.0
 }
 import TabSelectionRecognizer
 
@@ -450,6 +460,11 @@ public final class TabBarComponent: Component {
             }
             
             self.addSubview(self.backgroundContainer)
+            // Shadow: top-anchor the bar so the compact "flatten" scaleY squashes
+            // it downward from its top edge (keeps the top where the layout put it
+            // and shortens the visible height). anchorPoint is set once; the flatten
+            // transform + position are applied every layout pass in update().
+            self.backgroundContainer.layer.anchorPoint = CGPoint(x: 0.5, y: 0.0)
             self.backgroundContainer.contentView.addSubview(self.contextGestureContainerView)
             
             self.contextGestureContainerView.addSubview(self.liquidLensView)
@@ -661,27 +676,12 @@ public final class TabBarComponent: Component {
 
             let innerInset: CGFloat = 4.0
             var availableSize = CGSize(width: min(500.0, availableSize.width), height: availableSize.height)
-            // Shadow: "compact bottom bar" also narrows the bar (not just shorter).
-            // Reduce the available width by an item-count factor before the items
-            // are distributed across it (ports Swiftgram's tab-bar width reducer).
-            // Skipped while the in-bar search field is active (needs full width).
-            if !shadowShowTabNames && !(component.search?.isActive ?? false) {
-                let widthReducer: CGFloat
-                switch component.items.count {
-                case 1:
-                    widthReducer = 1.75
-                case 2:
-                    widthReducer = 1.5
-                case 3:
-                    widthReducer = 1.25
-                default:
-                    widthReducer = 1.0
-                }
-                availableSize.width = availableSize.width / widthReducer
-                if UserDefaults.standard.bool(forKey: "shadow.hideBottomSearch") {
-                    availableSize.width -= 48.0
-                    availableSize.width -= innerInset * 2.0
-                }
+            // Shadow: when the in-bar search field is hidden, reclaim its slot so the
+            // tabs use the freed width. (The compact toggle no longer narrows the bar
+            // here — it flattens the full-width bar vertically at the end of update().)
+            if !(component.search?.isActive ?? false) && UserDefaults.standard.bool(forKey: "shadow.hideBottomSearch") {
+                availableSize.width -= 48.0
+                availableSize.width -= innerInset * 2.0
             }
             
             let previousComponent = self.component
@@ -968,10 +968,18 @@ public final class TabBarComponent: Component {
                 }
             }
 
-            transition.setFrame(view: self.backgroundContainer, frame: CGRect(origin: CGPoint(), size: size))
+            transition.setBounds(view: self.backgroundContainer, bounds: CGRect(origin: CGPoint(), size: size))
+            // Shadow compact "flatten": squash the full-width bar vertically. With
+            // the top anchorPoint (0.5, 0.0) the layer's position is its top-center;
+            // place it at x = size.width/2, y = 0 and apply scaleY so the bar
+            // shrinks downward from the top. flattenScaleY == 1.0 in normal mode, so
+            // this reduces to the identity transform and a top-center position.
+            let flattenScaleY = shadowCompactFlattenScaleY
+            transition.setPosition(view: self.backgroundContainer, position: CGPoint(x: size.width * 0.5, y: 0.0))
+            transition.setTransform(view: self.backgroundContainer, transform: CATransform3DMakeScale(1.0, flattenScaleY, 1.0))
             self.backgroundContainer.update(size: size, isDark: component.theme.overallDarkAppearance, transition: transition)
 
-            return size
+            return CGSize(width: size.width, height: size.height * flattenScaleY)
         }
     }
     

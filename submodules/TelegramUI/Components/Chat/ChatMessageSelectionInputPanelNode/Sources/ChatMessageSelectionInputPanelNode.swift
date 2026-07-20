@@ -181,6 +181,10 @@ public final class ChatMessageSelectionInputPanelNode: ChatInputPanelNode {
     private let deleteButton: GlassButtonView
     private let reportButton: GlassButtonView
     private let forwardButton: GlassButtonView
+    // Shadow: anonymous forward ("forward without author"). Opens the normal chat
+    // picker but sends with sender names hidden. Placed next to the regular
+    // forward button in the multi-select panel.
+    private let incognitoForwardButton: GlassButtonView
     private let shareButton: GlassButtonView
     private let tagButton: GlassButtonView
     private let tagEditButton: GlassButtonView
@@ -228,7 +232,13 @@ public final class ChatMessageSelectionInputPanelNode: ChatInputPanelNode {
         self.forwardButton.icon = "Chat/Input/Accessory Panels/MessageSelectionForward"
         self.forwardButton.isAccessibilityElement = true
         self.forwardButton.accessibilityLabel = strings.VoiceOver_MessageContextForward
-        
+
+        // Shadow: anonymous ("without author") forward button — incognito glyph.
+        self.incognitoForwardButton = GlassButtonView()
+        self.incognitoForwardButton.icon = "Chat/Input/Accessory Panels/MessageSelectionIncognito"
+        self.incognitoForwardButton.isAccessibilityElement = true
+        self.incognitoForwardButton.accessibilityLabel = strings.VoiceOver_MessageContextForward
+
         self.shareButton = GlassButtonView()
         self.shareButton.icon = "Chat/Input/Accessory Panels/MessageSelectionAction"
         self.shareButton.isAccessibilityElement = true
@@ -258,18 +268,21 @@ public final class ChatMessageSelectionInputPanelNode: ChatInputPanelNode {
         self.view.addSubview(self.deleteButton)
         self.view.addSubview(self.reportButton)
         self.view.addSubview(self.forwardButton)
+        self.view.addSubview(self.incognitoForwardButton)
         self.view.addSubview(self.shareButton)
         self.view.addSubview(self.tagButton)
         self.view.addSubview(self.tagEditButton)
-        
+
         self.viewForOverlayContent = self.reactionOverlayContainer
-        
+
         self.forwardButton.isImplicitlyDisabled = true
+        self.incognitoForwardButton.isImplicitlyDisabled = true
         self.shareButton.isImplicitlyDisabled = true
-        
+
         self.deleteButton.button.addTarget(self, action: #selector(self.deleteButtonPressed), for: .touchUpInside)
         self.reportButton.button.addTarget(self, action: #selector(self.reportButtonPressed), for: .touchUpInside)
         self.forwardButton.button.addTarget(self, action: #selector(self.forwardButtonPressed), for: .touchUpInside)
+        self.incognitoForwardButton.button.addTarget(self, action: #selector(self.incognitoForwardButtonPressed), for: .touchUpInside)
         self.shareButton.button.addTarget(self, action: #selector(self.shareButtonPressed), for: .touchUpInside)
         self.tagButton.button.addTarget(self, action: #selector(self.tagButtonPressed), for: .touchUpInside)
         self.tagEditButton.button.addTarget(self, action: #selector(self.tagButtonPressed), for: .touchUpInside)
@@ -281,6 +294,7 @@ public final class ChatMessageSelectionInputPanelNode: ChatInputPanelNode {
     
     private func updateActions() {
         self.forwardButton.isEnabled = self.selectedMessages.count != 0
+        self.incognitoForwardButton.isEnabled = self.selectedMessages.count != 0
         
         if self.selectedMessages.isEmpty {
             self.actions = nil
@@ -323,6 +337,21 @@ public final class ChatMessageSelectionInputPanelNode: ChatInputPanelNode {
             self.interfaceInteraction?.displayCopyProtectionTip(self.forwardButton, false)
         } else if !self.forwardButton.isImplicitlyDisabled {
             self.interfaceInteraction?.forwardSelectedMessages()
+        }
+    }
+
+    @objc private func incognitoForwardButtonPressed() {
+        // Shadow: anonymous forward — same gating as the regular forward button
+        // (blocked in secret chats and when the content is copy-protected), but
+        // routes through forwardSelectedMessagesWithoutAuthor so sender names are
+        // hidden.
+        if let _ = self.presentationInterfaceState?.renderedPeer?.peer as? TelegramSecretChat {
+            return
+        }
+        if let actions = self.actions, actions.isCopyProtected {
+            self.interfaceInteraction?.displayCopyProtectionTip(self.incognitoForwardButton, false)
+        } else if !self.incognitoForwardButton.isImplicitlyDisabled {
+            self.interfaceInteraction?.forwardSelectedMessagesWithoutAuthor()
         }
     }
     
@@ -476,7 +505,9 @@ public final class ChatMessageSelectionInputPanelNode: ChatInputPanelNode {
             self.deleteButton.isEnabled = false
             self.reportButton.isEnabled = false
             self.forwardButton.isImplicitlyDisabled = !actions.options.contains(.forward)
-            
+            // Shadow: anonymous forward is available whenever regular forward is.
+            self.incognitoForwardButton.isImplicitlyDisabled = !actions.options.contains(.forward)
+
             if self.peerMedia {
                 self.deleteButton.isEnabled = !actions.options.intersection([.deleteLocally, .deleteGlobally]).isEmpty
             } else {
@@ -510,6 +541,7 @@ public final class ChatMessageSelectionInputPanelNode: ChatInputPanelNode {
             self.reportButton.isEnabled = false
             self.reportButton.isHidden = true
             self.forwardButton.isImplicitlyDisabled = true
+            self.incognitoForwardButton.isImplicitlyDisabled = true
             self.shareButton.isImplicitlyDisabled = true
             self.tagButton.isHidden = true
             self.tagEditButton.isHidden = true
@@ -544,12 +576,14 @@ public final class ChatMessageSelectionInputPanelNode: ChatInputPanelNode {
                     self.deleteButton,
                     tagButton,
                     self.shareButton,
+                    self.incognitoForwardButton,
                     self.forwardButton
                 ]
             } else {
                 buttons = [
                     self.deleteButton,
                     self.shareButton,
+                    self.incognitoForwardButton,
                     self.forwardButton
                 ]
             }
@@ -560,6 +594,7 @@ public final class ChatMessageSelectionInputPanelNode: ChatInputPanelNode {
                     self.reportButton,
                     tagButton,
                     self.shareButton,
+                    self.incognitoForwardButton,
                     self.forwardButton
                 ]
             } else {
@@ -567,6 +602,7 @@ public final class ChatMessageSelectionInputPanelNode: ChatInputPanelNode {
                     self.deleteButton,
                     self.reportButton,
                     self.shareButton,
+                    self.incognitoForwardButton,
                     self.forwardButton
                 ]
             }
@@ -577,6 +613,7 @@ public final class ChatMessageSelectionInputPanelNode: ChatInputPanelNode {
                     self.reportButton,
                     tagButton,
                     self.shareButton,
+                    self.incognitoForwardButton,
                     self.forwardButton
                 ]
             } else {
@@ -584,6 +621,7 @@ public final class ChatMessageSelectionInputPanelNode: ChatInputPanelNode {
                     self.deleteButton,
                     self.reportButton,
                     self.shareButton,
+                    self.incognitoForwardButton,
                     self.forwardButton
                 ]
             }

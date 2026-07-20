@@ -80,6 +80,11 @@ public final class ChatPanelInterfaceInteraction {
     public let blockMessageAuthor: (EngineRawMessage, ContextControllerProtocol?) -> Void
     public let deleteMessages: ([EngineRawMessage], ContextControllerProtocol?, @escaping (ContextMenuActionResult) -> Void) -> Void
     public let forwardSelectedMessages: () -> Void
+    // Shadow: forward the current message selection with sender names pre-hidden
+    // (hideNames = true), i.e. "forward without author" straight from the
+    // multi-select panel's anonymous-forward button. Symmetric to
+    // forwardSelectedMessages; reads the selection itself.
+    public let forwardSelectedMessagesWithoutAuthor: () -> Void
     public let forwardCurrentForwardMessages: () -> Void
     public let forwardMessages: ([EngineRawMessage]) -> Void
     // AyuGram: forward messages with sender names pre-hidden (hideNames = true),
@@ -215,6 +220,7 @@ public final class ChatPanelInterfaceInteraction {
         blockMessageAuthor: @escaping (EngineRawMessage, ContextControllerProtocol?) -> Void,
         deleteMessages: @escaping ([EngineRawMessage], ContextControllerProtocol?, @escaping (ContextMenuActionResult) -> Void) -> Void,
         forwardSelectedMessages: @escaping () -> Void,
+        forwardSelectedMessagesWithoutAuthor: @escaping () -> Void = {},
         forwardCurrentForwardMessages: @escaping () -> Void,
         forwardMessages: @escaping ([EngineRawMessage]) -> Void,
         forwardMessagesWithoutAuthor: @escaping ([EngineRawMessage]) -> Void = { _ in },
@@ -347,6 +353,7 @@ public final class ChatPanelInterfaceInteraction {
         self.blockMessageAuthor = blockMessageAuthor
         self.deleteMessages = deleteMessages
         self.forwardSelectedMessages = forwardSelectedMessages
+        self.forwardSelectedMessagesWithoutAuthor = forwardSelectedMessagesWithoutAuthor
         self.forwardCurrentForwardMessages = forwardCurrentForwardMessages
         self.forwardMessages = forwardMessages
         self.forwardMessagesWithoutAuthor = forwardMessagesWithoutAuthor

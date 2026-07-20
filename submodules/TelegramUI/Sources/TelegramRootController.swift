@@ -205,6 +205,17 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
     }
     
     public func addRootControllers(showCallsTab: Bool) {
+        // Shadow: flush the bottom-bar toggles into their UserDefaults mirror
+        // BEFORE the tab bar is created, so the low-level tab-bar modules
+        // (TabBarComponent / TabBarContollerNode) read the correct compact /
+        // hide-search state on the very first layout instead of an absent key
+        // (== false). Without this the compact bar and the folders-at-bottom
+        // panel restore from different sources at cold start and end up out of
+        // sync (folders stay lowered while the bar reverts to full size). The
+        // reactive ayuBottomBarDisposable below still keeps the mirror live for
+        // later changes.
+        ayuSyncBottomBarDefaults()
+
         let tabBarController = TabBarControllerImpl(theme: self.presentationData.theme, strings: self.presentationData.strings)
         tabBarController.navigationPresentation = .master
         let chatListController = self.context.sharedContext.makeChatListController(context: self.context, location: .chatList(groupId: .root), controlsHistoryPreload: true, hideNetworkActivityStatus: false, previewing: false, enableDebugActions: !GlobalExperimentalSettings.isAppStoreBuild)

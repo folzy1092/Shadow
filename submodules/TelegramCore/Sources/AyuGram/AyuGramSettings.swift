@@ -490,21 +490,49 @@ private func setAyuGramSettingsCurrent(_ settings: AyuGramSettings) {
     ayuGramSettingsStateLock.lock()
     let previous = ayuGramSettingsStateValue
     ayuGramSettingsStateValue = settings
+    let alreadyMirrored = ayuHasMirroredBottomBarDefaults
     ayuGramSettingsStateLock.unlock()
     // Mirror the bottom-bar toggles into UserDefaults so the low-level tab-bar
     // modules (TabBarUI / TabBarComponent) can read them without taking a
     // dependency on TelegramCore. Keys are shared with those modules; see
     // AyuBottomBarDefaultsKeys below. This function is called very frequently
-    // (on every settings read inside a transaction), so only write when one of
-    // the mirrored values actually changed.
-    if previous.foldersAtBottom != settings.foldersAtBottom
+    // (on every settings read inside a transaction), so normally only write when
+    // one of the mirrored values actually changed — BUT the very first mirror
+    // must always be written, even when the settings equal the defaults. Without
+    // this the low-level tab bar could read an absent key (== false) at cold
+    // start and render the wrong bottom-bar state until the next change, which is
+    // exactly the compact/folders desync seen after a restart. See also
+    // ayuSyncBottomBarDefaults(), called early from the root controller.
+    let changed = previous.foldersAtBottom != settings.foldersAtBottom
         || previous.hideBottomSearch != settings.hideBottomSearch
-        || previous.compactBottomBar != settings.compactBottomBar {
-        let defaults = UserDefaults.standard
-        defaults.set(settings.foldersAtBottom, forKey: AyuBottomBarDefaultsKeys.foldersAtBottom)
-        defaults.set(settings.hideBottomSearch, forKey: AyuBottomBarDefaultsKeys.hideBottomSearch)
-        defaults.set(settings.compactBottomBar, forKey: AyuBottomBarDefaultsKeys.compactBottomBar)
+        || previous.compactBottomBar != settings.compactBottomBar
+    if changed || !alreadyMirrored {
+        writeAyuBottomBarDefaults(settings)
     }
+}
+
+// Whether the bottom-bar UserDefaults mirror has been written at least once this
+// process. Guards the "always write the first mirror" rule in
+// setAyuGramSettingsCurrent. Access is guarded by ayuGramSettingsStateLock.
+private var ayuHasMirroredBottomBarDefaults = false
+
+private func writeAyuBottomBarDefaults(_ settings: AyuGramSettings) {
+    let defaults = UserDefaults.standard
+    defaults.set(settings.foldersAtBottom, forKey: AyuBottomBarDefaultsKeys.foldersAtBottom)
+    defaults.set(settings.hideBottomSearch, forKey: AyuBottomBarDefaultsKeys.hideBottomSearch)
+    defaults.set(settings.compactBottomBar, forKey: AyuBottomBarDefaultsKeys.compactBottomBar)
+    ayuGramSettingsStateLock.lock()
+    ayuHasMirroredBottomBarDefaults = true
+    ayuGramSettingsStateLock.unlock()
+}
+
+// Shadow: synchronously flush the current bottom-bar toggles into their
+// UserDefaults mirror from the process-wide snapshot. Call this once, early
+// (before the tab bar is created), so the low-level tab-bar modules never read a
+// stale/absent mirror on cold start. Safe to call repeatedly; it just rewrites
+// the same three keys.
+public func ayuSyncBottomBarDefaults() {
+    writeAyuBottomBarDefaults(ayuGramSettingsCurrent)
 }
 
 // Shared UserDefaults keys for the three "bottom interface" toggles. Duplicated

@@ -1909,6 +1909,17 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                     f(.dismissWithoutContent)
                 })))
             }
+        } else if isCopyProtected {
+            // Shadow: content protection strips the .forward option upstream, so
+            // there is no Forward action to show. Mirror Swiftgram and surface a
+            // non-clickable notice (disabled text color + nil action) so the user
+            // understands why forwarding is unavailable. Gated on isCopyProtected
+            // (not on .forward, which is absent here); when the fork's
+            // allowSaveRestrictedContent is on, message.isCopyProtected() is false,
+            // .forward is present and the normal actions above are used instead.
+            actions.append(.action(ContextMenuActionItem(text: "Обычная пересылка запрещена.", textColor: .disabled, icon: { theme in
+                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/ForwardDisable"), color: theme.actionSheet.secondaryTextColor)
+            }, action: nil)))
         }
 
         // AyuGram: "Burn" a kept view-once / self-destruct message — report it as
