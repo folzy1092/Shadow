@@ -1917,9 +1917,10 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             // (not on .forward, which is absent here); when the fork's
             // allowSaveRestrictedContent is on, message.isCopyProtected() is false,
             // .forward is present and the normal actions above are used instead.
+            let noForwardAction: ((ContextControllerProtocol?, @escaping (ContextMenuActionResult) -> Void) -> Void)? = nil
             actions.append(.action(ContextMenuActionItem(text: "Обычная пересылка запрещена.", textColor: .disabled, icon: { theme in
                 return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/ForwardDisable"), color: theme.actionSheet.secondaryTextColor)
-            }, action: nil)))
+            }, action: noForwardAction)))
         }
 
         // AyuGram: "Burn" a kept view-once / self-destruct message — report it as
