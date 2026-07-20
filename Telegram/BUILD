@@ -1786,7 +1786,11 @@ ios_application(
         ":RequiredDeviceCapabilitiesPlist",
         ":UrlTypesInfoPlist",
     ],
-    app_icons = [ ":ShadowAppIcon" ],
+    # Shadow fork: reverted to the stock Icon Composer bundle (":Telegram_icon").
+    # The custom ShadowAppIcon.xcassets (legacy appiconset) is rejected by actool
+    # under Xcode 26 during app bundling. Restore the working upstream icon; the
+    # custom-brand icon can be re-added later as a proper .icon bundle.
+    app_icons = [ ":{}_icon".format(name) for name in composer_icon_folders ],
     alternate_icons = [
         ":{}".format(name) for name in alternate_icon_folders
     ],
