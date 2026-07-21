@@ -2092,6 +2092,8 @@ extension ChatControllerImpl {
                 }
             }
         }, forwardCurrentForwardMessages: { [weak self] in
+            if let strongSelf = self {
+                strongSelf.commitPurposefulAction()
                 if let forwardMessageIds = strongSelf.presentationInterfaceState.interfaceState.forwardMessageIds {
                     strongSelf.forwardMessages(messageIds: forwardMessageIds, options: strongSelf.presentationInterfaceState.interfaceState.forwardOptionsState, resetCurrent: true)
                 }
