@@ -2079,9 +2079,19 @@ extension ChatControllerImpl {
                     strongSelf.forwardMessages(messageIds: forwardMessageIds, options: ChatInterfaceForwardOptionsState(hideNames: true, hideCaptions: false, unhideNamesOnCaptionChange: false))
                 }
             }
-        }, forwardCurrentForwardMessages: { [weak self] in
+        }, forwardSelectedMessagesAsCopy: { [weak self] in
+            // Shadow: content-protection bypass. Forward the current selection by
+            // re-uploading copies (asCopy: true) so it works in chats/channels
+            // where native forwarding is blocked (noforwards). Same selection
+            // source as forwardSelectedMessages.
             if let strongSelf = self {
                 strongSelf.commitPurposefulAction()
+                if let forwardMessageIdsSet = strongSelf.presentationInterfaceState.interfaceState.selectionState?.selectedIds {
+                    let forwardMessageIds = Array(forwardMessageIdsSet).sorted()
+                    strongSelf.forwardMessages(messageIds: forwardMessageIds, asCopy: true)
+                }
+            }
+        }, forwardCurrentForwardMessages: { [weak self] in
                 if let forwardMessageIds = strongSelf.presentationInterfaceState.interfaceState.forwardMessageIds {
                     strongSelf.forwardMessages(messageIds: forwardMessageIds, options: strongSelf.presentationInterfaceState.interfaceState.forwardOptionsState, resetCurrent: true)
                 }

@@ -9771,8 +9771,14 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             guard let strongSelf = self, !imageItems.isEmpty else {
                 return
             }
-            let images = imageItems as! [UIImage]
-            
+            // Shadow: defensive — loadObjects is typed to UIImage, but guard against
+            // any non-UIImage element instead of force-casting (a force cast here
+            // crashes the app if the drop session yields an unexpected object type).
+            let images = imageItems.compactMap { $0 as? UIImage }
+            guard !images.isEmpty else {
+                strongSelf.chatDisplayNode.updateDropInteraction(isActive: false)
+                return
+            }
             strongSelf.chatDisplayNode.updateDropInteraction(isActive: false)
             if images.count == 1, let image = images.first {
                 let maxSide = max(image.size.width, image.size.height)

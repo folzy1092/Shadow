@@ -84,6 +84,13 @@ public func gitConfigProfileBadge(forUserId userId: Int64) -> GitConfigProfileBa
     return gitConfigCurrent.profileBadges.first(where: { $0.userId == userId })
 }
 
+// Shadow: all profile badges for a user (the remote config may list more than
+// one for the same user_id). `gitConfigProfileBadge` returns only the first;
+// this returns every match so the UI can render each one.
+public func gitConfigProfileBadges(forUserId userId: Int64) -> [GitConfigProfileBadge] {
+    return gitConfigCurrent.profileBadges.filter({ $0.userId == userId })
+}
+
 // Look up a chat badge by chat id.
 public func gitConfigChatBadge(forChatId chatId: Int64) -> GitConfigBadge? {
     return gitConfigCurrent.badges.first(where: { $0.chatId == chatId })

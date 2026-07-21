@@ -182,10 +182,16 @@ private func ayuGramProfileItems(peerId: EnginePeer.Id, photo: [TelegramMediaIma
 private func gitConfigBadgeItem(emojiId: Int64, textTemplate: String?, name: String, id: AnyHashable) -> PeerInfoScreenItem {
     let attributedPrefix = NSMutableAttributedString(string: "  ")
     attributedPrefix.addAttribute(ChatTextInputAttributes.customEmoji, value: ChatTextInputTextCustomEmojiAttribute(interactivelySelectedFromPackId: nil, fileId: emojiId, file: nil), range: NSMakeRange(0, 1))
+    // Shadow: fall back to a readable default caption when the remote config
+    // supplies no text_template (previously the badge rendered with an empty
+    // label — just a lone emoji with no explanation).
     var text = textTemplate ?? ""
     text = text.replacingOccurrences(of: "{user_name}", with: name)
     text = text.replacingOccurrences(of: "{chat_name}", with: name)
     text = text.replacingOccurrences(of: "**", with: "")
+    if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        text = "Особый значок Shadow"
+    }
     return PeerInfoScreenCommentItem(id: id, text: text, attributedPrefix: attributedPrefix, useAccentLinkColor: false, linkAction: nil)
 }
 
@@ -301,7 +307,17 @@ func infoItems(
         }
         
         if let phone = user.phone, !(user.id == context.account.peerId && ayuGramSettingsCurrent.hideOwnPhoneNumber) {
-            let formattedPhone = formatPhoneNumber(context: context, number: phone)
+            // Shadow: visual phone-number spoof on the profile page. On our own
+            // profile, if a spoofed number is set, display it instead of the real
+            // one (mirrors the ID/DC spoof rows above and the Settings screen).
+            // Real user.phone is never modified — this is display-only.
+            let displayPhone: String
+            if user.id == context.account.peerId, let spoofedDigits = ayuGramSettingsCurrent.spoofedPhoneDigitsForDisplay() {
+                displayPhone = spoofedDigits
+            } else {
+                displayPhone = phone
+            }
+            let formattedPhone = formatPhoneNumber(context: context, number: displayPhone)
             let label: String
             if formattedPhone.hasPrefix("+888 ") {
                 label = presentationData.strings.UserInfo_AnonymousNumberLabel
@@ -356,10 +372,11 @@ func infoItems(
         items[.ayugram]!.append(contentsOf: ayuGramProfileItems(peerId: user.id, photo: user.photo, includeRegistration: true, isMutualContact: user.flags.contains(.mutualContact), isSelf: user.id == context.account.peerId, idBase: 3500, presentationData: presentationData, getController: { [weak interaction] in
             interaction?.getController()
         }))
-        // AyuGram: profile badge (custom emoji from the remote config)
-        // shown only for the configured user ids (profile_badges).
-        if let gitBadge = gitConfigProfileBadge(forUserId: user.id.id._internalGetInt64Value()) {
-            items[currentPeerInfoSection]!.append(gitConfigBadgeItem(emojiId: gitBadge.emojiId, textTemplate: gitBadge.textTemplate, name: EnginePeer(user).compactDisplayTitle, id: 3600))
+        // AyuGram: profile badge(s) (custom emoji from the remote config)
+        // shown only for the configured user ids (profile_badges). Renders every
+        // configured badge for this user, not just the first.
+        for (index, gitBadge) in gitConfigProfileBadges(forUserId: user.id.id._internalGetInt64Value()).enumerated() {
+            items[currentPeerInfoSection]!.append(gitConfigBadgeItem(emojiId: gitBadge.emojiId, textTemplate: gitBadge.textTemplate, name: EnginePeer(user).compactDisplayTitle, id: 3600 + index))
         }
 
         if let cachedData = data.cachedData as? CachedUserData {

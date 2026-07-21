@@ -334,7 +334,9 @@ public final class ChatMessageSelectionInputPanelNode: ChatInputPanelNode {
             return
         }
         if let actions = self.actions, actions.isCopyProtected {
-            self.interfaceInteraction?.displayCopyProtectionTip(self.forwardButton, false)
+            // Shadow: instead of just showing the copy-protection tip, bypass the
+            // restriction by re-uploading copies of the selected messages.
+            self.interfaceInteraction?.forwardSelectedMessagesAsCopy()
         } else if !self.forwardButton.isImplicitlyDisabled {
             self.interfaceInteraction?.forwardSelectedMessages()
         }
@@ -349,7 +351,10 @@ public final class ChatMessageSelectionInputPanelNode: ChatInputPanelNode {
             return
         }
         if let actions = self.actions, actions.isCopyProtected {
-            self.interfaceInteraction?.displayCopyProtectionTip(self.incognitoForwardButton, false)
+            // Shadow: under content protection, re-upload copies (which are already
+            // sent from our own account without the original author) — same bypass
+            // as the regular forward button.
+            self.interfaceInteraction?.forwardSelectedMessagesAsCopy()
         } else if !self.incognitoForwardButton.isImplicitlyDisabled {
             self.interfaceInteraction?.forwardSelectedMessagesWithoutAuthor()
         }
@@ -504,9 +509,14 @@ public final class ChatMessageSelectionInputPanelNode: ChatInputPanelNode {
         if let actions = self.actions {
             self.deleteButton.isEnabled = false
             self.reportButton.isEnabled = false
-            self.forwardButton.isImplicitlyDisabled = !actions.options.contains(.forward)
-            // Shadow: anonymous forward is available whenever regular forward is.
-            self.incognitoForwardButton.isImplicitlyDisabled = !actions.options.contains(.forward)
+            // Shadow: keep the forward buttons tappable under content protection —
+            // the copy bypass (re-upload) works even when the server strips the
+            // native .forward option. Only implicitly-disable them when forwarding
+            // is unavailable for some OTHER reason (no forward option AND not
+            // copy-protected).
+            let forwardImplicitlyDisabled = !actions.options.contains(.forward) && !actions.isCopyProtected
+            self.forwardButton.isImplicitlyDisabled = forwardImplicitlyDisabled
+            self.incognitoForwardButton.isImplicitlyDisabled = forwardImplicitlyDisabled
 
             if self.peerMedia {
                 self.deleteButton.isEnabled = !actions.options.intersection([.deleteLocally, .deleteGlobally]).isEmpty
@@ -646,11 +656,23 @@ public final class ChatMessageSelectionInputPanelNode: ChatInputPanelNode {
             offset += buttonSize.width + spacing
         }
         
-        // Shadow: content-protection notice under the buttons.
+        // Shadow: content-protection notice under the buttons — an icon (circle /
+        // "no-forward" glyph, copyright-style) followed by the text, matching the
+        // Swiftgram-style restricted-forward hint.
         if interfaceState.copyProtectionEnabled {
             let buttonsBottom = buttonSize.height
-            let noticeText = "Обычная пересылка в этом чате запрещена защитой контента."
-            self.restrictedForwardInfoNode.attributedText = NSAttributedString(string: noticeText, font: Font.regular(13.0), textColor: interfaceState.theme.chat.inputPanel.secondaryTextColor, paragraphAlignment: .center)
+            let noticeColor = interfaceState.theme.chat.inputPanel.secondaryTextColor
+            let noticeString = NSMutableAttributedString()
+            if let iconImage = generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/ForwardDisable"), color: noticeColor) {
+                let attachment = NSTextAttachment()
+                attachment.image = iconImage
+                let iconSize = CGSize(width: 15.0, height: 15.0)
+                attachment.bounds = CGRect(x: 0.0, y: -2.5, width: iconSize.width, height: iconSize.height)
+                noticeString.append(NSAttributedString(attachment: attachment))
+                noticeString.append(NSAttributedString(string: "  ", font: Font.regular(13.0), textColor: noticeColor))
+            }
+            noticeString.append(NSAttributedString(string: "Обычная пересылка запрещена", font: Font.regular(13.0), textColor: noticeColor))
+            self.restrictedForwardInfoNode.attributedText = noticeString
             let noticeInset: CGFloat = 16.0
             let noticeSize = self.restrictedForwardInfoNode.updateLayout(CGSize(width: width - leftInset - rightInset - noticeInset * 2.0, height: 44.0))
             let noticeSpacing: CGFloat = 6.0

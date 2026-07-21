@@ -15,7 +15,46 @@ import TopMessageReactions
 import ChatMessagePaymentAlertController
 
 extension ChatControllerImpl {
-    func forwardMessages(messageIds: [EngineMessage.Id], options: ChatInterfaceForwardOptionsState? = nil, resetCurrent: Bool = false) {
+    // Shadow: build "copy" enqueue messages that bypass content-protection
+    // (noforwards). Instead of a native .forward (which the server rejects for
+    // copy-protected sources), we re-send each message's media as a NEW standalone
+    // upload plus its text/caption — the media bytes are already in the local
+    // media box from display, so this re-uploads them under our own account, the
+    // same technique the core uses for secret-chat forwards
+    // (convertForwardedMediaForSecretChat). Messages with no forwardable media and
+    // no text (service actions, expired media, webpages-only) are dropped.
+    private func ayuBuildCopyMessages(_ messages: [EngineRawMessage], threadId: Int64?) -> [EnqueueMessage] {
+        var result: [EnqueueMessage] = []
+        for message in messages {
+            var freshMedia: Media?
+            for media in message.media {
+                if let file = media as? TelegramMediaFile {
+                    freshMedia = TelegramMediaFile(fileId: MediaId(namespace: Namespaces.Media.LocalFile, id: Int64.random(in: Int64.min ... Int64.max)), partialReference: file.partialReference, resource: file.resource, previewRepresentations: file.previewRepresentations, videoThumbnails: file.videoThumbnails, immediateThumbnailData: file.immediateThumbnailData, mimeType: file.mimeType, size: file.size, attributes: file.attributes, alternativeRepresentations: [])
+                    break
+                } else if let image = media as? TelegramMediaImage {
+                    freshMedia = TelegramMediaImage(imageId: MediaId(namespace: Namespaces.Media.LocalImage, id: Int64.random(in: Int64.min ... Int64.max)), representations: image.representations, immediateThumbnailData: image.immediateThumbnailData, reference: nil, partialReference: image.partialReference, flags: [])
+                    break
+                }
+            }
+
+            var attributes: [MessageAttribute] = []
+            for attribute in message.attributes {
+                if let entities = attribute as? TextEntitiesMessageAttribute {
+                    attributes.append(entities)
+                }
+            }
+
+            if freshMedia == nil && message.text.isEmpty {
+                continue
+            }
+
+            let mediaReference: AnyMediaReference? = freshMedia.flatMap { .standalone(media: $0) }
+            result.append(.message(text: message.text, attributes: attributes, inlineStickers: [:], mediaReference: mediaReference, threadId: threadId, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: []))
+        }
+        return result
+    }
+
+    func forwardMessages(messageIds: [EngineMessage.Id], options: ChatInterfaceForwardOptionsState? = nil, resetCurrent: Bool = false, asCopy: Bool = false) {
         let _ = (self.context.engine.data.get(EngineDataMap(
             messageIds.map(TelegramEngine.EngineData.Item.Messages.Message.init)
         ))
@@ -23,11 +62,11 @@ extension ChatControllerImpl {
             let sortedMessages = messages.values.compactMap { $0?._asMessage() }.sorted { lhs, rhs in
                 return lhs.id < rhs.id
             }
-            self?.forwardMessages(messages: sortedMessages, options: options, resetCurrent: resetCurrent)
+            self?.forwardMessages(messages: sortedMessages, options: options, resetCurrent: resetCurrent, asCopy: asCopy)
         })
     }
 
-    func forwardMessages(messages: [EngineRawMessage], options: ChatInterfaceForwardOptionsState? = nil, resetCurrent: Bool) {
+    func forwardMessages(messages: [EngineRawMessage], options: ChatInterfaceForwardOptionsState? = nil, resetCurrent: Bool, asCopy: Bool = false) {
         let _ = self.presentVoiceMessageDiscardAlert(action: {
             var filter: ChatListNodePeersFilter = [.onlyWriteable, .excludeDisabled, .doNotSearchMessages]
             var hasPublicPolls = false
@@ -154,10 +193,15 @@ extension ChatControllerImpl {
                         
                         var attributes: [EngineMessage.Attribute] = []
                         attributes.append(ForwardOptionsMessageAttribute(hideNames: forwardOptions?.hideNames == true, hideCaptions: forwardOptions?.hideCaptions == true))
-                        
-                        result.append(contentsOf: messages.map { message -> EnqueueMessage in
-                            return .forward(source: message.id, threadId: nil, grouping: .auto, attributes: attributes, correlationId: nil)
-                        })
+
+                        if asCopy {
+                            // Shadow: content-protection bypass — re-send copies instead of native forwards.
+                            result.append(contentsOf: strongSelf.ayuBuildCopyMessages(messages, threadId: nil))
+                        } else {
+                            result.append(contentsOf: messages.map { message -> EnqueueMessage in
+                                return .forward(source: message.id, threadId: nil, grouping: .auto, attributes: attributes, correlationId: nil)
+                            })
+                        }
                         
                         let commit: ([EnqueueMessage]) -> Void = { result in
                             guard let strongSelf = self else {
@@ -355,7 +399,22 @@ extension ChatControllerImpl {
                 }
                 let peerId = peer.id
                 let accountPeerId = strongSelf.context.account.peerId
-                
+
+                if asCopy {
+                    // Shadow: content-protection bypass. Native forward is blocked for
+                    // the source chat, so instead of routing through the forward
+                    // preview panel we enqueue re-uploaded copies straight into the
+                    // chosen peer (works the same whether it's the current chat,
+                    // Saved Messages, or another chat).
+                    let copyMessages = strongSelf.ayuBuildCopyMessages(messages, threadId: threadId)
+                    if !copyMessages.isEmpty {
+                        let _ = enqueueMessages(account: strongSelf.context.account, peerId: peerId, messages: copyMessages).startStandalone()
+                    }
+                    strongSelf.updateChatPresentationInterfaceState(animated: false, interactive: true, { $0.updatedInterfaceState({ $0.withoutSelectionState() }) })
+                    strongController.dismiss()
+                    return
+                }
+
                 if resetCurrent {
                     strongSelf.updateChatPresentationInterfaceState(animated: false, interactive: true, { $0.updatedInterfaceState({ $0.withUpdatedForwardMessageIds(nil).withUpdatedForwardOptionsState(nil) }) })
                 }
@@ -391,10 +450,20 @@ extension ChatControllerImpl {
                     }
                     
                     var correlationIds: [Int64] = []
-                    let mappedMessages = messages.map { message -> EnqueueMessage in
-                        let correlationId = Int64.random(in: Int64.min ... Int64.max)
-                        correlationIds.append(correlationId)
-                        return .forward(source: message.id, threadId: nil, grouping: .auto, attributes: [], correlationId: correlationId)
+                    let mappedMessages: [EnqueueMessage]
+                    if asCopy {
+                        // Shadow: content-protection bypass — re-send copies instead of native forwards.
+                        mappedMessages = strongSelf.ayuBuildCopyMessages(messages, threadId: nil).map { message -> EnqueueMessage in
+                            let correlationId = Int64.random(in: Int64.min ... Int64.max)
+                            correlationIds.append(correlationId)
+                            return message.withUpdatedCorrelationId(correlationId)
+                        }
+                    } else {
+                        mappedMessages = messages.map { message -> EnqueueMessage in
+                            let correlationId = Int64.random(in: Int64.min ... Int64.max)
+                            correlationIds.append(correlationId)
+                            return .forward(source: message.id, threadId: nil, grouping: .auto, attributes: [], correlationId: correlationId)
+                        }
                     }
                     
                     let _ = (reactionItems

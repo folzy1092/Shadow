@@ -93,6 +93,10 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
     // tab-bar modules and forces a relayout so they apply immediately and on
     // cold start, not only after the next unrelated layout pass).
     private var ayuBottomBarDisposable: Disposable?
+    // Shadow: remembered showCallsTab so the settings-change handler can rebuild
+    // the root controllers with the correct tab set (the value is only passed
+    // into addRootControllers/updateRootControllers as a parameter otherwise).
+    private var ayuShowCallsTab: Bool = false
     
     override public var minimizedContainer: MinimizedContainer? {
         didSet {
@@ -205,6 +209,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
     }
     
     public func addRootControllers(showCallsTab: Bool) {
+        self.ayuShowCallsTab = showCallsTab
         // Shadow: flush the bottom-bar toggles into their UserDefaults mirror
         // BEFORE the tab bar is created, so the low-level tab-bar modules
         // (TabBarComponent / TabBarContollerNode) read the correct compact /
@@ -272,21 +277,38 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         // read — and force the tab bar to relayout so the state is correct on
         // launch and updates live, instead of reverting until the next layout.
         self.ayuBottomBarDisposable?.dispose()
+        var ayuIsFirstBottomBarEmission = true
         self.ayuBottomBarDisposable = (ayuGramSettings(postbox: self.context.account.postbox)
-        |> map { settings -> (Bool, Bool) in
-            return (settings.compactBottomBar, settings.hideBottomSearch)
+        |> map { settings -> (Bool, Bool, Bool) in
+            return (settings.compactBottomBar, settings.hideBottomSearch, settings.foldersAtBottom)
         }
         |> distinctUntilChanged(isEqual: { $0 == $1 })
-        |> deliverOnMainQueue).start(next: { [weak self] valuePair in
-            let (compact, hideSearch) = valuePair
+        |> deliverOnMainQueue).start(next: { [weak self] valueTuple in
+            guard let self else {
+                return
+            }
+            let (compact, hideSearch, _) = valueTuple
             let defaults = UserDefaults.standard
             defaults.set(compact, forKey: "shadow.compactBottomBar")
             defaults.set(hideSearch, forKey: "shadow.hideBottomSearch")
-            (self?.rootTabController as? TabBarControllerImpl)?.updateLayout(transition: .animated(duration: 0.25, curve: .easeInOut))
+            (self.rootTabController as? TabBarControllerImpl)?.updateLayout(transition: .animated(duration: 0.25, curve: .easeInOut))
+            // Shadow: on a genuine CHANGE of these bottom-interface toggles (not the
+            // initial cold-start emission), rebuild the root tab controllers so every
+            // dependent component (folders-at-bottom panel, compact bar, search
+            // placement) re-lays-out from the same fresh state at once. This fixes the
+            // partial desync where, after toggling compact / folders-at-bottom, some
+            // pieces reverted on the next layout while the folder strip stayed
+            // displaced until an unrelated full re-render (e.g. opening Contacts).
+            if ayuIsFirstBottomBarEmission {
+                ayuIsFirstBottomBarEmission = false
+            } else {
+                self.updateRootControllers(showCallsTab: self.ayuShowCallsTab)
+            }
         })
     }
         
     public func updateRootControllers(showCallsTab: Bool) {
+        self.ayuShowCallsTab = showCallsTab
         guard let rootTabController = self.rootTabController as? TabBarControllerImpl else {
             return
         }

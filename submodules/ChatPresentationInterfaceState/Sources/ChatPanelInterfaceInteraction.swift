@@ -85,6 +85,10 @@ public final class ChatPanelInterfaceInteraction {
     // multi-select panel's anonymous-forward button. Symmetric to
     // forwardSelectedMessages; reads the selection itself.
     public let forwardSelectedMessagesWithoutAuthor: () -> Void
+    // Shadow: forward the current selection by RE-UPLOADING copies (bypasses
+    // content protection / noforwards). Used by the multi-select forward button in
+    // copy-protected chats where a native forward is rejected.
+    public let forwardSelectedMessagesAsCopy: () -> Void
     public let forwardCurrentForwardMessages: () -> Void
     public let forwardMessages: ([EngineRawMessage]) -> Void
     // AyuGram: forward messages with sender names pre-hidden (hideNames = true),
@@ -221,6 +225,7 @@ public final class ChatPanelInterfaceInteraction {
         deleteMessages: @escaping ([EngineRawMessage], ContextControllerProtocol?, @escaping (ContextMenuActionResult) -> Void) -> Void,
         forwardSelectedMessages: @escaping () -> Void,
         forwardSelectedMessagesWithoutAuthor: @escaping () -> Void = {},
+        forwardSelectedMessagesAsCopy: @escaping () -> Void = {},
         forwardCurrentForwardMessages: @escaping () -> Void,
         forwardMessages: @escaping ([EngineRawMessage]) -> Void,
         forwardMessagesWithoutAuthor: @escaping ([EngineRawMessage]) -> Void = { _ in },
@@ -354,6 +359,7 @@ public final class ChatPanelInterfaceInteraction {
         self.deleteMessages = deleteMessages
         self.forwardSelectedMessages = forwardSelectedMessages
         self.forwardSelectedMessagesWithoutAuthor = forwardSelectedMessagesWithoutAuthor
+        self.forwardSelectedMessagesAsCopy = forwardSelectedMessagesAsCopy
         self.forwardCurrentForwardMessages = forwardCurrentForwardMessages
         self.forwardMessages = forwardMessages
         self.forwardMessagesWithoutAuthor = forwardMessagesWithoutAuthor
