@@ -123,14 +123,22 @@ private func audioArtworkData(from asset: AVURLAsset) -> Data? {
 
 private func descriptionWithUrl(_ url: URL) -> ICloudFileDescription? {
     if #available(iOSApplicationExtension 9.0, iOS 9.0, *) {
-        guard url.startAccessingSecurityScopedResource() else {
-            return nil
+        // Shadow: don't hard-require security-scoped access. When the file picker
+        // runs in `.import` mode iOS copies the pick into our own sandbox and the
+        // returned URL is a plain local file — startAccessingSecurityScopedResource()
+        // returns false for it, but we can read it directly. Only call the matching
+        // stop when access was actually granted (true iCloud/Files scoped URL).
+        let hasScopedAccess = url.startAccessingSecurityScopedResource()
+        defer {
+            if hasScopedAccess {
+                url.stopAccessingSecurityScopedResource()
+            }
         }
-        
+
         guard let urlData = try? url.bookmarkData(options: URL.BookmarkCreationOptions.suitableForBookmarkFile, includingResourceValuesForKeys: nil, relativeTo: nil) else {
             return nil
         }
-        
+
         guard let values = try? url.resourceValues(forKeys: Set([.fileSizeKey])), let fileSize = values.fileSize else {
             return nil
         }
@@ -184,9 +192,7 @@ private func descriptionWithUrl(_ url: URL) -> ICloudFileDescription? {
             fileSize: fileSize,
             audioMetadata: audioMetadata
         )
-        
-        url.stopAccessingSecurityScopedResource()
-        
+
         return result
     } else {
         return nil
@@ -298,10 +304,13 @@ public func fetchICloudFileResource(resource: ICloudFileResource) -> Signal<Engi
             }
         }
         
-        guard url.startAccessingSecurityScopedResource() else {
-            subscriber.putCompletion()
-            return EmptyDisposable
-        }
+        // Shadow: soft security-scoped access. For `.import`-mode picks the file
+        // is already a plain local copy in our sandbox — startAccessingSecurityScopedResource()
+        // returns false but the bytes are still readable, so don't abort the fetch
+        // when access isn't granted (that was silently dropping every Files pick on
+        // sideload signings without the iCloud entitlement). The paired stop in
+        // ICloudFileResourceCopyItem.deinit is a no-op when access wasn't granted.
+        _ = url.startAccessingSecurityScopedResource()
         
         let complete = {
             if resource.thumbnail {

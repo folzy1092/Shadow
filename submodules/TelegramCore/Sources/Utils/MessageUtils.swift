@@ -396,6 +396,16 @@ public extension Message {
         if ayuGramSettingsCurrent.allowSaveRestrictedContent {
             return false
         }
+        return self.isServerCopyProtected()
+    }
+
+    // Shadow: the real, server-side copy-protection state of the message's chat,
+    // ignoring the fork's `allowSaveRestrictedContent` client override. Used to
+    // decide whether the forward buttons must route through the re-upload copy
+    // bypass: native forwards are stripped by the server for protected sources
+    // regardless of our local "allow save" toggle, so the bypass must key off
+    // the true flag, not off isCopyProtected() (which the toggle forces false).
+    func isServerCopyProtected() -> Bool {
         if self.flags.contains(.CopyProtected) {
             return true
         } else if let group = self.peers[self.id.peerId] as? TelegramGroup, group.flags.contains(.copyProtectionEnabled) {

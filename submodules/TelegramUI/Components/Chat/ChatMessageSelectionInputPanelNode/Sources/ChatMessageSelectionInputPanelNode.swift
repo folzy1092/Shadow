@@ -324,16 +324,33 @@ public final class ChatMessageSelectionInputPanelNode: ChatInputPanelNode {
     @objc private func deleteButtonPressed() {
         self.interfaceInteraction?.deleteSelectedMessages(self.deleteButton)
     }
-    
+
     @objc private func reportButtonPressed() {
         self.interfaceInteraction?.reportSelectedMessages()
     }
-    
+
+    // Shadow: true, server-side copy protection of the current chat, independent
+    // of the fork's "allow save restricted content" toggle. That toggle forces
+    // actions.isCopyProtected (and presentationInterfaceState.copyProtectionEnabled)
+    // to false, which would otherwise route the forward buttons through a native
+    // forward — but the server still strips native forwards for protected chats,
+    // so we must detect protection from the peer's own flag and route through the
+    // re-upload copy bypass regardless of the toggle.
+    private var shouldForwardAsCopy: Bool {
+        if let actions = self.actions, actions.isCopyProtected {
+            return true
+        }
+        if let peer = self.presentationInterfaceState?.renderedPeer?.peer, peer.isCopyProtectionEnabled {
+            return true
+        }
+        return false
+    }
+
     @objc private func forwardButtonPressed() {
         if let _ = self.presentationInterfaceState?.renderedPeer?.peer as? TelegramSecretChat {
             return
         }
-        if let actions = self.actions, actions.isCopyProtected {
+        if self.shouldForwardAsCopy {
             // Shadow: instead of just showing the copy-protection tip, bypass the
             // restriction by re-uploading copies of the selected messages.
             self.interfaceInteraction?.forwardSelectedMessagesAsCopy()
@@ -350,7 +367,7 @@ public final class ChatMessageSelectionInputPanelNode: ChatInputPanelNode {
         if let _ = self.presentationInterfaceState?.renderedPeer?.peer as? TelegramSecretChat {
             return
         }
-        if let actions = self.actions, actions.isCopyProtected {
+        if self.shouldForwardAsCopy {
             // Shadow: under content protection, re-upload copies (which are already
             // sent from our own account without the original author) — same bypass
             // as the regular forward button.
