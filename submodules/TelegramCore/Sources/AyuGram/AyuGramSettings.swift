@@ -159,6 +159,11 @@ public struct AyuGramSettings: Codable, Equatable {
     public var spoofProfilePhoneEnabled: Bool
     public var spoofProfilePhoneValue: String
 
+    // CUSTOM BANNER — when on, a user-picked image (stored via AyuSavedMedia
+    // under a fixed name) is drawn behind the chat-list top region. Off by
+    // default; when off, or when no image is stored, the chat list looks stock.
+    public var customBannerEnabled: Bool
+
     public static var defaultSettings: AyuGramSettings {
         return AyuGramSettings(
             keepDeletedMessages: true,
@@ -204,7 +209,8 @@ public struct AyuGramSettings: Codable, Equatable {
             spoofProfileDcEnabled: false,
             spoofProfileDcValue: "",
             spoofProfilePhoneEnabled: false,
-            spoofProfilePhoneValue: ""
+            spoofProfilePhoneValue: "",
+            customBannerEnabled: false
         )
     }
 
@@ -303,7 +309,8 @@ public struct AyuGramSettings: Codable, Equatable {
         spoofProfileDcEnabled: Bool,
         spoofProfileDcValue: String,
         spoofProfilePhoneEnabled: Bool,
-        spoofProfilePhoneValue: String
+        spoofProfilePhoneValue: String,
+        customBannerEnabled: Bool
     ) {
         self.keepDeletedMessages = keepDeletedMessages
         self.saveEditHistory = saveEditHistory
@@ -349,6 +356,7 @@ public struct AyuGramSettings: Codable, Equatable {
         self.spoofProfileDcValue = spoofProfileDcValue
         self.spoofProfilePhoneEnabled = spoofProfilePhoneEnabled
         self.spoofProfilePhoneValue = spoofProfilePhoneValue
+        self.customBannerEnabled = customBannerEnabled
     }
 
     public init(from decoder: Decoder) throws {
@@ -397,6 +405,7 @@ public struct AyuGramSettings: Codable, Equatable {
         self.spoofProfileDcValue = (try container.decodeIfPresent(String.self, forKey: "spoofProfileDcValue")) ?? ""
         self.spoofProfilePhoneEnabled = ((try container.decodeIfPresent(Int32.self, forKey: "spoofProfilePhoneEnabled")) ?? 0) != 0
         self.spoofProfilePhoneValue = (try container.decodeIfPresent(String.self, forKey: "spoofProfilePhoneValue")) ?? ""
+        self.customBannerEnabled = ((try container.decodeIfPresent(Int32.self, forKey: "customBannerEnabled")) ?? 0) != 0
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -445,6 +454,7 @@ public struct AyuGramSettings: Codable, Equatable {
         try container.encode(self.spoofProfileDcValue, forKey: "spoofProfileDcValue")
         try container.encode((self.spoofProfilePhoneEnabled ? 1 : 0) as Int32, forKey: "spoofProfilePhoneEnabled")
         try container.encode(self.spoofProfilePhoneValue, forKey: "spoofProfilePhoneValue")
+        try container.encode((self.customBannerEnabled ? 1 : 0) as Int32, forKey: "customBannerEnabled")
     }
 }
 

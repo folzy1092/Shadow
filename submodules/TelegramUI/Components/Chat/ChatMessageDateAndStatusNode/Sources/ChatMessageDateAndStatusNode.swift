@@ -553,7 +553,12 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
             // (server only provides it for channel posts, like the view count).
             if arguments.forwardCount > 0 {
                 if let forwardImage = UIImage(bundleImageName: "Chat/Context Menu/Forward") {
-                    forwardsImage = generateTintedImage(image: forwardImage, color: dateColor)
+                    // Scale the (large) context-menu forward glyph down to the same
+                    // compact size as the inline replies icon, then tint it. Without
+                    // scaling the full-size icon overlaps the count text.
+                    let targetSize = CGSize(width: 13.0, height: 13.0)
+                    let scaled = generateScaledImage(image: forwardImage, size: targetSize, opaque: false, scale: nil) ?? forwardImage
+                    forwardsImage = generateTintedImage(image: scaled, color: dateColor)
                 }
             }
 

@@ -216,6 +216,8 @@ private final class AyuCustomizationArguments {
     let updateShowRegistrationDate: (Bool) -> Void
     let updateHideOwnPhoneNumber: (Bool) -> Void
     let syncGitConfig: () -> Void
+    let updateCustomBanner: (Bool) -> Void
+    let chooseBanner: () -> Void
 
     init(
         updateShowMessageSeconds: @escaping (Bool) -> Void,
@@ -237,7 +239,9 @@ private final class AyuCustomizationArguments {
         updateShowProfileDC: @escaping (Bool) -> Void,
         updateShowRegistrationDate: @escaping (Bool) -> Void,
         updateHideOwnPhoneNumber: @escaping (Bool) -> Void,
-        syncGitConfig: @escaping () -> Void
+        syncGitConfig: @escaping () -> Void,
+        updateCustomBanner: @escaping (Bool) -> Void,
+        chooseBanner: @escaping () -> Void
     ) {
         self.updateShowMessageSeconds = updateShowMessageSeconds
         self.updateDoubleTapToEdit = updateDoubleTapToEdit
@@ -259,6 +263,8 @@ private final class AyuCustomizationArguments {
         self.updateShowRegistrationDate = updateShowRegistrationDate
         self.updateHideOwnPhoneNumber = updateHideOwnPhoneNumber
         self.syncGitConfig = syncGitConfig
+        self.updateCustomBanner = updateCustomBanner
+        self.chooseBanner = chooseBanner
     }
 }
 
@@ -270,6 +276,7 @@ private enum AyuCustomizationSection: Int32 {
     case media
     case calls
     case githubConfig
+    case banner
 }
 
 private enum AyuCustomizationEntry: ItemListNodeEntry {
@@ -314,6 +321,11 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
     case syncGithub
     case githubConfigFooter
 
+    case bannerHeader
+    case customBanner(Bool)
+    case bannerChoose
+    case bannerFooter
+
     var section: ItemListSectionId {
         switch self {
         case .appearanceHeader, .showMessageSeconds, .doubleTapToEdit, .showExactLastSeen, .showExactLastSeenSeconds, .wideChannelPosts, .showExactViewCounts, .showForwardCount, .appearanceFooter:
@@ -330,6 +342,8 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
             return AyuCustomizationSection.calls.rawValue
         case .githubConfigHeader, .syncGithub, .githubConfigFooter:
             return AyuCustomizationSection.githubConfig.rawValue
+        case .bannerHeader, .customBanner, .bannerChoose, .bannerFooter:
+            return AyuCustomizationSection.banner.rawValue
         }
     }
 
@@ -369,6 +383,10 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .githubConfigHeader: return 31
         case .syncGithub: return 32
         case .githubConfigFooter: return 33
+        case .bannerHeader: return 34
+        case .customBanner: return 35
+        case .bannerChoose: return 36
+        case .bannerFooter: return 37
         }
     }
 
@@ -487,6 +505,18 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
             })
         case .githubConfigFooter:
             return ItemListTextItem(presentationData: presentationData, text: .plain("Загружает актуальные значки профилей и каналов из конфигурации GitHub. Значки также обновляются при запуске; эта кнопка обновляет их немедленно."), sectionId: self.section)
+        case .bannerHeader:
+            return ItemListSectionHeaderItem(presentationData: presentationData, text: "БАННЕР", sectionId: self.section)
+        case let .customBanner(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Кастомный баннер", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.updateCustomBanner(value)
+            })
+        case .bannerChoose:
+            return ItemListActionItem(presentationData: presentationData, title: "Выбрать изображение", kind: .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: {
+                arguments.chooseBanner()
+            })
+        case .bannerFooter:
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Отображает выбранное изображение как фон верхней части списка чатов (за историями, заголовком и поиском). Внизу баннера — затемнение для читаемости текста. Выключите переключатель, чтобы вернуть стандартный вид."), sectionId: self.section)
         }
     }
 }
@@ -537,11 +567,19 @@ private func ayuCustomizationEntries(settings: AyuGramSettings) -> [AyuCustomiza
     entries.append(.syncGithub)
     entries.append(.githubConfigFooter)
 
+    entries.append(.bannerHeader)
+    entries.append(.customBanner(settings.customBannerEnabled))
+    if settings.customBannerEnabled {
+        entries.append(.bannerChoose)
+    }
+    entries.append(.bannerFooter)
+
     return entries
 }
 
 private func ayuCustomizationController(context: AccountContext) -> ViewController {
     var presentControllerImpl: ((ViewController, ViewControllerPresentationArguments?) -> Void)?
+    var presentBannerImagePickerImpl: (() -> Void)?
 
     let arguments = AyuCustomizationArguments(
         updateShowMessageSeconds: { value in
@@ -607,6 +645,17 @@ private func ayuCustomizationController(context: AccountContext) -> ViewControll
                 let text = success ? "Значки обновлены с GitHub." : "Не удалось связаться с GitHub. Попробуйте позже."
                 presentControllerImpl?(textAlertController(context: context, title: nil, text: text, actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]), nil)
             })
+        },
+        updateCustomBanner: { value in
+            ayuUpdateSettings(context: context) { var s = $0; s.customBannerEnabled = value; return s }
+            if !value {
+                // Turning the banner off also drops the stored image, so re-enabling
+                // starts clean.
+                let _ = AyuSavedMedia.removeBanner(basePath: context.account.postbox.mediaBox.basePath)
+            }
+        },
+        chooseBanner: {
+            presentBannerImagePickerImpl?()
         }
     )
 
@@ -625,10 +674,53 @@ private func ayuCustomizationController(context: AccountContext) -> ViewControll
     presentControllerImpl = { [weak controller] c, a in
         controller?.present(c, in: .window(.root), with: a)
     }
+
+    // Shadow: present the system photo picker, then persist the picked image as
+    // the custom banner via AyuSavedMedia. A strong reference to the delegate is
+    // held for the lifetime of the picker so it isn't deallocated mid-flow.
+    var bannerPickerDelegate: BannerImagePickerDelegate?
+    presentBannerImagePickerImpl = { [weak controller] in
+        guard let controller = controller else {
+            return
+        }
+        let picker = UIImagePickerController()
+        picker.sourceType = .photoLibrary
+        picker.mediaTypes = ["public.image"]
+        let delegate = BannerImagePickerDelegate(completion: { image in
+            bannerPickerDelegate = nil
+            guard let image = image, let data = image.jpegData(compressionQuality: 0.9) else {
+                return
+            }
+            let _ = AyuSavedMedia.saveBanner(basePath: context.account.postbox.mediaBox.basePath, jpegData: data)
+            ayuUpdateSettings(context: context) { var s = $0; s.customBannerEnabled = true; return s }
+        })
+        bannerPickerDelegate = delegate
+        picker.delegate = delegate
+        controller.view.window?.rootViewController?.present(picker, animated: true)
+    }
     return controller
 }
 
-// MARK: - Шпион
+// Retained delegate for the banner photo picker: returns the picked image (or
+// nil on cancel) and always dismisses the picker.
+private final class BannerImagePickerDelegate: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+    private let completion: (UIImage?) -> Void
+
+    init(completion: @escaping (UIImage?) -> Void) {
+        self.completion = completion
+    }
+
+    func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
+        let image = (info[.editedImage] as? UIImage) ?? (info[.originalImage] as? UIImage)
+        picker.dismiss(animated: true)
+        self.completion(image)
+    }
+
+    func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+        picker.dismiss(animated: true)
+        self.completion(nil)
+    }
+}
 
 private final class AyuSpyArguments {
     let updateKeepDeleted: (Bool) -> Void

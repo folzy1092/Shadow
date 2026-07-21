@@ -192,6 +192,13 @@ public final class ChatListNavigationBar: Component {
 
     public final class View: UIView {
         private let edgeEffectView: EdgeEffectView
+
+        // Shadow: optional custom banner rendered behind the whole header (below
+        // the blur, stories, title and search). Gradient at the bottom keeps text
+        // readable. Never interactive. nil unless the setting is on + image stored.
+        private var bannerView: UIImageView?
+        private var bannerGradientLayer: CAGradientLayer?
+        private var bannerLoadedSignature: String?
         
         private let headerBackgroundContainer: GlassBackgroundContainerView
         public let headerContent = ComponentView<Empty>()
@@ -269,6 +276,73 @@ public final class ChatListNavigationBar: Component {
             return result
         }
         
+        // Shadow: build/update/remove the custom banner behind the header. Called
+        // from applyScroll with the current full-header frame. Loads the stored
+        // image lazily (only when the setting is on) and keeps it purely visual.
+        private func updateBanner(frame: CGRect, transition: ComponentTransition) {
+            guard ayuGramSettingsCurrent.customBannerEnabled, let component = self.component else {
+                if let bannerView = self.bannerView {
+                    bannerView.removeFromSuperview()
+                    self.bannerView = nil
+                    self.bannerGradientLayer = nil
+                    self.bannerLoadedSignature = nil
+                }
+                return
+            }
+
+            let basePath = component.context.account.postbox.mediaBox.basePath
+            let bannerPath = AyuSavedMedia.bannerPath(basePath: basePath)
+            // Signature = path + file size, so replacing the image reloads it.
+            var signature = bannerPath
+            if let attrs = try? FileManager.default.attributesOfItem(atPath: bannerPath), let size = attrs[.size] as? NSNumber {
+                signature += "_\(size.int64Value)"
+            } else {
+                if let bannerView = self.bannerView {
+                    bannerView.removeFromSuperview()
+                    self.bannerView = nil
+                    self.bannerGradientLayer = nil
+                    self.bannerLoadedSignature = nil
+                }
+                return
+            }
+
+            let bannerView: UIImageView
+            if let current = self.bannerView {
+                bannerView = current
+            } else {
+                bannerView = UIImageView()
+                bannerView.isUserInteractionEnabled = false
+                bannerView.contentMode = .scaleAspectFill
+                bannerView.clipsToBounds = true
+                let gradient = CAGradientLayer()
+                gradient.colors = [UIColor(white: 0.0, alpha: 0.0).cgColor, UIColor(white: 0.0, alpha: 0.55).cgColor]
+                gradient.startPoint = CGPoint(x: 0.5, y: 0.0)
+                gradient.endPoint = CGPoint(x: 0.5, y: 1.0)
+                bannerView.layer.addSublayer(gradient)
+                self.bannerGradientLayer = gradient
+                self.insertSubview(bannerView, at: 0)
+                self.bannerView = bannerView
+            }
+
+            if self.bannerLoadedSignature != signature {
+                if let data = AyuSavedMedia.bannerData(basePath: basePath), let image = UIImage(data: data) {
+                    bannerView.image = image
+                    self.bannerLoadedSignature = signature
+                } else {
+                    bannerView.removeFromSuperview()
+                    self.bannerView = nil
+                    self.bannerGradientLayer = nil
+                    self.bannerLoadedSignature = nil
+                    return
+                }
+            }
+
+            transition.setFrame(view: bannerView, frame: frame)
+            if let gradient = self.bannerGradientLayer {
+                gradient.frame = CGRect(origin: CGPoint(), size: frame.size)
+            }
+        }
+
         public func applyCurrentScroll(transition: ComponentTransition) {
             if let rawScrollOffset = self.rawScrollOffset, self.hasDeferredScrollOffset {
                 self.applyScroll(offset: rawScrollOffset, allowAvatarsExpansion: self.currentAllowAvatarsExpansion, transition: transition)
@@ -411,6 +485,16 @@ public final class ChatListNavigationBar: Component {
             let edgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: currentLayout.size.width, height: edgeEffectHeight))
             transition.setFrame(view: self.edgeEffectView, frame: edgeEffectFrame)
             self.edgeEffectView.update(content: nil, blur: true, alpha: 0.85, rect: edgeEffectFrame, edge: .top, edgeSize: min(54.0, edgeEffectHeight), transition: transition)
+
+            // Shadow: render the custom banner over the full header area. Hidden in
+            // active search (header content scrolls away). Purely a background layer.
+            let bannerFrame = CGRect(origin: CGPoint(), size: CGSize(width: currentLayout.size.width, height: visibleSize.height))
+            self.updateBanner(frame: bannerFrame, transition: transition)
+            if component.activeSearch != nil {
+                self.bannerView?.isHidden = true
+            } else {
+                self.bannerView?.isHidden = false
+            }
             
             let headerTransition = transition
             

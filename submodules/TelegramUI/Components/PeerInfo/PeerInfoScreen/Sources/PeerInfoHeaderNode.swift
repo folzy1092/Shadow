@@ -1236,10 +1236,25 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             smallTitleAttributes = MultiScaleTextState.Attributes(font: Font.medium(28.0), color: .white, shadowColor: titleShadowColor)
             
             if self.isSettings, case let .user(user) = peer {
-                var subtitle = formatPhoneNumber(context: self.context, number: user.phone ?? "")
-                
+                // Shadow: honour the fork's phone privacy on the settings header
+                // subtitle, same as the profile-body phone row. Hide the number
+                // entirely when "hide own phone" is on, or show the spoofed digits
+                // when a visual spoof is configured. Real user.phone is untouched.
+                var subtitle: String
+                if ayuGramSettingsCurrent.hideOwnPhoneNumber {
+                    subtitle = ""
+                } else if let spoofedDigits = ayuGramSettingsCurrent.spoofedPhoneDigitsForDisplay() {
+                    subtitle = formatPhoneNumber(context: self.context, number: spoofedDigits)
+                } else {
+                    subtitle = formatPhoneNumber(context: self.context, number: user.phone ?? "")
+                }
+
                 if let mainUsername = user.addressName, !mainUsername.isEmpty {
-                    subtitle = "\(subtitle) • @\(mainUsername)"
+                    if subtitle.isEmpty {
+                        subtitle = "@\(mainUsername)"
+                    } else {
+                        subtitle = "\(subtitle) • @\(mainUsername)"
+                    }
                 }
                 subtitleStringText = subtitle
                 subtitleAttributes = MultiScaleTextState.Attributes(font: Font.regular(17.0), color: .white)
