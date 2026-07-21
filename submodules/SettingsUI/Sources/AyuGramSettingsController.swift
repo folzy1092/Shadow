@@ -676,9 +676,8 @@ private func ayuCustomizationController(context: AccountContext) -> ViewControll
     }
 
     // Shadow: present the system photo picker, then persist the picked image as
-    // the custom banner via AyuSavedMedia. A strong reference to the delegate is
-    // held for the lifetime of the picker so it isn't deallocated mid-flow.
-    var bannerPickerDelegate: BannerImagePickerDelegate?
+    // the custom banner via AyuSavedMedia. The delegate keeps a strong reference
+    // to itself until the picker finishes, so it isn't deallocated mid-flow.
     presentBannerImagePickerImpl = { [weak controller] in
         guard let controller = controller else {
             return
@@ -687,14 +686,13 @@ private func ayuCustomizationController(context: AccountContext) -> ViewControll
         picker.sourceType = .photoLibrary
         picker.mediaTypes = ["public.image"]
         let delegate = BannerImagePickerDelegate(completion: { image in
-            bannerPickerDelegate = nil
             guard let image = image, let data = image.jpegData(compressionQuality: 0.9) else {
                 return
             }
             let _ = AyuSavedMedia.saveBanner(basePath: context.account.postbox.mediaBox.basePath, jpegData: data)
             ayuUpdateSettings(context: context) { var s = $0; s.customBannerEnabled = true; return s }
         })
-        bannerPickerDelegate = delegate
+        delegate.retainSelf()
         picker.delegate = delegate
         controller.view.window?.rootViewController?.present(picker, animated: true)
     }
@@ -705,20 +703,30 @@ private func ayuCustomizationController(context: AccountContext) -> ViewControll
 // nil on cancel) and always dismisses the picker.
 private final class BannerImagePickerDelegate: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
     private let completion: (UIImage?) -> Void
+    // Self-retain cycle held only for the picker's lifetime (see retainSelf()).
+    private var selfReference: BannerImagePickerDelegate?
 
     init(completion: @escaping (UIImage?) -> Void) {
         self.completion = completion
+    }
+
+    // Keep this delegate alive (UIImagePickerController's delegate is weak) until
+    // the picker finishes or is cancelled.
+    func retainSelf() {
+        self.selfReference = self
     }
 
     func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
         let image = (info[.editedImage] as? UIImage) ?? (info[.originalImage] as? UIImage)
         picker.dismiss(animated: true)
         self.completion(image)
+        self.selfReference = nil
     }
 
     func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
         picker.dismiss(animated: true)
         self.completion(nil)
+        self.selfReference = nil
     }
 }
 
