@@ -1332,6 +1332,12 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         }
         
         let isCopyProtected = chatPresentationInterfaceState.copyProtectionEnabled || message.isCopyProtected()
+        // Shadow: real, server-side copy protection of this message's chat,
+        // independent of the fork's allowSaveRestrictedContent toggle. The toggle
+        // forces isCopyProtected to false, but the server still strips the .forward
+        // option for protected chats — so without this the context menu would show
+        // neither a working Forward action nor the "forwarding disabled" notice.
+        let isServerCopyProtected = message.isServerCopyProtected()
         if !messageText.isEmpty || richMessageMarkdown != nil || (resourceAvailable && isImage) || diceEmoji != nil {
             if !isExpired {
                 if !isPoll {
@@ -1938,14 +1944,14 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                     f(.dismissWithoutContent)
                 })))
             }
-        } else if isCopyProtected {
+        } else if isServerCopyProtected {
             // Shadow: content protection strips the .forward option upstream, so
             // there is no Forward action to show. Mirror Swiftgram and surface a
             // non-clickable notice (disabled text color + nil action) so the user
-            // understands why forwarding is unavailable. Gated on isCopyProtected
-            // (not on .forward, which is absent here); when the fork's
-            // allowSaveRestrictedContent is on, message.isCopyProtected() is false,
-            // .forward is present and the normal actions above are used instead.
+            // understands why forwarding is unavailable. Gated on the real
+            // server-side protection flag (not on isCopyProtected, which the fork's
+            // allowSaveRestrictedContent toggle forces false — that would hide the
+            // notice even though the server still blocks native forwards).
             let noForwardAction: ((ContextControllerProtocol?, @escaping (ContextMenuActionResult) -> Void) -> Void)? = nil
             actions.append(.action(ContextMenuActionItem(text: "Обычная пересылка запрещена.", textColor: .disabled, icon: { theme in
                 return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/ForwardDisable"), color: theme.actionSheet.secondaryTextColor)

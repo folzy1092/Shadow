@@ -60,6 +60,10 @@ public struct AyuGramSettings: Codable, Equatable {
     // phrase ("last seen 1 hour ago"), whenever the client actually has a
     // precise timestamp to show.
     public var showExactLastSeen: Bool
+    // When showExactLastSeen is on, additionally append seconds to the exact
+    // last-seen time (e.g. "last seen at 12:10:12" instead of "12:10"). Has no
+    // effect unless showExactLastSeen is enabled.
+    public var showExactLastSeenSeconds: Bool
 
     // Render channel (broadcast) posts at full bubble width so long articles and
     // news posts use more horizontal space. Only affects broadcast channels;
@@ -167,6 +171,7 @@ public struct AyuGramSettings: Codable, Equatable {
             showMessageSeconds: false,
             doubleTapToEdit: false,
             showExactLastSeen: false,
+            showExactLastSeenSeconds: false,
             wideChannelPosts: false,
             showExactViewCounts: false,
             hideAllChatsFolder: false,
@@ -264,6 +269,7 @@ public struct AyuGramSettings: Codable, Equatable {
         showMessageSeconds: Bool,
         doubleTapToEdit: Bool,
         showExactLastSeen: Bool,
+        showExactLastSeenSeconds: Bool,
         wideChannelPosts: Bool,
         showExactViewCounts: Bool,
         hideAllChatsFolder: Bool,
@@ -307,6 +313,7 @@ public struct AyuGramSettings: Codable, Equatable {
         self.showMessageSeconds = showMessageSeconds
         self.doubleTapToEdit = doubleTapToEdit
         self.showExactLastSeen = showExactLastSeen
+        self.showExactLastSeenSeconds = showExactLastSeenSeconds
         self.wideChannelPosts = wideChannelPosts
         self.showExactViewCounts = showExactViewCounts
         self.hideAllChatsFolder = hideAllChatsFolder
@@ -353,6 +360,7 @@ public struct AyuGramSettings: Codable, Equatable {
         self.showMessageSeconds = ((try container.decodeIfPresent(Int32.self, forKey: "showMessageSeconds")) ?? 0) != 0
         self.doubleTapToEdit = ((try container.decodeIfPresent(Int32.self, forKey: "doubleTapToEdit")) ?? 0) != 0
         self.showExactLastSeen = ((try container.decodeIfPresent(Int32.self, forKey: "showExactLastSeen")) ?? 0) != 0
+        self.showExactLastSeenSeconds = ((try container.decodeIfPresent(Int32.self, forKey: "showExactLastSeenSeconds")) ?? 0) != 0
         self.wideChannelPosts = ((try container.decodeIfPresent(Int32.self, forKey: "wideChannelPosts")) ?? 0) != 0
         self.showExactViewCounts = ((try container.decodeIfPresent(Int32.self, forKey: "showExactViewCounts")) ?? 0) != 0
         self.hideAllChatsFolder = ((try container.decodeIfPresent(Int32.self, forKey: "hideAllChatsFolder")) ?? 0) != 0
@@ -399,6 +407,7 @@ public struct AyuGramSettings: Codable, Equatable {
         try container.encode((self.showMessageSeconds ? 1 : 0) as Int32, forKey: "showMessageSeconds")
         try container.encode((self.doubleTapToEdit ? 1 : 0) as Int32, forKey: "doubleTapToEdit")
         try container.encode((self.showExactLastSeen ? 1 : 0) as Int32, forKey: "showExactLastSeen")
+        try container.encode((self.showExactLastSeenSeconds ? 1 : 0) as Int32, forKey: "showExactLastSeenSeconds")
         try container.encode((self.wideChannelPosts ? 1 : 0) as Int32, forKey: "wideChannelPosts")
         try container.encode((self.showExactViewCounts ? 1 : 0) as Int32, forKey: "showExactViewCounts")
         try container.encode((self.hideAllChatsFolder ? 1 : 0) as Int32, forKey: "hideAllChatsFolder")
