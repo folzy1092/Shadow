@@ -349,6 +349,7 @@ public class ChatMessageMediaBubbleContentNode: ChatMessageBubbleContentNode {
             }
             var viewCount: Int?
             var dateReplies = 0
+            var dateForwards = 0
             var starsCount: Int64?
             var dateReactionsAndPeers = mergedMessageReactionsAndPeers(accountPeerId: item.context.account.peerId, accountPeer: item.associatedData.accountPeer, message: item.message)
             if item.message.isRestricted(platform: "ios", contentSettings: item.context.currentContentSettings.with { $0 }) {
@@ -368,6 +369,8 @@ public class ChatMessageMediaBubbleContentNode: ChatMessageBubbleContentNode {
                     }
                 } else if let attribute = attribute as? PaidStarsMessageAttribute, item.message.id.peerId.namespace == Namespaces.Peer.CloudChannel {
                     starsCount = attribute.stars.value
+                } else if let attribute = attribute as? ForwardCountMessageAttribute, ayuGramSettingsCurrent.showForwardCount {
+                    dateForwards = attribute.count
                 }
             }
             
@@ -418,6 +421,7 @@ public class ChatMessageMediaBubbleContentNode: ChatMessageBubbleContentNode {
                     dateReactions: dateReactionsAndPeers.reactions,
                     dateReactionPeers: dateReactionsAndPeers.peers,
                     dateReplies: dateReplies,
+                    dateForwards: dateForwards,
                     starsCount: starsCount,
                     isPinned: item.message.tags.contains(.pinned) && !item.associatedData.isInPinnedListMode && !isReplyThread,
                     dateText: dateText

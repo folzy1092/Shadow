@@ -75,6 +75,10 @@ public struct AyuGramSettings: Codable, Equatable {
     // reply/reaction/forward counts elsewhere are untouched.
     public var showExactViewCounts: Bool
 
+    // Show how many times a message was forwarded, next to the timestamp (after
+    // the view count). Server only provides this for channel posts, like views.
+    public var showForwardCount: Bool
+
     // CHATS
     // Completely hide the "All Chats" folder tab from the chat list.
     public var hideAllChatsFolder: Bool
@@ -174,6 +178,7 @@ public struct AyuGramSettings: Codable, Equatable {
             showExactLastSeenSeconds: false,
             wideChannelPosts: false,
             showExactViewCounts: false,
+            showForwardCount: false,
             hideAllChatsFolder: false,
             foldersAtBottom: false,
             hideBottomSearch: false,
@@ -272,6 +277,7 @@ public struct AyuGramSettings: Codable, Equatable {
         showExactLastSeenSeconds: Bool,
         wideChannelPosts: Bool,
         showExactViewCounts: Bool,
+        showForwardCount: Bool,
         hideAllChatsFolder: Bool,
         foldersAtBottom: Bool,
         hideBottomSearch: Bool,
@@ -316,6 +322,7 @@ public struct AyuGramSettings: Codable, Equatable {
         self.showExactLastSeenSeconds = showExactLastSeenSeconds
         self.wideChannelPosts = wideChannelPosts
         self.showExactViewCounts = showExactViewCounts
+        self.showForwardCount = showForwardCount
         self.hideAllChatsFolder = hideAllChatsFolder
         self.foldersAtBottom = foldersAtBottom
         self.hideBottomSearch = hideBottomSearch
@@ -363,6 +370,7 @@ public struct AyuGramSettings: Codable, Equatable {
         self.showExactLastSeenSeconds = ((try container.decodeIfPresent(Int32.self, forKey: "showExactLastSeenSeconds")) ?? 0) != 0
         self.wideChannelPosts = ((try container.decodeIfPresent(Int32.self, forKey: "wideChannelPosts")) ?? 0) != 0
         self.showExactViewCounts = ((try container.decodeIfPresent(Int32.self, forKey: "showExactViewCounts")) ?? 0) != 0
+        self.showForwardCount = ((try container.decodeIfPresent(Int32.self, forKey: "showForwardCount")) ?? 0) != 0
         self.hideAllChatsFolder = ((try container.decodeIfPresent(Int32.self, forKey: "hideAllChatsFolder")) ?? 0) != 0
         self.foldersAtBottom = ((try container.decodeIfPresent(Int32.self, forKey: "foldersAtBottom")) ?? 0) != 0
         self.hideBottomSearch = ((try container.decodeIfPresent(Int32.self, forKey: "hideBottomSearch")) ?? 0) != 0
@@ -410,6 +418,7 @@ public struct AyuGramSettings: Codable, Equatable {
         try container.encode((self.showExactLastSeenSeconds ? 1 : 0) as Int32, forKey: "showExactLastSeenSeconds")
         try container.encode((self.wideChannelPosts ? 1 : 0) as Int32, forKey: "wideChannelPosts")
         try container.encode((self.showExactViewCounts ? 1 : 0) as Int32, forKey: "showExactViewCounts")
+        try container.encode((self.showForwardCount ? 1 : 0) as Int32, forKey: "showForwardCount")
         try container.encode((self.hideAllChatsFolder ? 1 : 0) as Int32, forKey: "hideAllChatsFolder")
         try container.encode((self.foldersAtBottom ? 1 : 0) as Int32, forKey: "foldersAtBottom")
         try container.encode((self.hideBottomSearch ? 1 : 0) as Int32, forKey: "hideBottomSearch")

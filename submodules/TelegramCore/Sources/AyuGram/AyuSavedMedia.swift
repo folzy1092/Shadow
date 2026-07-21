@@ -318,6 +318,49 @@ public enum AyuSavedMedia {
         return entries(basePath: basePath).reduce(0) { $0 + $1.size }
     }
 
+    // MARK: - Custom chat-list banner (single fixed image)
+
+    // The banner is a single user-chosen image rendered behind the chat list's
+    // top region. It lives in the same fork-private directory (never swept by the
+    // MediaBox cache) under a fixed name, so there is at most one at a time.
+    private static let bannerFileName = "shadow-banner.jpg"
+
+    public static func bannerPath(basePath: String) -> String {
+        return ensureDirectory(basePath: basePath) + "/" + bannerFileName
+    }
+
+    // True if a banner image is currently stored on disk.
+    public static func hasBanner(basePath: String) -> Bool {
+        return FileManager.default.fileExists(atPath: bannerPath(basePath: basePath))
+    }
+
+    // Persist the given JPEG data as the banner, replacing any previous one.
+    // Returns true on success.
+    @discardableResult
+    public static func saveBanner(basePath: String, jpegData: Data) -> Bool {
+        let path = bannerPath(basePath: basePath)
+        do {
+            try? FileManager.default.removeItem(atPath: path)
+            try jpegData.write(to: URL(fileURLWithPath: path), options: .atomic)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    // Load the stored banner bytes, or nil if none.
+    public static func bannerData(basePath: String) -> Data? {
+        let path = bannerPath(basePath: basePath)
+        return try? Data(contentsOf: URL(fileURLWithPath: path), options: .mappedIfSafe)
+    }
+
+    // Delete the stored banner. Returns true if a file was removed.
+    @discardableResult
+    public static func removeBanner(basePath: String) -> Bool {
+        let path = bannerPath(basePath: basePath)
+        return (try? FileManager.default.removeItem(atPath: path)) != nil
+    }
+
     // Remove everything in the gallery. Returns freed bytes.
     @discardableResult
     public static func clearAll(basePath: String) -> Int64 {

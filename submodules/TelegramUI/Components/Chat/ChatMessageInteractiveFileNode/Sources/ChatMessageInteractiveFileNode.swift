@@ -902,6 +902,7 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
                     }
                     var viewCount: Int?
                     var dateReplies = 0
+                    var dateForwards = 0
                     var starsCount: Int64?
                     var dateReactionsAndPeers = mergedMessageReactionsAndPeers(accountPeerId: arguments.context.account.peerId, accountPeer: arguments.associatedData.accountPeer, message: arguments.topMessage)
                     if arguments.topMessage.isRestricted(platform: "ios", contentSettings: arguments.context.currentContentSettings.with { $0 }) || arguments.presentationData.isPreview {
@@ -918,6 +919,8 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
                             }
                         } else if let attribute = attribute as? PaidStarsMessageAttribute, arguments.message.id.peerId.namespace == Namespaces.Peer.CloudChannel {
                             starsCount = attribute.stars.value
+                        } else if let attribute = attribute as? ForwardCountMessageAttribute, ayuGramSettingsCurrent.showForwardCount {
+                            dateForwards = attribute.count
                         }
                     }
                     if arguments.forcedIsEdited {
@@ -964,6 +967,7 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
                         areStarReactionsEnabled: arguments.associatedData.areStarReactionsEnabled,
                         messageEffect: arguments.message.messageEffect(availableMessageEffects: arguments.associatedData.availableMessageEffects),
                         replyCount: dateReplies,
+                        forwardCount: dateForwards,
                         starsCount: starsCount,
                         isPinned: arguments.isPinned && !arguments.associatedData.isInPinnedListMode,
                         hasAutoremove: arguments.message.isSelfExpiring,

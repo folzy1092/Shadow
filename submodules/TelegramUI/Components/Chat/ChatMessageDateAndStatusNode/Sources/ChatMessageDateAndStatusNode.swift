@@ -196,6 +196,7 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
         var areStarReactionsEnabled: Bool
         var messageEffect: AvailableMessageEffects.MessageEffect?
         var replyCount: Int
+        var forwardCount: Int
         var starsCount: Int64?
         var tonAmount: Int64?
         var isPinned: Bool
@@ -222,6 +223,7 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
             areStarReactionsEnabled: Bool,
             messageEffect: AvailableMessageEffects.MessageEffect?,
             replyCount: Int,
+            forwardCount: Int = 0,
             starsCount: Int64?,
             tonAmount: Int64? = nil,
             isPinned: Bool,
@@ -247,6 +249,7 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
             self.areStarReactionsEnabled = areStarReactionsEnabled
             self.messageEffect = messageEffect
             self.replyCount = replyCount
+            self.forwardCount = forwardCount
             self.starsCount = starsCount
             self.tonAmount = tonAmount
             self.isPinned = isPinned
@@ -271,6 +274,8 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
     private var repliesIcon: ASImageNode?
     private var selfExpiringIcon: ASImageNode?
     private var replyCountNode: TextNode?
+    private var forwardsIcon: ASImageNode?
+    private var forwardCountNode: TextNode?
     private var starsIcon: ASImageNode?
     private var starsCountNode: TextNode?
 
@@ -327,12 +332,14 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
         var currentBackgroundNode = self.backgroundNode
         var currentImpressionIcon = self.impressionIcon
         var currentRepliesIcon = self.repliesIcon
+        var currentForwardsIcon = self.forwardsIcon
         var currentStarsIcon = self.starsIcon
 
         let currentType = self.type
         let currentTheme = self.theme
 
         let makeReplyCountLayout = TextNode.asyncLayout(self.replyCountNode)
+        let makeForwardCountLayout = TextNode.asyncLayout(self.forwardCountNode)
         let makeStarsCountLayout = TextNode.asyncLayout(self.starsCountNode)
 
         let reactionButtonsContainer = self.reactionButtonsContainer
@@ -350,6 +357,7 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
             let clockMinImage: UIImage?
             var impressionImage: UIImage?
             var repliesImage: UIImage?
+            var forwardsImage: UIImage?
             var starsImage: UIImage?
 
             let themeUpdated = arguments.presentationData.theme != currentTheme || arguments.type != currentType
@@ -536,7 +544,19 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
                     starsImage = graphics.freeTonIcon
                 }
             }
-            
+
+            // Shadow: forwards counter icon. Generated inline and tinted with the
+            // date color so it matches each bubble type (incoming/outgoing/media/
+            // free) without adding fields to the shared theme graphics. Kept fully
+            // independent of the replies/pinned icon so it never interferes with
+            // the pinned-message indicator. Shown only when forwardCount > 0
+            // (server only provides it for channel posts, like the view count).
+            if arguments.forwardCount > 0 {
+                if let forwardImage = UIImage(bundleImageName: "Chat/Context Menu/Forward") {
+                    forwardsImage = generateTintedImage(image: forwardImage, color: dateColor)
+                }
+            }
+
             var updatedDateText = arguments.dateText
             if arguments.edited {
                 if let useEditedTimestamp = arguments.context.getAppConfigValue("message_primary_edited_date") as? Bool, useEditedTimestamp {
@@ -594,7 +614,22 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
             } else {
                 currentRepliesIcon = nil
             }
-            
+
+            // Shadow: forwards counter icon node (independent of replies/pinned).
+            var forwardsIconSize = CGSize()
+            if let forwardsImage = forwardsImage {
+                if currentForwardsIcon == nil {
+                    let iconNode = ASImageNode()
+                    iconNode.isLayerBacked = true
+                    iconNode.displayWithoutProcessing = true
+                    iconNode.displaysAsynchronously = false
+                    currentForwardsIcon = iconNode
+                }
+                forwardsIconSize = forwardsImage.size
+            } else {
+                currentForwardsIcon = nil
+            }
+
             var starsIconSize = CGSize()
             if let starsImage = starsImage {
                 if currentStarsIcon == nil {
@@ -720,6 +755,7 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
             }
 
             var replyCountLayoutAndApply: (TextNodeLayout, () -> TextNode)?
+            var forwardCountLayoutAndApply: (TextNodeLayout, () -> TextNode)?
             var starsCountLayoutAndApply: (TextNodeLayout, () -> TextNode)?
 
             let reactionSize: CGFloat = 8.0
@@ -727,7 +763,24 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
             let reactionTrailingSpacing: CGFloat = 6.0
 
             var reactionInset: CGFloat = 0.0
-            
+
+            // Shadow: reserve width for the forwards counter (icon + count),
+            // positioned after the view count and before the replies counter.
+            if arguments.forwardCount > 0 {
+                let countString: String
+                if arguments.forwardCount > 1000000 {
+                    countString = "\(arguments.forwardCount / 1000000)M"
+                } else if arguments.forwardCount > 1000 {
+                    countString = "\(arguments.forwardCount / 1000)K"
+                } else {
+                    countString = "\(arguments.forwardCount)"
+                }
+
+                let layoutAndApply = makeForwardCountLayout(TextNodeLayoutArguments(attributedString: NSAttributedString(string: countString, font: dateFont, textColor: dateColor), backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: CGSize(width: 100.0, height: 100.0)))
+                reactionInset += 14.0 + layoutAndApply.0.size.width + 4.0
+                forwardCountLayoutAndApply = layoutAndApply
+            }
+
             if arguments.replyCount > 0 {
                 let countString: String
                 if arguments.replyCount > 1000000 {
@@ -1313,6 +1366,56 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
                             }
                         }
                         
+                        if let currentForwardsIcon = currentForwardsIcon {
+                            currentForwardsIcon.displaysAsynchronously = false
+                            if currentForwardsIcon.image !== forwardsImage {
+                                currentForwardsIcon.image = forwardsImage
+                            }
+                            if currentForwardsIcon.supernode == nil {
+                                strongSelf.forwardsIcon = currentForwardsIcon
+                                strongSelf.addSubnode(currentForwardsIcon)
+                                if animation.isAnimated {
+                                    currentForwardsIcon.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.15)
+                                }
+                            }
+                            let forwardsIconFrame = CGRect(origin: CGPoint(x: reactionOffset - 2.0, y: backgroundInsets.top + offset + verticalInset + floor((date.size.height - forwardsIconSize.height) / 2.0)), size: forwardsIconSize)
+                            animation.animator.updateFrame(layer: currentForwardsIcon.layer, frame: forwardsIconFrame, completion: nil)
+                            reactionOffset += 9.0
+                        } else if let forwardsIcon = strongSelf.forwardsIcon {
+                            strongSelf.forwardsIcon = nil
+                            if animation.isAnimated {
+                                forwardsIcon.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2, removeOnCompletion: false, completion: { [weak forwardsIcon] _ in
+                                    forwardsIcon?.removeFromSupernode()
+                                })
+                            } else {
+                                forwardsIcon.removeFromSupernode()
+                            }
+                        }
+
+                        if let (layout, apply) = forwardCountLayoutAndApply {
+                            let node = apply()
+                            if strongSelf.forwardCountNode !== node {
+                                strongSelf.forwardCountNode?.removeFromSupernode()
+                                strongSelf.addSubnode(node)
+                                strongSelf.forwardCountNode = node
+                                if animation.isAnimated {
+                                    node.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.15)
+                                }
+                            }
+                            let forwardCountFrame = CGRect(origin: CGPoint(x: reactionOffset + 4.0, y: backgroundInsets.top + 1.0 + offset + verticalInset), size: layout.size)
+                            animation.animator.updateFrame(layer: node.layer, frame: forwardCountFrame, completion: nil)
+                            reactionOffset += 4.0 + layout.size.width
+                        } else if let forwardCountNode = strongSelf.forwardCountNode {
+                            strongSelf.forwardCountNode = nil
+                            if animation.isAnimated {
+                                forwardCountNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2, removeOnCompletion: false, completion: { [weak forwardCountNode] _ in
+                                    forwardCountNode?.removeFromSupernode()
+                                })
+                            } else {
+                                forwardCountNode.removeFromSupernode()
+                            }
+                        }
+
                         if let currentRepliesIcon = currentRepliesIcon {
                             currentRepliesIcon.displaysAsynchronously = false
                             if currentRepliesIcon.image !== repliesImage {

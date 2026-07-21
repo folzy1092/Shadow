@@ -84,6 +84,7 @@ public struct ChatMessageDateAndStatus {
     public var dateReactions: [MessageReaction]
     public var dateReactionPeers: [(MessageReaction.Reaction, EnginePeer)]
     public var dateReplies: Int
+    public var dateForwards: Int
     public var starsCount: Int64?
     public var isPinned: Bool
     public var dateText: String
@@ -95,6 +96,7 @@ public struct ChatMessageDateAndStatus {
         dateReactions: [MessageReaction],
         dateReactionPeers: [(MessageReaction.Reaction, EnginePeer)],
         dateReplies: Int,
+        dateForwards: Int = 0,
         starsCount: Int64?,
         isPinned: Bool,
         dateText: String
@@ -105,6 +107,7 @@ public struct ChatMessageDateAndStatus {
         self.dateReactions = dateReactions
         self.dateReactionPeers = dateReactionPeers
         self.dateReplies = dateReplies
+        self.dateForwards = dateForwards
         self.starsCount = starsCount
         self.isPinned = isPinned
         self.dateText = dateText
@@ -1128,6 +1131,7 @@ public final class ChatMessageInteractiveMediaNode: ASDisplayNode, GalleryItemTr
                     areStarReactionsEnabled: associatedData.areStarReactionsEnabled,
                     messageEffect: messageEffect,
                     replyCount: dateAndStatus.dateReplies,
+                    forwardCount: dateAndStatus.dateForwards,
                     starsCount: dateAndStatus.starsCount,
                     isPinned: dateAndStatus.isPinned,
                     hasAutoremove: message.isSelfExpiring,
