@@ -199,6 +199,7 @@ private final class AyuCustomizationArguments {
     let updateShowMessageSeconds: (Bool) -> Void
     let updateDoubleTapToEdit: (Bool) -> Void
     let updateShowExactLastSeen: (Bool) -> Void
+    let updateShowExactLastSeenSeconds: (Bool) -> Void
     let updateWideChannelPosts: (Bool) -> Void
     let updateShowExactViewCounts: (Bool) -> Void
     let updateRoundVideoBackCamera: (Bool) -> Void
@@ -219,6 +220,7 @@ private final class AyuCustomizationArguments {
         updateShowMessageSeconds: @escaping (Bool) -> Void,
         updateDoubleTapToEdit: @escaping (Bool) -> Void,
         updateShowExactLastSeen: @escaping (Bool) -> Void,
+        updateShowExactLastSeenSeconds: @escaping (Bool) -> Void,
         updateWideChannelPosts: @escaping (Bool) -> Void,
         updateShowExactViewCounts: @escaping (Bool) -> Void,
         updateRoundVideoBackCamera: @escaping (Bool) -> Void,
@@ -238,6 +240,7 @@ private final class AyuCustomizationArguments {
         self.updateShowMessageSeconds = updateShowMessageSeconds
         self.updateDoubleTapToEdit = updateDoubleTapToEdit
         self.updateShowExactLastSeen = updateShowExactLastSeen
+        self.updateShowExactLastSeenSeconds = updateShowExactLastSeenSeconds
         self.updateWideChannelPosts = updateWideChannelPosts
         self.updateShowExactViewCounts = updateShowExactViewCounts
         self.updateRoundVideoBackCamera = updateRoundVideoBackCamera
@@ -271,6 +274,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
     case showMessageSeconds(Bool)
     case doubleTapToEdit(Bool)
     case showExactLastSeen(Bool)
+    case showExactLastSeenSeconds(Bool)
     case wideChannelPosts(Bool)
     case showExactViewCounts(Bool)
     case appearanceFooter
@@ -308,7 +312,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
 
     var section: ItemListSectionId {
         switch self {
-        case .appearanceHeader, .showMessageSeconds, .doubleTapToEdit, .showExactLastSeen, .wideChannelPosts, .showExactViewCounts, .appearanceFooter:
+        case .appearanceHeader, .showMessageSeconds, .doubleTapToEdit, .showExactLastSeen, .showExactLastSeenSeconds, .wideChannelPosts, .showExactViewCounts, .appearanceFooter:
             return AyuCustomizationSection.appearance.rawValue
         case .chatsHeader, .hideAllChatsFolder, .chatsFooter:
             return AyuCustomizationSection.chats.rawValue
@@ -331,34 +335,35 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .showMessageSeconds: return 1
         case .doubleTapToEdit: return 2
         case .showExactLastSeen: return 3
-        case .wideChannelPosts: return 4
-        case .showExactViewCounts: return 5
-        case .appearanceFooter: return 6
-        case .chatsHeader: return 7
-        case .hideAllChatsFolder: return 8
-        case .chatsFooter: return 9
-        case .bottomBarHeader: return 10
-        case .foldersAtBottom: return 11
-        case .hideBottomSearch: return 12
-        case .compactBottomBar: return 13
-        case .bottomBarFooter: return 14
-        case .profilesHeader: return 15
-        case .showProfileId: return 16
-        case .showProfileDC: return 17
-        case .showRegistrationDate: return 18
-        case .hideOwnPhoneNumber: return 19
-        case .profilesFooter: return 20
-        case .mediaHeader: return 21
-        case .roundVideoBackCamera: return 22
-        case .showCameraTile: return 23
-        case .cameraTileLivePreview: return 24
-        case .mediaFooter: return 25
-        case .callsHeader: return 26
-        case .confirmCalls: return 27
-        case .callsFooter: return 28
-        case .githubConfigHeader: return 29
-        case .syncGithub: return 30
-        case .githubConfigFooter: return 31
+        case .showExactLastSeenSeconds: return 4
+        case .wideChannelPosts: return 5
+        case .showExactViewCounts: return 6
+        case .appearanceFooter: return 7
+        case .chatsHeader: return 8
+        case .hideAllChatsFolder: return 9
+        case .chatsFooter: return 10
+        case .bottomBarHeader: return 11
+        case .foldersAtBottom: return 12
+        case .hideBottomSearch: return 13
+        case .compactBottomBar: return 14
+        case .bottomBarFooter: return 15
+        case .profilesHeader: return 16
+        case .showProfileId: return 17
+        case .showProfileDC: return 18
+        case .showRegistrationDate: return 19
+        case .hideOwnPhoneNumber: return 20
+        case .profilesFooter: return 21
+        case .mediaHeader: return 22
+        case .roundVideoBackCamera: return 23
+        case .showCameraTile: return 24
+        case .cameraTileLivePreview: return 25
+        case .mediaFooter: return 26
+        case .callsHeader: return 27
+        case .confirmCalls: return 28
+        case .callsFooter: return 29
+        case .githubConfigHeader: return 30
+        case .syncGithub: return 31
+        case .githubConfigFooter: return 32
         }
     }
 
@@ -383,6 +388,10 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
             return ItemListSwitchItem(presentationData: presentationData, title: "Точное время последнего захода", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 arguments.updateShowExactLastSeen(value)
             })
+        case let .showExactLastSeenSeconds(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Секунды у последнего захода", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.updateShowExactLastSeenSeconds(value)
+            })
         case let .wideChannelPosts(value):
             return ItemListSwitchItem(presentationData: presentationData, title: "Широкие посты в каналах", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 arguments.updateWideChannelPosts(value)
@@ -392,7 +401,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
                 arguments.updateShowExactViewCounts(value)
             })
         case .appearanceFooter:
-            return ItemListTextItem(presentationData: presentationData, text: .plain("«Секунды в метках времени» показывают ЧЧ:ММ:СС вместо ЧЧ:ММ. «Двойной тап — редактирование» открывает редактирование при двойном нажатии на своё сообщение. «Точное время последнего захода» вместо «был в сети час назад» показывает точное время, например «был в сети сегодня в 12:10». «Широкие посты в каналах» отображают сообщения каналов на увеличенную ширину — удобно для длинных постов и статей. Влияет только на каналы: личные чаты и группы не меняются. «Точные просмотры на постах» показывают полное число просмотров (5678) вместо сокращённого (5.6K)."), sectionId: self.section)
+            return ItemListTextItem(presentationData: presentationData, text: .plain("«Секунды в метках времени» показывают ЧЧ:ММ:СС вместо ЧЧ:ММ. «Двойной тап — редактирование» открывает редактирование при двойном нажатии на своё сообщение. «Точное время последнего захода» вместо «был в сети час назад» показывает точное время, например «был в сети сегодня в 12:10»; дополнительный переключатель «Секунды у последнего захода» добавляет к нему секунды («12:10:12»). «Широкие посты в каналах» отображают сообщения каналов на увеличенную ширину — удобно для длинных постов и статей. Влияет только на каналы: личные чаты и группы не меняются. «Точные просмотры на постах» показывают полное число просмотров (5678) вместо сокращённого (5.6K)."), sectionId: self.section)
         case .chatsHeader:
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "ЧАТЫ", sectionId: self.section)
         case let .hideAllChatsFolder(value):
@@ -480,6 +489,9 @@ private func ayuCustomizationEntries(settings: AyuGramSettings) -> [AyuCustomiza
     entries.append(.showMessageSeconds(settings.showMessageSeconds))
     entries.append(.doubleTapToEdit(settings.doubleTapToEdit))
     entries.append(.showExactLastSeen(settings.showExactLastSeen))
+    if settings.showExactLastSeen {
+        entries.append(.showExactLastSeenSeconds(settings.showExactLastSeenSeconds))
+    }
     entries.append(.wideChannelPosts(settings.wideChannelPosts))
     entries.append(.showExactViewCounts(settings.showExactViewCounts))
     entries.append(.appearanceFooter)
@@ -530,6 +542,9 @@ private func ayuCustomizationController(context: AccountContext) -> ViewControll
         },
         updateShowExactLastSeen: { value in
             ayuUpdateSettings(context: context) { var s = $0; s.showExactLastSeen = value; return s }
+        },
+        updateShowExactLastSeenSeconds: { value in
+            ayuUpdateSettings(context: context) { var s = $0; s.showExactLastSeenSeconds = value; return s }
         },
         updateWideChannelPosts: { value in
             ayuUpdateSettings(context: context) { var s = $0; s.wideChannelPosts = value; return s }
