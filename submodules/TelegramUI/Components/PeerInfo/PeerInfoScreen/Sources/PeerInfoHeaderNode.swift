@@ -2644,6 +2644,11 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             // official cover when active, so the two never visually clash.
             let profileBackgroundActive = self.updateProfileBackground(frame: coverFrame, transition: transition)
             backgroundCoverView.alpha = profileBackgroundActive ? 0.0 : 1.0
+            // Shadow: alpha alone can leave the official cover's internal
+            // gradient/pattern layers rendering (and animating) during scroll
+            // transitions, which shows through as a faint drifting artifact
+            // behind the custom background. isHidden fully stops rendering.
+            backgroundCoverView.isHidden = profileBackgroundActive
         }
 
         if let profileGiftsContext, let peer {
