@@ -192,16 +192,17 @@ jobs:
           CONTENT="$(printf '%s%s %s\nShadow %s (build %s)\nКоммит: %s\n%s\n%s' \
             "$MENTION" "$ICON" "$HEAD" "$APP_VERSION" "$BUILD_NUMBER" "$COMMIT_FIRST_LINE" "$TAIL" "$RUN_URL")"
 
-          PAYLOAD="$(python3 -c "
-import json, sys
-content = sys.argv[1]
-allowed_users = json.loads(sys.argv[2])
-print(json.dumps({
-    'username': 'Shadow CI',
-    'content': content,
-    'allowed_mentions': {'users': allowed_users},
-}))
-" "$CONTENT" "$ALLOWED_USERS")"
+          PAYLOAD="$(python3 - "$CONTENT" "$ALLOWED_USERS" <<'PY'
+          import json, sys
+          content = sys.argv[1]
+          allowed_users = json.loads(sys.argv[2])
+          print(json.dumps({
+              "username": "Shadow CI",
+              "content": content,
+              "allowed_mentions": {"users": allowed_users},
+          }))
+          PY
+          )"
 
           curl -sS --max-time 30 \
             -H "Content-Type: application/json" \
