@@ -156,3 +156,56 @@ jobs:
             --data-urlencode "disable_web_page_preview=true" \
             || echo "Telegram notification failed (non-fatal)"
 
+      - name: Notify Discord
+        if: always()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          DISCORD_PING_USER_ID: ${{ secrets.DISCORD_PING_USER_ID }}
+          JOB_STATUS: ${{ job.status }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+        run: |
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+            echo "Discord webhook secret not set — skipping notification"
+            exit 0
+          fi
+
+          if [ "$JOB_STATUS" = "success" ]; then
+            ICON="✅"
+            HEAD="Сборка готова"
+            TAIL="IPA: артефакт Shadow-IPA-${BUILD_NUMBER} на странице прогона."
+          else
+            ICON="❌"
+            HEAD="Сборка упала"
+            TAIL="Открой лог прогона, чтобы посмотреть ошибку."
+          fi
+
+          COMMIT_FIRST_LINE="$(printf '%s' "$COMMIT_MSG" | head -n 1)"
+
+          MENTION=""
+          ALLOWED_USERS="[]"
+          if [ -n "$DISCORD_PING_USER_ID" ]; then
+            MENTION="<@${DISCORD_PING_USER_ID}> "
+            ALLOWED_USERS="[\"${DISCORD_PING_USER_ID}\"]"
+          fi
+
+          CONTENT="$(printf '%s%s %s\nShadow %s (build %s)\nКоммит: %s\n%s\n%s' \
+            "$MENTION" "$ICON" "$HEAD" "$APP_VERSION" "$BUILD_NUMBER" "$COMMIT_FIRST_LINE" "$TAIL" "$RUN_URL")"
+
+          PAYLOAD="$(python3 -c "
+import json, sys
+content = sys.argv[1]
+allowed_users = json.loads(sys.argv[2])
+print(json.dumps({
+    'username': 'Shadow CI',
+    'content': content,
+    'allowed_mentions': {'users': allowed_users},
+}))
+" "$CONTENT" "$ALLOWED_USERS")"
+
+          curl -sS --max-time 30 \
+            -H "Content-Type: application/json" \
+            -X POST "$DISCORD_WEBHOOK_URL" \
+            -d "$PAYLOAD" \
+            || echo "Discord notification failed (non-fatal)"
+
