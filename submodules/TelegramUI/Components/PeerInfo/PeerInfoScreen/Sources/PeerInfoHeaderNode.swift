@@ -111,6 +111,14 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     let backgroundCover = ComponentView<Empty>()
     let giftsCover = ComponentView<Empty>()
     var didSetupBackgroundCover = false
+
+    // Shadow: custom "Мой профиль" background — a user-picked image drawn behind
+    // the avatar/name, visible only locally on the account owner's own profile
+    // screen (isMyProfile). Replaces (hides) the official cover when active.
+    private var profileBackgroundImageView: UIImageView?
+    private var profileBackgroundDimLayer: CALayer?
+    private var profileBackgroundBottomFadeLayer: CAGradientLayer?
+    private var profileBackgroundLoadedSignature: String?
     let buttonsContainerNode: SparseNode
     let buttonsBackgroundNode: NavigationBackgroundNode
     let buttonsMaskView: UIView
@@ -492,6 +500,88 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     private var currentStatusIcon: CredibilityIcon?
     
     private var currentPanelStatusData: PeerInfoStatusData?
+
+    // Shadow: build/update/remove the custom "Мой профиль" background layer.
+    // Only active for the account owner's own profile screen (isMyProfile),
+    // when the setting is on and an image is stored — never for Settings, never
+    // for other peers' profiles, never sent anywhere. Returns true when shown,
+    // so the caller can hide the official cover to avoid a visual clash.
+    @discardableResult
+    private func updateProfileBackground(frame: CGRect, transition: ContainedViewLayoutTransition) -> Bool {
+        func clear() {
+            if let imageView = self.profileBackgroundImageView {
+                imageView.removeFromSuperview()
+                self.profileBackgroundImageView = nil
+                self.profileBackgroundDimLayer = nil
+                self.profileBackgroundBottomFadeLayer = nil
+                self.profileBackgroundLoadedSignature = nil
+            }
+        }
+
+        guard self.isMyProfile, ayuGramSettingsCurrent.customProfileBackgroundEnabled else {
+            clear()
+            return false
+        }
+
+        let basePath = self.context.account.postbox.mediaBox.basePath
+        let path = AyuSavedMedia.profileBackgroundPath(basePath: basePath)
+        var signature = path
+        if let attrs = try? FileManager.default.attributesOfItem(atPath: path), let size = attrs[.size] as? NSNumber {
+            signature += "_\(size.int64Value)"
+        } else {
+            clear()
+            return false
+        }
+
+        let imageView: UIImageView
+        if let current = self.profileBackgroundImageView {
+            imageView = current
+        } else {
+            imageView = UIImageView()
+            imageView.isUserInteractionEnabled = false
+            imageView.contentMode = .scaleAspectFill
+            imageView.clipsToBounds = true
+
+            // Uniform dark overlay across the ENTIRE image (not a top-transparent
+            // ramp like the chat-list banner) so the avatar/name stay readable no
+            // matter where they sit over the picked image.
+            let dim = CALayer()
+            dim.backgroundColor = UIColor(white: 0.0, alpha: 0.38).cgColor
+            imageView.layer.addSublayer(dim)
+            self.profileBackgroundDimLayer = dim
+
+            // Short gradient strip at the very bottom only, fading from that same
+            // dim tone into fully opaque black, so the transition into the content
+            // below (bio / saved music / info rows) is seamless, not a hard cut.
+            let fade = CAGradientLayer()
+            fade.colors = [UIColor(white: 0.0, alpha: 0.38).cgColor, UIColor(white: 0.0, alpha: 1.0).cgColor]
+            fade.startPoint = CGPoint(x: 0.5, y: 0.0)
+            fade.endPoint = CGPoint(x: 0.5, y: 1.0)
+            imageView.layer.addSublayer(fade)
+            self.profileBackgroundBottomFadeLayer = fade
+
+            self.backgroundBannerView.insertSubview(imageView, at: 0)
+            self.profileBackgroundImageView = imageView
+        }
+
+        if self.profileBackgroundLoadedSignature != signature {
+            if let data = AyuSavedMedia.profileBackgroundData(basePath: basePath), let image = UIImage(data: data) {
+                imageView.image = image
+                self.profileBackgroundLoadedSignature = signature
+            } else {
+                clear()
+                return false
+            }
+        }
+
+        transition.updateFrame(view: imageView, frame: frame)
+        self.profileBackgroundDimLayer?.frame = CGRect(origin: CGPoint(), size: frame.size)
+        let fadeHeight: CGFloat = min(64.0, frame.size.height)
+        self.profileBackgroundBottomFadeLayer?.frame = CGRect(x: 0.0, y: frame.size.height - fadeHeight, width: frame.size.width, height: fadeHeight)
+
+        return true
+    }
+
     func update(width: CGFloat, containerHeight: CGFloat, containerInset: CGFloat, statusBarHeight: CGFloat, navigationHeight: CGFloat, isModalOverlay: Bool, isMediaOnly: Bool, contentOffset: CGFloat, paneContainerY: CGFloat, presentationData: PresentationData, peer: EnginePeer?, cachedData: EngineCachedPeerData?, threadData: MessageHistoryThreadData?, peerNotificationSettings: TelegramPeerNotificationSettings?, threadNotificationSettings: TelegramPeerNotificationSettings?, globalNotificationSettings: EngineGlobalNotificationSettings?, statusData: PeerInfoStatusData?, panelStatusData: (PeerInfoStatusData?, PeerInfoStatusData?, CGFloat?), isSecretChat: Bool, isContact: Bool, isSettings: Bool, state: PeerInfoState, profileGiftsContext: ProfileGiftsContext?, screenData: PeerInfoScreenData?, isSearching: Bool, metrics: LayoutMetrics, deviceMetrics: DeviceMetrics, transition: ContainedViewLayoutTransition, additive: Bool, animateHeader: Bool) -> CGFloat {
         if self.appliedCustomNavigationContentNode !== self.customNavigationContentNode {
             if let previous = self.appliedCustomNavigationContentNode {
@@ -2521,10 +2611,11 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             if backgroundCoverView.superview == nil {
                 self.backgroundBannerView.addSubview(backgroundCoverView)
             }
+            let coverFrame = CGRect(origin: CGPoint(x: -bannerInset, y: bannerFrame.height - backgroundCoverSize.height), size: backgroundCoverSize)
             if additive {
-                transition.updateFrameAdditive(view: backgroundCoverView, frame: CGRect(origin: CGPoint(x: -bannerInset, y: bannerFrame.height - backgroundCoverSize.height), size: backgroundCoverSize))
+                transition.updateFrameAdditive(view: backgroundCoverView, frame: coverFrame)
             } else {
-                transition.updateFrame(view: backgroundCoverView, frame: CGRect(origin: CGPoint(x: -bannerInset, y: bannerFrame.height - backgroundCoverSize.height), size: backgroundCoverSize))
+                transition.updateFrame(view: backgroundCoverView, frame: coverFrame)
             }
             if backgroundCoverAnimateIn {
                 if !self.isAvatarExpanded {
@@ -2537,8 +2628,13 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                     self.invokeDisplayGiftInfo()
                 }
             }
+
+            // Shadow: custom "Мой профиль" background replaces (hides) the
+            // official cover when active, so the two never visually clash.
+            let profileBackgroundActive = self.updateProfileBackground(frame: coverFrame, transition: transition)
+            backgroundCoverView.alpha = profileBackgroundActive ? 0.0 : 1.0
         }
-        
+
         if let profileGiftsContext, let peer {
             let giftsCoverSize = self.giftsCover.update(
                 transition: ComponentTransition(transition),

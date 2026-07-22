@@ -361,6 +361,43 @@ public enum AyuSavedMedia {
         return (try? FileManager.default.removeItem(atPath: path)) != nil
     }
 
+    // MARK: - Custom "My Profile" background (single fixed image, visual-only)
+
+    // Mirrors the banner storage exactly. Shown only on the local user's own
+    // "Мой профиль" screen — never sent to the server, never seen by anyone else.
+    private static let profileBackgroundFileName = "shadow-profile-background.jpg"
+
+    public static func profileBackgroundPath(basePath: String) -> String {
+        return ensureDirectory(basePath: basePath) + "/" + profileBackgroundFileName
+    }
+
+    public static func hasProfileBackground(basePath: String) -> Bool {
+        return FileManager.default.fileExists(atPath: profileBackgroundPath(basePath: basePath))
+    }
+
+    @discardableResult
+    public static func saveProfileBackground(basePath: String, jpegData: Data) -> Bool {
+        let path = profileBackgroundPath(basePath: basePath)
+        do {
+            try? FileManager.default.removeItem(atPath: path)
+            try jpegData.write(to: URL(fileURLWithPath: path), options: .atomic)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    public static func profileBackgroundData(basePath: String) -> Data? {
+        let path = profileBackgroundPath(basePath: basePath)
+        return try? Data(contentsOf: URL(fileURLWithPath: path), options: .mappedIfSafe)
+    }
+
+    @discardableResult
+    public static func removeProfileBackground(basePath: String) -> Bool {
+        let path = profileBackgroundPath(basePath: basePath)
+        return (try? FileManager.default.removeItem(atPath: path)) != nil
+    }
+
     // Remove everything in the gallery. Returns freed bytes.
     @discardableResult
     public static func clearAll(basePath: String) -> Int64 {

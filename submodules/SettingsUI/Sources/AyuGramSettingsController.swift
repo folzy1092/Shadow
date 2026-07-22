@@ -218,6 +218,8 @@ private final class AyuCustomizationArguments {
     let syncGitConfig: () -> Void
     let updateCustomBanner: (Bool) -> Void
     let chooseBanner: () -> Void
+    let updateCustomProfileBackground: (Bool) -> Void
+    let chooseProfileBackground: () -> Void
 
     init(
         updateShowMessageSeconds: @escaping (Bool) -> Void,
@@ -241,7 +243,9 @@ private final class AyuCustomizationArguments {
         updateHideOwnPhoneNumber: @escaping (Bool) -> Void,
         syncGitConfig: @escaping () -> Void,
         updateCustomBanner: @escaping (Bool) -> Void,
-        chooseBanner: @escaping () -> Void
+        chooseBanner: @escaping () -> Void,
+        updateCustomProfileBackground: @escaping (Bool) -> Void,
+        chooseProfileBackground: @escaping () -> Void
     ) {
         self.updateShowMessageSeconds = updateShowMessageSeconds
         self.updateDoubleTapToEdit = updateDoubleTapToEdit
@@ -265,6 +269,8 @@ private final class AyuCustomizationArguments {
         self.syncGitConfig = syncGitConfig
         self.updateCustomBanner = updateCustomBanner
         self.chooseBanner = chooseBanner
+        self.updateCustomProfileBackground = updateCustomProfileBackground
+        self.chooseProfileBackground = chooseProfileBackground
     }
 }
 
@@ -277,6 +283,7 @@ private enum AyuCustomizationSection: Int32 {
     case calls
     case githubConfig
     case banner
+    case profileBackground
 }
 
 private enum AyuCustomizationEntry: ItemListNodeEntry {
@@ -326,6 +333,11 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
     case bannerChoose
     case bannerFooter
 
+    case profileBackgroundHeader
+    case customProfileBackground(Bool)
+    case profileBackgroundChoose
+    case profileBackgroundFooter
+
     var section: ItemListSectionId {
         switch self {
         case .appearanceHeader, .showMessageSeconds, .doubleTapToEdit, .showExactLastSeen, .showExactLastSeenSeconds, .wideChannelPosts, .showExactViewCounts, .showForwardCount, .appearanceFooter:
@@ -344,6 +356,8 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
             return AyuCustomizationSection.githubConfig.rawValue
         case .bannerHeader, .customBanner, .bannerChoose, .bannerFooter:
             return AyuCustomizationSection.banner.rawValue
+        case .profileBackgroundHeader, .customProfileBackground, .profileBackgroundChoose, .profileBackgroundFooter:
+            return AyuCustomizationSection.profileBackground.rawValue
         }
     }
 
@@ -387,6 +401,10 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .customBanner: return 35
         case .bannerChoose: return 36
         case .bannerFooter: return 37
+        case .profileBackgroundHeader: return 38
+        case .customProfileBackground: return 39
+        case .profileBackgroundChoose: return 40
+        case .profileBackgroundFooter: return 41
         }
     }
 
@@ -517,6 +535,18 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
             })
         case .bannerFooter:
             return ItemListTextItem(presentationData: presentationData, text: .plain("Отображает выбранное изображение как фон верхней части списка чатов (за историями, заголовком и поиском). Внизу баннера — затемнение для читаемости текста. Выключите переключатель, чтобы вернуть стандартный вид."), sectionId: self.section)
+        case .profileBackgroundHeader:
+            return ItemListSectionHeaderItem(presentationData: presentationData, text: "ФОН ПРОФИЛЯ", sectionId: self.section)
+        case let .customProfileBackground(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Кастомный фон профиля", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.updateCustomProfileBackground(value)
+            })
+        case .profileBackgroundChoose:
+            return ItemListActionItem(presentationData: presentationData, title: "Выбрать изображение", kind: .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: {
+                arguments.chooseProfileBackground()
+            })
+        case .profileBackgroundFooter:
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Отображает выбранное изображение как фон верхней части экрана «Мой профиль» (за аватаром и именем), с затемнением по всей области для читаемости и плавным переходом в обычный фон внизу. Работает только визуально в интерфейсе Shadow и видно только вам — другие пользователи и другие устройства видят обычный профиль. Заменяет собой стандартный цвет/эмодзи-статус профиля, если он у вас включён."), sectionId: self.section)
         }
     }
 }
@@ -574,12 +604,20 @@ private func ayuCustomizationEntries(settings: AyuGramSettings) -> [AyuCustomiza
     }
     entries.append(.bannerFooter)
 
+    entries.append(.profileBackgroundHeader)
+    entries.append(.customProfileBackground(settings.customProfileBackgroundEnabled))
+    if settings.customProfileBackgroundEnabled {
+        entries.append(.profileBackgroundChoose)
+    }
+    entries.append(.profileBackgroundFooter)
+
     return entries
 }
 
 private func ayuCustomizationController(context: AccountContext) -> ViewController {
     var presentControllerImpl: ((ViewController, ViewControllerPresentationArguments?) -> Void)?
     var presentBannerImagePickerImpl: (() -> Void)?
+    var presentProfileBackgroundImagePickerImpl: (() -> Void)?
 
     let arguments = AyuCustomizationArguments(
         updateShowMessageSeconds: { value in
@@ -656,6 +694,15 @@ private func ayuCustomizationController(context: AccountContext) -> ViewControll
         },
         chooseBanner: {
             presentBannerImagePickerImpl?()
+        },
+        updateCustomProfileBackground: { value in
+            ayuUpdateSettings(context: context) { var s = $0; s.customProfileBackgroundEnabled = value; return s }
+            if !value {
+                let _ = AyuSavedMedia.removeProfileBackground(basePath: context.account.postbox.mediaBox.basePath)
+            }
+        },
+        chooseProfileBackground: {
+            presentProfileBackgroundImagePickerImpl?()
         }
     )
 
@@ -691,6 +738,26 @@ private func ayuCustomizationController(context: AccountContext) -> ViewControll
             }
             let _ = AyuSavedMedia.saveBanner(basePath: context.account.postbox.mediaBox.basePath, jpegData: data)
             ayuUpdateSettings(context: context) { var s = $0; s.customBannerEnabled = true; return s }
+        })
+        delegate.retainSelf()
+        picker.delegate = delegate
+        controller.view.window?.rootViewController?.present(picker, animated: true)
+    }
+
+    // Same picker pattern for the "Мой профиль" custom background.
+    presentProfileBackgroundImagePickerImpl = { [weak controller] in
+        guard let controller = controller else {
+            return
+        }
+        let picker = UIImagePickerController()
+        picker.sourceType = .photoLibrary
+        picker.mediaTypes = ["public.image"]
+        let delegate = BannerImagePickerDelegate(completion: { image in
+            guard let image = image, let data = image.jpegData(compressionQuality: 0.9) else {
+                return
+            }
+            let _ = AyuSavedMedia.saveProfileBackground(basePath: context.account.postbox.mediaBox.basePath, jpegData: data)
+            ayuUpdateSettings(context: context) { var s = $0; s.customProfileBackgroundEnabled = true; return s }
         })
         delegate.retainSelf()
         picker.delegate = delegate
