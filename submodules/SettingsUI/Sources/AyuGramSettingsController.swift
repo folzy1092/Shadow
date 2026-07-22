@@ -219,6 +219,8 @@ private final class AyuCustomizationArguments {
     let updateCustomBanner: (Bool) -> Void
     let chooseBanner: () -> Void
     let updateCustomProfileBackground: (Bool) -> Void
+    let updateCustomProfileBackgroundForOthers: (Bool) -> Void
+    let updateCustomProfileBackgroundForSettings: (Bool) -> Void
     let chooseProfileBackground: () -> Void
 
     init(
@@ -245,6 +247,8 @@ private final class AyuCustomizationArguments {
         updateCustomBanner: @escaping (Bool) -> Void,
         chooseBanner: @escaping () -> Void,
         updateCustomProfileBackground: @escaping (Bool) -> Void,
+        updateCustomProfileBackgroundForOthers: @escaping (Bool) -> Void,
+        updateCustomProfileBackgroundForSettings: @escaping (Bool) -> Void,
         chooseProfileBackground: @escaping () -> Void
     ) {
         self.updateShowMessageSeconds = updateShowMessageSeconds
@@ -335,6 +339,8 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
 
     case profileBackgroundHeader
     case customProfileBackground(Bool)
+    case customProfileBackgroundForOthers(Bool)
+    case customProfileBackgroundForSettings(Bool)
     case profileBackgroundChoose
     case profileBackgroundFooter
 
@@ -356,7 +362,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
             return AyuCustomizationSection.githubConfig.rawValue
         case .bannerHeader, .customBanner, .bannerChoose, .bannerFooter:
             return AyuCustomizationSection.banner.rawValue
-        case .profileBackgroundHeader, .customProfileBackground, .profileBackgroundChoose, .profileBackgroundFooter:
+        case .profileBackgroundHeader, .customProfileBackground, .customProfileBackgroundForOthers, .customProfileBackgroundForSettings, .profileBackgroundChoose, .profileBackgroundFooter:
             return AyuCustomizationSection.profileBackground.rawValue
         }
     }
@@ -403,8 +409,10 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .bannerFooter: return 37
         case .profileBackgroundHeader: return 38
         case .customProfileBackground: return 39
-        case .profileBackgroundChoose: return 40
-        case .profileBackgroundFooter: return 41
+        case .customProfileBackgroundForOthers: return 40
+        case .customProfileBackgroundForSettings: return 41
+        case .profileBackgroundChoose: return 42
+        case .profileBackgroundFooter: return 43
         }
     }
 
@@ -541,6 +549,14 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
             return ItemListSwitchItem(presentationData: presentationData, title: "Кастомный фон профиля", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 arguments.updateCustomProfileBackground(value)
             })
+        case let .customProfileBackgroundForOthers(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Применять для всех профилей", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.updateCustomProfileBackgroundForOthers(value)
+            })
+        case let .customProfileBackgroundForSettings(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Применять в Settings", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.updateCustomProfileBackgroundForSettings(value)
+            })
         case .profileBackgroundChoose:
             return ItemListActionItem(presentationData: presentationData, title: "Выбрать изображение", kind: .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: {
                 arguments.chooseProfileBackground()
@@ -607,6 +623,8 @@ private func ayuCustomizationEntries(settings: AyuGramSettings) -> [AyuCustomiza
     entries.append(.profileBackgroundHeader)
     entries.append(.customProfileBackground(settings.customProfileBackgroundEnabled))
     if settings.customProfileBackgroundEnabled {
+        entries.append(.customProfileBackgroundForOthers(settings.customProfileBackgroundForOthers))
+        entries.append(.customProfileBackgroundForSettings(settings.customProfileBackgroundForSettings))
         entries.append(.profileBackgroundChoose)
     }
     entries.append(.profileBackgroundFooter)
@@ -700,6 +718,12 @@ private func ayuCustomizationController(context: AccountContext) -> ViewControll
             if !value {
                 let _ = AyuSavedMedia.removeProfileBackground(basePath: context.account.postbox.mediaBox.basePath)
             }
+        },
+        updateCustomProfileBackgroundForOthers: { value in
+            ayuUpdateSettings(context: context) { var s = $0; s.customProfileBackgroundForOthers = value; return s }
+        },
+        updateCustomProfileBackgroundForSettings: { value in
+            ayuUpdateSettings(context: context) { var s = $0; s.customProfileBackgroundForSettings = value; return s }
         },
         chooseProfileBackground: {
             presentProfileBackgroundImagePickerImpl?()

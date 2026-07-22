@@ -171,6 +171,14 @@ public struct AyuGramSettings: Codable, Equatable {
     // it replaces Telegram's own profile-color/status cover for that screen.
     public var customProfileBackgroundEnabled: Bool
 
+    // Применять кастомный фон профиля для ВСЕХ профилей (друзей, контактов),
+    // а не только для "Мой профиль". Работает только когда customProfileBackgroundEnabled = true.
+    public var customProfileBackgroundForOthers: Bool
+
+    // Применять кастомный фон профиля в экране Settings (где переключение аккаунтов, сверху мини-профиль).
+    // Работает только когда customProfileBackgroundEnabled = true.
+    public var customProfileBackgroundForSettings: Bool
+
     public static var defaultSettings: AyuGramSettings {
         return AyuGramSettings(
             keepDeletedMessages: true,
@@ -218,7 +226,9 @@ public struct AyuGramSettings: Codable, Equatable {
             spoofProfilePhoneEnabled: false,
             spoofProfilePhoneValue: "",
             customBannerEnabled: false,
-            customProfileBackgroundEnabled: false
+            customProfileBackgroundEnabled: false,
+            customProfileBackgroundForOthers: false,
+            customProfileBackgroundForSettings: false
         )
     }
 
@@ -319,7 +329,9 @@ public struct AyuGramSettings: Codable, Equatable {
         spoofProfilePhoneEnabled: Bool,
         spoofProfilePhoneValue: String,
         customBannerEnabled: Bool,
-        customProfileBackgroundEnabled: Bool
+        customProfileBackgroundEnabled: Bool,
+        customProfileBackgroundForOthers: Bool,
+        customProfileBackgroundForSettings: Bool
     ) {
         self.keepDeletedMessages = keepDeletedMessages
         self.saveEditHistory = saveEditHistory
@@ -367,6 +379,8 @@ public struct AyuGramSettings: Codable, Equatable {
         self.spoofProfilePhoneValue = spoofProfilePhoneValue
         self.customBannerEnabled = customBannerEnabled
         self.customProfileBackgroundEnabled = customProfileBackgroundEnabled
+        self.customProfileBackgroundForOthers = customProfileBackgroundForOthers
+        self.customProfileBackgroundForSettings = customProfileBackgroundForSettings
     }
 
     public init(from decoder: Decoder) throws {
@@ -417,6 +431,8 @@ public struct AyuGramSettings: Codable, Equatable {
         self.spoofProfilePhoneValue = (try container.decodeIfPresent(String.self, forKey: "spoofProfilePhoneValue")) ?? ""
         self.customBannerEnabled = ((try container.decodeIfPresent(Int32.self, forKey: "customBannerEnabled")) ?? 0) != 0
         self.customProfileBackgroundEnabled = ((try container.decodeIfPresent(Int32.self, forKey: "customProfileBackgroundEnabled")) ?? 0) != 0
+        self.customProfileBackgroundForOthers = ((try container.decodeIfPresent(Int32.self, forKey: "customProfileBackgroundForOthers")) ?? 0) != 0
+        self.customProfileBackgroundForSettings = ((try container.decodeIfPresent(Int32.self, forKey: "customProfileBackgroundForSettings")) ?? 0) != 0
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -467,6 +483,8 @@ public struct AyuGramSettings: Codable, Equatable {
         try container.encode(self.spoofProfilePhoneValue, forKey: "spoofProfilePhoneValue")
         try container.encode((self.customBannerEnabled ? 1 : 0) as Int32, forKey: "customBannerEnabled")
         try container.encode((self.customProfileBackgroundEnabled ? 1 : 0) as Int32, forKey: "customProfileBackgroundEnabled")
+        try container.encode((self.customProfileBackgroundForOthers ? 1 : 0) as Int32, forKey: "customProfileBackgroundForOthers")
+        try container.encode((self.customProfileBackgroundForSettings ? 1 : 0) as Int32, forKey: "customProfileBackgroundForSettings")
     }
 }
 

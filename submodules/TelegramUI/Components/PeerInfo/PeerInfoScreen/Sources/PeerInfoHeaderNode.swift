@@ -116,7 +116,6 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     // the avatar/name, visible only locally on the account owner's own profile
     // screen (isMyProfile). Replaces (hides) the official cover when active.
     private var profileBackgroundImageView: UIImageView?
-    private var profileBackgroundDimLayer: CALayer?
     private var profileBackgroundBottomFadeLayer: CAGradientLayer?
     private var profileBackgroundLoadedSignature: String?
     let buttonsContainerNode: SparseNode
@@ -512,13 +511,21 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             if let imageView = self.profileBackgroundImageView {
                 imageView.removeFromSuperview()
                 self.profileBackgroundImageView = nil
-                self.profileBackgroundDimLayer = nil
                 self.profileBackgroundBottomFadeLayer = nil
                 self.profileBackgroundLoadedSignature = nil
             }
         }
 
-        guard self.isMyProfile, ayuGramSettingsCurrent.customProfileBackgroundEnabled else {
+        // Показываем кастомный фон если:
+        // 1. Это "Мой профиль" И включён customProfileBackgroundEnabled
+        // 2. ИЛИ включён customProfileBackgroundForOthers (применять для всех профилей)
+        // 3. ИЛИ это Settings И включён customProfileBackgroundForSettings
+        let shouldShowCustomBackground = ayuGramSettingsCurrent.customProfileBackgroundEnabled &&
+            (self.isMyProfile ||
+             ayuGramSettingsCurrent.customProfileBackgroundForOthers ||
+             (self.isSettings && ayuGramSettingsCurrent.customProfileBackgroundForSettings))
+
+        guard shouldShowCustomBackground else {
             clear()
             return false
         }
@@ -542,15 +549,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             imageView.contentMode = .scaleAspectFill
             imageView.clipsToBounds = true
 
-            // Uniform dark overlay across the ENTIRE image (not a top-transparent
-            // ramp like the chat-list banner) so the avatar/name stay readable no
-            // matter where they sit over the picked image.
-            let dim = CALayer()
-            dim.backgroundColor = UIColor(white: 0.0, alpha: 0.38).cgColor
-            imageView.layer.addSublayer(dim)
-            self.profileBackgroundDimLayer = dim
-
-            // Short gradient strip at the very bottom only, fading from that same
+            // Short gradient strip at the very bottom only, fading from
             // dim tone into fully opaque black, so the transition into the content
             // below (bio / saved music / info rows) is seamless, not a hard cut.
             let fade = CAGradientLayer()
@@ -575,7 +574,6 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         }
 
         transition.updateFrame(view: imageView, frame: frame)
-        self.profileBackgroundDimLayer?.frame = CGRect(origin: CGPoint(), size: frame.size)
         let fadeHeight: CGFloat = min(64.0, frame.size.height)
         self.profileBackgroundBottomFadeLayer?.frame = CGRect(x: 0.0, y: frame.size.height - fadeHeight, width: frame.size.width, height: fadeHeight)
 
@@ -755,7 +753,20 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         
         var hasCoverColor = false
         let regularNavigationContentsSecondaryColor: UIColor
-        if let emojiStatus = peer?.emojiStatus, case let .starGift(_, _, _, _, _, innerColor, outerColor, _, _) = emojiStatus.content {
+
+        // Shadow: когда кастомный фон профиля активен, игнорируем Premium цвета
+        // чтобы не было фиолетовых отблесков от оригинального фона
+        let customBackgroundActive = ayuGramSettingsCurrent.customProfileBackgroundEnabled &&
+            (self.isMyProfile ||
+             ayuGramSettingsCurrent.customProfileBackgroundForOthers ||
+             (self.isSettings && ayuGramSettingsCurrent.customProfileBackgroundForSettings))
+
+        if customBackgroundActive {
+            // Используем дефолтные цвета темы как будто Premium нет
+            regularNavigationContentsSecondaryColor = presentationData.theme.list.itemSecondaryTextColor
+            regularContentButtonBackgroundColor = presentationData.theme.list.itemBlocksBackgroundColor
+            regularHeaderButtonBackgroundColor = .clear
+        } else if let emojiStatus = peer?.emojiStatus, case let .starGift(_, _, _, _, _, innerColor, outerColor, _, _) = emojiStatus.content {
             let mainColor = UIColor(rgb: UInt32(bitPattern: innerColor))
             let secondaryColor = UIColor(rgb: UInt32(bitPattern: outerColor))
             regularNavigationContentsSecondaryColor = UIColor(white: 1.0, alpha: 0.6).blitOver(mainColor.withMultiplied(hue: 1.0, saturation: 2.2, brightness: 1.5), alpha: 1.0)
