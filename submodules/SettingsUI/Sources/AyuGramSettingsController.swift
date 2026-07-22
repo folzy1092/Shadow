@@ -274,6 +274,8 @@ private final class AyuCustomizationArguments {
         self.updateCustomBanner = updateCustomBanner
         self.chooseBanner = chooseBanner
         self.updateCustomProfileBackground = updateCustomProfileBackground
+        self.updateCustomProfileBackgroundForOthers = updateCustomProfileBackgroundForOthers
+        self.updateCustomProfileBackgroundForSettings = updateCustomProfileBackgroundForSettings
         self.chooseProfileBackground = chooseProfileBackground
     }
 }
