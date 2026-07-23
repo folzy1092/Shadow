@@ -388,7 +388,6 @@ public final class ChatListNavigationBar: Component {
 
             self.currentHeight = visibleSize.height
             
-            var embeddedSearchBarExpansionHeight: CGFloat = 0.0
             var searchFrameValue: CGRect?
             if let search = component.search {
                 let searchContentNode: NavigationBarSearchContentNode
@@ -446,7 +445,7 @@ public final class ChatListNavigationBar: Component {
                 let clippedSearchOffset = max(0.0, min(clippedScrollOffset, searchOffsetDistance))
                 let searchOffsetFraction = clippedSearchOffset / searchOffsetDistance
                 searchContentNode.expansionProgress = 1.0 - searchOffsetFraction
-                embeddedSearchBarExpansionHeight = 60.0 - floorToScreenPixels((1.0 - searchOffsetFraction) * searchSize.height)
+                let _ = 60.0 - floorToScreenPixels((1.0 - searchOffsetFraction) * searchSize.height)
                 if searchOffsetFraction > 0.0 {
                     searchFrame.origin.y -= (60.0 - 44.0) * 0.5 * searchOffsetFraction
                 }

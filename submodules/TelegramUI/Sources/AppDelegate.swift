@@ -2030,6 +2030,14 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         
         SharedDisplayLinkDriver.shared.updateForegroundState(self.isActiveValue)
         
+        // Shadow: re-apply Ayu visual customisations (compact tab bar, banner,
+        // profile background) that may have been lost when iOS unloaded view
+        // state during background. Settings themselves are persisted and
+        // unchanged — only the rendered UI needs a nudge.
+        if let rootController = self.mainWindow.viewController as? TelegramRootController {
+            rootController.reapplyAyuVisualState()
+        }
+        
         func cancelWindowPanGestures(view: UIView) {
             if let gestureRecognizers = view.gestureRecognizers {
                 for recognizer in gestureRecognizers {

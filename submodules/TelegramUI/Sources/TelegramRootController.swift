@@ -323,6 +323,19 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         rootTabController.setControllers(controllers, selectedIndex: nil)
     }
     
+    // Shadow: re-applies all Ayu visual customisations that depend on
+    // UserDefaults mirrors or view-level state (compact tab bar, banner,
+    // profile background). Called on every applicationDidBecomeActive so that
+    // customisations survive background→foreground transitions where iOS may
+    // have unloaded part of the view hierarchy under memory pressure.
+    // Reuses the same path as the cold-start ayuSyncBottomBarDefaults() call
+    // in addRootControllers and the live ayuBottomBarDisposable — no new
+    // mechanism, just an unconditional re-fire on foreground.
+    public func reapplyAyuVisualState() {
+        ayuSyncBottomBarDefaults()
+        (self.rootTabController as? TabBarControllerImpl)?.updateLayout(transition: .immediate)
+    }
+    
     public func openChatsController(activateSearch: Bool, filter: ChatListSearchFilter = .chats, query: String? = nil) {
         guard let rootTabController = self.rootTabController else {
             return
