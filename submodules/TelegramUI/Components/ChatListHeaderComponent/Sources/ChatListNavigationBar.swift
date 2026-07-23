@@ -196,7 +196,6 @@ public final class ChatListNavigationBar: Component {
         // the blur, stories, title and search). Gradient at the bottom keeps text
         // readable. Never interactive. nil unless the setting is on + image stored.
         private var bannerView: UIImageView?
-        private var bannerGradientLayer: CAGradientLayer?
         private var bannerLoadedSignature: String?
         
         private let headerBackgroundContainer: GlassBackgroundContainerView
@@ -280,12 +279,10 @@ public final class ChatListNavigationBar: Component {
                 if let bannerView = self.bannerView {
                     bannerView.removeFromSuperview()
                     self.bannerView = nil
-                    self.bannerGradientLayer = nil
                     self.bannerLoadedSignature = nil
                 }
                 return
             }
-
             let basePath = component.context.account.postbox.mediaBox.basePath
             let bannerPath = AyuSavedMedia.bannerPath(basePath: basePath)
             // Signature = path + file size, so replacing the image reloads it.
@@ -296,7 +293,6 @@ public final class ChatListNavigationBar: Component {
                 if let bannerView = self.bannerView {
                     bannerView.removeFromSuperview()
                     self.bannerView = nil
-                    self.bannerGradientLayer = nil
                     self.bannerLoadedSignature = nil
                 }
                 return
@@ -310,12 +306,6 @@ public final class ChatListNavigationBar: Component {
                 bannerView.isUserInteractionEnabled = false
                 bannerView.contentMode = .scaleAspectFill
                 bannerView.clipsToBounds = true
-                let gradient = CAGradientLayer()
-                gradient.colors = [UIColor(white: 0.0, alpha: 0.0).cgColor, UIColor(white: 0.0, alpha: 0.55).cgColor]
-                gradient.startPoint = CGPoint(x: 0.5, y: 0.0)
-                gradient.endPoint = CGPoint(x: 0.5, y: 1.0)
-                bannerView.layer.addSublayer(gradient)
-                self.bannerGradientLayer = gradient
                 self.insertSubview(bannerView, at: 0)
                 self.bannerView = bannerView
             }
@@ -327,16 +317,12 @@ public final class ChatListNavigationBar: Component {
                 } else {
                     bannerView.removeFromSuperview()
                     self.bannerView = nil
-                    self.bannerGradientLayer = nil
                     self.bannerLoadedSignature = nil
                     return
                 }
             }
 
             transition.setFrame(view: bannerView, frame: frame)
-            if let gradient = self.bannerGradientLayer {
-                gradient.frame = CGRect(origin: CGPoint(), size: frame.size)
-            }
         }
 
         public func applyCurrentScroll(transition: ComponentTransition) {

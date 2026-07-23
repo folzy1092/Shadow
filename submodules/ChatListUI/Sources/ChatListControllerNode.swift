@@ -1188,6 +1188,7 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
     var dismissSearch: (() -> Void)?
     
     let debugListView = ListViewImpl()
+    private var ayuBannerSettingsDisposable: Disposable?
     
     init(context: AccountContext, location: ChatListControllerLocation, previewing: Bool, controlsHistoryPreload: Bool, presentationData: PresentationData, animationCache: AnimationCache, animationRenderer: MultiAnimationRenderer, controller: ChatListControllerImpl) {
         self.context = context
@@ -1321,6 +1322,38 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
         inlineContentPanRecognizer.cancelsTouchesInView = true
         self.inlineContentPanRecognizer = inlineContentPanRecognizer
         self.view.addGestureRecognizer(inlineContentPanRecognizer)
+        
+        // Shadow: force the navigation bar to re-apply the banner as soon as the
+        // persisted settings arrive from postbox. Fixes the race where the first
+        // applyScroll runs before keepAyuGramSettingsUpdated has emitted, leaving
+        // ayuGramSettingsCurrent at defaultSettings (customBannerEnabled = false)
+        // and the banner never created.
+        self.ayuBannerSettingsDisposable = (ayuGramSettings(postbox: context.account.postbox)
+        |> filter { $0.customBannerEnabled }
+        |> take(1)
+        |> delay(0.0, queue: Queue.mainQueue())
+        |> deliverOnMainQueue).start(next: { [weak self] _ in
+            guard let self else { return }
+            if let navigationBarComponentView = self.navigationBarView.view as? ChatListNavigationBar.View {
+                let offset: CGFloat
+                switch self.mainContainerNode.currentItemNode.visibleContentOffset() {
+                case let .known(value):
+                    offset = value
+                default:
+                    offset = 0.0
+                }
+                navigationBarComponentView.applyScroll(
+                    offset: offset,
+                    allowAvatarsExpansion: false,
+                    forceUpdate: true,
+                    transition: .immediate
+                )
+            }
+        })
+    }
+    
+    deinit {
+        self.ayuBannerSettingsDisposable?.dispose()
     }
     
     override func didLoad() {
