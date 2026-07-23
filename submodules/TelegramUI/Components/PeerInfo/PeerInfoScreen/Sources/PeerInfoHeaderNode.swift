@@ -116,7 +116,6 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     // the avatar/name, visible only locally on the account owner's own profile
     // screen (isMyProfile). Replaces (hides) the official cover when active.
     private var profileBackgroundImageView: UIImageView?
-    private var profileBackgroundBottomFadeLayer: CAGradientLayer?
     private var profileBackgroundLoadedSignature: String?
     let buttonsContainerNode: SparseNode
     let buttonsBackgroundNode: NavigationBackgroundNode
@@ -511,7 +510,6 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             if let imageView = self.profileBackgroundImageView {
                 imageView.removeFromSuperview()
                 self.profileBackgroundImageView = nil
-                self.profileBackgroundBottomFadeLayer = nil
                 self.profileBackgroundLoadedSignature = nil
             }
         }
@@ -549,16 +547,6 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             imageView.contentMode = .scaleAspectFill
             imageView.clipsToBounds = true
 
-            // Short gradient strip at the very bottom only, fading from
-            // dim tone into fully opaque black, so the transition into the content
-            // below (bio / saved music / info rows) is seamless, not a hard cut.
-            let fade = CAGradientLayer()
-            fade.colors = [UIColor(white: 0.0, alpha: 0.38).cgColor, UIColor(white: 0.0, alpha: 1.0).cgColor]
-            fade.startPoint = CGPoint(x: 0.5, y: 0.0)
-            fade.endPoint = CGPoint(x: 0.5, y: 1.0)
-            imageView.layer.addSublayer(fade)
-            self.profileBackgroundBottomFadeLayer = fade
-
             self.backgroundBannerView.insertSubview(imageView, at: 0)
             self.profileBackgroundImageView = imageView
         }
@@ -574,8 +562,6 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         }
 
         transition.updateFrame(view: imageView, frame: frame)
-        let fadeHeight: CGFloat = min(64.0, frame.size.height)
-        self.profileBackgroundBottomFadeLayer?.frame = CGRect(x: 0.0, y: frame.size.height - fadeHeight, width: frame.size.width, height: fadeHeight)
 
         return true
     }
