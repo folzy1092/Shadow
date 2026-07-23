@@ -191,7 +191,6 @@ public final class ChatListNavigationBar: Component {
     public static let storiesScrollHeight: CGFloat = storiesHeightValue()
 
     public final class View: UIView {
-        private let edgeEffectView: EdgeEffectView
 
         // Shadow: optional custom banner rendered behind the whole header (below
         // the blur, stories, title and search). Gradient at the bottom keeps text
@@ -240,8 +239,6 @@ public final class ChatListNavigationBar: Component {
         private var pinnedFraction: CGFloat = 0.0
         
         override public init(frame: CGRect) {
-            self.edgeEffectView = EdgeEffectView()
-            
             self.headerBackgroundContainer = GlassBackgroundContainerView()
             self.headerBackgroundContainer.layer.anchorPoint = CGPoint()
             
@@ -250,7 +247,6 @@ public final class ChatListNavigationBar: Component {
             
             super.init(frame: frame)
             
-            self.addSubview(self.edgeEffectView)
             self.addSubview(self.bottomContentsContainer)
         }
         
@@ -473,19 +469,6 @@ public final class ChatListNavigationBar: Component {
                 }
             }
             
-            var edgeEffectHeight: CGFloat = currentLayout.size.height + 14.0
-            if component.search != nil {
-                if component.activeSearch != nil {
-                } else {
-                    edgeEffectHeight -= embeddedSearchBarExpansionHeight
-                }
-            } else if component.activeSearch != nil {
-            }
-            edgeEffectHeight = max(0.0, edgeEffectHeight)
-            let edgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: currentLayout.size.width, height: edgeEffectHeight))
-            transition.setFrame(view: self.edgeEffectView, frame: edgeEffectFrame)
-            self.edgeEffectView.update(content: nil, blur: true, alpha: 0.85, rect: edgeEffectFrame, edge: .top, edgeSize: min(54.0, edgeEffectHeight), transition: transition)
-
             // Shadow: render the custom banner over the full header area. Hidden in
             // active search (header content scrolls away). Purely a background layer.
             let bannerFrame = CGRect(origin: CGPoint(), size: CGSize(width: currentLayout.size.width, height: visibleSize.height))
@@ -777,17 +760,6 @@ public final class ChatListNavigationBar: Component {
         }
         
         private func updateEdgeEffectColor(transition: ComponentTransition) {
-            guard let component = self.component else {
-                return
-            }
-            var color: UIColor = component.theme.list.plainBackgroundColor
-            if component.activeSearch == nil {
-                color = component.theme.list.plainBackgroundColor.mixedWith(component.theme.chatList.pinnedItemBackgroundColor, alpha: self.pinnedFraction)
-            }
-            if !component.hasEdgeEffect {
-                color = component.theme.list.itemModalBlocksBackgroundColor
-            }
-            self.edgeEffectView.updateColor(color: color, transition: transition)
         }
         
         func update(component: ChatListNavigationBar, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
@@ -898,8 +870,6 @@ public final class ChatListNavigationBar: Component {
             }
             
             self.updateEdgeEffectColor(transition: transition)
-            
-            self.edgeEffectView.isHidden = !component.hasEdgeEffect
             
             return size
         }

@@ -893,11 +893,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             if state.isEditing {
                 backgroundBannerAlpha = 0.0
             } else {
-                if 1.0 - innerBackgroundTransitionFraction < 0.5 {
-                    backgroundBannerAlpha = 0.0
-                } else {
-                    backgroundBannerAlpha = 1.0
-                }
+                backgroundBannerAlpha = 1.0
             }
             navigationTransition.updateAlpha(layer: self.backgroundBannerView.layer, alpha: backgroundBannerAlpha)
             
