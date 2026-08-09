@@ -129,6 +129,58 @@ public func ayuForkStoreClearKeptDeleted(postbox: Postbox) -> Signal<Never, NoEr
     |> ignoreValues
 }
 
+// Age out kept (anti-deleted) messages: delete for real every indexed message
+// whose trash mark (DeletedMessageAttribute.date) is older than `maxAge`
+// seconds, and drop it from the index. `maxAge <= 0` disables the expiry.
+// Refs whose message no longer exists are dropped too. Returns how many
+// messages were deleted.
+//
+// This is the message-side counterpart of the saved-media "Срок хранения": the
+// media gallery was already pruned by age, but kept messages themselves lived
+// forever until the user hit "Очистить" by hand.
+@discardableResult
+func ayuForkStorePruneKeptDeleted(transaction: Transaction, mediaBox: MediaBox, maxAge: Int32, now: Int32) -> Int {
+    guard maxAge > 0 else {
+        return 0
+    }
+    let store = ayuForkStore(transaction: transaction)
+    if store.keptDeleted.isEmpty {
+        return 0
+    }
+    var expiredIds: [MessageId] = []
+    var remaining: [AyuForkMsgRef] = []
+    for ref in store.keptDeleted {
+        let messageId = ref.messageId
+        guard let message = transaction.getMessage(messageId) else {
+            // Already gone — the ref is stale, drop it.
+            continue
+        }
+        var markDate: Int32?
+        for attribute in message.attributes {
+            if let attribute = attribute as? DeletedMessageAttribute {
+                markDate = attribute.date
+                break
+            }
+        }
+        if let markDate = markDate, now - markDate >= maxAge {
+            expiredIds.append(messageId)
+        } else {
+            remaining.append(ref)
+        }
+    }
+    if !expiredIds.isEmpty {
+        _internal_deleteMessages(transaction: transaction, mediaBox: mediaBox, ids: expiredIds)
+    }
+    if remaining.count != store.keptDeleted.count {
+        updateAyuForkStore(transaction: transaction) { current in
+            var current = current
+            current.keptDeleted = remaining
+            return current
+        }
+    }
+    return expiredIds.count
+}
+
 // Strip the stored edit versions from the affected messages and clear the index.
 public func ayuForkStoreClearEditHistory(postbox: Postbox) -> Signal<Never, NoError> {
     return postbox.transaction { transaction -> Void in

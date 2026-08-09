@@ -513,6 +513,9 @@ public func managedAyuMediaAutoClean(postbox: Postbox) -> Signal<Never, NoError>
                 }
             }
         }
+        // Same retention window applies to the kept (anti-deleted) messages
+        // themselves — not just to their media files in the gallery.
+        ayuForkStorePruneKeptDeleted(transaction: transaction, mediaBox: postbox.mediaBox, maxAge: settings.mediaAutoCleanInterval, now: Int32(Date().timeIntervalSince1970))
         return (settings.mediaAutoCleanInterval, settings.attachmentSizeLimit, keep)
     }
     |> mapToSignal { maxAge, maxBytes, keep -> Signal<Never, NoError> in

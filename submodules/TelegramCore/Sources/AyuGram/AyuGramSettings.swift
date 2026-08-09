@@ -536,12 +536,22 @@ extension AyuGramSettings {
 // via a per-account subscription (see `keepAyuGramSettingsUpdated`). Reads are
 // lock-guarded and cheap; writes are rare.
 private let ayuGramSettingsStateLock = NSLock()
-private var ayuGramSettingsStateValue: AyuGramSettings = AyuGramSettings.defaultSettings
+// nil until the first read/write of this process. The first read restores the
+// last persisted settings from the UserDefaults mirror (see below) instead of
+// falling back to defaults — the postbox-backed snapshot only arrives
+// asynchronously and every UI-render-path consumer would otherwise render the
+// default state on cold start.
+private var ayuGramSettingsStateValue: AyuGramSettings?
 
 public var ayuGramSettingsCurrent: AyuGramSettings {
     ayuGramSettingsStateLock.lock()
     defer { ayuGramSettingsStateLock.unlock() }
-    return ayuGramSettingsStateValue
+    if let value = ayuGramSettingsStateValue {
+        return value
+    }
+    let restored = readAyuSettingsMirror() ?? AyuGramSettings.defaultSettings
+    ayuGramSettingsStateValue = restored
+    return restored
 }
 
 private func setAyuGramSettingsCurrent(_ settings: AyuGramSettings) {
@@ -549,7 +559,14 @@ private func setAyuGramSettingsCurrent(_ settings: AyuGramSettings) {
     let previous = ayuGramSettingsStateValue
     ayuGramSettingsStateValue = settings
     let alreadyMirrored = ayuHasMirroredBottomBarDefaults
+    let alreadyMirroredSettings = ayuHasMirroredSettings
     ayuGramSettingsStateLock.unlock()
+    // Full-settings mirror: same idea as the bottom-bar keys below, but for the
+    // whole value, so the very first synchronous read in the next cold start
+    // sees the user's real settings rather than the defaults.
+    if previous != settings || !alreadyMirroredSettings {
+        writeAyuSettingsMirror(settings)
+    }
     // Mirror the bottom-bar toggles into UserDefaults so the low-level tab-bar
     // modules (TabBarUI / TabBarComponent) can read them without taking a
     // dependency on TelegramCore. Keys are shared with those modules; see
@@ -561,9 +578,9 @@ private func setAyuGramSettingsCurrent(_ settings: AyuGramSettings) {
     // start and render the wrong bottom-bar state until the next change, which is
     // exactly the compact/folders desync seen after a restart. See also
     // ayuSyncBottomBarDefaults(), called early from the root controller.
-    let changed = previous.foldersAtBottom != settings.foldersAtBottom
-        || previous.hideBottomSearch != settings.hideBottomSearch
-        || previous.compactBottomBar != settings.compactBottomBar
+    let changed = previous?.foldersAtBottom != settings.foldersAtBottom
+        || previous?.hideBottomSearch != settings.hideBottomSearch
+        || previous?.compactBottomBar != settings.compactBottomBar
     if changed || !alreadyMirrored {
         writeAyuBottomBarDefaults(settings)
     }
@@ -573,6 +590,30 @@ private func setAyuGramSettingsCurrent(_ settings: AyuGramSettings) {
 // process. Guards the "always write the first mirror" rule in
 // setAyuGramSettingsCurrent. Access is guarded by ayuGramSettingsStateLock.
 private var ayuHasMirroredBottomBarDefaults = false
+
+// Same flag for the full-settings mirror below.
+private var ayuHasMirroredSettings = false
+
+// UserDefaults key holding the JSON-encoded last known settings value.
+private let ayuSettingsMirrorKey = "shadow.settingsMirror"
+
+private func writeAyuSettingsMirror(_ settings: AyuGramSettings) {
+    if let data = try? JSONEncoder().encode(settings) {
+        UserDefaults.standard.set(data, forKey: ayuSettingsMirrorKey)
+    }
+    ayuGramSettingsStateLock.lock()
+    ayuHasMirroredSettings = true
+    ayuGramSettingsStateLock.unlock()
+}
+
+// Reads the mirror. Called with ayuGramSettingsStateLock HELD — it must not take
+// the lock itself.
+private func readAyuSettingsMirror() -> AyuGramSettings? {
+    guard let data = UserDefaults.standard.data(forKey: ayuSettingsMirrorKey) else {
+        return nil
+    }
+    return try? JSONDecoder().decode(AyuGramSettings.self, from: data)
+}
 
 private func writeAyuBottomBarDefaults(_ settings: AyuGramSettings) {
     let defaults = UserDefaults.standard

@@ -37,7 +37,28 @@ func _internal_ayuBurnViewOnceMedia(postbox: Postbox, messageId: MessageId) -> S
             let storeForwardInfo = currentMessage.forwardInfo.flatMap { info in
                 StoreMessageForwardInfo(authorId: info.author?.id, sourceId: info.source?.id, sourceMessageId: info.sourceMessageId, date: info.date, authorSignature: info.authorSignature, psaType: info.psaType, flags: info.flags)
             }
-            return .update(StoreMessage(id: currentMessage.id, customStableId: nil, globallyUniqueId: currentMessage.globallyUniqueId, groupingKey: currentMessage.groupingKey, threadId: currentMessage.threadId, timestamp: currentMessage.timestamp, flags: StoreMessageFlags(currentMessage.flags), tags: currentMessage.tags, globalTags: currentMessage.globalTags, localTags: currentMessage.localTags, forwardInfo: storeForwardInfo, authorId: currentMessage.author?.id, text: currentMessage.text, attributes: attributes, media: currentMessage.media))
+            // 3. Recompute the media tags. tagsForStoreMessage() deliberately gives
+            // a self-destruct message NO .photoOrVideo/.photo/.video tag, so the
+            // message we just turned into a regular one is still missing from the
+            // chat's tag-indexed media list. The tap handler opens a gallery built
+            // from that list — with the message absent it lands on a neighbouring
+            // photo, which is why a burned photo used to open some unrelated image
+            // from the chat while its own bubble rendered fine.
+            var textEntities: [MessageTextEntity]?
+            for attribute in attributes {
+                if let attribute = attribute as? TextEntitiesMessageAttribute {
+                    textEntities = attribute.entities
+                    break
+                }
+            }
+            let (tags, globalTags) = tagsForStoreMessage(
+                incoming: currentMessage.flags.contains(.Incoming),
+                attributes: attributes,
+                media: currentMessage.media,
+                textEntities: textEntities,
+                isPinned: currentMessage.tags.contains(.pinned)
+            )
+            return .update(StoreMessage(id: currentMessage.id, customStableId: nil, globallyUniqueId: currentMessage.globallyUniqueId, groupingKey: currentMessage.groupingKey, threadId: currentMessage.threadId, timestamp: currentMessage.timestamp, flags: StoreMessageFlags(currentMessage.flags), tags: tags, globalTags: currentMessage.globalTags.union(globalTags), localTags: currentMessage.localTags, forwardInfo: storeForwardInfo, authorId: currentMessage.author?.id, text: currentMessage.text, attributes: attributes, media: currentMessage.media))
         })
     }
 }

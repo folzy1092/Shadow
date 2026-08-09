@@ -1309,6 +1309,13 @@ private final class ItemComponent: Component {
                 }
                 titleView.frame = titleFrame
                 alphaTransition.setAlpha(view: titleView, alpha: component.isCompact ? 0.0 : 1.0)
+            } else if let titleView = self.title.view, titleView.superview != nil {
+                // Shadow: the flag can flip after the item has already been laid
+                // out with a title (toggling "compact" at runtime, or the first
+                // layout running before the persisted settings were read). Adding
+                // it conditionally is not enough — an already-attached title must
+                // be taken back out, or the compact bar keeps showing tab names.
+                titleView.removeFromSuperview()
             }
 
             if let badgeText = badgeValue, !badgeText.isEmpty {

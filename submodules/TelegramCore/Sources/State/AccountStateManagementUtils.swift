@@ -4443,10 +4443,11 @@ func replayFinalState(
                 // AyuGram anti-delete: keep the local copy (and its media) that the
                 // server told us to remove. Media survives because the message keeps
                 // referencing it, so it is not garbage-collected.
-                // Anti-delete is peer-type agnostic: deleted messages, media and
-                // files from BOTS are always kept too. The "Исключить ботов"
-                // toggle only protects saved-gallery media from auto-cleanup
-                // (see managedAyuMediaAutoClean) and never gates this save path.
+                // Anti-delete never keeps BOT-authored messages or our own
+                // outgoing ones (see ayuGramMarkMessagesDeleted). Those ids come
+                // back from the mark call and are deleted here through the normal
+                // path — this branch deletes nothing on its own, so leaving them
+                // unhandled would keep them in the chat with no trash badge.
                 if !currentAyuGramSettings(transaction: transaction).keepDeletedMessages {
                     var resourceIds: [MediaResourceId] = []
                     transaction.deleteMessagesWithGlobalIds(ids, forEachMedia: { media in
@@ -4457,7 +4458,17 @@ func replayFinalState(
                     }
                     deletedMessageIds.append(contentsOf: ids.map { .global($0) })
                 } else {
-                    ayuGramMarkMessagesDeleted(transaction: transaction, ids: transaction.messageIdsForGlobalIds(ids))
+                    let excludedIds = ayuGramMarkMessagesDeleted(transaction: transaction, ids: transaction.messageIdsForGlobalIds(ids))
+                    if !excludedIds.isEmpty {
+                        var resourceIds: [MediaResourceId] = []
+                        transaction.deleteMessages(excludedIds, forEachMedia: { media in
+                            addMessageMediaResourceIdsToRemove(media: media, resourceIds: &resourceIds)
+                        })
+                        if !resourceIds.isEmpty {
+                            let _ = mediaBox.removeCachedResources(Array(Set(resourceIds)), force: true).start()
+                        }
+                        deletedMessageIds.append(contentsOf: excludedIds.map { .messageId($0) })
+                    }
                 }
             case let .DeleteMessages(ids):
                 // AyuGram anti-delete: same for channel/thread message deletions.
@@ -4467,7 +4478,13 @@ func replayFinalState(
                     })
                     deletedMessageIds.append(contentsOf: ids.map { .messageId($0) })
                 } else {
-                    ayuGramMarkMessagesDeleted(transaction: transaction, ids: ids)
+                    let excludedIds = ayuGramMarkMessagesDeleted(transaction: transaction, ids: ids)
+                    if !excludedIds.isEmpty {
+                        _internal_deleteMessages(transaction: transaction, mediaBox: mediaBox, ids: excludedIds, manualAddMessageThreadStatsDifference: { id, add, remove in
+                            addMessageThreadStatsDifference(threadKey: id, remove: remove, addedMessagePeer: nil, addedMessageId: nil, isOutgoing: false)
+                        })
+                        deletedMessageIds.append(contentsOf: excludedIds.map { .messageId($0) })
+                    }
                 }
             case let .UpdateMinAvailableMessage(id):
                 if let message = transaction.getMessage(id) {

@@ -1486,7 +1486,13 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             }
         }
         
-        if resourceAvailable, !message.containsSecretMedia && !isCopyProtected {
+        // Shadow: the fork keeps view-once / self-destruct media on disk, so the
+        // save action is still meaningful BEFORE the message is burned. Upstream
+        // hides it for anything containsSecretMedia; allow it for cloud view-once
+        // messages while "keep self-destruct media" is on. Real secret chats keep
+        // the upstream behaviour.
+        let ayuAllowSaveSecretMedia = ayuGramSettingsCurrent.keepSelfDestructMedia && message.id.peerId.namespace != Namespaces.Peer.SecretChat
+        if resourceAvailable, (!message.containsSecretMedia || ayuAllowSaveSecretMedia) && !isCopyProtected {
             var mediaReference: AnyMediaReference?
             var isVideo = false
             for media in message.effectiveMedia {
