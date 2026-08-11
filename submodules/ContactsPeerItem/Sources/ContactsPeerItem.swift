@@ -857,6 +857,11 @@ public class ContactsPeerItemNode: ItemListRevealOptionsItemNode {
             
             var credibilityStatusIcon: EmojiStatusComponent.Content?
             var verifiedIcon: EmojiStatusComponent.Content?
+            // Shadow: true when verifiedIcon holds the fork's remote-config badge
+            // rather than a real bot-verification icon — placed after the
+            // credibility/emoji-status icons (right of the name) instead of
+            // upstream's before-the-name placement.
+            var verifiedIconOnRight = false
             var emojiStatusIcon: EmojiStatusComponent.Content?
             var emojiStatusParticleColor: UIColor?
             
@@ -881,6 +886,11 @@ public class ContactsPeerItemNode: ItemListRevealOptionsItemNode {
                     }
                     if let verificationIconFileId = peer.verificationIconFileId {
                         verifiedIcon = .animation(content: .customEmoji(fileId: verificationIconFileId), size: CGSize(width: 32.0, height: 32.0), placeholderColor: item.presentationData.theme.list.mediaPlaceholderColor, themeColor: item.presentationData.theme.list.itemAccentColor, loopMode: .count(0))
+                    }
+                    // Shadow: fork badge, right of the name (see verifiedIconOnRight).
+                    if let badgeEmojiId = ayuGramNameBadgeEmojiId(peerId: peer.id) {
+                        verifiedIcon = .animation(content: .customEmoji(fileId: badgeEmojiId), size: CGSize(width: 32.0, height: 32.0), placeholderColor: item.presentationData.theme.list.mediaPlaceholderColor, themeColor: item.presentationData.theme.list.itemAccentColor, loopMode: .count(0))
+                        verifiedIconOnRight = true
                     }
                 }
             case .deviceContact:
@@ -1541,7 +1551,7 @@ public class ContactsPeerItemNode: ItemListRevealOptionsItemNode {
                             
                             var titleLeftOffset: CGFloat = 0.0
                             var nextIconX: CGFloat = titleFrame.maxX
-                            if let verifiedIcon {
+                            if let verifiedIcon, !verifiedIconOnRight {
                                 let animationCache = item.context.animationCache
                                 let animationRenderer = item.context.animationRenderer
                                 
@@ -1578,7 +1588,7 @@ public class ContactsPeerItemNode: ItemListRevealOptionsItemNode {
                                 
                                 titleLeftOffset += iconSize.width + 4.0
                                 nextIconX += iconSize.width + 4.0
-                            } else if let verifiedIconView = strongSelf.verifiedIconView {
+                            } else if !verifiedIconOnRight, let verifiedIconView = strongSelf.verifiedIconView {
                                 strongSelf.verifiedIconView = nil
                                 verifiedIconView.removeFromSuperview()
                             }
@@ -1701,6 +1711,49 @@ public class ContactsPeerItemNode: ItemListRevealOptionsItemNode {
                             } else if let emojiStatusIconView = strongSelf.emojiStatusIconView {
                                 strongSelf.emojiStatusIconView = nil
                                 emojiStatusIconView.removeFromSuperview()
+                            }
+
+                            // Shadow: fork badge placed AFTER credibility + emoji
+                            // status, i.e. as the last icon in the row, reusing the
+                            // same verifiedIconView the (unused, in this case)
+                            // before-name path above would have used.
+                            if let verifiedIcon, verifiedIconOnRight {
+                                let animationCache = item.context.animationCache
+                                let animationRenderer = item.context.animationRenderer
+
+                                let verifiedIconView: ComponentHostView<Empty>
+                                if let current = strongSelf.verifiedIconView {
+                                    verifiedIconView = current
+                                } else {
+                                    verifiedIconView = ComponentHostView<Empty>()
+                                    strongSelf.offsetContainerNode.view.addSubview(verifiedIconView)
+                                    strongSelf.verifiedIconView = verifiedIconView
+                                }
+
+                                let verifiedIconComponent = EmojiStatusComponent(
+                                    context: item.context,
+                                    animationCache: animationCache,
+                                    animationRenderer: animationRenderer,
+                                    content: verifiedIcon,
+                                    isVisibleForAnimations: strongSelf.visibilityStatus,
+                                    action: nil,
+                                    emojiFileUpdated: nil
+                                )
+                                strongSelf.verifiedIconComponent = verifiedIconComponent
+
+                                let iconSize = verifiedIconView.update(
+                                    transition: .immediate,
+                                    component: AnyComponent(verifiedIconComponent),
+                                    environment: {},
+                                    containerSize: CGSize(width: 16.0, height: 16.0)
+                                )
+
+                                nextIconX += 4.0
+                                transition.updateFrame(view: verifiedIconView, frame: CGRect(origin: CGPoint(x: nextIconX, y: floorToScreenPixels(titleFrame.midY - iconSize.height / 2.0)), size: iconSize))
+                                nextIconX += iconSize.width
+                            } else if verifiedIconOnRight, let verifiedIconView = strongSelf.verifiedIconView {
+                                strongSelf.verifiedIconView = nil
+                                verifiedIconView.removeFromSuperview()
                             }
                             
                             if let (titleBadgeLayout, titleBadgeApply) = titleBadgeLayoutAndApply {

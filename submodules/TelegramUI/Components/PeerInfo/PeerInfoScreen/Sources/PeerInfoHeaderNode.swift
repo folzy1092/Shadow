@@ -669,6 +669,11 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         var credibilityIcon: CredibilityIcon = .none
         var verifiedIcon: CredibilityIcon = .none
         var statusIcon: CredibilityIcon = .none
+        // Shadow: true routes verifiedIcon to the RIGHT of the name (after the
+        // status/premium chain) instead of upstream's default LEFT placement for
+        // a non-".verified" verifiedIcon. See the ayuGramNameBadgeEmojiId branch
+        // below and its use further down where verifiedIcon's side is decided.
+        var verifiedIconOnRight = false
         if let peer {
             if peer.id == self.context.account.peerId && !self.isSettings && !self.isMyProfile {
                 credibilityIcon = .none
@@ -688,6 +693,16 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             }
             if let verificationIconFileId = peer.verificationIconFileId {
                 verifiedIcon = .emojiStatus(PeerEmojiStatus(content: .emoji(fileId: verificationIconFileId), expirationDate: nil))
+            }
+            // Shadow: the fork's remote-config badge rides in the verification
+            // icon slot, reusing its whole update/layout/collapse plumbing, and
+            // takes priority over a real verification icon (per fork config).
+            // Unlike the bot-verification icon — which Telegram draws BEFORE the
+            // name — this one is a second emoji status, so it is placed after the
+            // status/premium chain instead (see verifiedIconOnRight below).
+            if let badgeEmojiId = ayuGramNameBadgeEmojiId(peerId: peer.id) {
+                verifiedIcon = .emojiStatus(PeerEmojiStatus(content: .emoji(fileId: badgeEmojiId), expirationDate: nil))
+                verifiedIconOnRight = true
             }
         }
         
@@ -1677,10 +1692,14 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             nextExpandedIconX += 4.0 + titleExpandedCredibilityIconSize.width
         }
                 
+        var verifiedIconGoesRight = verifiedIconOnRight
+        if case .verified = verifiedIcon {
+            verifiedIconGoesRight = true
+        }
         if let verifiedIconSize = self.verifiedIconSize, let titleExpandedVerifiedIconSize = self.titleExpandedVerifiedIconSize, verifiedIconSize.width > 0.0 {
             let leftOffset: CGFloat
             let leftExpandedOffset: CGFloat
-            if case .verified = verifiedIcon {
+            if verifiedIconGoesRight {
                 titleHorizontalOffset -= (verifiedIconSize.width + 4.0) / 2.0
                 
                 leftOffset = nextIconX + 4.0
@@ -1701,7 +1720,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             transition.updateFrame(view: self.titleVerifiedIconView, frame: CGRect(origin: CGPoint(x: leftOffset + collapsedTransitionOffset, y: floor((titleSize.height - verifiedIconSize.height) / 2.0)), size: verifiedIconSize))
             transition.updateFrame(view: self.titleExpandedVerifiedIconView, frame: CGRect(origin: CGPoint(x: leftExpandedOffset, y: floor((titleExpandedSize.height - titleExpandedVerifiedIconSize.height) / 2.0) + 1.0), size: titleExpandedVerifiedIconSize))
             
-            if case .verified = verifiedIcon {
+            if verifiedIconGoesRight {
                 nextIconX += 4.0 + verifiedIconSize.width
                 nextExpandedIconX += 4.0 + titleExpandedVerifiedIconSize.width
             }

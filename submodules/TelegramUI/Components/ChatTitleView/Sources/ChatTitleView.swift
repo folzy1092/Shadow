@@ -221,6 +221,10 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
     private var titleCredibilityIcon: ChatTitleCredibilityIcon = .none
     private var titleVerifiedIcon: ChatTitleCredibilityIcon = .none
     private var titleStatusIcon: ChatTitleCredibilityIcon = .none
+    // Shadow: true when titleVerifiedIcon holds the fork's remote-config badge
+    // rather than a real bot-verification icon — placed AFTER the status/premium
+    // chain (right of the name) instead of upstream's before-the-name placement.
+    private var titleVerifiedIconOnRight: Bool = false
     
     private var presenceManager: PeerPresenceStatusManager?
     
@@ -269,6 +273,7 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
                 var titleCredibilityIcon: ChatTitleCredibilityIcon = .none
                 var titleVerifiedIcon: ChatTitleCredibilityIcon = .none
                 var titleStatusIcon: ChatTitleCredibilityIcon = .none
+                var titleVerifiedIconOnRight = false
                 var isEnabled = true
                 switch titleContent {
                     case let .peer(peerView, customTitle, _, _, isScheduledMessages, isMuted, _, hidePeerStatus, isEnabledValue):
@@ -320,6 +325,13 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
                                     if let verificationIconFileId = peer.verificationIconFileId {
                                         titleVerifiedIcon = .emojiStatus(PeerEmojiStatus(content: .emoji(fileId: verificationIconFileId), expirationDate: nil))
                                     }
+                                }
+                                // Shadow: fork badge in the verification icon slot, so it
+                                // sits right after the emoji status. Outside the
+                                // "not me" check above — our own badge shows too.
+                                if let badgeEmojiId = ayuGramNameBadgeEmojiId(peerId: peer.id) {
+                                    titleVerifiedIcon = .emojiStatus(PeerEmojiStatus(content: .emoji(fileId: badgeEmojiId), expirationDate: nil))
+                                    titleVerifiedIconOnRight = true
                                 }
                             }
                             if peerView.peerId.namespace == Namespaces.Peer.SecretChat {
@@ -455,6 +467,10 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
                 
                 if titleVerifiedIcon != self.titleVerifiedIcon {
                     self.titleVerifiedIcon = titleVerifiedIcon
+                    updated = true
+                }
+                if titleVerifiedIconOnRight != self.titleVerifiedIconOnRight {
+                    self.titleVerifiedIconOnRight = titleVerifiedIconOnRight
                     updated = true
                 }
                 
@@ -1025,7 +1041,7 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
         var titleFrame: CGRect
         
         var titleInsets: UIEdgeInsets = .zero
-        if case .emojiStatus = self.titleVerifiedIcon, verifiedIconWidth > 0.0 {
+        if case .emojiStatus = self.titleVerifiedIcon, verifiedIconWidth > 0.0, !self.titleVerifiedIconOnRight {
             titleInsets.left = verifiedIconWidth
         }
         
@@ -1073,9 +1089,21 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
         }
         
         var nextIconX: CGFloat = titleFrame.width
-        
-        titleTransition.updateFrame(view: self.titleVerifiedIconView, frame: CGRect(origin: CGPoint(x: 0.0, y: floor((titleFrame.height - titleVerifiedSize.height) / 2.0)), size: titleVerifiedSize))
-        
+
+        // Shadow: the fork badge (titleVerifiedIconOnRight) is placed as the
+        // OUTERMOST icon — furthest right, after the premium/status emoji — by
+        // consuming nextIconX before credibility/status get to it. A real
+        // bot-verification icon keeps upstream's x = 0 placement, BEFORE the name.
+        if self.titleVerifiedIconOnRight, verifiedIconWidth > 0.0 {
+            titleTransition.updateFrame(view: self.titleVerifiedIconView, frame: CGRect(origin: CGPoint(x: nextIconX - titleVerifiedSize.width, y: floor((titleFrame.height - titleVerifiedSize.height) / 2.0)), size: titleVerifiedSize))
+            nextIconX -= titleVerifiedSize.width
+            if credibilityIconWidth > 0.0 || statusIconWidth > 0.0 {
+                nextIconX -= statusSpacing
+            }
+        } else {
+            titleTransition.updateFrame(view: self.titleVerifiedIconView, frame: CGRect(origin: CGPoint(x: 0.0, y: floor((titleFrame.height - titleVerifiedSize.height) / 2.0)), size: titleVerifiedSize))
+        }
+
         self.titleCredibilityIconView.frame = CGRect(origin: CGPoint(x: nextIconX - titleCredibilitySize.width, y: floor((titleFrame.height - titleCredibilitySize.height) / 2.0)), size: titleCredibilitySize)
         nextIconX -= titleCredibilitySize.width
         if credibilityIconWidth > 0.0 {

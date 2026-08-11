@@ -53,6 +53,9 @@ public struct AyuGramSettings: Codable, Equatable {
     // MESSAGES
     // Render message timestamps as HH:MM:SS instead of HH:MM.
     public var showMessageSeconds: Bool
+    // Replace the "Изменено" ("edited") text label next to the timestamp with a
+    // small pencil icon, Swiftgram/exteraGram-style, instead of the localized word.
+    public var editedIndicatorAsPencil: Bool
     // Double-tapping one of your own messages opens the edit interface.
     public var doubleTapToEdit: Bool
     // Show the exact clock time of a peer's last-seen in the chat header
@@ -193,6 +196,7 @@ public struct AyuGramSettings: Codable, Equatable {
             sendViaScheduled: false,
             sendWithoutOnline: false,
             showMessageSeconds: false,
+            editedIndicatorAsPencil: false,
             doubleTapToEdit: false,
             showExactLastSeen: false,
             showExactLastSeenSeconds: false,
@@ -296,6 +300,7 @@ public struct AyuGramSettings: Codable, Equatable {
         sendViaScheduled: Bool,
         sendWithoutOnline: Bool,
         showMessageSeconds: Bool,
+        editedIndicatorAsPencil: Bool,
         doubleTapToEdit: Bool,
         showExactLastSeen: Bool,
         showExactLastSeenSeconds: Bool,
@@ -345,6 +350,7 @@ public struct AyuGramSettings: Codable, Equatable {
         self.sendViaScheduled = sendViaScheduled
         self.sendWithoutOnline = sendWithoutOnline
         self.showMessageSeconds = showMessageSeconds
+        self.editedIndicatorAsPencil = editedIndicatorAsPencil
         self.doubleTapToEdit = doubleTapToEdit
         self.showExactLastSeen = showExactLastSeen
         self.showExactLastSeenSeconds = showExactLastSeenSeconds
@@ -397,6 +403,7 @@ public struct AyuGramSettings: Codable, Equatable {
         self.sendViaScheduled = ((try container.decodeIfPresent(Int32.self, forKey: "sendViaScheduled")) ?? 0) != 0
         self.sendWithoutOnline = ((try container.decodeIfPresent(Int32.self, forKey: "sendWithoutOnline")) ?? 0) != 0
         self.showMessageSeconds = ((try container.decodeIfPresent(Int32.self, forKey: "showMessageSeconds")) ?? 0) != 0
+        self.editedIndicatorAsPencil = ((try container.decodeIfPresent(Int32.self, forKey: "editedIndicatorAsPencil")) ?? 0) != 0
         self.doubleTapToEdit = ((try container.decodeIfPresent(Int32.self, forKey: "doubleTapToEdit")) ?? 0) != 0
         self.showExactLastSeen = ((try container.decodeIfPresent(Int32.self, forKey: "showExactLastSeen")) ?? 0) != 0
         self.showExactLastSeenSeconds = ((try container.decodeIfPresent(Int32.self, forKey: "showExactLastSeenSeconds")) ?? 0) != 0
@@ -449,6 +456,7 @@ public struct AyuGramSettings: Codable, Equatable {
         try container.encode((self.sendViaScheduled ? 1 : 0) as Int32, forKey: "sendViaScheduled")
         try container.encode((self.sendWithoutOnline ? 1 : 0) as Int32, forKey: "sendWithoutOnline")
         try container.encode((self.showMessageSeconds ? 1 : 0) as Int32, forKey: "showMessageSeconds")
+        try container.encode((self.editedIndicatorAsPencil ? 1 : 0) as Int32, forKey: "editedIndicatorAsPencil")
         try container.encode((self.doubleTapToEdit ? 1 : 0) as Int32, forKey: "doubleTapToEdit")
         try container.encode((self.showExactLastSeen ? 1 : 0) as Int32, forKey: "showExactLastSeen")
         try container.encode((self.showExactLastSeenSeconds ? 1 : 0) as Int32, forKey: "showExactLastSeenSeconds")

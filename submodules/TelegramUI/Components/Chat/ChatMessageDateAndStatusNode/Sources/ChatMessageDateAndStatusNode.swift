@@ -565,6 +565,12 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
             var updatedDateText = arguments.dateText
             if arguments.edited {
                 if let useEditedTimestamp = arguments.context.getAppConfigValue("message_primary_edited_date") as? Bool, useEditedTimestamp {
+                } else if ayuGramSettingsCurrent.editedIndicatorAsPencil {
+                    // Shadow: replace the localized "Изменено"/"edited" word with a
+                    // compact pencil glyph — same "prefix the date string" mechanism
+                    // the anti-delete 🗑 badge uses (StringForMessageTimestampStatus),
+                    // so no new icon view / width-reservation plumbing is needed.
+                    updatedDateText = "✎ \(updatedDateText)"
                 } else {
                     updatedDateText = "\(arguments.presentationData.strings.Conversation_MessageEditedLabel) \(updatedDateText)"
                 }

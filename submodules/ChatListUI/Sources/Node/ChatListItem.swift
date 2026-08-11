@@ -2507,6 +2507,12 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
             var currentMutedIconImage: UIImage?
             var currentCredibilityIconContent: EmojiStatusComponent.Content?
             var currentVerifiedIconContent: EmojiStatusComponent.Content?
+            // Shadow: true when currentVerifiedIconContent holds the fork's
+            // remote-config badge rather than a real bot-verification icon —
+            // placed after the status/credibility icons (right of the name)
+            // instead of upstream's before-the-name placement for a verified
+            // ".animation" content.
+            var currentVerifiedIconOnRight = false
             var currentStatusIconContent: EmojiStatusComponent.Content?
             var currentStatusIconParticleColor: UIColor?
             var currentSecretIconImage: UIImage?
@@ -3572,6 +3578,13 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                             if let verificationIconFileId = peer.verificationIconFileId {
                                 currentVerifiedIconContent = .animation(content: .customEmoji(fileId: verificationIconFileId), size: CGSize(width: 32.0, height: 32.0), placeholderColor: item.presentationData.theme.list.mediaPlaceholderColor, themeColor: item.presentationData.theme.list.itemAccentColor, loopMode: .count(0))
                             }
+                            // Shadow: fork badge in the verification icon slot,
+                            // placed after status/credibility (right of the name)
+                            // instead of the bot-verification icon's before-name spot.
+                            if let badgeEmojiId = ayuGramNameBadgeEmojiId(peerId: peer.id) {
+                                currentVerifiedIconContent = .animation(content: .customEmoji(fileId: badgeEmojiId), size: CGSize(width: 32.0, height: 32.0), placeholderColor: item.presentationData.theme.list.mediaPlaceholderColor, themeColor: item.presentationData.theme.list.itemAccentColor, loopMode: .count(0))
+                                currentVerifiedIconOnRight = true
+                            }
                         }
                     default:
                         break
@@ -3603,6 +3616,12 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                     if let verificationIconFileId = peer.verificationIconFileId {
                         currentVerifiedIconContent = .animation(content: .customEmoji(fileId: verificationIconFileId), size: CGSize(width: 32.0, height: 32.0), placeholderColor: item.presentationData.theme.list.mediaPlaceholderColor, themeColor: item.presentationData.theme.list.itemAccentColor, loopMode: .count(0))
                     }
+                    // Shadow: fork badge, right of the name (see the comment on the
+                    // other iconPeer branch above).
+                    if let badgeEmojiId = ayuGramNameBadgeEmojiId(peerId: peer.id) {
+                        currentVerifiedIconContent = .animation(content: .customEmoji(fileId: badgeEmojiId), size: CGSize(width: 32.0, height: 32.0), placeholderColor: item.presentationData.theme.list.mediaPlaceholderColor, themeColor: item.presentationData.theme.list.itemAccentColor, loopMode: .count(0))
+                        currentVerifiedIconOnRight = true
+                    }
                 }
             }
             if let currentSecretIconImage = currentSecretIconImage {
@@ -3611,7 +3630,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
             
             var titleLeftOffset: CGFloat = 0.0
             if let currentVerifiedIconContent {
-                if titleLeftOffset.isZero, case .animation = currentVerifiedIconContent {
+                if titleLeftOffset.isZero, case .animation = currentVerifiedIconContent, !currentVerifiedIconOnRight {
                     titleLeftOffset += 19.0
                 }
                 
@@ -5288,7 +5307,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         strongSelf.verifiedIconComponent = verifiedIconComponent
                         
                         let iconOrigin: CGFloat
-                        if case .animation = currentVerifiedIconContent {
+                        if case .animation = currentVerifiedIconContent, !currentVerifiedIconOnRight {
                             iconOrigin = contentRect.origin.x
                         } else {
                             iconOrigin = nextTitleIconOrigin

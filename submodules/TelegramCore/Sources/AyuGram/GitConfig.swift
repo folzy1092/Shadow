@@ -1,4 +1,5 @@
 import Foundation
+import Postbox
 import SwiftSignalKit
 
 // AyuGram: remote badge configuration ("git config").
@@ -94,6 +95,38 @@ public func gitConfigProfileBadges(forUserId userId: Int64) -> [GitConfigProfile
 // Look up a chat badge by chat id.
 public func gitConfigChatBadge(forChatId chatId: Int64) -> GitConfigBadge? {
     return gitConfigCurrent.badges.first(where: { $0.chatId == chatId })
+}
+
+// The Bot API (-100…) form of a peer id. The remote config may store either this
+// or the raw internal id, so chat lookups try both.
+private func gitConfigBotApiId(_ peerId: PeerId) -> Int64 {
+    let raw = peerId.id._internalGetInt64Value()
+    if peerId.namespace == Namespaces.Peer.CloudChannel {
+        return -(1_000_000_000_000 + raw)
+    } else if peerId.namespace == Namespaces.Peer.CloudGroup {
+        return -raw
+    } else {
+        return raw
+    }
+}
+
+// Shadow: the custom-emoji id to render next to a peer's NAME — profile header,
+// chat title, chat list row, contact/member rows. Users match `profile_badges`,
+// chats/channels match `badges`. nil when the peer has no configured badge.
+// (Message author names in group chat bubbles are NOT covered yet — that render
+// path has no existing second-icon slot to reuse, unlike the four sites above.)
+//
+// This is the single source for the "second emoji status" decoration, so every
+// render site stays consistent and none of them has to know the config layout.
+public func ayuGramNameBadgeEmojiId(peerId: PeerId) -> Int64? {
+    let raw = peerId.id._internalGetInt64Value()
+    if peerId.namespace == Namespaces.Peer.CloudUser {
+        return gitConfigProfileBadges(forUserId: raw).first?.emojiId
+    }
+    if let badge = gitConfigChatBadge(forChatId: raw) {
+        return badge.emojiId
+    }
+    return gitConfigChatBadge(forChatId: gitConfigBotApiId(peerId))?.emojiId
 }
 
 // MARK: - Parsing

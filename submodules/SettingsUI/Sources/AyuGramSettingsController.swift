@@ -197,6 +197,7 @@ private func ayuUpdateSettings(context: AccountContext, _ f: @escaping (AyuGramS
 
 private final class AyuCustomizationArguments {
     let updateShowMessageSeconds: (Bool) -> Void
+    let updateEditedIndicatorAsPencil: (Bool) -> Void
     let updateDoubleTapToEdit: (Bool) -> Void
     let updateShowExactLastSeen: (Bool) -> Void
     let updateShowExactLastSeenSeconds: (Bool) -> Void
@@ -225,6 +226,7 @@ private final class AyuCustomizationArguments {
 
     init(
         updateShowMessageSeconds: @escaping (Bool) -> Void,
+        updateEditedIndicatorAsPencil: @escaping (Bool) -> Void,
         updateDoubleTapToEdit: @escaping (Bool) -> Void,
         updateShowExactLastSeen: @escaping (Bool) -> Void,
         updateShowExactLastSeenSeconds: @escaping (Bool) -> Void,
@@ -252,6 +254,7 @@ private final class AyuCustomizationArguments {
         chooseProfileBackground: @escaping () -> Void
     ) {
         self.updateShowMessageSeconds = updateShowMessageSeconds
+        self.updateEditedIndicatorAsPencil = updateEditedIndicatorAsPencil
         self.updateDoubleTapToEdit = updateDoubleTapToEdit
         self.updateShowExactLastSeen = updateShowExactLastSeen
         self.updateShowExactLastSeenSeconds = updateShowExactLastSeenSeconds
@@ -295,6 +298,7 @@ private enum AyuCustomizationSection: Int32 {
 private enum AyuCustomizationEntry: ItemListNodeEntry {
     case appearanceHeader
     case showMessageSeconds(Bool)
+    case editedIndicatorAsPencil(Bool)
     case doubleTapToEdit(Bool)
     case showExactLastSeen(Bool)
     case showExactLastSeenSeconds(Bool)
@@ -348,7 +352,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
 
     var section: ItemListSectionId {
         switch self {
-        case .appearanceHeader, .showMessageSeconds, .doubleTapToEdit, .showExactLastSeen, .showExactLastSeenSeconds, .wideChannelPosts, .showExactViewCounts, .showForwardCount, .appearanceFooter:
+        case .appearanceHeader, .showMessageSeconds, .editedIndicatorAsPencil, .doubleTapToEdit, .showExactLastSeen, .showExactLastSeenSeconds, .wideChannelPosts, .showExactViewCounts, .showForwardCount, .appearanceFooter:
             return AyuCustomizationSection.appearance.rawValue
         case .chatsHeader, .hideAllChatsFolder, .chatsFooter:
             return AyuCustomizationSection.chats.rawValue
@@ -373,48 +377,49 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         switch self {
         case .appearanceHeader: return 0
         case .showMessageSeconds: return 1
-        case .doubleTapToEdit: return 2
-        case .showExactLastSeen: return 3
-        case .showExactLastSeenSeconds: return 4
-        case .wideChannelPosts: return 5
-        case .showExactViewCounts: return 6
-        case .showForwardCount: return 7
-        case .appearanceFooter: return 8
-        case .chatsHeader: return 9
-        case .hideAllChatsFolder: return 10
-        case .chatsFooter: return 11
-        case .bottomBarHeader: return 12
-        case .foldersAtBottom: return 13
-        case .hideBottomSearch: return 14
-        case .compactBottomBar: return 15
-        case .bottomBarFooter: return 16
-        case .profilesHeader: return 17
-        case .showProfileId: return 18
-        case .showProfileDC: return 19
-        case .showRegistrationDate: return 20
-        case .hideOwnPhoneNumber: return 21
-        case .profilesFooter: return 22
-        case .mediaHeader: return 23
-        case .roundVideoBackCamera: return 24
-        case .showCameraTile: return 25
-        case .cameraTileLivePreview: return 26
-        case .mediaFooter: return 27
-        case .callsHeader: return 28
-        case .confirmCalls: return 29
-        case .callsFooter: return 30
-        case .githubConfigHeader: return 31
-        case .syncGithub: return 32
-        case .githubConfigFooter: return 33
-        case .bannerHeader: return 34
-        case .customBanner: return 35
-        case .bannerChoose: return 36
-        case .bannerFooter: return 37
-        case .profileBackgroundHeader: return 38
-        case .customProfileBackground: return 39
-        case .customProfileBackgroundForOthers: return 40
-        case .customProfileBackgroundForSettings: return 41
-        case .profileBackgroundChoose: return 42
-        case .profileBackgroundFooter: return 43
+        case .editedIndicatorAsPencil: return 2
+        case .doubleTapToEdit: return 3
+        case .showExactLastSeen: return 4
+        case .showExactLastSeenSeconds: return 5
+        case .wideChannelPosts: return 6
+        case .showExactViewCounts: return 7
+        case .showForwardCount: return 8
+        case .appearanceFooter: return 9
+        case .chatsHeader: return 10
+        case .hideAllChatsFolder: return 11
+        case .chatsFooter: return 12
+        case .bottomBarHeader: return 13
+        case .foldersAtBottom: return 14
+        case .hideBottomSearch: return 15
+        case .compactBottomBar: return 16
+        case .bottomBarFooter: return 17
+        case .profilesHeader: return 18
+        case .showProfileId: return 19
+        case .showProfileDC: return 20
+        case .showRegistrationDate: return 21
+        case .hideOwnPhoneNumber: return 22
+        case .profilesFooter: return 23
+        case .mediaHeader: return 24
+        case .roundVideoBackCamera: return 25
+        case .showCameraTile: return 26
+        case .cameraTileLivePreview: return 27
+        case .mediaFooter: return 28
+        case .callsHeader: return 29
+        case .confirmCalls: return 30
+        case .callsFooter: return 31
+        case .githubConfigHeader: return 32
+        case .syncGithub: return 33
+        case .githubConfigFooter: return 34
+        case .bannerHeader: return 35
+        case .customBanner: return 36
+        case .bannerChoose: return 37
+        case .bannerFooter: return 38
+        case .profileBackgroundHeader: return 39
+        case .customProfileBackground: return 40
+        case .customProfileBackgroundForOthers: return 41
+        case .customProfileBackgroundForSettings: return 42
+        case .profileBackgroundChoose: return 43
+        case .profileBackgroundFooter: return 44
         }
     }
 
@@ -430,6 +435,10 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case let .showMessageSeconds(value):
             return ItemListSwitchItem(presentationData: presentationData, title: "Секунды в метках времени", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 arguments.updateShowMessageSeconds(value)
+            })
+        case let .editedIndicatorAsPencil(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Значок ✎ вместо «Изменено»", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.updateEditedIndicatorAsPencil(value)
             })
         case let .doubleTapToEdit(value):
             return ItemListSwitchItem(presentationData: presentationData, title: "Двойной тап — редактирование", value: value, sectionId: self.section, style: .blocks, updated: { value in
@@ -574,6 +583,7 @@ private func ayuCustomizationEntries(settings: AyuGramSettings) -> [AyuCustomiza
 
     entries.append(.appearanceHeader)
     entries.append(.showMessageSeconds(settings.showMessageSeconds))
+    entries.append(.editedIndicatorAsPencil(settings.editedIndicatorAsPencil))
     entries.append(.doubleTapToEdit(settings.doubleTapToEdit))
     entries.append(.showExactLastSeen(settings.showExactLastSeen))
     if settings.showExactLastSeen {
@@ -642,6 +652,9 @@ private func ayuCustomizationController(context: AccountContext) -> ViewControll
     let arguments = AyuCustomizationArguments(
         updateShowMessageSeconds: { value in
             ayuUpdateSettings(context: context) { var s = $0; s.showMessageSeconds = value; return s }
+        },
+        updateEditedIndicatorAsPencil: { value in
+            ayuUpdateSettings(context: context) { var s = $0; s.editedIndicatorAsPencil = value; return s }
         },
         updateDoubleTapToEdit: { value in
             ayuUpdateSettings(context: context) { var s = $0; s.doubleTapToEdit = value; return s }
