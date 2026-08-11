@@ -151,10 +151,12 @@ public func ayuGramNameBadge(peerId: PeerId, displayName: String) -> AyuGramName
     let raw = peerId.id._internalGetInt64Value()
     let emojiId: Int64
     let textTemplate: String?
-    if peerId.namespace == Namespaces.Peer.CloudUser {
-        guard let badge = gitConfigProfileBadges(forUserId: raw).first else {
-            return nil
-        }
+    // profile_badges (matched by user_id) is checked first for a user peer, but
+    // the config's "badges" list (chat_id) is also accepted as a fallback for
+    // ANY peer type — in practice people don't reliably separate the two lists
+    // by id kind, they just want "this id gets this badge" regardless of
+    // whether the id happens to belong to a user or a chat/channel.
+    if peerId.namespace == Namespaces.Peer.CloudUser, let badge = gitConfigProfileBadges(forUserId: raw).first {
         emojiId = badge.emojiId
         textTemplate = badge.textTemplate
     } else if let badge = gitConfigChatBadge(forChatId: raw) ?? gitConfigChatBadge(forChatId: gitConfigBotApiId(peerId)) {

@@ -417,11 +417,19 @@ func infoItems(
         items[.ayugram]!.append(contentsOf: ayuGramProfileItems(peerId: user.id, photo: user.photo, includeRegistration: true, isMutualContact: user.flags.contains(.mutualContact), isSelf: user.id == context.account.peerId, idBase: 3500, presentationData: presentationData, getController: { [weak interaction] in
             interaction?.getController()
         }))
-        // AyuGram: profile badge(s) (custom emoji from the remote config)
-        // shown only for the configured user ids (profile_badges). Renders every
-        // configured badge for this user, not just the first.
-        for (index, gitBadge) in gitConfigProfileBadges(forUserId: user.id.id._internalGetInt64Value()).enumerated() {
-            let badge = AyuGramNameBadge(emojiId: gitBadge.emojiId, description: ayuGramNameBadgeDescription(textTemplate: gitBadge.textTemplate, displayName: EnginePeer(user).compactDisplayTitle))
+        // AyuGram: profile badge(s) (custom emoji from the remote config). Every
+        // profile_badges match for this user_id is shown (not just the first);
+        // if the config has none there, fall back to the single ayuGramNameBadge
+        // lookup, which also accepts a "badges" (chat_id) entry for this id —
+        // see its comment for why (people mix the two lists in practice).
+        let profileBadgeMatches = gitConfigProfileBadges(forUserId: user.id.id._internalGetInt64Value())
+        var badgesToShow: [AyuGramNameBadge] = profileBadgeMatches.map { gitBadge in
+            AyuGramNameBadge(emojiId: gitBadge.emojiId, description: ayuGramNameBadgeDescription(textTemplate: gitBadge.textTemplate, displayName: EnginePeer(user).compactDisplayTitle))
+        }
+        if badgesToShow.isEmpty, let fallbackBadge = ayuGramNameBadge(peerId: user.id, displayName: EnginePeer(user).compactDisplayTitle) {
+            badgesToShow = [fallbackBadge]
+        }
+        for (index, badge) in badgesToShow.enumerated() {
             items[.ayugram]!.append(gitConfigBadgeItem(context: context, badge: badge, id: 3600 + index, getController: { [weak interaction] in
                 interaction?.getController()
             }))
