@@ -999,6 +999,14 @@ public final class ChatTitleComponent: Component {
                     verifiedIcon = ComponentView()
                     self.verifiedIcon = verifiedIcon
                 }
+                // Shadow: the fork's badge (titleVerifiedIconOnRight) renders a
+                // custom-emoji file, which visually reads smaller than the
+                // premium/verified glyph assets at the same container size — those
+                // are drawn edge-to-edge, custom-emoji stickers commonly carry
+                // their own internal padding. A ~10% bump on the container
+                // compensates; upstream's own bot-verification icon (onRight ==
+                // false) is left at its original size.
+                let verifiedIconContainerSize: CGSize = titleVerifiedIconOnRight ? CGSize(width: 22.0, height: 22.0) : CGSize(width: 20.0, height: 20.0)
                 verifiedIconSize = verifiedIcon.update(
                     transition: .immediate,
                     component: AnyComponent(EmojiStatusComponent(
@@ -1010,7 +1018,7 @@ public final class ChatTitleComponent: Component {
                         action: nil
                     )),
                     environment: {},
-                    containerSize: CGSize(width: 20.0, height: 20.0)
+                    containerSize: verifiedIconContainerSize
                 )
             } else if let verifiedIcon = self.verifiedIcon {
                 self.verifiedIcon = nil

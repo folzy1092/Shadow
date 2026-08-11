@@ -1205,6 +1205,12 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 emojiExpandedStatusContent = .none
             }
             
+            // Shadow: bump the container ~10% for the fork's badge only — a
+            // custom-emoji file reads visually smaller than the premium/verified
+            // glyph assets at the same box (those are edge-to-edge, stickers
+            // usually carry their own padding). Real bot-verification icons
+            // (verifiedIconOnRight == false) keep the original size.
+            let verifiedIconContainerSize: CGSize = verifiedIconOnRight ? CGSize(width: 29.0, height: 29.0) : CGSize(width: 26.0, height: 26.0)
             let iconSize = self.titleVerifiedIconView.update(
                 transition: ComponentTransition(navigationTransition),
                 component: AnyComponent(EmojiStatusComponent(
@@ -1223,7 +1229,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                     emojiFileUpdated: nil
                 )),
                 environment: {},
-                containerSize: CGSize(width: 26.0, height: 26.0)
+                containerSize: verifiedIconContainerSize
             )
             let expandedIconSize = self.titleExpandedVerifiedIconView.update(
                 transition: ComponentTransition(navigationTransition),
@@ -1242,7 +1248,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                     } : {}
                 )),
                 environment: {},
-                containerSize: CGSize(width: 26.0, height: 26.0)
+                containerSize: verifiedIconContainerSize
             )
             
             self.verifiedIconSize = iconSize

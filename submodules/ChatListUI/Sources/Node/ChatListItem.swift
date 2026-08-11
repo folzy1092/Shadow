@@ -5312,8 +5312,12 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         } else {
                             iconOrigin = nextTitleIconOrigin
                         }
-                        let containerSize = CGSize(width: 16.0, height: 16.0)
-                        
+                        // Shadow: ~10% bigger for the fork's badge — a custom-emoji
+                        // file reads smaller than the premium/verified glyph assets
+                        // at the same box (those are edge-to-edge, stickers usually
+                        // carry their own padding).
+                        let containerSize = currentVerifiedIconOnRight ? CGSize(width: 18.0, height: 18.0) : CGSize(width: 16.0, height: 16.0)
+
                         let iconSize = verifiedIconView.update(
                             transition: .immediate,
                             component: AnyComponent(verifiedIconComponent),

@@ -1741,11 +1741,14 @@ public class ContactsPeerItemNode: ItemListRevealOptionsItemNode {
                                 )
                                 strongSelf.verifiedIconComponent = verifiedIconComponent
 
+                                // Shadow: ~10% bigger than the upstream 16x16 — a
+                                // custom-emoji file reads smaller than the premium/
+                                // verified glyph assets at the same box.
                                 let iconSize = verifiedIconView.update(
                                     transition: .immediate,
                                     component: AnyComponent(verifiedIconComponent),
                                     environment: {},
-                                    containerSize: CGSize(width: 16.0, height: 16.0)
+                                    containerSize: CGSize(width: 18.0, height: 18.0)
                                 )
 
                                 nextIconX += 4.0
