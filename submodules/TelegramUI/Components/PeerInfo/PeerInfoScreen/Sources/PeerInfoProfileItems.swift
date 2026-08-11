@@ -176,16 +176,19 @@ private func ayuGramProfileItems(peerId: EnginePeer.Id, photo: [TelegramMediaIma
     return result
 }
 
-// AyuGram: a client-only badge sourced from the remote config. Renders
-// the config's custom emoji (by emoji_id) inline via the same attributed-prefix
-// mechanism the channel verification badge uses, followed by the (optional)
+// AyuGram: a client-only badge sourced from the remote config. Renders the
+// config's custom emoji (by emoji_id) inline, followed by the (optional)
 // template text ({user_name}/{chat_name} substituted, markdown ** stripped).
-private func gitConfigBadgeItem(emojiId: Int64, textTemplate: String?, name: String, id: AnyHashable) -> PeerInfoScreenItem {
-    let attributedPrefix = NSMutableAttributedString(string: "  ")
-    attributedPrefix.addAttribute(ChatTextInputAttributes.customEmoji, value: ChatTextInputTextCustomEmojiAttribute(interactivelySelectedFromPackId: nil, fileId: emojiId, file: nil), range: NSMakeRange(0, 1))
-    // Shadow: fall back to a readable default caption when the remote config
-    // supplies no text_template (previously the badge rendered with an empty
-    // label — just a lone emoji with no explanation).
+//
+// Shadow: this is a regular labeled row (same kind as the id / dc rows), NOT a
+// PeerInfoScreenCommentItem. A comment item is a between-blocks footer — placed
+// as the first entry of the bio/description block it drew on top of the "описание"
+// row underneath it. As a labeled row it gets its own line in the fork's info
+// card above, and the description block is left untouched.
+private func gitConfigBadgeItem(context: AccountContext, emojiId: Int64, textTemplate: String?, name: String, id: AnyHashable) -> PeerInfoScreenItem {
+    // Fall back to a readable default caption when the remote config supplies no
+    // text_template (otherwise the badge would be a lone emoji with no
+    // explanation).
     var text = textTemplate ?? ""
     text = text.replacingOccurrences(of: "{user_name}", with: name)
     text = text.replacingOccurrences(of: "{chat_name}", with: name)
@@ -193,7 +196,22 @@ private func gitConfigBadgeItem(emojiId: Int64, textTemplate: String?, name: Str
     if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
         text = "Особый значок Shadow"
     }
-    return PeerInfoScreenCommentItem(id: id, text: text, attributedPrefix: attributedPrefix, useAccentLinkColor: false, linkAction: nil)
+    // One BMP scalar (a single UTF-16 unit) carries the custom emoji, so the
+    // entity range is 0..<1; it also stays visible as a plain star if the emoji
+    // file fails to load.
+    let value = "\u{2B50} " + text
+    return PeerInfoScreenLabeledValueItem(
+        id: id,
+        context: context,
+        label: "значок",
+        text: value,
+        entities: [MessageTextEntity(range: 0 ..< 1, type: .CustomEmoji(stickerPack: nil, fileId: emojiId))],
+        textColor: .primary,
+        textBehavior: .multiLine(maxLines: 3, enabledEntities: []),
+        action: nil,
+        requestLayout: { _ in
+        }
+    )
 }
 
 // Chat/channel badge lookup that tolerates either the raw internal id or the
@@ -394,7 +412,7 @@ func infoItems(
         // shown only for the configured user ids (profile_badges). Renders every
         // configured badge for this user, not just the first.
         for (index, gitBadge) in gitConfigProfileBadges(forUserId: user.id.id._internalGetInt64Value()).enumerated() {
-            items[currentPeerInfoSection]!.append(gitConfigBadgeItem(emojiId: gitBadge.emojiId, textTemplate: gitBadge.textTemplate, name: EnginePeer(user).compactDisplayTitle, id: 3600 + index))
+            items[.ayugram]!.append(gitConfigBadgeItem(context: context, emojiId: gitBadge.emojiId, textTemplate: gitBadge.textTemplate, name: EnginePeer(user).compactDisplayTitle, id: 3600 + index))
         }
 
         if let cachedData = data.cachedData as? CachedUserData {
@@ -757,7 +775,7 @@ func infoItems(
         // AyuGram: chat/channel badge (custom emoji from the remote config)
         // shown only for the configured chat ids (badges).
         if let gitBadge = gitConfigChatBadge(forPeerId: channel.id) {
-            items[currentPeerInfoSection]!.append(gitConfigBadgeItem(emojiId: gitBadge.emojiId, textTemplate: gitBadge.textTemplate, name: EnginePeer(channel).compactDisplayTitle, id: 3600))
+            items[.ayugram]!.append(gitConfigBadgeItem(context: context, emojiId: gitBadge.emojiId, textTemplate: gitBadge.textTemplate, name: EnginePeer(channel).compactDisplayTitle, id: 3600))
         }
 
         if let _ = data.threadData {
