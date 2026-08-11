@@ -124,6 +124,11 @@ private func gitConfigBotApiId(_ peerId: PeerId) -> Int64 {
 public struct AyuGramNameBadge: Equatable {
     public let emojiId: Int64
     public let description: String
+
+    public init(emojiId: Int64, description: String) {
+        self.emojiId = emojiId
+        self.description = description
+    }
 }
 
 // Shared {user_name}/{chat_name} substitution + ** stripping + empty-template
