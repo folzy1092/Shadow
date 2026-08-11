@@ -17,6 +17,7 @@ import AvatarNode
 import PeerNameColorItem
 import BoostLevelIconComponent
 import UndoUI
+import TooltipUI
 
 private let enabledPublicBioEntities: EnabledEntityTypes = [.allUrl, .mention, .hashtag]
 private let enabledPrivateBioEntities: EnabledEntityTypes = [.internalUrl, .mention, .hashtag]
@@ -177,50 +178,58 @@ private func ayuGramProfileItems(peerId: EnginePeer.Id, photo: [TelegramMediaIma
 }
 
 // AyuGram: a client-only badge sourced from the remote config. Renders the
-// config's custom emoji (by emoji_id) inline, followed by the (optional)
-// template text ({user_name}/{chat_name} substituted, markdown ** stripped).
+// config's custom emoji inline, followed by its description text — both come
+// from ayuGramNameBadge(peerId:displayName:) in GitConfig.swift, the single
+// place that resolves a badge and substitutes {user_name}/{chat_name}, so this
+// row and the tap-popup on the name-icon (see PeerInfoHeaderNode) never
+// disagree on the text.
 //
 // Shadow: this is a regular labeled row (same kind as the id / dc rows), NOT a
 // PeerInfoScreenCommentItem. A comment item is a between-blocks footer — placed
 // as the first entry of the bio/description block it drew on top of the "описание"
 // row underneath it. As a labeled row it gets its own line in the fork's info
 // card above, and the description block is left untouched.
-private func gitConfigBadgeItem(context: AccountContext, emojiId: Int64, textTemplate: String?, name: String, id: AnyHashable) -> PeerInfoScreenItem {
-    // Fall back to a readable default caption when the remote config supplies no
-    // text_template (otherwise the badge would be a lone emoji with no
-    // explanation).
-    var text = textTemplate ?? ""
-    text = text.replacingOccurrences(of: "{user_name}", with: name)
-    text = text.replacingOccurrences(of: "{chat_name}", with: name)
-    text = text.replacingOccurrences(of: "**", with: "")
-    if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-        text = "Особый значок Shadow"
-    }
+private func gitConfigBadgeItem(context: AccountContext, badge: AyuGramNameBadge, id: AnyHashable, getController: @escaping () -> ViewController?) -> PeerInfoScreenItem {
     // One BMP scalar (a single UTF-16 unit) carries the custom emoji, so the
     // entity range is 0..<1; it also stays visible as a plain star if the emoji
     // file fails to load.
-    let value = "\u{2B50} " + text
+    let value = "\u{2B50} " + badge.description
     return PeerInfoScreenLabeledValueItem(
         id: id,
         context: context,
         label: "значок",
         text: value,
-        entities: [MessageTextEntity(range: 0 ..< 1, type: .CustomEmoji(stickerPack: nil, fileId: emojiId))],
+        entities: [MessageTextEntity(range: 0 ..< 1, type: .CustomEmoji(stickerPack: nil, fileId: badge.emojiId))],
         textColor: .primary,
         textBehavior: .multiLine(maxLines: 3, enabledEntities: []),
-        action: nil,
+        action: { sourceNode, _ in
+            ayuGramPresentBadgeTooltip(context: context, sourceNode: sourceNode, description: badge.description, getController: getController)
+        },
         requestLayout: { _ in
         }
     )
 }
 
-// Chat/channel badge lookup that tolerates either the raw internal id or the
-// Bot API (-100…) form in the config's chat_id.
-private func gitConfigChatBadge(forPeerId peerId: EnginePeer.Id) -> GitConfigBadge? {
-    if let badge = gitConfigChatBadge(forChatId: peerId.id._internalGetInt64Value()) {
-        return badge
+// Shadow: anchors a small TooltipScreen callout with the badge's description
+// under the given source view — same mechanism PeerInfoScreen already uses for
+// the unique-gift-title tooltip (displayUniqueGiftInfo), just invoked directly
+// here instead of through a header-node callback since this call site is a
+// plain list row, not the animated profile header.
+func ayuGramPresentBadgeTooltip(context: AccountContext, sourceNode: ASDisplayNode, description: String, getController: @escaping () -> ViewController?) {
+    guard let controller = getController() else {
+        return
     }
-    return gitConfigChatBadge(forChatId: ayuGramBotApiId(peerId))
+    let sourceRect = sourceNode.view.convert(sourceNode.bounds, to: controller.view)
+    let tooltipController = TooltipScreen(
+        account: context.account,
+        sharedContext: context.sharedContext,
+        text: .plain(text: description),
+        location: .point(sourceRect, .bottom),
+        shouldDismissOnTouch: { _, _ in
+            return .dismiss(consume: false)
+        }
+    )
+    controller.present(tooltipController, in: .current)
 }
 
 func infoItems(
@@ -412,7 +421,10 @@ func infoItems(
         // shown only for the configured user ids (profile_badges). Renders every
         // configured badge for this user, not just the first.
         for (index, gitBadge) in gitConfigProfileBadges(forUserId: user.id.id._internalGetInt64Value()).enumerated() {
-            items[.ayugram]!.append(gitConfigBadgeItem(context: context, emojiId: gitBadge.emojiId, textTemplate: gitBadge.textTemplate, name: EnginePeer(user).compactDisplayTitle, id: 3600 + index))
+            let badge = AyuGramNameBadge(emojiId: gitBadge.emojiId, description: ayuGramNameBadgeDescription(textTemplate: gitBadge.textTemplate, displayName: EnginePeer(user).compactDisplayTitle))
+            items[.ayugram]!.append(gitConfigBadgeItem(context: context, badge: badge, id: 3600 + index, getController: { [weak interaction] in
+                interaction?.getController()
+            }))
         }
 
         if let cachedData = data.cachedData as? CachedUserData {
@@ -774,8 +786,10 @@ func infoItems(
         }))
         // AyuGram: chat/channel badge (custom emoji from the remote config)
         // shown only for the configured chat ids (badges).
-        if let gitBadge = gitConfigChatBadge(forPeerId: channel.id) {
-            items[.ayugram]!.append(gitConfigBadgeItem(context: context, emojiId: gitBadge.emojiId, textTemplate: gitBadge.textTemplate, name: EnginePeer(channel).compactDisplayTitle, id: 3600))
+        if let badge = ayuGramNameBadge(peerId: channel.id, displayName: EnginePeer(channel).compactDisplayTitle) {
+            items[.ayugram]!.append(gitConfigBadgeItem(context: context, badge: badge, id: 3600, getController: { [weak interaction] in
+                interaction?.getController()
+            }))
         }
 
         if let _ = data.threadData {

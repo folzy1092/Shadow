@@ -110,23 +110,62 @@ private func gitConfigBotApiId(_ peerId: PeerId) -> Int64 {
     }
 }
 
-// Shadow: the custom-emoji id to render next to a peer's NAME — profile header,
+// Shadow: the fork's remote-config badge for a peer's NAME — profile header,
 // chat title, chat list row, contact/member rows. Users match `profile_badges`,
 // chats/channels match `badges`. nil when the peer has no configured badge.
 // (Message author names in group chat bubbles are NOT covered yet — that render
 // path has no existing second-icon slot to reuse, unlike the four sites above.)
 //
 // This is the single source for the "second emoji status" decoration, so every
-// render site stays consistent and none of them has to know the config layout.
-public func ayuGramNameBadgeEmojiId(peerId: PeerId) -> Int64? {
+// render site stays consistent and none of them has to know the config layout —
+// including the description text, so a render site can show it in a tap popup
+// without re-deriving the {user_name}/{chat_name} substitution + ** stripping +
+// empty-template fallback itself.
+public struct AyuGramNameBadge: Equatable {
+    public let emojiId: Int64
+    public let description: String
+}
+
+// Shared {user_name}/{chat_name} substitution + ** stripping + empty-template
+// fallback, factored out so a caller iterating multiple badges for one peer
+// (e.g. the profile info card, which shows every configured badge as its own
+// row) can build the same description text per-badge without going through the
+// single-badge ayuGramNameBadge lookup below.
+public func ayuGramNameBadgeDescription(textTemplate: String?, displayName: String) -> String {
+    var text = textTemplate ?? ""
+    text = text.replacingOccurrences(of: "{user_name}", with: displayName)
+    text = text.replacingOccurrences(of: "{chat_name}", with: displayName)
+    text = text.replacingOccurrences(of: "**", with: "")
+    if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        text = "Особый значок Shadow"
+    }
+    return text
+}
+
+public func ayuGramNameBadge(peerId: PeerId, displayName: String) -> AyuGramNameBadge? {
     let raw = peerId.id._internalGetInt64Value()
+    let emojiId: Int64
+    let textTemplate: String?
     if peerId.namespace == Namespaces.Peer.CloudUser {
-        return gitConfigProfileBadges(forUserId: raw).first?.emojiId
+        guard let badge = gitConfigProfileBadges(forUserId: raw).first else {
+            return nil
+        }
+        emojiId = badge.emojiId
+        textTemplate = badge.textTemplate
+    } else if let badge = gitConfigChatBadge(forChatId: raw) ?? gitConfigChatBadge(forChatId: gitConfigBotApiId(peerId)) {
+        emojiId = badge.emojiId
+        textTemplate = badge.textTemplate
+    } else {
+        return nil
     }
-    if let badge = gitConfigChatBadge(forChatId: raw) {
-        return badge.emojiId
-    }
-    return gitConfigChatBadge(forChatId: gitConfigBotApiId(peerId))?.emojiId
+    return AyuGramNameBadge(emojiId: emojiId, description: ayuGramNameBadgeDescription(textTemplate: textTemplate, displayName: displayName))
+}
+
+// Emoji-id-only lookup for render sites that only draw the icon (no tap popup,
+// no display name on hand). Delegates to ayuGramNameBadge so the matching logic
+// (profile_badges vs badges, Bot API id fallback) stays in one place.
+public func ayuGramNameBadgeEmojiId(peerId: PeerId) -> Int64? {
+    return ayuGramNameBadge(peerId: peerId, displayName: "")?.emojiId
 }
 
 // MARK: - Parsing

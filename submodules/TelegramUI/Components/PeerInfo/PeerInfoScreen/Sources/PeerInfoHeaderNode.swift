@@ -188,6 +188,10 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     var displayStatusPremiumIntro: (() -> Void)?
     var displayUniqueGiftInfo: ((UIView, String) -> Void)?
     var openUniqueGift: ((UIView, String) -> Void)?
+    // Shadow: tap-popup for the fork's name badge (verifiedIconOnRight). Same
+    // (UIView, String) shape as displayUniqueGiftInfo — the view anchors a
+    // TooltipScreen, the string is the badge's already-substituted description.
+    var displayAyuBadgeInfo: ((UIView, String) -> Void)?
     
     var navigateToForum: (() -> Void)?
     
@@ -671,9 +675,12 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         var statusIcon: CredibilityIcon = .none
         // Shadow: true routes verifiedIcon to the RIGHT of the name (after the
         // status/premium chain) instead of upstream's default LEFT placement for
-        // a non-".verified" verifiedIcon. See the ayuGramNameBadgeEmojiId branch
-        // below and its use further down where verifiedIcon's side is decided.
+        // a non-".verified" verifiedIcon. See the ayuGramNameBadge branch below
+        // and its use further down where verifiedIcon's side is decided.
         var verifiedIconOnRight = false
+        // Populated alongside verifiedIconOnRight; passed to displayAyuBadgeInfo
+        // from the EmojiStatusComponent tap action further down.
+        var verifiedBadgeDescription = ""
         if let peer {
             if peer.id == self.context.account.peerId && !self.isSettings && !self.isMyProfile {
                 credibilityIcon = .none
@@ -700,9 +707,10 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             // Unlike the bot-verification icon — which Telegram draws BEFORE the
             // name — this one is a second emoji status, so it is placed after the
             // status/premium chain instead (see verifiedIconOnRight below).
-            if let badgeEmojiId = ayuGramNameBadgeEmojiId(peerId: peer.id) {
-                verifiedIcon = .emojiStatus(PeerEmojiStatus(content: .emoji(fileId: badgeEmojiId), expirationDate: nil))
+            if let badge = ayuGramNameBadge(peerId: peer.id, displayName: peer.displayTitle(strings: presentationData.strings, displayOrder: presentationData.nameDisplayOrder)) {
+                verifiedIcon = .emojiStatus(PeerEmojiStatus(content: .emoji(fileId: badge.emojiId), expirationDate: nil))
                 verifiedIconOnRight = true
+                verifiedBadgeDescription = badge.description
             }
         }
         
@@ -1206,7 +1214,12 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                     content: emojiRegularStatusContent,
                     isVisibleForAnimations: true,
                     useSharedAnimation: true,
-                    action: nil,
+                    action: verifiedIconOnRight ? { [weak self] in
+                        guard let self else {
+                            return
+                        }
+                        self.displayAyuBadgeInfo?(self.titleVerifiedIconView, verifiedBadgeDescription)
+                    } : nil,
                     emojiFileUpdated: nil
                 )),
                 environment: {},
@@ -1221,7 +1234,12 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                     content: emojiExpandedStatusContent,
                     isVisibleForAnimations: true,
                     useSharedAnimation: true,
-                    action: {}
+                    action: verifiedIconOnRight ? { [weak self] in
+                        guard let self else {
+                            return
+                        }
+                        self.displayAyuBadgeInfo?(self.titleExpandedVerifiedIconView, verifiedBadgeDescription)
+                    } : {}
                 )),
                 environment: {},
                 containerSize: CGSize(width: 26.0, height: 26.0)

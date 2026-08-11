@@ -2333,7 +2333,30 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                 )
                 controller.present(tooltipController, in: .current)
             }
-            
+
+            // Shadow: tap-popup for the fork's name badge — same shape/guard as
+            // displayUniqueGiftInfo above, plain text instead of the gift's
+            // shimmering title style since this is a static config description.
+            self.headerNode.displayAyuBadgeInfo = { [weak self] sourceView, text in
+                guard let self, let controller = self.controller else {
+                    return
+                }
+                let sourceRect = sourceView.convert(sourceView.bounds, to: controller.view)
+                guard sourceRect.minY > 44.0 else {
+                    return
+                }
+                let tooltipController = TooltipScreen(
+                    account: self.context.account,
+                    sharedContext: self.context.sharedContext,
+                    text: .plain(text: text),
+                    location: .point(sourceRect, .bottom),
+                    shouldDismissOnTouch: { _, _ in
+                        return .dismiss(consume: false)
+                    }
+                )
+                controller.present(tooltipController, in: .current)
+            }
+
             self.headerNode.displayStatusPremiumIntro = { [weak self] in
                 guard let self else {
                     return
