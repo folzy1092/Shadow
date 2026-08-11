@@ -183,8 +183,19 @@ private struct GitConfigDTO: Codable {
     struct Badge: Codable {
         let id: String?
         let chat_id: Int64?
+        // Accepted as an alias for chat_id within the same "badges" list — in
+        // practice config authors use "user_id" for entries meant for a person
+        // without moving them into the separate "profile_badges" array. Both
+        // name the same effective id (see effectiveId below); ayuGramNameBadge
+        // already tries "badges" for a CloudUser peer as a profile_badges
+        // fallback, so this is what actually makes such entries apply.
+        let user_id: Int64?
         let emoji_id: Int64?
         let text_template: String?
+
+        var effectiveId: Int64? {
+            return chat_id ?? user_id
+        }
     }
     struct ProfileBadge: Codable {
         let id: String?
@@ -201,7 +212,7 @@ private func parseGitConfig(_ data: Data) -> GitConfig? {
         return nil
     }
     let badges: [GitConfigBadge] = (dto.badges ?? []).compactMap { badge in
-        guard let chatId = badge.chat_id, let emojiId = badge.emoji_id else {
+        guard let chatId = badge.effectiveId, let emojiId = badge.emoji_id else {
             return nil
         }
         return GitConfigBadge(id: badge.id ?? "", chatId: chatId, emojiId: emojiId, textTemplate: badge.text_template)
