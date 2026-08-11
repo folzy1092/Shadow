@@ -569,6 +569,11 @@ public final class EntityKeyboardComponent: Component {
             
             let emojiContentItemIdUpdated = ActionSlot<(AnyHashable, AnyHashable?, ComponentTransition)>()
             if let emojiContent = component.emojiContent {
+                // Shadow: regular emoji before custom/premium packs (opt-in).
+                if ayuGramSettingsCurrent.regularEmojiFirst {
+                    emojiContent.panelItemGroups = ayuReorderEmojiKeyboardItems(emojiContent.panelItemGroups)
+                    emojiContent.contentItemGroups = ayuReorderEmojiKeyboardItems(emojiContent.contentItemGroups)
+                }
                 contents.append(AnyComponentWithIdentity(id: "emoji", component: AnyComponent(emojiContent)))
                 var topEmojiItems: [EntityKeyboardTopPanelComponent.Item] = []
                 for itemGroup in emojiContent.panelItemGroups {

@@ -56,6 +56,9 @@ public struct AyuGramSettings: Codable, Equatable {
     // Replace the "Изменено" ("edited") text label next to the timestamp with a
     // small pencil icon, Swiftgram/exteraGram-style, instead of the localized word.
     public var editedIndicatorAsPencil: Bool
+    // In the emoji keyboard, list the plain Unicode emoji group right after
+    // "recent" instead of after every custom/premium emoji pack (Swiftgram-style).
+    public var regularEmojiFirst: Bool
     // Double-tapping one of your own messages opens the edit interface.
     public var doubleTapToEdit: Bool
     // Show the exact clock time of a peer's last-seen in the chat header
@@ -197,6 +200,7 @@ public struct AyuGramSettings: Codable, Equatable {
             sendWithoutOnline: false,
             showMessageSeconds: false,
             editedIndicatorAsPencil: false,
+            regularEmojiFirst: false,
             doubleTapToEdit: false,
             showExactLastSeen: false,
             showExactLastSeenSeconds: false,
@@ -301,6 +305,7 @@ public struct AyuGramSettings: Codable, Equatable {
         sendWithoutOnline: Bool,
         showMessageSeconds: Bool,
         editedIndicatorAsPencil: Bool,
+        regularEmojiFirst: Bool,
         doubleTapToEdit: Bool,
         showExactLastSeen: Bool,
         showExactLastSeenSeconds: Bool,
@@ -351,6 +356,7 @@ public struct AyuGramSettings: Codable, Equatable {
         self.sendWithoutOnline = sendWithoutOnline
         self.showMessageSeconds = showMessageSeconds
         self.editedIndicatorAsPencil = editedIndicatorAsPencil
+        self.regularEmojiFirst = regularEmojiFirst
         self.doubleTapToEdit = doubleTapToEdit
         self.showExactLastSeen = showExactLastSeen
         self.showExactLastSeenSeconds = showExactLastSeenSeconds
@@ -404,6 +410,7 @@ public struct AyuGramSettings: Codable, Equatable {
         self.sendWithoutOnline = ((try container.decodeIfPresent(Int32.self, forKey: "sendWithoutOnline")) ?? 0) != 0
         self.showMessageSeconds = ((try container.decodeIfPresent(Int32.self, forKey: "showMessageSeconds")) ?? 0) != 0
         self.editedIndicatorAsPencil = ((try container.decodeIfPresent(Int32.self, forKey: "editedIndicatorAsPencil")) ?? 0) != 0
+        self.regularEmojiFirst = ((try container.decodeIfPresent(Int32.self, forKey: "regularEmojiFirst")) ?? 0) != 0
         self.doubleTapToEdit = ((try container.decodeIfPresent(Int32.self, forKey: "doubleTapToEdit")) ?? 0) != 0
         self.showExactLastSeen = ((try container.decodeIfPresent(Int32.self, forKey: "showExactLastSeen")) ?? 0) != 0
         self.showExactLastSeenSeconds = ((try container.decodeIfPresent(Int32.self, forKey: "showExactLastSeenSeconds")) ?? 0) != 0
@@ -457,6 +464,7 @@ public struct AyuGramSettings: Codable, Equatable {
         try container.encode((self.sendWithoutOnline ? 1 : 0) as Int32, forKey: "sendWithoutOnline")
         try container.encode((self.showMessageSeconds ? 1 : 0) as Int32, forKey: "showMessageSeconds")
         try container.encode((self.editedIndicatorAsPencil ? 1 : 0) as Int32, forKey: "editedIndicatorAsPencil")
+        try container.encode((self.regularEmojiFirst ? 1 : 0) as Int32, forKey: "regularEmojiFirst")
         try container.encode((self.doubleTapToEdit ? 1 : 0) as Int32, forKey: "doubleTapToEdit")
         try container.encode((self.showExactLastSeen ? 1 : 0) as Int32, forKey: "showExactLastSeen")
         try container.encode((self.showExactLastSeenSeconds ? 1 : 0) as Int32, forKey: "showExactLastSeenSeconds")

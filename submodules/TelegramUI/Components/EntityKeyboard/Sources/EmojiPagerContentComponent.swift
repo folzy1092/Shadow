@@ -625,8 +625,11 @@ public final class EmojiPagerContentComponent: Component {
     public let animationCache: AnimationCache
     public let animationRenderer: MultiAnimationRenderer
     public let inputInteractionHolder: InputInteractionHolder
-    public let panelItemGroups: [ItemGroup]
-    public let contentItemGroups: [ItemGroup]
+    // Shadow: var (not let) so ayuGramReorderEmojiKeyboardItems can move the
+    // regular-emoji group in place after construction, from EntityKeyboard.swift
+    // — matching Swiftgram's approach (same two properties, same reason).
+    public var panelItemGroups: [ItemGroup]
+    public var contentItemGroups: [ItemGroup]
     public let itemLayoutType: ItemLayoutType
     public let itemContentUniqueId: ContentId?
     public let canLoadMore: Bool
