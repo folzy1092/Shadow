@@ -149,6 +149,19 @@ extension ChatControllerImpl {
             return
         }
 
+        // Shadow: the share-arrow button routes through ShareController, a
+        // generic reusable component with no notion of content protection —
+        // it always builds a native .forward, which the server rejects for a
+        // copy-protected source (same failure the context-menu "Переслать"
+        // action had before forwardMessagesAsCopy was wired in). Intercept
+        // here and reuse that same working asCopy machinery (download-wait,
+        // grouping, its own peer picker) instead of patching ShareController
+        // itself, which is shared well beyond chat messages.
+        if message.isServerCopyProtected() {
+            self.forwardMessages(messages: messages, resetCurrent: false, asCopy: true)
+            return
+        }
+
         let chatPresentationInterfaceState = self.presentationInterfaceState
         var warnAboutPrivate = false
         var canShareToStory = false

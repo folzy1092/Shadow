@@ -876,7 +876,33 @@ open class ChatMessageItemView: ListViewItemNode, ChatMessageItemNodeProtocol {
         if let item = self.item {
             switch button.action {
                 case let .url(url):
-                    item.controllerInteraction.longTap(.url(url), ChatControllerInteraction.LongTapParams(message: item.message))
+                    // Shadow: simple link popup instead of the native long-tap URL
+                    // sheet (Open/Copy/Share/Add to Reading List, plus a link
+                    // preview) — same minimal style as the .callback case below:
+                    // just the link, "Открыть ссылку", "Скопировать ссылку". This
+                    // also covers Mini App launch buttons, which are plain .url
+                    // buttons with a t.me deep link under the hood.
+                    let presentationDataURL = item.context.sharedContext.currentPresentationData.with { $0 }
+                    let urlActionSheet = ActionSheetController(presentationData: presentationDataURL)
+                    urlActionSheet.setItemGroups([
+                        ActionSheetItemGroup(items: [
+                            ActionSheetTextItem(title: url, parseMarkdown: false),
+                            ActionSheetButtonItem(title: "Открыть ссылку", action: { [weak urlActionSheet] in
+                                urlActionSheet?.dismissAnimated()
+                                item.controllerInteraction.openUrl(ChatControllerInteraction.OpenUrl(url: url, concealed: !url.hasPrefix("tg://"), progress: nil))
+                            }),
+                            ActionSheetButtonItem(title: "Скопировать ссылку", action: { [weak urlActionSheet] in
+                                urlActionSheet?.dismissAnimated()
+                                item.controllerInteraction.copyText(url)
+                            })
+                        ]),
+                        ActionSheetItemGroup(items: [
+                            ActionSheetButtonItem(title: presentationDataURL.strings.Common_Cancel, color: .accent, font: .bold, action: { [weak urlActionSheet] in
+                                urlActionSheet?.dismissAnimated()
+                            })
+                        ])
+                    ])
+                    item.controllerInteraction.presentController(urlActionSheet, nil)
                 case let .callback(_, data):
                     // Shadow: debug aid for people writing their own bots — long-press
                     // an inline callback button to see exactly what callback_data it
