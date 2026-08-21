@@ -877,6 +877,37 @@ open class ChatMessageItemView: ListViewItemNode, ChatMessageItemNodeProtocol {
             switch button.action {
                 case let .url(url):
                     item.controllerInteraction.longTap(.url(url), ChatControllerInteraction.LongTapParams(message: item.message))
+                case let .callback(_, data):
+                    // Shadow: debug aid for people writing their own bots — long-press
+                    // an inline callback button to see exactly what callback_data it
+                    // sends, without digging through server-side bot logs.
+                    let dataText: String
+                    if let string = String(data: data.makeData(), encoding: .utf8) {
+                        dataText = string
+                    } else {
+                        dataText = data.makeData().map { String(format: "%02x", $0) }.joined()
+                    }
+                    let presentationData = item.presentationData
+                    let actionSheet = ActionSheetController(presentationData: presentationData)
+                    actionSheet.setItemGroups([
+                        ActionSheetItemGroup(items: [
+                            ActionSheetTextItem(title: "Имя: \(button.title)\nID: \(dataText)", parseMarkdown: false),
+                            ActionSheetButtonItem(title: "Скопировать имя", action: { [weak actionSheet] in
+                                actionSheet?.dismissAnimated()
+                                item.controllerInteraction.copyText(button.title)
+                            }),
+                            ActionSheetButtonItem(title: "Скопировать айди", action: { [weak actionSheet] in
+                                actionSheet?.dismissAnimated()
+                                item.controllerInteraction.copyText(dataText)
+                            })
+                        ]),
+                        ActionSheetItemGroup(items: [
+                            ActionSheetButtonItem(title: presentationData.strings.Common_Cancel, color: .accent, font: .bold, action: { [weak actionSheet] in
+                                actionSheet?.dismissAnimated()
+                            })
+                        ])
+                    ])
+                    item.controllerInteraction.presentController(actionSheet, nil)
                 default:
                     break
             }
