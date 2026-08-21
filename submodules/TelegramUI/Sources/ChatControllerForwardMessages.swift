@@ -16,24 +16,69 @@ import TopMessageReactions
 import ChatMessagePaymentAlertController
 
 extension ChatControllerImpl {
+    // Shadow: waits for a media resource to be FULLY present in the local
+    // MediaBox, actively triggering the download rather than assuming it's
+    // already cached. A copy-protected source often has auto-download disabled
+    // or only a downscaled preview loaded (grid thumbnails in a multi-photo
+    // post, in particular), so "the bytes are already there from display" does
+    // not hold — enqueueing a copy against a resource that isn't actually local
+    // fails at upload time, which is the error the forward-as-copy path used to
+    // hit. Falls back to `false` after a timeout instead of hanging forever if
+    // the resource can't be fetched at all (e.g. it expired server-side).
+    private func ayuWaitForResourceDownload(resource: MediaResource, mediaReference: AnyMediaReference, userLocation: MediaResourceUserLocation, userContentType: MediaResourceUserContentType) -> Signal<Bool, NoError> {
+        let context = self.context
+        let waitSignal = Signal<Bool, NoError> { subscriber in
+            let fetchDisposable = context.engine.resources.fetch(
+                reference: mediaReference.resourceReference(resource),
+                userLocation: userLocation,
+                userContentType: userContentType
+            ).start()
+            let dataDisposable = (context.engine.resources.data(resource: EngineMediaResource(resource), waitUntilFetchStatus: true)
+            |> filter { $0.isComplete }
+            |> take(1)).start(next: { _ in
+                subscriber.putNext(true)
+                subscriber.putCompletion()
+            })
+            return ActionDisposable {
+                fetchDisposable.dispose()
+                dataDisposable.dispose()
+            }
+        }
+        return waitSignal
+        |> timeout(60.0, queue: Queue.mainQueue(), alternate: .single(false))
+    }
+
     // Shadow: build "copy" enqueue messages that bypass content-protection
     // (noforwards). Instead of a native .forward (which the server rejects for
     // copy-protected sources), we re-send each message's media as a NEW standalone
-    // upload plus its text/caption — the media bytes are already in the local
-    // media box from display, so this re-uploads them under our own account, the
-    // same technique the core uses for secret-chat forwards
-    // (convertForwardedMediaForSecretChat). Messages with no forwardable media and
-    // no text (service actions, expired media, webpages-only) are dropped.
-    private func ayuBuildCopyMessages(_ messages: [EngineRawMessage], threadId: Int64?) -> [EnqueueMessage] {
-        var result: [EnqueueMessage] = []
+    // upload plus its text/caption, the same technique the core uses for secret-
+    // chat forwards (convertForwardedMediaForSecretChat) — after first making
+    // sure the resource is actually downloaded (see ayuWaitForResourceDownload).
+    // Messages that originally shared a groupingKey (a multi-media post) keep a
+    // shared — freshly generated — grouping key, so the copy lands as ONE
+    // grouped post with its caption intact, not N separate messages, regardless
+    // of how many media items the original post had. Messages with no
+    // forwardable media and no text (service actions, expired media, webpages-
+    // only) are dropped.
+    private func ayuBuildCopyMessages(_ messages: [EngineRawMessage], threadId: Int64?) -> Signal<[EnqueueMessage], NoError> {
+        var groupingKeyMap: [Int64: Int64] = [:]
+        var perMessageSignals: [Signal<EnqueueMessage?, NoError>] = []
+
         for message in messages {
             var freshMedia: Media?
+            var resourceToWait: (resource: MediaResource, mediaReference: AnyMediaReference, userContentType: MediaResourceUserContentType)?
             for media in message.media {
                 if let file = media as? TelegramMediaFile {
-                    freshMedia = TelegramMediaFile(fileId: MediaId(namespace: Namespaces.Media.LocalFile, id: Int64.random(in: Int64.min ... Int64.max)), partialReference: file.partialReference, resource: file.resource, previewRepresentations: file.previewRepresentations, videoThumbnails: file.videoThumbnails, immediateThumbnailData: file.immediateThumbnailData, mimeType: file.mimeType, size: file.size, attributes: file.attributes, alternativeRepresentations: [])
+                    let newFile = TelegramMediaFile(fileId: MediaId(namespace: Namespaces.Media.LocalFile, id: Int64.random(in: Int64.min ... Int64.max)), partialReference: file.partialReference, resource: file.resource, previewRepresentations: file.previewRepresentations, videoThumbnails: file.videoThumbnails, immediateThumbnailData: file.immediateThumbnailData, mimeType: file.mimeType, size: file.size, attributes: file.attributes, alternativeRepresentations: [])
+                    freshMedia = newFile
+                    resourceToWait = (file.resource, .standalone(media: newFile), MediaResourceUserContentType(file: file))
                     break
                 } else if let image = media as? TelegramMediaImage {
-                    freshMedia = TelegramMediaImage(imageId: MediaId(namespace: Namespaces.Media.LocalImage, id: Int64.random(in: Int64.min ... Int64.max)), representations: image.representations, immediateThumbnailData: image.immediateThumbnailData, reference: nil, partialReference: image.partialReference, flags: [])
+                    let newImage = TelegramMediaImage(imageId: MediaId(namespace: Namespaces.Media.LocalImage, id: Int64.random(in: Int64.min ... Int64.max)), representations: image.representations, immediateThumbnailData: image.immediateThumbnailData, reference: nil, partialReference: image.partialReference, flags: [])
+                    freshMedia = newImage
+                    if let largest = largestImageRepresentation(image.representations) {
+                        resourceToWait = (largest.resource, .standalone(media: newImage), .image)
+                    }
                     break
                 }
             }
@@ -49,10 +94,47 @@ extension ChatControllerImpl {
                 continue
             }
 
+            var localGroupingKey: Int64?
+            if let originalKey = message.groupingKey {
+                if let mapped = groupingKeyMap[originalKey] {
+                    localGroupingKey = mapped
+                } else {
+                    let newKey = Int64.random(in: Int64.min ... Int64.max)
+                    groupingKeyMap[originalKey] = newKey
+                    localGroupingKey = newKey
+                }
+            }
+
+            let text = message.text
             let mediaReference: AnyMediaReference? = freshMedia.flatMap { .standalone(media: $0) }
-            result.append(.message(text: message.text, attributes: attributes, inlineStickers: [:], mediaReference: mediaReference, threadId: threadId, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: []))
+            let buildMessage: () -> EnqueueMessage? = {
+                return .message(text: text, attributes: attributes, inlineStickers: [:], mediaReference: mediaReference, threadId: threadId, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: localGroupingKey, correlationId: nil, bubbleUpEmojiOrStickersets: [])
+            }
+
+            if let resourceToWait {
+                let userLocation: MediaResourceUserLocation = .peer(message.id.peerId)
+                perMessageSignals.append(
+                    ayuWaitForResourceDownload(resource: resourceToWait.resource, mediaReference: resourceToWait.mediaReference, userLocation: userLocation, userContentType: resourceToWait.userContentType)
+                    |> map { didDownload -> EnqueueMessage? in
+                        // Couldn't get the media locally (timed out / resource gone) —
+                        // drop this item rather than enqueue an upload that will just
+                        // fail; fall back to a text-only message if there was a caption.
+                        if !didDownload {
+                            if !text.isEmpty {
+                                return .message(text: text, attributes: attributes, inlineStickers: [:], mediaReference: nil, threadId: threadId, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])
+                            }
+                            return nil
+                        }
+                        return buildMessage()
+                    }
+                )
+            } else {
+                perMessageSignals.append(.single(buildMessage()))
+            }
         }
-        return result
+
+        return combineLatest(perMessageSignals)
+        |> map { $0.compactMap { $0 } }
     }
 
     func forwardMessages(messageIds: [EngineMessage.Id], options: ChatInterfaceForwardOptionsState? = nil, resetCurrent: Bool = false, asCopy: Bool = false) {
@@ -176,7 +258,13 @@ extension ChatControllerImpl {
                         }
                         
                         strongController.dismiss()
-                        
+
+                        // Shadow: everything that used to run directly inside `proceed`
+                        // now runs inside this closure, so the asCopy branch can fetch
+                        // (async, see ayuBuildCopyMessages) before this body executes,
+                        // while the non-asCopy branch still calls it synchronously —
+                        // zero behavior change for the native-forward path.
+                        let continueForward: ([EnqueueMessage]) -> Void = { copyMessages in
                         var result: [EnqueueMessage] = []
                         if messageText.string.count > 0 {
                             let inputText = convertMarkdownToAttributes(messageText)
@@ -197,7 +285,7 @@ extension ChatControllerImpl {
 
                         if asCopy {
                             // Shadow: content-protection bypass — re-send copies instead of native forwards.
-                            result.append(contentsOf: strongSelf.ayuBuildCopyMessages(messages, threadId: nil))
+                            result.append(contentsOf: copyMessages)
                         } else {
                             result.append(contentsOf: messages.map { message -> EnqueueMessage in
                                 return .forward(source: message.id, threadId: nil, grouping: .auto, attributes: attributes, correlationId: nil)
@@ -371,6 +459,16 @@ extension ChatControllerImpl {
                             let transformedMessages = strongSelf.transformEnqueueMessages(result, silentPosting: strongSelf.presentationInterfaceState.interfaceState.silentPosting, scheduleTime: scheduleWhenOnlineTimestamp)
                             commit(transformedMessages)
                         }
+                        }
+
+                        if asCopy {
+                            let _ = (strongSelf.ayuBuildCopyMessages(messages, threadId: nil)
+                            |> deliverOnMainQueue).startStandalone(next: { copyMessages in
+                                continueForward(copyMessages)
+                            })
+                        } else {
+                            continueForward([])
+                        }
                     }
                     
                     if totalAmount.value > 0 {
@@ -406,13 +504,19 @@ extension ChatControllerImpl {
                     // the source chat, so instead of routing through the forward
                     // preview panel we enqueue re-uploaded copies straight into the
                     // chosen peer (works the same whether it's the current chat,
-                    // Saved Messages, or another chat).
-                    let copyMessages = strongSelf.ayuBuildCopyMessages(messages, threadId: threadId)
-                    if !copyMessages.isEmpty {
-                        let _ = enqueueMessages(account: strongSelf.context.account, peerId: peerId, messages: copyMessages).startStandalone()
-                    }
+                    // Saved Messages, or another chat). ayuBuildCopyMessages is async —
+                    // it waits for each media item to actually finish downloading
+                    // before building the enqueue list — so the UI dismisses right
+                    // away (matches the instant feel of a native forward) while the
+                    // download+upload continues in the background.
                     strongSelf.updateChatPresentationInterfaceState(animated: false, interactive: true, { $0.updatedInterfaceState({ $0.withoutSelectionState() }) })
                     strongController.dismiss()
+                    let _ = (strongSelf.ayuBuildCopyMessages(messages, threadId: threadId)
+                    |> deliverOnMainQueue).startStandalone(next: { copyMessages in
+                        if !copyMessages.isEmpty {
+                            let _ = enqueueMessages(account: strongSelf.context.account, peerId: peerId, messages: copyMessages).startStandalone()
+                        }
+                    })
                     return
                 }
 
