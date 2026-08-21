@@ -24,9 +24,11 @@ private final class AyuForkStorageArguments {
     let clearGallery: () -> Void
     let clearAntiDelete: () -> Void
     let clearEditHistory: () -> Void
+    let runCleanupNow: () -> Void
 
-    init(clearGallery: @escaping () -> Void, clearAntiDelete: @escaping () -> Void, clearEditHistory: @escaping () -> Void) {
+    init(clearGallery: @escaping () -> Void, runCleanupNow: @escaping () -> Void, clearAntiDelete: @escaping () -> Void, clearEditHistory: @escaping () -> Void) {
         self.clearGallery = clearGallery
+        self.runCleanupNow = runCleanupNow
         self.clearAntiDelete = clearAntiDelete
         self.clearEditHistory = clearEditHistory
     }
@@ -52,6 +54,7 @@ private enum AyuForkStorageEntry: ItemListNodeEntry {
     case galleryEmpty
     case chatRow(index: Int, title: String, sizeText: String)
     case clearGallery(enabled: Bool)
+    case runCleanupNow
 
     case otherHeader
     case antiDelete(count: Int)
@@ -64,7 +67,7 @@ private enum AyuForkStorageEntry: ItemListNodeEntry {
         switch self {
         case .overviewHeader, .totalSize, .overviewFooter:
             return AyuForkStorageSection.overview.rawValue
-        case .galleryHeader, .galleryEmpty, .chatRow, .clearGallery:
+        case .galleryHeader, .galleryEmpty, .chatRow, .clearGallery, .runCleanupNow:
             return AyuForkStorageSection.gallery.rawValue
         case .otherHeader, .antiDelete, .clearAntiDelete, .editHistory, .clearEditHistory, .otherFooter:
             return AyuForkStorageSection.other.rawValue
@@ -85,6 +88,8 @@ private enum AyuForkStorageEntry: ItemListNodeEntry {
             return 4
         case let .chatRow(index, _, _):
             return 100 + Int32(index)
+        case .runCleanupNow:
+            return 999
         case .clearGallery:
             return 1000
         case .otherHeader:
@@ -121,6 +126,10 @@ private enum AyuForkStorageEntry: ItemListNodeEntry {
             return ItemListDisclosureItem(presentationData: presentationData, title: "Нет сохранённых медиа", label: "", sectionId: self.section, style: .blocks, disclosureStyle: .none, action: nil)
         case let .chatRow(_, title, sizeText):
             return ItemListDisclosureItem(presentationData: presentationData, title: title, label: sizeText, sectionId: self.section, style: .blocks, disclosureStyle: .none, action: nil)
+        case .runCleanupNow:
+            return ItemListActionItem(presentationData: presentationData, title: "Запустить очистку сейчас", kind: .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: {
+                arguments.runCleanupNow()
+            })
         case let .clearGallery(enabled):
             return ItemListActionItem(presentationData: presentationData, title: "Очистить сохранённые медиа", kind: enabled ? .destructive : .disabled, alignment: .natural, sectionId: self.section, style: .blocks, action: {
                 if enabled {
@@ -173,6 +182,7 @@ private func ayuForkStorageEntries(data: AyuForkStorageData) -> [AyuForkStorageE
             entries.append(.chatRow(index: index, title: chat.title, sizeText: chat.sizeText))
         }
     }
+    entries.append(.runCleanupNow)
     entries.append(.clearGallery(enabled: !data.chats.isEmpty))
 
     entries.append(.otherHeader)
@@ -214,6 +224,27 @@ public func ayuForkStorageController(context: AccountContext) -> ViewController 
                     })
                 })
             ]), nil)
+        },
+        runCleanupNow: {
+            let _ = (ayuRunMediaCleanupNow(postbox: context.account.postbox)
+            |> deliverOnMainQueue).start(next: { result in
+                var lines: [String] = []
+                if result.maxAge <= 0 {
+                    lines.append("Срок хранения: отключён")
+                } else {
+                    lines.append("По сроку удалено: \(result.ageRemoved)")
+                }
+                if result.maxBytes <= 0 {
+                    lines.append("Лимит размера: отключён")
+                } else {
+                    lines.append("По размеру удалено: \(result.sizeRemoved)")
+                }
+                let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+                presentControllerImpl?(textAlertController(context: context, title: nil, text: lines.joined(separator: "\n"), actions: [
+                    TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})
+                ]), nil)
+                refresh()
+            })
         },
         clearAntiDelete: {
             let presentationData = context.sharedContext.currentPresentationData.with { $0 }

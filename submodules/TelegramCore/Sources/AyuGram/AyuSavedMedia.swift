@@ -470,53 +470,61 @@ public enum AyuSavedMedia {
     }
 }
 
+// Shared by managedAyuMediaAutoClean and ayuRunMediaCleanupNow (the manual
+// "run now" trigger in the storage screen) so the pinned/channel/bot whitelist
+// logic exists in exactly one place.
+private func ayuMediaAutoCleanParameters(transaction: Transaction, postbox: Postbox) -> (maxAge: Int32, maxBytes: Int64, keep: Set<Int64>) {
+    let settings = currentAyuGramSettings(transaction: transaction)
+    var keep = Set<Int64>()
+    if settings.mediaAutoCleanKeepPinned {
+        for item in transaction.getPinnedItemIds(groupId: .root) {
+            if case let .peer(peerId) = item {
+                keep.insert(peerId.toInt64())
+            }
+        }
+        for item in transaction.getPinnedItemIds(groupId: Namespaces.PeerGroup.archive) {
+            if case let .peer(peerId) = item {
+                keep.insert(peerId.toInt64())
+            }
+        }
+    }
+    // Channel / bot exclusions: scan the peers owning gallery files and add
+    // the matching ones to the whitelist. Channels are recognised by the peer
+    // id namespace alone; bots require a peer lookup.
+    if settings.mediaAutoCleanKeepChannels || settings.mediaAutoCleanKeepBots {
+        var ownerIds = Set<Int64>()
+        for entry in AyuSavedMedia.entries(basePath: postbox.mediaBox.basePath) {
+            if let peerId = entry.peerId {
+                ownerIds.insert(peerId)
+            }
+        }
+        for ownerId in ownerIds {
+            let peerId = PeerId(ownerId)
+            if settings.mediaAutoCleanKeepChannels, peerId.namespace == Namespaces.Peer.CloudChannel {
+                keep.insert(ownerId)
+                continue
+            }
+            if settings.mediaAutoCleanKeepBots, peerId.namespace == Namespaces.Peer.CloudUser {
+                if let user = transaction.getPeer(peerId) as? TelegramUser, user.botInfo != nil {
+                    keep.insert(ownerId)
+                }
+            }
+        }
+    }
+    return (settings.mediaAutoCleanInterval, settings.attachmentSizeLimit, keep)
+}
+
 // Periodic auto-clean task. Started once per account from the managed
 // operations. Every few minutes it reads the current interval and the pinned
 // whitelist, then prunes the gallery. Cheap when disabled (interval == 0).
 public func managedAyuMediaAutoClean(postbox: Postbox) -> Signal<Never, NoError> {
     let checkInterval: Double = 300.0
     let step = postbox.transaction { transaction -> (Int32, Int64, Set<Int64>) in
-        let settings = currentAyuGramSettings(transaction: transaction)
-        var keep = Set<Int64>()
-        if settings.mediaAutoCleanKeepPinned {
-            for item in transaction.getPinnedItemIds(groupId: .root) {
-                if case let .peer(peerId) = item {
-                    keep.insert(peerId.toInt64())
-                }
-            }
-            for item in transaction.getPinnedItemIds(groupId: Namespaces.PeerGroup.archive) {
-                if case let .peer(peerId) = item {
-                    keep.insert(peerId.toInt64())
-                }
-            }
-        }
-        // Channel / bot exclusions: scan the peers owning gallery files and add
-        // the matching ones to the whitelist. Channels are recognised by the peer
-        // id namespace alone; bots require a peer lookup.
-        if settings.mediaAutoCleanKeepChannels || settings.mediaAutoCleanKeepBots {
-            var ownerIds = Set<Int64>()
-            for entry in AyuSavedMedia.entries(basePath: postbox.mediaBox.basePath) {
-                if let peerId = entry.peerId {
-                    ownerIds.insert(peerId)
-                }
-            }
-            for ownerId in ownerIds {
-                let peerId = PeerId(ownerId)
-                if settings.mediaAutoCleanKeepChannels, peerId.namespace == Namespaces.Peer.CloudChannel {
-                    keep.insert(ownerId)
-                    continue
-                }
-                if settings.mediaAutoCleanKeepBots, peerId.namespace == Namespaces.Peer.CloudUser {
-                    if let user = transaction.getPeer(peerId) as? TelegramUser, user.botInfo != nil {
-                        keep.insert(ownerId)
-                    }
-                }
-            }
-        }
+        let (maxAge, maxBytes, keep) = ayuMediaAutoCleanParameters(transaction: transaction, postbox: postbox)
         // Same retention window applies to the kept (anti-deleted) messages
         // themselves — not just to their media files in the gallery.
-        ayuForkStorePruneKeptDeleted(transaction: transaction, mediaBox: postbox.mediaBox, maxAge: settings.mediaAutoCleanInterval, now: Int32(Date().timeIntervalSince1970))
-        return (settings.mediaAutoCleanInterval, settings.attachmentSizeLimit, keep)
+        ayuForkStorePruneKeptDeleted(transaction: transaction, mediaBox: postbox.mediaBox, maxAge: maxAge, now: Int32(Date().timeIntervalSince1970))
+        return (maxAge, maxBytes, keep)
     }
     |> mapToSignal { maxAge, maxBytes, keep -> Signal<Never, NoError> in
         let basePath = postbox.mediaBox.basePath
@@ -541,4 +549,34 @@ public func managedAyuMediaAutoClean(postbox: Postbox) -> Signal<Never, NoError>
         )
     )
     |> restart
+}
+
+// Shadow: on-demand version of the periodic cleanup pass, for the "Запустить
+// очистку сейчас" button in the storage screen — runs the exact same logic
+// immediately (same whitelist computation, same cleanup/cleanupBySize calls)
+// and reports how many files each pass actually removed, since "0 removed"
+// vs "some removed but the total still looks wrong" points at two different
+// kinds of bugs (the logic never running at all, vs. it running but not
+// matching what the user expects).
+public func ayuRunMediaCleanupNow(postbox: Postbox) -> Signal<(ageRemoved: Int, sizeRemoved: Int, maxAge: Int32, maxBytes: Int64), NoError> {
+    return postbox.transaction { transaction -> (Int32, Int64, Set<Int64>) in
+        return ayuMediaAutoCleanParameters(transaction: transaction, postbox: postbox)
+    }
+    |> mapToSignal { maxAge, maxBytes, keep -> Signal<(ageRemoved: Int, sizeRemoved: Int, maxAge: Int32, maxBytes: Int64), NoError> in
+        let basePath = postbox.mediaBox.basePath
+        return Signal { subscriber in
+            var ageRemoved = 0
+            var sizeRemoved = 0
+            if maxAge > 0 {
+                ageRemoved = AyuSavedMedia.cleanup(basePath: basePath, maxAge: maxAge, keepPeerIds: keep, now: Date().timeIntervalSince1970)
+            }
+            if maxBytes > 0 {
+                sizeRemoved = AyuSavedMedia.cleanupBySize(basePath: basePath, maxBytes: maxBytes, keepPeerIds: keep)
+            }
+            subscriber.putNext((ageRemoved, sizeRemoved, maxAge, maxBytes))
+            subscriber.putCompletion()
+            return EmptyDisposable
+        }
+        |> runOn(Queue.concurrentDefaultQueue())
+    }
 }
