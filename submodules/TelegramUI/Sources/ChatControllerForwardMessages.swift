@@ -25,9 +25,11 @@ extension ChatControllerImpl {
     // fails at upload time, which is the error the forward-as-copy path used to
     // hit. Falls back to `false` after a timeout instead of hanging forever if
     // the resource can't be fetched at all (e.g. it expired server-side).
-    private func ayuWaitForResourceDownload(resource: MediaResource, mediaReference: AnyMediaReference, userLocation: MediaResourceUserLocation, userContentType: MediaResourceUserContentType) -> Signal<Bool, NoError> {
+    // Returns the resolved local file path once the resource is complete, or
+    // nil after the timeout.
+    private func ayuWaitForResourceDownload(resource: MediaResource, mediaReference: AnyMediaReference, userLocation: MediaResourceUserLocation, userContentType: MediaResourceUserContentType) -> Signal<String?, NoError> {
         let context = self.context
-        let waitSignal = Signal<Bool, NoError> { subscriber in
+        let waitSignal = Signal<String?, NoError> { subscriber in
             let fetchDisposable = context.engine.resources.fetch(
                 reference: mediaReference.resourceReference(resource),
                 userLocation: userLocation,
@@ -35,8 +37,8 @@ extension ChatControllerImpl {
             ).start()
             let dataDisposable = (context.engine.resources.data(resource: EngineMediaResource(resource), waitUntilFetchStatus: true)
             |> filter { $0.isComplete }
-            |> take(1)).start(next: { _ in
-                subscriber.putNext(true)
+            |> take(1)).start(next: { data in
+                subscriber.putNext(data.path)
                 subscriber.putCompletion()
             })
             return ActionDisposable {
@@ -45,7 +47,7 @@ extension ChatControllerImpl {
             }
         }
         return waitSignal
-        |> timeout(60.0, queue: Queue.mainQueue(), alternate: .single(false))
+        |> timeout(60.0, queue: Queue.mainQueue(), alternate: .single(nil))
     }
 
     // Shadow: build "copy" enqueue messages that bypass content-protection
@@ -65,19 +67,36 @@ extension ChatControllerImpl {
         var perMessageSignals: [Signal<EnqueueMessage?, NoError>] = []
 
         for message in messages {
-            var freshMedia: Media?
+            // Shadow: resourceToWait carries the ORIGINAL resource only to
+            // download-trigger + wait on it — buildMedia below constructs the
+            // copy's media from a resolved LOCAL PATH via
+            // LocalFileReferenceMediaResource, a resource identity with its own
+            // randomId, completely independent of the original's. Reusing the
+            // original resource object directly (an earlier version of this did
+            // exactly that) meant the copy message's media and the source
+            // message's media shared the same MediaResourceId — if the copy's
+            // send failed and got cleaned up, that cleanup could remove the
+            // shared on-disk file, leaving the ORIGINAL undownloadable too
+            // (catastrophic for view-once/self-destruct media the whole feature
+            // exists to preserve, since the local copy may be the only one left).
             var resourceToWait: (resource: MediaResource, mediaReference: AnyMediaReference, userContentType: MediaResourceUserContentType)?
+            var buildMedia: ((String) -> Media)?
             for media in message.media {
                 if let file = media as? TelegramMediaFile {
-                    let newFile = TelegramMediaFile(fileId: MediaId(namespace: Namespaces.Media.LocalFile, id: Int64.random(in: Int64.min ... Int64.max)), partialReference: file.partialReference, resource: file.resource, previewRepresentations: file.previewRepresentations, videoThumbnails: file.videoThumbnails, immediateThumbnailData: file.immediateThumbnailData, mimeType: file.mimeType, size: file.size, attributes: file.attributes, alternativeRepresentations: [])
-                    freshMedia = newFile
-                    resourceToWait = (file.resource, .standalone(media: newFile), MediaResourceUserContentType(file: file))
+                    resourceToWait = (file.resource, .standalone(media: file), MediaResourceUserContentType(file: file))
+                    buildMedia = { path in
+                        let localResource = LocalFileReferenceMediaResource(localFilePath: path, randomId: Int64.random(in: Int64.min ... Int64.max))
+                        return TelegramMediaFile(fileId: MediaId(namespace: Namespaces.Media.LocalFile, id: Int64.random(in: Int64.min ... Int64.max)), partialReference: nil, resource: localResource, previewRepresentations: file.previewRepresentations, videoThumbnails: file.videoThumbnails, immediateThumbnailData: file.immediateThumbnailData, mimeType: file.mimeType, size: file.size, attributes: file.attributes, alternativeRepresentations: [])
+                    }
                     break
                 } else if let image = media as? TelegramMediaImage {
-                    let newImage = TelegramMediaImage(imageId: MediaId(namespace: Namespaces.Media.LocalImage, id: Int64.random(in: Int64.min ... Int64.max)), representations: image.representations, immediateThumbnailData: image.immediateThumbnailData, reference: nil, partialReference: image.partialReference, flags: [])
-                    freshMedia = newImage
                     if let largest = largestImageRepresentation(image.representations) {
-                        resourceToWait = (largest.resource, .standalone(media: newImage), .image)
+                        resourceToWait = (largest.resource, .standalone(media: image), .image)
+                        buildMedia = { path in
+                            let localResource = LocalFileReferenceMediaResource(localFilePath: path, randomId: Int64.random(in: Int64.min ... Int64.max))
+                            let representation = TelegramMediaImageRepresentation(dimensions: largest.dimensions, resource: localResource, progressiveSizes: [], immediateThumbnailData: image.immediateThumbnailData)
+                            return TelegramMediaImage(imageId: MediaId(namespace: Namespaces.Media.LocalImage, id: Int64.random(in: Int64.min ... Int64.max)), representations: [representation], immediateThumbnailData: image.immediateThumbnailData, reference: nil, partialReference: nil, flags: [])
+                        }
                     }
                     break
                 }
@@ -90,7 +109,7 @@ extension ChatControllerImpl {
                 }
             }
 
-            if freshMedia == nil && message.text.isEmpty {
+            if resourceToWait == nil && message.text.isEmpty {
                 continue
             }
 
@@ -106,30 +125,26 @@ extension ChatControllerImpl {
             }
 
             let text = message.text
-            let mediaReference: AnyMediaReference? = freshMedia.flatMap { .standalone(media: $0) }
-            let buildMessage: () -> EnqueueMessage? = {
-                return .message(text: text, attributes: attributes, inlineStickers: [:], mediaReference: mediaReference, threadId: threadId, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: localGroupingKey, correlationId: nil, bubbleUpEmojiOrStickersets: [])
-            }
-
-            if let resourceToWait {
+            if let resourceToWait, let buildMedia {
                 let userLocation: MediaResourceUserLocation = .peer(message.id.peerId)
                 perMessageSignals.append(
                     ayuWaitForResourceDownload(resource: resourceToWait.resource, mediaReference: resourceToWait.mediaReference, userLocation: userLocation, userContentType: resourceToWait.userContentType)
-                    |> map { didDownload -> EnqueueMessage? in
+                    |> map { path -> EnqueueMessage? in
                         // Couldn't get the media locally (timed out / resource gone) —
                         // drop this item rather than enqueue an upload that will just
                         // fail; fall back to a text-only message if there was a caption.
-                        if !didDownload {
+                        guard let path else {
                             if !text.isEmpty {
                                 return .message(text: text, attributes: attributes, inlineStickers: [:], mediaReference: nil, threadId: threadId, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])
                             }
                             return nil
                         }
-                        return buildMessage()
+                        let mediaReference: AnyMediaReference = .standalone(media: buildMedia(path))
+                        return .message(text: text, attributes: attributes, inlineStickers: [:], mediaReference: mediaReference, threadId: threadId, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: localGroupingKey, correlationId: nil, bubbleUpEmojiOrStickersets: [])
                     }
                 )
             } else {
-                perMessageSignals.append(.single(buildMessage()))
+                perMessageSignals.append(.single(.message(text: text, attributes: attributes, inlineStickers: [:], mediaReference: nil, threadId: threadId, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: localGroupingKey, correlationId: nil, bubbleUpEmojiOrStickersets: [])))
             }
         }
 

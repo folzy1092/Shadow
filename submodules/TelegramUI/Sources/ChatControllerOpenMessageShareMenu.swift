@@ -151,13 +151,15 @@ extension ChatControllerImpl {
 
         // Shadow: the share-arrow button routes through ShareController, a
         // generic reusable component with no notion of content protection —
-        // it always builds a native .forward, which the server rejects for a
-        // copy-protected source (same failure the context-menu "Переслать"
-        // action had before forwardMessagesAsCopy was wired in). Intercept
-        // here and reuse that same working asCopy machinery (download-wait,
-        // grouping, its own peer picker) instead of patching ShareController
-        // itself, which is shared well beyond chat messages.
-        if message.isServerCopyProtected() {
+        // it always builds a native .forward, which the server rejects both
+        // for a copy-protected source AND for still-secret (view-once /
+        // self-destruct, containsSecretMedia) media — Telegram blocks native
+        // forwarding of the latter by design, forward-ability being exactly
+        // what self-destruct exists to prevent. Intercept here and reuse that
+        // same working asCopy machinery (download-wait, grouping, its own
+        // peer picker) instead of patching ShareController itself, which is
+        // shared well beyond chat messages.
+        if message.isServerCopyProtected() || message.containsSecretMedia {
             self.forwardMessages(messages: messages, resetCurrent: false, asCopy: true)
             return
         }
