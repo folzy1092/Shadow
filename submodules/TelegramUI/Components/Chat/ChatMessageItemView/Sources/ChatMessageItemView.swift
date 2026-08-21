@@ -873,13 +873,6 @@ open class ChatMessageItemView: ListViewItemNode, ChatMessageItemNodeProtocol {
     }
     
     open func presentMessageButtonContextMenu(button: ReplyMarkupButton) {
-        // Shadow: diagnostic checkpoint #2 — confirms the long-tap chain made it
-        // all the way from the gesture recognizer down to this method (through
-        // ChatMessageActionButtonNode.longTapped -> ChatMessageActionButtonsNode.
-        // buttonLongTapped -> here). Distinctive double-buzz, different from
-        // checkpoint #1's triple-buzz, so the two are distinguishable by feel.
-        // Remove once the "nothing appears on long-press" report is resolved.
-        HapticFeedback().success()
         if let item = self.item {
             switch button.action {
                 case let .url(url):

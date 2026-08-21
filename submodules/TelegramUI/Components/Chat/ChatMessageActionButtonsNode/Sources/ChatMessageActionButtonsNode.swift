@@ -87,9 +87,20 @@ private final class ChatMessageActionButtonNode: ASDisplayNode {
     private var button: ReplyMarkupButton?
     var pressed: ((ReplyMarkupButton, Promise<Bool>) -> Void)?
     var longTapped: ((ReplyMarkupButton) -> Void)?
-    
-    var longTapRecognizer: UILongPressGestureRecognizer?
-    
+
+    // Shadow: long-press is detected manually via UIControl touch events + a
+    // Timer instead of a UILongPressGestureRecognizer. A UIButton's own touch
+    // tracking (which drives its highlight state — see highligthedChanged
+    // below) and a UIGestureRecognizer attached to that SAME view compete for
+    // the touch; in practice the button's tracking wins and the recognizer's
+    // .began never fires — confirmed on device (the button visibly dims on a
+    // long hold, proving UIControl claimed the touch, while the recognizer
+    // stayed silent the whole time). Routing through the button's own touch
+    // events sidesteps that conflict entirely — it's the same mechanism the
+    // working highlight animation already relies on.
+    private var longPressTimer: Timer?
+    private var didTriggerLongPress = false
+
     private let accessibilityArea: AccessibilityAreaNode
     
     private var progressDisposable: Disposable?
@@ -110,13 +121,21 @@ private final class ChatMessageActionButtonNode: ASDisplayNode {
     
     deinit {
         self.progressDisposable?.dispose()
+        self.longPressTimer?.invalidate()
     }
-    
+
     override func didLoad() {
         super.didLoad()
-        
+
         let buttonView = HighlightTrackingButton(frame: self.bounds)
         buttonView.addTarget(self, action: #selector(self.buttonPressed), for: [.touchUpInside])
+        buttonView.addTarget(self, action: #selector(self.buttonTouchDown), for: [.touchDown])
+        // .touchUpInside included here too (as well as targeting buttonPressed
+        // above — a control can have several targets for the same event): a
+        // quick regular tap must invalidate the pending long-press timer, or a
+        // fast tap-and-release would still fire a long-press ~0.3s later since
+        // nothing else stops the already-scheduled timer.
+        buttonView.addTarget(self, action: #selector(self.buttonTouchEnded), for: [.touchUpInside, .touchUpOutside, .touchCancel, .touchDragExit])
         self.buttonView = buttonView
         buttonView.isAccessibilityElement = false
         self.view.addSubview(buttonView)
@@ -148,17 +167,22 @@ private final class ChatMessageActionButtonNode: ASDisplayNode {
             }
         }
         
-        let longTapRecognizer = UILongPressGestureRecognizer(target: self, action: #selector(self.longTapGesture(_:)))
-        longTapRecognizer.minimumPressDuration = 0.3
-        buttonView.addGestureRecognizer(longTapRecognizer)
-        self.longTapRecognizer = longTapRecognizer
     }
-    
+
     @objc func buttonPressed() {
+        // A long-press already fired for this touch-down — don't ALSO send the
+        // regular tap action on release. touchUpInside still fires natively
+        // after a long hold (UIControl has no notion of "consumed" the way a
+        // UIGestureRecognizer's cancelsTouchesInView would give us for free),
+        // so this flag is the manual equivalent.
+        if self.didTriggerLongPress {
+            self.didTriggerLongPress = false
+            return
+        }
         if let button = self.button, let pressed = self.pressed {
             let progressPromise = Promise<Bool>()
             pressed(button, progressPromise)
-            
+
             self.progressDisposable?.dispose()
             self.progressDisposable = (progressPromise.get()
             |> deliverOnMainQueue).startStrict(next: { [weak self] isLoading in
@@ -168,6 +192,36 @@ private final class ChatMessageActionButtonNode: ASDisplayNode {
                 self.updateIsLoading(isLoading: isLoading)
             })
         }
+    }
+
+    @objc private func buttonTouchDown() {
+        self.didTriggerLongPress = false
+        self.longPressTimer?.invalidate()
+        let timer = Timer(timeInterval: 0.3, repeats: false, block: { [weak self] _ in
+            self?.handleLongPress()
+        })
+        self.longPressTimer = timer
+        // .common, not the default .default run loop mode — a .default-mode
+        // timer can be suspended while the enclosing list view is mid-touch-
+        // tracking (e.g. UIScrollView's tracking runs the loop in
+        // .tracking/.common), which would make a real, held-still long-press
+        // silently never fire the timer at all.
+        RunLoop.main.add(timer, forMode: .common)
+    }
+
+    @objc private func buttonTouchEnded() {
+        self.longPressTimer?.invalidate()
+        self.longPressTimer = nil
+    }
+
+    private func handleLongPress() {
+        self.longPressTimer = nil
+        guard let button = self.button, let longTapped = self.longTapped else {
+            return
+        }
+        self.didTriggerLongPress = true
+        HapticFeedback().impact(.medium)
+        longTapped(button)
     }
     
     private func updateIsLoading(isLoading: Bool) {
@@ -200,21 +254,6 @@ private final class ChatMessageActionButtonNode: ASDisplayNode {
                     loadingEffectView?.removeFromSuperview()
                 })
             }
-        }
-    }
-    
-    @objc func longTapGesture(_ recognizer: UILongPressGestureRecognizer) {
-        if recognizer.state == .began {
-            // Shadow: diagnostic checkpoint #1 — confirms the gesture recognizer
-            // itself reaches .began (rules out a hit-testing / competing-recognizer
-            // conflict with the bubble's own long-tap, vs. something breaking
-            // further down the chain). Distinctive triple-buzz so it's unlikely to
-            // be confused with any other haptic in the app. Remove once the
-            // "nothing appears on long-press" report is resolved.
-            HapticFeedback().error()
-        }
-        if let button = self.button, let longTapped = self.longTapped, recognizer.state == .began {
-            longTapped(button)
         }
     }
     
