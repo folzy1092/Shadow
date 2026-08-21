@@ -555,20 +555,13 @@ extension ChatControllerImpl {
                     }
                     
                     var correlationIds: [Int64] = []
-                    let mappedMessages: [EnqueueMessage]
-                    if asCopy {
-                        // Shadow: content-protection bypass — re-send copies instead of native forwards.
-                        mappedMessages = strongSelf.ayuBuildCopyMessages(messages, threadId: nil).map { message -> EnqueueMessage in
-                            let correlationId = Int64.random(in: Int64.min ... Int64.max)
-                            correlationIds.append(correlationId)
-                            return message.withUpdatedCorrelationId(correlationId)
-                        }
-                    } else {
-                        mappedMessages = messages.map { message -> EnqueueMessage in
-                            let correlationId = Int64.random(in: Int64.min ... Int64.max)
-                            correlationIds.append(correlationId)
-                            return .forward(source: message.id, threadId: nil, grouping: .auto, attributes: [], correlationId: correlationId)
-                        }
+                    // Shadow: asCopy always returns earlier in peerSelected (see the
+                    // "if asCopy { ...; return }" guard above), so this branch never
+                    // sees asCopy == true — always a native forward here.
+                    let mappedMessages: [EnqueueMessage] = messages.map { message -> EnqueueMessage in
+                        let correlationId = Int64.random(in: Int64.min ... Int64.max)
+                        correlationIds.append(correlationId)
+                        return .forward(source: message.id, threadId: nil, grouping: .auto, attributes: [], correlationId: correlationId)
                     }
                     
                     let _ = (reactionItems
