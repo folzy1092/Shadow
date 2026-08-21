@@ -287,6 +287,7 @@ private final class AyuCustomizationArguments {
 }
 
 private enum AyuCustomizationSection: Int32 {
+    case buildInfo
     case appearance
     case chats
     case bottomBar
@@ -299,6 +300,15 @@ private enum AyuCustomizationSection: Int32 {
 }
 
 private enum AyuCustomizationEntry: ItemListNodeEntry {
+    // Shadow: shown at the very top so a build can always be identified from
+    // inside the app — this session's repeated "which build is this" confusion
+    // (a compile error meant an earlier push never actually produced an
+    // installable IPA, but there was no way to tell from the device alone)
+    // is exactly what this is for. CFBundleVersion here is the exact commit-
+    // count-based BUILD_NUMBER the CI workflow already stamps into the IPA
+    // (same number the Telegram/Discord "Сборка готова" notification prints),
+    // so no new build-system wiring is needed — just surfacing existing data.
+    case buildInfo
     case appearanceHeader
     case showMessageSeconds(Bool)
     case editedIndicatorAsPencil(Bool)
@@ -356,6 +366,8 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
 
     var section: ItemListSectionId {
         switch self {
+        case .buildInfo:
+            return AyuCustomizationSection.buildInfo.rawValue
         case .appearanceHeader, .showMessageSeconds, .editedIndicatorAsPencil, .regularEmojiFirst, .doubleTapToEdit, .showExactLastSeen, .showExactLastSeenSeconds, .wideChannelPosts, .showExactViewCounts, .showForwardCount, .appearanceFooter:
             return AyuCustomizationSection.appearance.rawValue
         case .chatsHeader, .hideAllChatsFolder, .chatsFooter:
@@ -379,6 +391,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
 
     var stableId: Int32 {
         switch self {
+        case .buildInfo: return -1
         case .appearanceHeader: return 0
         case .showMessageSeconds: return 1
         case .editedIndicatorAsPencil: return 2
@@ -435,6 +448,11 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
     func item(presentationData: ItemListPresentationData, arguments: Any) -> ListViewItem {
         let arguments = arguments as! AyuCustomizationArguments
         switch self {
+        case .buildInfo:
+            let bundle = Bundle.main
+            let bundleVersion = (bundle.infoDictionary?["CFBundleShortVersionString"] as? String) ?? ""
+            let bundleBuild = (bundle.infoDictionary?[kCFBundleVersionKey as String] as? String) ?? ""
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Shadow \(bundleVersion) (build \(bundleBuild))"), sectionId: self.section)
         case .appearanceHeader:
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "ОФОРМЛЕНИЕ", sectionId: self.section)
         case let .showMessageSeconds(value):
@@ -590,6 +608,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
 private func ayuCustomizationEntries(settings: AyuGramSettings) -> [AyuCustomizationEntry] {
     var entries: [AyuCustomizationEntry] = []
 
+    entries.append(.buildInfo)
     entries.append(.appearanceHeader)
     entries.append(.showMessageSeconds(settings.showMessageSeconds))
     entries.append(.editedIndicatorAsPencil(settings.editedIndicatorAsPencil))
