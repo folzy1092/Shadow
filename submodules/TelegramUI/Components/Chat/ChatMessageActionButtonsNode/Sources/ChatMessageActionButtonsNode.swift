@@ -204,6 +204,15 @@ private final class ChatMessageActionButtonNode: ASDisplayNode {
     }
     
     @objc func longTapGesture(_ recognizer: UILongPressGestureRecognizer) {
+        if recognizer.state == .began {
+            // Shadow: diagnostic checkpoint #1 — confirms the gesture recognizer
+            // itself reaches .began (rules out a hit-testing / competing-recognizer
+            // conflict with the bubble's own long-tap, vs. something breaking
+            // further down the chain). Distinctive triple-buzz so it's unlikely to
+            // be confused with any other haptic in the app. Remove once the
+            // "nothing appears on long-press" report is resolved.
+            HapticFeedback().error()
+        }
         if let button = self.button, let longTapped = self.longTapped, recognizer.state == .began {
             longTapped(button)
         }
