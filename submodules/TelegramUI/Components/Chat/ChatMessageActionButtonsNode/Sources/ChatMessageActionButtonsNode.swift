@@ -98,7 +98,9 @@ private final class ChatMessageActionButtonNode: ASDisplayNode {
     // stayed silent the whole time). Routing through the button's own touch
     // events sidesteps that conflict entirely — it's the same mechanism the
     // working highlight animation already relies on.
-    private var longPressTimer: Timer?
+    // Foundation.Timer, spelled out — SwiftSignalKit also exports a type
+    // named Timer, and this file (transitively, via TelegramCore) sees both.
+    private var longPressTimer: Foundation.Timer?
     private var didTriggerLongPress = false
 
     private let accessibilityArea: AccessibilityAreaNode
@@ -197,7 +199,7 @@ private final class ChatMessageActionButtonNode: ASDisplayNode {
     @objc private func buttonTouchDown() {
         self.didTriggerLongPress = false
         self.longPressTimer?.invalidate()
-        let timer = Timer(timeInterval: 0.3, repeats: false, block: { [weak self] _ in
+        let timer = Foundation.Timer(timeInterval: 0.3, repeats: false, block: { [weak self] _ in
             self?.handleLongPress()
         })
         self.longPressTimer = timer
@@ -398,14 +400,7 @@ private final class ChatMessageActionButtonNode: ASDisplayNode {
                     
                     node.wallpaperBackgroundNode = backgroundNode
                     node.button = button
-                    
-                    switch button.action {
-                    case .url:
-                        node.longTapRecognizer?.isEnabled = true
-                    default:
-                        node.longTapRecognizer?.isEnabled = false
-                    }
-                    
+
                     if node.backgroundBlurView == nil {
                         if let backgroundBlurView = backgroundNode?.makeFreeBackground() {
                             node.backgroundBlurView = backgroundBlurView
