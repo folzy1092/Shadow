@@ -1952,16 +1952,18 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             }
         } else if isServerCopyProtected {
             // Shadow: content protection strips the .forward option upstream, so
-            // there is no Forward action to show. Mirror Swiftgram and surface a
-            // non-clickable notice (disabled text color + nil action) so the user
-            // understands why forwarding is unavailable. Gated on the real
-            // server-side protection flag (not on isCopyProtected, which the fork's
-            // allowSaveRestrictedContent toggle forces false — that would hide the
-            // notice even though the server still blocks native forwards).
-            let noForwardAction: ((ContextControllerProtocol?, @escaping (ContextMenuActionResult) -> Void) -> Void)? = nil
-            actions.append(.action(ContextMenuActionItem(text: "Обычная пересылка запрещена.", textColor: .disabled, icon: { theme in
-                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/ForwardDisable"), color: theme.actionSheet.secondaryTextColor)
-            }, action: noForwardAction)))
+            // there is no native Forward action to show — but forwardMessagesAsCopy
+            // (re-upload as a fresh message, bypassing noforwards) still works here.
+            // Gated on the real server-side protection flag (not on isCopyProtected,
+            // which the fork's allowSaveRestrictedContent toggle forces false — that
+            // would hide this row even though the server still blocks native
+            // forwards).
+            actions.append(.action(ContextMenuActionItem(text: "Обычная пересылка запрещена. Переслать копией", textColor: .primary, icon: { theme in
+                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/ForwardDisable"), color: theme.actionSheet.primaryTextColor)
+            }, action: { _, f in
+                interfaceInteraction.forwardMessagesAsCopy(selectAll || isImage ? messages : [message])
+                f(.dismissWithoutContent)
+            })))
         }
 
         // AyuGram: "Burn" a kept view-once / self-destruct message — report it as

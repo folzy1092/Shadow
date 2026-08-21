@@ -94,6 +94,15 @@ public final class ChatPanelInterfaceInteraction {
     // AyuGram: forward messages with sender names pre-hidden (hideNames = true),
     // available for any chat.
     public let forwardMessagesWithoutAuthor: ([EngineRawMessage]) -> Void
+    // Shadow: forward EXPLICIT messages by RE-UPLOADING copies (bypasses content
+    // protection / noforwards), the same technique forwardSelectedMessagesAsCopy
+    // uses for the multi-select panel — but that one only reads the current
+    // selection, so it's unreachable from a single-message context menu (the
+    // "Обычная пересылка запрещена." notice there had no clickable action at
+    // all). This is the message-array-taking sibling forwardMessages/
+    // forwardMessagesWithoutAuthor already are, so the context menu can offer
+    // it directly.
+    public let forwardMessagesAsCopy: ([EngineRawMessage]) -> Void
     public let updateForwardOptionsState: ((ChatInterfaceForwardOptionsState) -> ChatInterfaceForwardOptionsState) -> Void
     public let presentForwardOptions: (UIView) -> Void
     public let presentReplyOptions: (UIView) -> Void
@@ -230,6 +239,7 @@ public final class ChatPanelInterfaceInteraction {
         forwardCurrentForwardMessages: @escaping () -> Void,
         forwardMessages: @escaping ([EngineRawMessage]) -> Void,
         forwardMessagesWithoutAuthor: @escaping ([EngineRawMessage]) -> Void = { _ in },
+        forwardMessagesAsCopy: @escaping ([EngineRawMessage]) -> Void = { _ in },
         updateForwardOptionsState: @escaping ((ChatInterfaceForwardOptionsState) -> ChatInterfaceForwardOptionsState) -> Void,
         presentForwardOptions: @escaping (UIView) -> Void,
         presentReplyOptions: @escaping (UIView) -> Void,
@@ -365,6 +375,7 @@ public final class ChatPanelInterfaceInteraction {
         self.forwardCurrentForwardMessages = forwardCurrentForwardMessages
         self.forwardMessages = forwardMessages
         self.forwardMessagesWithoutAuthor = forwardMessagesWithoutAuthor
+        self.forwardMessagesAsCopy = forwardMessagesAsCopy
         self.updateForwardOptionsState = updateForwardOptionsState
         self.presentForwardOptions = presentForwardOptions
         self.presentReplyOptions = presentReplyOptions
