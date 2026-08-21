@@ -887,7 +887,7 @@ open class ChatMessageItemView: ListViewItemNode, ChatMessageItemNodeProtocol {
                     } else {
                         dataText = data.makeData().map { String(format: "%02x", $0) }.joined()
                     }
-                    let presentationData = item.presentationData
+                    let presentationData = item.context.sharedContext.currentPresentationData.with { $0 }
                     let actionSheet = ActionSheetController(presentationData: presentationData)
                     actionSheet.setItemGroups([
                         ActionSheetItemGroup(items: [
