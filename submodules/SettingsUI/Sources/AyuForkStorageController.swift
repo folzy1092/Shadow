@@ -25,12 +25,14 @@ private final class AyuForkStorageArguments {
     let clearAntiDelete: () -> Void
     let clearEditHistory: () -> Void
     let runCleanupNow: () -> Void
+    let openArchive: () -> Void
 
-    init(clearGallery: @escaping () -> Void, runCleanupNow: @escaping () -> Void, clearAntiDelete: @escaping () -> Void, clearEditHistory: @escaping () -> Void) {
+    init(clearGallery: @escaping () -> Void, runCleanupNow: @escaping () -> Void, clearAntiDelete: @escaping () -> Void, clearEditHistory: @escaping () -> Void, openArchive: @escaping () -> Void) {
         self.clearGallery = clearGallery
         self.runCleanupNow = runCleanupNow
         self.clearAntiDelete = clearAntiDelete
         self.clearEditHistory = clearEditHistory
+        self.openArchive = openArchive
     }
 }
 
@@ -61,6 +63,7 @@ private enum AyuForkStorageEntry: ItemListNodeEntry {
     case clearAntiDelete(enabled: Bool)
     case editHistory(count: Int)
     case clearEditHistory(enabled: Bool)
+    case openArchive(enabled: Bool)
     case otherFooter
 
     var section: ItemListSectionId {
@@ -69,7 +72,7 @@ private enum AyuForkStorageEntry: ItemListNodeEntry {
             return AyuForkStorageSection.overview.rawValue
         case .galleryHeader, .galleryEmpty, .chatRow, .clearGallery, .runCleanupNow:
             return AyuForkStorageSection.gallery.rawValue
-        case .otherHeader, .antiDelete, .clearAntiDelete, .editHistory, .clearEditHistory, .otherFooter:
+        case .otherHeader, .antiDelete, .clearAntiDelete, .editHistory, .clearEditHistory, .openArchive, .otherFooter:
             return AyuForkStorageSection.other.rawValue
         }
     }
@@ -102,8 +105,10 @@ private enum AyuForkStorageEntry: ItemListNodeEntry {
             return 1004
         case .clearEditHistory:
             return 1005
-        case .otherFooter:
+        case .openArchive:
             return 1006
+        case .otherFooter:
+            return 1007
         }
     }
 
@@ -154,8 +159,14 @@ private enum AyuForkStorageEntry: ItemListNodeEntry {
                     arguments.clearEditHistory()
                 }
             })
+        case let .openArchive(enabled):
+            return ItemListActionItem(presentationData: presentationData, title: "Открыть архив", kind: enabled ? .generic : .disabled, alignment: .natural, sectionId: self.section, style: .blocks, action: {
+                if enabled {
+                    arguments.openArchive()
+                }
+            })
         case .otherFooter:
-            return ItemListTextItem(presentationData: presentationData, text: .plain("«Удалить сохранённые сообщения» убирает все сообщения, оставленные форком после удаления собеседником (освобождает и связанные медиа). «Очистить историю правок» удаляет сохранённые прежние версии из всех сообщений."), sectionId: self.section)
+            return ItemListTextItem(presentationData: presentationData, text: .plain("«Открыть архив» показывает все сохранённые сообщения одним списком, как обычный чат: удалённые собеседником и отредактированные, вместе с медиа. «Удалить сохранённые сообщения» убирает все сообщения, оставленные форком после удаления собеседником (освобождает и связанные медиа). «Очистить историю правок» удаляет сохранённые прежние версии из всех сообщений."), sectionId: self.section)
         }
     }
 }
@@ -190,6 +201,7 @@ private func ayuForkStorageEntries(data: AyuForkStorageData) -> [AyuForkStorageE
     entries.append(.clearAntiDelete(enabled: data.antiDeleteCount > 0))
     entries.append(.editHistory(count: data.editHistoryCount))
     entries.append(.clearEditHistory(enabled: data.editHistoryCount > 0))
+    entries.append(.openArchive(enabled: data.antiDeleteCount > 0 || data.editHistoryCount > 0))
     entries.append(.otherFooter)
 
     return entries
@@ -204,6 +216,7 @@ public func ayuForkStorageController(context: AccountContext) -> ViewController 
     }
 
     var presentControllerImpl: ((ViewController, ViewControllerPresentationArguments?) -> Void)?
+    var pushControllerImpl: ((ViewController) -> Void)?
 
     let arguments = AyuForkStorageArguments(
         clearGallery: {
@@ -269,6 +282,9 @@ public func ayuForkStorageController(context: AccountContext) -> ViewController 
                     })
                 })
             ]), nil)
+        },
+        openArchive: {
+            pushControllerImpl?(ayuArchiveChatController(context: context))
         }
     )
 
@@ -342,6 +358,9 @@ public func ayuForkStorageController(context: AccountContext) -> ViewController 
     let controller = ItemListController(context: context, state: signal)
     presentControllerImpl = { [weak controller] c, a in
         controller?.present(c, in: .window(.root), with: a)
+    }
+    pushControllerImpl = { [weak controller] c in
+        (controller?.navigationController as? NavigationController)?.pushViewController(c)
     }
     return controller
 }
