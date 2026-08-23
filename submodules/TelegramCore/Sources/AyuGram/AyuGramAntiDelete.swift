@@ -20,7 +20,7 @@ import Postbox
 // itself, so an id that is merely skipped here would stay in the chat forever
 // with no trash badge — exactly the "ghost" this exclusion exists to prevent.
 @discardableResult
-func ayuGramMarkMessagesDeleted(transaction: Transaction, ids: [MessageId]) -> [MessageId] {
+func ayuGramMarkMessagesDeleted(transaction: Transaction, mediaBox: MediaBox, ids: [MessageId]) -> [MessageId] {
     var filteredIds: [MessageId] = []
     var excludedIds: [MessageId] = []
     for id in ids {
@@ -46,6 +46,21 @@ func ayuGramMarkMessagesDeleted(transaction: Transaction, ids: [MessageId]) -> [
     }
     let markDate = Int32(CFAbsoluteTimeGetCurrent() + NSTimeIntervalSince1970)
     for id in filteredIds {
+        // Shadow: копируем медиа удаляемого сообщения в приватную папку форка
+        // ПРЯМО СЕЙЧАС, пока байты ещё есть на диске.
+        //
+        // Одного лишь сохранения самого сообщения мало: его медиа физически
+        // лежит в общем кэше Telegram, который периодически подчищается. Как
+        // только это произойдёт, перекачать уже нечего — на сервере сообщение
+        // удалено. Внешне это выглядит так: сообщение с корзиной осталось, а
+        // видео/фото в нём "как не бывало".
+        //
+        // saveMessageMedia делает hard link на файл в кэше (лишнего места не
+        // занимает), и именно эта ссылка удерживает байты живыми после того,
+        // как кэш удалит свою копию.
+        if let message = transaction.getMessage(id) {
+            AyuSavedMedia.saveMessageMedia(mediaBox: mediaBox, message: message)
+        }
         transaction.updateMessage(id) { currentMessage -> PostboxUpdateMessage in
             if currentMessage.attributes.contains(where: { $0 is DeletedMessageAttribute }) {
                 return .skip

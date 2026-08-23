@@ -4458,7 +4458,7 @@ func replayFinalState(
                     }
                     deletedMessageIds.append(contentsOf: ids.map { .global($0) })
                 } else {
-                    let excludedIds = ayuGramMarkMessagesDeleted(transaction: transaction, ids: transaction.messageIdsForGlobalIds(ids))
+                    let excludedIds = ayuGramMarkMessagesDeleted(transaction: transaction, mediaBox: mediaBox, ids: transaction.messageIdsForGlobalIds(ids))
                     if !excludedIds.isEmpty {
                         var resourceIds: [MediaResourceId] = []
                         transaction.deleteMessages(excludedIds, forEachMedia: { media in
@@ -4478,7 +4478,7 @@ func replayFinalState(
                     })
                     deletedMessageIds.append(contentsOf: ids.map { .messageId($0) })
                 } else {
-                    let excludedIds = ayuGramMarkMessagesDeleted(transaction: transaction, ids: ids)
+                    let excludedIds = ayuGramMarkMessagesDeleted(transaction: transaction, mediaBox: mediaBox, ids: ids)
                     if !excludedIds.isEmpty {
                         _internal_deleteMessages(transaction: transaction, mediaBox: mediaBox, ids: excludedIds, manualAddMessageThreadStatsDifference: { id, add, remove in
                             addMessageThreadStatsDifference(threadKey: id, remove: remove, addedMessagePeer: nil, addedMessageId: nil, isOutgoing: false)
