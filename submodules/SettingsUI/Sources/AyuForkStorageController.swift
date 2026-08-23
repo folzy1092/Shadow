@@ -26,13 +26,15 @@ private final class AyuForkStorageArguments {
     let clearEditHistory: () -> Void
     let runCleanupNow: () -> Void
     let openArchive: () -> Void
+    let openArchiveForPeer: (PeerId) -> Void
 
-    init(clearGallery: @escaping () -> Void, runCleanupNow: @escaping () -> Void, clearAntiDelete: @escaping () -> Void, clearEditHistory: @escaping () -> Void, openArchive: @escaping () -> Void) {
+    init(clearGallery: @escaping () -> Void, runCleanupNow: @escaping () -> Void, clearAntiDelete: @escaping () -> Void, clearEditHistory: @escaping () -> Void, openArchive: @escaping () -> Void, openArchiveForPeer: @escaping (PeerId) -> Void) {
         self.clearGallery = clearGallery
         self.runCleanupNow = runCleanupNow
         self.clearAntiDelete = clearAntiDelete
         self.clearEditHistory = clearEditHistory
         self.openArchive = openArchive
+        self.openArchiveForPeer = openArchiveForPeer
     }
 }
 
@@ -45,6 +47,9 @@ private enum AyuForkStorageSection: Int32 {
 private struct AyuForkChatUsage: Equatable {
     let title: String
     let sizeText: String
+    // nil для строки «Прочее» (файлы, у которых не удалось определить чат) —
+    // по ней открывать нечего.
+    let peerId: PeerId?
 }
 
 private enum AyuForkStorageEntry: ItemListNodeEntry {
@@ -54,7 +59,7 @@ private enum AyuForkStorageEntry: ItemListNodeEntry {
 
     case galleryHeader
     case galleryEmpty
-    case chatRow(index: Int, title: String, sizeText: String)
+    case chatRow(index: Int, title: String, sizeText: String, peerId: PeerId?)
     case clearGallery(enabled: Bool)
     case runCleanupNow
 
@@ -89,7 +94,7 @@ private enum AyuForkStorageEntry: ItemListNodeEntry {
             return 3
         case .galleryEmpty:
             return 4
-        case let .chatRow(index, _, _):
+        case let .chatRow(index, _, _, _):
             return 100 + Int32(index)
         case .runCleanupNow:
             return 999
@@ -129,8 +134,14 @@ private enum AyuForkStorageEntry: ItemListNodeEntry {
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "СОХРАНЁННЫЕ МЕДИА ПО ЧАТАМ", sectionId: self.section)
         case .galleryEmpty:
             return ItemListDisclosureItem(presentationData: presentationData, title: "Нет сохранённых медиа", label: "", sectionId: self.section, style: .blocks, disclosureStyle: .none, action: nil)
-        case let .chatRow(_, title, sizeText):
-            return ItemListDisclosureItem(presentationData: presentationData, title: title, label: sizeText, sectionId: self.section, style: .blocks, disclosureStyle: .none, action: nil)
+        case let .chatRow(_, title, sizeText, peerId):
+            // По тапу — архив, отфильтрованный по этому чату. Для «Прочего»
+            // (peerId == nil) строка остаётся некликабельной, как была.
+            return ItemListDisclosureItem(presentationData: presentationData, title: title, label: sizeText, sectionId: self.section, style: .blocks, disclosureStyle: peerId != nil ? .arrow : .none, action: peerId.flatMap { peerId in
+                return {
+                    arguments.openArchiveForPeer(peerId)
+                }
+            })
         case .runCleanupNow:
             return ItemListActionItem(presentationData: presentationData, title: "Запустить очистку сейчас", kind: .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: {
                 arguments.runCleanupNow()
@@ -190,7 +201,7 @@ private func ayuForkStorageEntries(data: AyuForkStorageData) -> [AyuForkStorageE
         entries.append(.galleryEmpty)
     } else {
         for (index, chat) in data.chats.enumerated() {
-            entries.append(.chatRow(index: index, title: chat.title, sizeText: chat.sizeText))
+            entries.append(.chatRow(index: index, title: chat.title, sizeText: chat.sizeText, peerId: chat.peerId))
         }
     }
     entries.append(.runCleanupNow)
@@ -285,6 +296,9 @@ public func ayuForkStorageController(context: AccountContext) -> ViewController 
         },
         openArchive: {
             pushControllerImpl?(ayuArchiveChatController(context: context))
+        },
+        openArchiveForPeer: { peerId in
+            pushControllerImpl?(ayuArchiveChatController(context: context, peerId: peerId))
         }
     )
 
@@ -326,10 +340,10 @@ public func ayuForkStorageController(context: AccountContext) -> ViewController 
                     } else {
                         title = "Чат \(peerIdValue)"
                     }
-                    sortable.append((size: size, usage: AyuForkChatUsage(title: title, sizeText: dataSizeString(size, formatting: formatting))))
+                    sortable.append((size: size, usage: AyuForkChatUsage(title: title, sizeText: dataSizeString(size, formatting: formatting), peerId: peerId)))
                 }
                 if unknown > 0 {
-                    sortable.append((size: unknown, usage: AyuForkChatUsage(title: "Прочее", sizeText: dataSizeString(unknown, formatting: formatting))))
+                    sortable.append((size: unknown, usage: AyuForkChatUsage(title: "Прочее", sizeText: dataSizeString(unknown, formatting: formatting), peerId: nil)))
                 }
                 sortable.sort { $0.size > $1.size }
 

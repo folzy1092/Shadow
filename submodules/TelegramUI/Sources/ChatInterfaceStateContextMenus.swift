@@ -1992,48 +1992,14 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         if messages.count == 1, let editHistory = message.attributes.first(where: { $0 is SavedMessageEditsAttribute }) as? SavedMessageEditsAttribute, !editHistory.versions.isEmpty {
             actions.append(.action(ContextMenuActionItem(text: "История изменений", icon: { theme in
                 return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Time"), color: theme.actionSheet.primaryTextColor)
-            }, action: { c, _ in
-                let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-                var subItems: [ContextMenuItem] = []
-                subItems.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Common_Back, textColor: .primary, icon: { theme in
-                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Back"), color: theme.actionSheet.primaryTextColor)
-                }, iconPosition: .left, action: { c, _ in
-                    c?.popItems()
-                })))
-                subItems.append(.separator)
-
-                let editHistoryDateFormatter = DateFormatter()
-                editHistoryDateFormatter.dateFormat = "dd.MM.yy HH:mm"
-                let versionFont: ContextMenuActionItemFont = .custom(font: Font.regular(floor(presentationData.listsFontSize.baseDisplaySize * 0.9)), height: nil, verticalOffset: nil)
-                for version in editHistory.versions {
-                    let dateString = editHistoryDateFormatter.string(from: Date(timeIntervalSince1970: Double(version.date)))
-                    // AyuGram: prefix a marker when this version also carried media
-                    // (its previous media was backed up into the private gallery).
-                    var mediaMarker = ""
-                    switch version.mediaKind {
-                    case "image":
-                        mediaMarker = "🖼 "
-                    case "video":
-                        mediaMarker = "🎥 "
-                    case "roundVideo":
-                        mediaMarker = "⭕️ "
-                    case "voice":
-                        mediaMarker = "🎤 "
-                    case "file":
-                        mediaMarker = "📎 "
-                    default:
-                        mediaMarker = ""
-                    }
-                    let bodyText = version.text.isEmpty && !mediaMarker.isEmpty ? "\(mediaMarker)[media]" : "\(mediaMarker)\(version.text)"
-                    subItems.append(.action(ContextMenuActionItem(text: "\(dateString)\n\(bodyText)", textColor: .primary, textLayout: .multiline, textFont: versionFont, badge: nil, icon: { _ in nil }, action: { _, f in
-                        f(.default)
-                    })))
-                }
-                subItems.append(.action(ContextMenuActionItem(text: "→ \(message.text)", textColor: .primary, textLayout: .multiline, textFont: versionFont, badge: nil, icon: { _ in nil }, action: { _, f in
-                    f(.default)
-                })))
-
-                c?.pushItems(items: .single(ContextController.Items(content: .list(subItems))))
+            }, action: { _, f in
+                // Shadow: открываем версии отдельным ЧАТОМ, а не подменю со
+                // строчками. Раньше версия с медиа показывалась эмодзи-маркером
+                // ("🖼 [media]") — само фото/видео посмотреть было нельзя, хотя
+                // оно лежит сохранённым в приватной папке форка. В чате оно
+                // рисуется настоящим сообщением, с галереей по тапу.
+                f(.dismissWithoutContent)
+                controllerInteraction.navigationController()?.pushViewController(ayuEditHistoryChatController(context: context, message: message))
             })))
         }
 
