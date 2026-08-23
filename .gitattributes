@@ -13,3 +13,8 @@ submodules/Stripe/* linguist-vendored
 submodules/ton/tonlib-src/* linguist-vendored
 submodules/webp/include/* linguist-vendored
 third-party/* linguist-vendored
+
+
+# Shadow: bash-скрипты всегда с LF. На машине разработчика core.autocrlf=true,
+# а с CRLF скрипт не запускается — bash ругается на возврат каретки.
+*.sh text eol=lf
