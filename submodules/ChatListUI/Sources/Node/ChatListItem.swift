@@ -2512,7 +2512,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
             // placed after the status/credibility icons (right of the name)
             // instead of upstream's before-the-name placement for a verified
             // ".animation" content.
-            var currentVerifiedIconOnRight = false
+            let currentVerifiedIconOnRight = false
             var currentStatusIconContent: EmojiStatusComponent.Content?
             var currentStatusIconParticleColor: UIColor?
             var currentSecretIconImage: UIImage?
@@ -3583,7 +3583,6 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                             // instead of the bot-verification icon's before-name spot.
                             if let badgeEmojiId = ayuGramNameBadgeEmojiId(peerId: peer.id) {
                                 currentVerifiedIconContent = .animation(content: .customEmoji(fileId: badgeEmojiId), size: CGSize(width: 32.0, height: 32.0), placeholderColor: item.presentationData.theme.list.mediaPlaceholderColor, themeColor: item.presentationData.theme.list.itemAccentColor, loopMode: .count(0))
-                                currentVerifiedIconOnRight = true
                             }
                         }
                     default:
@@ -3616,11 +3615,10 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                     if let verificationIconFileId = peer.verificationIconFileId {
                         currentVerifiedIconContent = .animation(content: .customEmoji(fileId: verificationIconFileId), size: CGSize(width: 32.0, height: 32.0), placeholderColor: item.presentationData.theme.list.mediaPlaceholderColor, themeColor: item.presentationData.theme.list.itemAccentColor, loopMode: .count(0))
                     }
-                    // Shadow: fork badge, right of the name (see the comment on the
-                    // other iconPeer branch above).
+                    // Shadow: значок форка в слоте верификации, перед именем (см.
+                    // комментарий у другой ветки iconPeer выше).
                     if let badgeEmojiId = ayuGramNameBadgeEmojiId(peerId: peer.id) {
                         currentVerifiedIconContent = .animation(content: .customEmoji(fileId: badgeEmojiId), size: CGSize(width: 32.0, height: 32.0), placeholderColor: item.presentationData.theme.list.mediaPlaceholderColor, themeColor: item.presentationData.theme.list.itemAccentColor, loopMode: .count(0))
-                        currentVerifiedIconOnRight = true
                     }
                 }
             }

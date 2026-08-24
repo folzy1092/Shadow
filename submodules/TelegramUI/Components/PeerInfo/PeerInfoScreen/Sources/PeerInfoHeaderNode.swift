@@ -673,13 +673,9 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         var credibilityIcon: CredibilityIcon = .none
         var verifiedIcon: CredibilityIcon = .none
         var statusIcon: CredibilityIcon = .none
-        // Shadow: true routes verifiedIcon to the RIGHT of the name (after the
-        // status/premium chain) instead of upstream's default LEFT placement for
-        // a non-".verified" verifiedIcon. See the ayuGramNameBadge branch below
-        // and its use further down where verifiedIcon's side is decided.
-        var verifiedIconOnRight = false
-        // Populated alongside verifiedIconOnRight; passed to displayAyuBadgeInfo
-        // from the EmojiStatusComponent tap action further down.
+        // Shadow: описание значка форка из github-конфига. Непустое — значит в
+        // слоте верификации сейчас значок форка, а не настоящая верификация;
+        // по нему же включается попап с описанием по тапу (displayAyuBadgeInfo).
         var verifiedBadgeDescription = ""
         if let peer {
             if peer.id == self.context.account.peerId && !self.isSettings && !self.isMyProfile {
@@ -701,15 +697,14 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             if let verificationIconFileId = peer.verificationIconFileId {
                 verifiedIcon = .emojiStatus(PeerEmojiStatus(content: .emoji(fileId: verificationIconFileId), expirationDate: nil))
             }
-            // Shadow: the fork's remote-config badge rides in the verification
-            // icon slot, reusing its whole update/layout/collapse plumbing, and
-            // takes priority over a real verification icon (per fork config).
-            // Unlike the bot-verification icon — which Telegram draws BEFORE the
-            // name — this one is a second emoji status, so it is placed after the
-            // status/premium chain instead (see verifiedIconOnRight below).
+            // Shadow: значок из github-конфига форка занимает слот верификации и
+            // рисуется ТАМ ЖЕ, где Telegram рисует свою галочку верификации —
+            // перед именем. Раньше он выносился вправо, вторым эмодзи после
+            // премиум-статуса (verifiedIconOnRight), но задумка именно в том,
+            // чтобы выглядеть как верификация, а не как ещё один статус.
+            // Приоритет выше настоящей верификации — так решено для форка.
             if let badge = ayuGramNameBadge(peerId: peer.id, displayName: peer.displayTitle(strings: presentationData.strings, displayOrder: presentationData.nameDisplayOrder)) {
                 verifiedIcon = .emojiStatus(PeerEmojiStatus(content: .emoji(fileId: badge.emojiId), expirationDate: nil))
-                verifiedIconOnRight = true
                 verifiedBadgeDescription = badge.description
             }
         }
@@ -1205,12 +1200,12 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 emojiExpandedStatusContent = .none
             }
             
-            // Shadow: bump the container ~10% for the fork's badge only — a
-            // custom-emoji file reads visually smaller than the premium/verified
-            // glyph assets at the same box (those are edge-to-edge, stickers
-            // usually carry their own padding). Real bot-verification icons
-            // (verifiedIconOnRight == false) keep the original size.
-            let verifiedIconContainerSize: CGSize = verifiedIconOnRight ? CGSize(width: 29.0, height: 29.0) : CGSize(width: 26.0, height: 26.0)
+            // Shadow: значок форка чуть крупнее — кастом-эмодзи визуально мельче
+            // штатных глифов верификации в том же боксе (те нарисованы впритык,
+            // у стикеров обычно свои поля). Признак — непустое описание из
+            // конфига; у настоящей верификации его нет, ей остаётся штатный размер.
+            let isAyuBadge = !verifiedBadgeDescription.isEmpty
+            let verifiedIconContainerSize: CGSize = isAyuBadge ? CGSize(width: 29.0, height: 29.0) : CGSize(width: 26.0, height: 26.0)
             let iconSize = self.titleVerifiedIconView.update(
                 transition: ComponentTransition(navigationTransition),
                 component: AnyComponent(EmojiStatusComponent(
@@ -1220,7 +1215,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                     content: emojiRegularStatusContent,
                     isVisibleForAnimations: true,
                     useSharedAnimation: true,
-                    action: verifiedIconOnRight ? { [weak self] in
+                    action: isAyuBadge ? { [weak self] in
                         guard let self else {
                             return
                         }
@@ -1240,7 +1235,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                     content: emojiExpandedStatusContent,
                     isVisibleForAnimations: true,
                     useSharedAnimation: true,
-                    action: verifiedIconOnRight ? { [weak self] in
+                    action: isAyuBadge ? { [weak self] in
                         guard let self else {
                             return
                         }
@@ -1716,7 +1711,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             nextExpandedIconX += 4.0 + titleExpandedCredibilityIconSize.width
         }
                 
-        var verifiedIconGoesRight = verifiedIconOnRight
+        var verifiedIconGoesRight = false
         if case .verified = verifiedIcon {
             verifiedIconGoesRight = true
         }

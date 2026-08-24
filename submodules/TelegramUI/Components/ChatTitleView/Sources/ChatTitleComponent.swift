@@ -377,7 +377,7 @@ public final class ChatTitleComponent: Component {
             // badge rather than a real bot-verification icon — placed after the
             // status/premium chain (right of the name) instead of upstream's
             // before-the-name placement. See its use in the layout section below.
-            var titleVerifiedIconOnRight = false
+            let titleVerifiedIconOnRight = false
             var isEnabled = true
             switch component.content {
             case let .peer(peerView, customTitle, _, _, isScheduledMessages, isMuted, _, hidePeerStatus, isEnabledValue):
@@ -465,12 +465,11 @@ public final class ChatTitleComponent: Component {
                                 titleVerifiedIcon = .emojiStatus(PeerEmojiStatus(content: .emoji(fileId: verificationIconFileId), expirationDate: nil))
                             }
                         }
-                        // Shadow: fork badge in the verification icon slot, so it
-                        // sits right after the emoji status. Outside the "not me"
-                        // check above — our own badge shows too.
+                        // Shadow: значок форка в слоте верификации —
+                        // рисуется перед именем, как штатная галочка. Вне проверки
+                        // "не я" выше: свой значок тоже показываем.
                         if let badgeEmojiId = ayuGramNameBadgeEmojiId(peerId: peer.id) {
                             titleVerifiedIcon = .emojiStatus(PeerEmojiStatus(content: .emoji(fileId: badgeEmojiId), expirationDate: nil))
-                            titleVerifiedIconOnRight = true
                         }
                     }
                     if peerView.peerId.namespace == Namespaces.Peer.SecretChat {

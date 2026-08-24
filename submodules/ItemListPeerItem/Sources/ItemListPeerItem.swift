@@ -935,7 +935,7 @@ public class ItemListPeerItemNode: ItemListRevealOptionsItemNode, ItemListItemNo
             // rather than a real bot-verification icon — placed after
             // credibilityIcon (right of the name) instead of upstream's
             // before-the-name placement.
-            var verifiedIconOnRight = false
+            let verifiedIconOnRight = false
 
             if case .threatSelfAsSaved = item.aliasHandling, item.peer.id == item.context.accountPeerId {
             } else {
@@ -959,10 +959,10 @@ public class ItemListPeerItemNode: ItemListRevealOptionsItemNode, ItemListItemNo
                 if let verificationIconFileId = item.peer.verificationIconFileId {
                     verifiedIcon = .animation(content: .customEmoji(fileId: verificationIconFileId), size: CGSize(width: 32.0, height: 32.0), placeholderColor: item.presentationData.theme.list.mediaPlaceholderColor, themeColor: item.presentationData.theme.list.itemAccentColor, loopMode: .count(0))
                 }
-                // Shadow: fork badge, right of the name (see verifiedIconOnRight).
+                // Shadow: значок форка занимает слот верификации и рисуется там же,
+                // где штатная галочка — перед именем.
                 if let badgeEmojiId = ayuGramNameBadgeEmojiId(peerId: item.peer.id) {
                     verifiedIcon = .animation(content: .customEmoji(fileId: badgeEmojiId), size: CGSize(width: 32.0, height: 32.0), placeholderColor: item.presentationData.theme.list.mediaPlaceholderColor, themeColor: item.presentationData.theme.list.itemAccentColor, loopMode: .count(0))
-                    verifiedIconOnRight = true
                 }
             }
             

@@ -273,7 +273,7 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
                 var titleCredibilityIcon: ChatTitleCredibilityIcon = .none
                 var titleVerifiedIcon: ChatTitleCredibilityIcon = .none
                 var titleStatusIcon: ChatTitleCredibilityIcon = .none
-                var titleVerifiedIconOnRight = false
+                let titleVerifiedIconOnRight = false
                 var isEnabled = true
                 switch titleContent {
                     case let .peer(peerView, customTitle, _, _, isScheduledMessages, isMuted, _, hidePeerStatus, isEnabledValue):
@@ -331,7 +331,6 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
                                 // "not me" check above — our own badge shows too.
                                 if let badgeEmojiId = ayuGramNameBadgeEmojiId(peerId: peer.id) {
                                     titleVerifiedIcon = .emojiStatus(PeerEmojiStatus(content: .emoji(fileId: badgeEmojiId), expirationDate: nil))
-                                    titleVerifiedIconOnRight = true
                                 }
                             }
                             if peerView.peerId.namespace == Namespaces.Peer.SecretChat {

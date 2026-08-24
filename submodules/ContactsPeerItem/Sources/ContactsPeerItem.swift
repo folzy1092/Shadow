@@ -861,7 +861,7 @@ public class ContactsPeerItemNode: ItemListRevealOptionsItemNode {
             // rather than a real bot-verification icon — placed after the
             // credibility/emoji-status icons (right of the name) instead of
             // upstream's before-the-name placement.
-            var verifiedIconOnRight = false
+            let verifiedIconOnRight = false
             var emojiStatusIcon: EmojiStatusComponent.Content?
             var emojiStatusParticleColor: UIColor?
             
@@ -887,10 +887,10 @@ public class ContactsPeerItemNode: ItemListRevealOptionsItemNode {
                     if let verificationIconFileId = peer.verificationIconFileId {
                         verifiedIcon = .animation(content: .customEmoji(fileId: verificationIconFileId), size: CGSize(width: 32.0, height: 32.0), placeholderColor: item.presentationData.theme.list.mediaPlaceholderColor, themeColor: item.presentationData.theme.list.itemAccentColor, loopMode: .count(0))
                     }
-                    // Shadow: fork badge, right of the name (see verifiedIconOnRight).
+                    // Shadow: значок форка занимает слот верификации и рисуется там же,
+                    // где штатная галочка — перед именем.
                     if let badgeEmojiId = ayuGramNameBadgeEmojiId(peerId: peer.id) {
                         verifiedIcon = .animation(content: .customEmoji(fileId: badgeEmojiId), size: CGSize(width: 32.0, height: 32.0), placeholderColor: item.presentationData.theme.list.mediaPlaceholderColor, themeColor: item.presentationData.theme.list.itemAccentColor, loopMode: .count(0))
-                        verifiedIconOnRight = true
                     }
                 }
             case .deviceContact:
