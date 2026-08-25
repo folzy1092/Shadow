@@ -29,6 +29,28 @@ private func maybeAddRotationAnimation(_ layer: CALayer, duration: Double) {
     layer.add(basicAnimation, forKey: "clockFrameAnimation")
 }
 
+// Shadow: inline icon for the anti-delete/edited-history markers, matching
+// AyuGram Desktop's actual glyph (Chat/AyuGram/Deleted = their "ayu/trash_bin",
+// Chat/AyuGram/Edited = their "ayu/edited") instead of a plain Unicode emoji.
+// Returned as an attributed-string fragment (icon + trailing space) so callers
+// can just append it in front of the date text, same as the old text-prefix did.
+private func ayuMarkerIconFragment(imageName: String, tintColor: UIColor, font: UIFont) -> NSAttributedString {
+    let iconHeight = floor(font.pointSize)
+    let iconSize = CGSize(width: floor(iconHeight * 20.0 / 24.0), height: iconHeight)
+    var image = UIImage(bundleImageName: imageName)
+    if let sourceImage = image, let scaledImage = generateScaledImage(image: sourceImage, size: iconSize, opaque: false, scale: nil) {
+        image = scaledImage
+    }
+    let attachment = NSTextAttachment()
+    attachment.image = image.flatMap { generateTintedImage(image: $0, color: tintColor) }
+    // Vertically center the icon against the font's cap-height so it lines up
+    // with the middle of the surrounding text instead of sitting on the baseline.
+    attachment.bounds = CGRect(x: 0.0, y: (font.capHeight - iconSize.height) / 2.0, width: iconSize.width, height: iconSize.height)
+    let result = NSMutableAttributedString(attachment: attachment)
+    result.append(NSAttributedString(string: " ", font: font, textColor: tintColor))
+    return result
+}
+
 public enum ChatMessageDateAndStatusOutgoingType: Equatable {
     case Sent(read: Bool)
     case Sending
@@ -563,17 +585,30 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
             }
 
             var updatedDateText = arguments.dateText
+            // Shadow: the anti-delete badge (StringForMessageTimestampStatus) already
+            // baked a "🗑 " prefix into arguments.dateText when no custom override is
+            // set — strip it back off here and swap it for the real AyuGram-style
+            // icon below instead of the Unicode emoji. A custom deletedIndicatorText
+            // produces a different prefix, so this match only fires for the default.
+            var useDeletedIcon = false
+            let defaultDeletedPrefix = "🗑 "
+            if ayuGramSettingsCurrent.deletedIndicatorText.isEmpty, updatedDateText.hasPrefix(defaultDeletedPrefix) {
+                updatedDateText = String(updatedDateText.dropFirst(defaultDeletedPrefix.count))
+                useDeletedIcon = true
+            }
+            var useEditedIcon = false
             if arguments.edited {
                 if let useEditedTimestamp = arguments.context.getAppConfigValue("message_primary_edited_date") as? Bool, useEditedTimestamp {
                 } else if ayuGramSettingsCurrent.editedIndicatorAsPencil {
-                    // Shadow: replace the localized "Изменено"/"edited" word with a
-                    // compact pencil glyph — same "prefix the date string" mechanism
-                    // the anti-delete 🗑 badge uses (StringForMessageTimestampStatus),
-                    // so no new icon view / width-reservation plumbing is needed.
-                    // A non-empty editedIndicatorText overrides the default glyph
-                    // with whatever text/emoji the user configured in settings.
-                    let indicator = ayuGramSettingsCurrent.editedIndicatorText.isEmpty ? "✎" : ayuGramSettingsCurrent.editedIndicatorText
-                    updatedDateText = "\(indicator) \(updatedDateText)"
+                    // Shadow: replace the localized "Изменено"/"edited" word with the
+                    // AyuGram-style pencil icon, unless the user configured a custom
+                    // text/emoji override in settings — that has no icon equivalent,
+                    // so it stays a plain text prefix like before.
+                    if ayuGramSettingsCurrent.editedIndicatorText.isEmpty {
+                        useEditedIcon = true
+                    } else {
+                        updatedDateText = "\(ayuGramSettingsCurrent.editedIndicatorText) \(updatedDateText)"
+                    }
                 } else {
                     updatedDateText = "\(arguments.presentationData.strings.Conversation_MessageEditedLabel) \(updatedDateText)"
                 }
@@ -586,9 +621,23 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
                 let impressionCountText = ayuGramSettingsCurrent.showExactViewCounts ? "\(impressionCount)" : compactNumericCountString(impressionCount, decimalSeparator: arguments.presentationData.dateTimeFormat.decimalSeparator)
                 updatedDateText = impressionCountText + " " + updatedDateText
             }
-            
+
             let dateFont = Font.regular(floor(arguments.presentationData.fontSize.baseDisplaySize * 11.0 / 17.0))
-            let (date, dateApply) = dateLayout(TextNodeLayoutArguments(attributedString: NSAttributedString(string: updatedDateText, font: dateFont, textColor: dateColor), backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .middle, constrainedSize: arguments.constrainedSize, alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
+            let dateAttributedString: NSAttributedString
+            if useEditedIcon || useDeletedIcon {
+                let mutableDateString = NSMutableAttributedString()
+                if useEditedIcon {
+                    mutableDateString.append(ayuMarkerIconFragment(imageName: "Chat/AyuGram/Edited", tintColor: dateColor, font: dateFont))
+                }
+                if useDeletedIcon {
+                    mutableDateString.append(ayuMarkerIconFragment(imageName: "Chat/AyuGram/Deleted", tintColor: dateColor, font: dateFont))
+                }
+                mutableDateString.append(NSAttributedString(string: updatedDateText, font: dateFont, textColor: dateColor))
+                dateAttributedString = mutableDateString
+            } else {
+                dateAttributedString = NSAttributedString(string: updatedDateText, font: dateFont, textColor: dateColor)
+            }
+            let (date, dateApply) = dateLayout(TextNodeLayoutArguments(attributedString: dateAttributedString, backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .middle, constrainedSize: arguments.constrainedSize, alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
             
             let checkOffset = floor(arguments.presentationData.fontSize.baseDisplaySize * 6.0 / 17.0)
             
