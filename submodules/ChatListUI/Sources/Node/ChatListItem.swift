@@ -2512,7 +2512,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
             // placed after the status/credibility icons (right of the name)
             // instead of upstream's before-the-name placement for a verified
             // ".animation" content.
-            let currentVerifiedIconOnRight = false
+            var currentVerifiedIconOnRight = false
             var currentStatusIconContent: EmojiStatusComponent.Content?
             var currentStatusIconParticleColor: UIColor?
             var currentSecretIconImage: UIImage?
@@ -3583,6 +3583,10 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                             // instead of the bot-verification icon's before-name spot.
                             if let badgeEmojiId = ayuGramNameBadgeEmojiId(peerId: peer.id) {
                                 currentVerifiedIconContent = .animation(content: .customEmoji(fileId: badgeEmojiId), size: CGSize(width: 32.0, height: 32.0), placeholderColor: item.presentationData.theme.list.mediaPlaceholderColor, themeColor: item.presentationData.theme.list.itemAccentColor, loopMode: .count(0))
+                            } else if let exteraEmojiId = ayuExteraBadgeEmojiId(peerId: peer.id) {
+                                // Значок поддержавшего exteraGram — справа от имени.
+                                currentVerifiedIconContent = .animation(content: .customEmoji(fileId: exteraEmojiId), size: CGSize(width: 32.0, height: 32.0), placeholderColor: item.presentationData.theme.list.mediaPlaceholderColor, themeColor: item.presentationData.theme.list.itemAccentColor, loopMode: .count(0))
+                                currentVerifiedIconOnRight = true
                             }
                         }
                     default:
@@ -3619,6 +3623,10 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                     // комментарий у другой ветки iconPeer выше).
                     if let badgeEmojiId = ayuGramNameBadgeEmojiId(peerId: peer.id) {
                         currentVerifiedIconContent = .animation(content: .customEmoji(fileId: badgeEmojiId), size: CGSize(width: 32.0, height: 32.0), placeholderColor: item.presentationData.theme.list.mediaPlaceholderColor, themeColor: item.presentationData.theme.list.itemAccentColor, loopMode: .count(0))
+                    } else if let exteraEmojiId = ayuExteraBadgeEmojiId(peerId: peer.id) {
+                        // Значок поддержавшего exteraGram — справа от имени.
+                        currentVerifiedIconContent = .animation(content: .customEmoji(fileId: exteraEmojiId), size: CGSize(width: 32.0, height: 32.0), placeholderColor: item.presentationData.theme.list.mediaPlaceholderColor, themeColor: item.presentationData.theme.list.itemAccentColor, loopMode: .count(0))
+                        currentVerifiedIconOnRight = true
                     }
                 }
             }

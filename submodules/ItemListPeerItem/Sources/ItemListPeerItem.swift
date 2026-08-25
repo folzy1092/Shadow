@@ -935,7 +935,7 @@ public class ItemListPeerItemNode: ItemListRevealOptionsItemNode, ItemListItemNo
             // rather than a real bot-verification icon — placed after
             // credibilityIcon (right of the name) instead of upstream's
             // before-the-name placement.
-            let verifiedIconOnRight = false
+            var verifiedIconOnRight = false
 
             if case .threatSelfAsSaved = item.aliasHandling, item.peer.id == item.context.accountPeerId {
             } else {
@@ -963,6 +963,10 @@ public class ItemListPeerItemNode: ItemListRevealOptionsItemNode, ItemListItemNo
                 // где штатная галочка — перед именем.
                 if let badgeEmojiId = ayuGramNameBadgeEmojiId(peerId: item.peer.id) {
                     verifiedIcon = .animation(content: .customEmoji(fileId: badgeEmojiId), size: CGSize(width: 32.0, height: 32.0), placeholderColor: item.presentationData.theme.list.mediaPlaceholderColor, themeColor: item.presentationData.theme.list.itemAccentColor, loopMode: .count(0))
+                } else if let exteraEmojiId = ayuExteraBadgeEmojiId(peerId: item.peer.id) {
+                    // Значок поддержавшего exteraGram — справа от имени.
+                    verifiedIcon = .animation(content: .customEmoji(fileId: exteraEmojiId), size: CGSize(width: 32.0, height: 32.0), placeholderColor: item.presentationData.theme.list.mediaPlaceholderColor, themeColor: item.presentationData.theme.list.itemAccentColor, loopMode: .count(0))
+                    verifiedIconOnRight = true
                 }
             }
             

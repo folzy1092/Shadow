@@ -188,6 +188,20 @@ private func ayuGramProfileItems(peerId: EnginePeer.Id, photo: [TelegramMediaIma
 // .ayugram section right after id/dc/registration, NOT prepended to the
 // bio/description block — that placement (tried once before) is what made an
 // earlier attempt at a comment-item row draw on top of the "описание" row.
+// Shadow: строка "поддержал exteraGram / AyuGram". Отдельно от gitConfigBadgeItem,
+// потому что эмодзи здесь необязателен: у обычного поддержавшего персонального
+// значка нет, а общий emoji_id в нашем config.json может быть не задан — подпись
+// при этом всё равно осмысленна, просто без иконки.
+private func exteraBadgeItem(peerId: EnginePeer.Id, text: String, id: AnyHashable) -> PeerInfoScreenItem {
+    var attributedPrefix: NSMutableAttributedString?
+    if let emojiId = ayuExteraBadgeEmojiId(peerId: peerId) {
+        let prefix = NSMutableAttributedString(string: "  ")
+        prefix.addAttribute(ChatTextInputAttributes.customEmoji, value: ChatTextInputTextCustomEmojiAttribute(interactivelySelectedFromPackId: nil, fileId: emojiId, file: nil), range: NSMakeRange(0, 1))
+        attributedPrefix = prefix
+    }
+    return PeerInfoScreenCommentItem(id: id, text: text, attributedPrefix: attributedPrefix, useAccentLinkColor: false, linkAction: nil)
+}
+
 private func gitConfigBadgeItem(badge: AyuGramNameBadge, id: AnyHashable) -> PeerInfoScreenItem {
     let attributedPrefix = NSMutableAttributedString(string: "  ")
     attributedPrefix.addAttribute(ChatTextInputAttributes.customEmoji, value: ChatTextInputTextCustomEmojiAttribute(interactivelySelectedFromPackId: nil, fileId: badge.emojiId, file: nil), range: NSMakeRange(0, 1))
@@ -393,6 +407,11 @@ func infoItems(
         }
         for (index, badge) in badgesToShow.enumerated() {
             items[.ayugram]!.append(gitConfigBadgeItem(badge: badge, id: 3600 + index))
+        }
+        // Отдельной строкой, не вместо: человек может быть и в нашем конфиге, и
+        // среди поддержавших exteraGram.
+        if let exteraText = ayuExteraDescription(peerId: user.id) {
+            items[.ayugram]!.append(exteraBadgeItem(peerId: user.id, text: exteraText, id: 3650))
         }
 
         if let cachedData = data.cachedData as? CachedUserData {
@@ -756,6 +775,11 @@ func infoItems(
         // shown only for the configured chat ids (badges).
         if let badge = ayuGramNameBadge(peerId: channel.id, displayName: EnginePeer(channel).compactDisplayTitle) {
             items[.ayugram]!.append(gitConfigBadgeItem(badge: badge, id: 3600))
+        }
+        // Отдельной строкой, не вместо: чат может быть и в нашем конфиге, и
+        // среди поддержавших exteraGram.
+        if let exteraText = ayuExteraDescription(peerId: channel.id) {
+            items[.ayugram]!.append(exteraBadgeItem(peerId: channel.id, text: exteraText, id: 3650))
         }
 
         if let _ = data.threadData {

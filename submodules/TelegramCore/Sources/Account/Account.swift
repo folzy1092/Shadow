@@ -1432,6 +1432,9 @@ public class Account {
         // AyuGram: fetch the remote badge config (cache-first, background refresh).
         // Fire-and-forget; failures never affect the UI.
         startGitConfigIfNeeded()
+        // Shadow: значки поддержавших exteraGram / AyuGram — свой источник,
+        // грузится так же: кэш с диска, затем обновление в фоне.
+        startAyuExteraConfigIfNeeded()
 
         let extractedExpr1: [Signal<AccountRunningImportantTasks, NoError>] = [
             managedSynchronizeChatInputStateOperations(postbox: self.postbox, network: self.network, messageMediaPreuploadManager: self.messageMediaPreuploadManager, auxiliaryMethods: self.auxiliaryMethods) |> map { inputStates in

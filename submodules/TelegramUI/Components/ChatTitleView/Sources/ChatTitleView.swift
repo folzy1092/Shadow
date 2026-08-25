@@ -273,7 +273,7 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
                 var titleCredibilityIcon: ChatTitleCredibilityIcon = .none
                 var titleVerifiedIcon: ChatTitleCredibilityIcon = .none
                 var titleStatusIcon: ChatTitleCredibilityIcon = .none
-                let titleVerifiedIconOnRight = false
+                var titleVerifiedIconOnRight = false
                 var isEnabled = true
                 switch titleContent {
                     case let .peer(peerView, customTitle, _, _, isScheduledMessages, isMuted, _, hidePeerStatus, isEnabledValue):
@@ -326,11 +326,15 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
                                         titleVerifiedIcon = .emojiStatus(PeerEmojiStatus(content: .emoji(fileId: verificationIconFileId), expirationDate: nil))
                                     }
                                 }
-                                // Shadow: fork badge in the verification icon slot, so it
-                                // sits right after the emoji status. Outside the
-                                // "not me" check above — our own badge shows too.
+                                // Shadow: значок форка в слоте верификации — перед именем,
+                                // как штатная галочка. Вне проверки "не я" выше:
+                                // свой значок тоже показываем.
                                 if let badgeEmojiId = ayuGramNameBadgeEmojiId(peerId: peer.id) {
                                     titleVerifiedIcon = .emojiStatus(PeerEmojiStatus(content: .emoji(fileId: badgeEmojiId), expirationDate: nil))
+                                } else if let exteraEmojiId = ayuExteraBadgeEmojiId(peerId: peer.id) {
+                                    // Значок поддержавшего exteraGram — справа от имени.
+                                    titleVerifiedIcon = .emojiStatus(PeerEmojiStatus(content: .emoji(fileId: exteraEmojiId), expirationDate: nil))
+                                    titleVerifiedIconOnRight = true
                                 }
                             }
                             if peerView.peerId.namespace == Namespaces.Peer.SecretChat {

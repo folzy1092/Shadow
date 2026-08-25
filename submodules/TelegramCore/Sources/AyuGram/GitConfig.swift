@@ -45,12 +45,19 @@ public struct GitConfigProfileBadge: Equatable {
 public struct GitConfig: Equatable {
     public let badges: [GitConfigBadge]
     public let profileBadges: [GitConfigProfileBadge]
+    // Shadow: общий значок для поддержавших exteraGram / AyuGram. Их API отдаёт
+    // персональный эмодзи только тем, кто есть в customBadges; всем остальным
+    // поддержавшим десктоп рисует картинку из своих ресурсов, которой у нас нет.
+    // Поэтому общий значок задаётся здесь. nil — обычные поддержавшие без
+    // персонального значка не получают ничего.
+    public let exteraBadgeEmojiId: Int64?
 
-    public static let empty = GitConfig(badges: [], profileBadges: [])
+    public static let empty = GitConfig(badges: [], profileBadges: [], exteraBadgeEmojiId: nil)
 
-    public init(badges: [GitConfigBadge], profileBadges: [GitConfigProfileBadge]) {
+    public init(badges: [GitConfigBadge], profileBadges: [GitConfigProfileBadge], exteraBadgeEmojiId: Int64?) {
         self.badges = badges
         self.profileBadges = profileBadges
+        self.exteraBadgeEmojiId = exteraBadgeEmojiId
     }
 }
 
@@ -205,6 +212,7 @@ private struct GitConfigDTO: Codable {
     }
     let badges: [Badge]?
     let profile_badges: [ProfileBadge]?
+    let extera_badge_emoji_id: Int64?
 }
 
 private func parseGitConfig(_ data: Data) -> GitConfig? {
@@ -223,7 +231,7 @@ private func parseGitConfig(_ data: Data) -> GitConfig? {
         }
         return GitConfigProfileBadge(id: badge.id ?? "", userId: userId, emojiId: emojiId, textTemplate: badge.text_template)
     }
-    return GitConfig(badges: badges, profileBadges: profileBadges)
+    return GitConfig(badges: badges, profileBadges: profileBadges, exteraBadgeEmojiId: dto.extera_badge_emoji_id)
 }
 
 // MARK: - Fetch + cache lifecycle
@@ -293,4 +301,10 @@ public func startGitConfigIfNeeded() {
 // `completion` is called on the main queue with whether the sync succeeded.
 public func refreshGitConfig(completion: ((Bool) -> Void)? = nil) {
     fetchGitConfig(completion: completion)
+}
+
+// Общий emoji_id значка для поддержавших exteraGram / AyuGram (см.
+// AyuExteraConfig.swift). Живёт здесь, потому что берётся из нашего config.json.
+public func ayuExteraDefaultBadgeEmojiId() -> Int64? {
+    return gitConfigCurrent.exteraBadgeEmojiId
 }

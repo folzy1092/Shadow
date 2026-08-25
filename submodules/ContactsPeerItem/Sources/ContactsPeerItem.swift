@@ -861,7 +861,7 @@ public class ContactsPeerItemNode: ItemListRevealOptionsItemNode {
             // rather than a real bot-verification icon — placed after the
             // credibility/emoji-status icons (right of the name) instead of
             // upstream's before-the-name placement.
-            let verifiedIconOnRight = false
+            var verifiedIconOnRight = false
             var emojiStatusIcon: EmojiStatusComponent.Content?
             var emojiStatusParticleColor: UIColor?
             
@@ -891,6 +891,10 @@ public class ContactsPeerItemNode: ItemListRevealOptionsItemNode {
                     // где штатная галочка — перед именем.
                     if let badgeEmojiId = ayuGramNameBadgeEmojiId(peerId: peer.id) {
                         verifiedIcon = .animation(content: .customEmoji(fileId: badgeEmojiId), size: CGSize(width: 32.0, height: 32.0), placeholderColor: item.presentationData.theme.list.mediaPlaceholderColor, themeColor: item.presentationData.theme.list.itemAccentColor, loopMode: .count(0))
+                    } else if let exteraEmojiId = ayuExteraBadgeEmojiId(peerId: peer.id) {
+                        // Значок поддержавшего exteraGram — справа от имени.
+                        verifiedIcon = .animation(content: .customEmoji(fileId: exteraEmojiId), size: CGSize(width: 32.0, height: 32.0), placeholderColor: item.presentationData.theme.list.mediaPlaceholderColor, themeColor: item.presentationData.theme.list.itemAccentColor, loopMode: .count(0))
+                        verifiedIconOnRight = true
                     }
                 }
             case .deviceContact:

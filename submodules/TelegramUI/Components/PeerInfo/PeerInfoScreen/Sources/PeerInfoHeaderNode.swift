@@ -677,6 +677,8 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         // слоте верификации сейчас значок форка, а не настоящая верификация;
         // по нему же включается попап с описанием по тапу (displayAyuBadgeInfo).
         var verifiedBadgeDescription = ""
+        // Значок Extera выносится вправо, значок нашего конфига — нет.
+        var isExteraBadge = false
         if let peer {
             if peer.id == self.context.account.peerId && !self.isSettings && !self.isMyProfile {
                 credibilityIcon = .none
@@ -706,6 +708,13 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             if let badge = ayuGramNameBadge(peerId: peer.id, displayName: peer.displayTitle(strings: presentationData.strings, displayOrder: presentationData.nameDisplayOrder)) {
                 verifiedIcon = .emojiStatus(PeerEmojiStatus(content: .emoji(fileId: badge.emojiId), expirationDate: nil))
                 verifiedBadgeDescription = badge.description
+            } else if let badge = ayuExteraBadge(peerId: peer.id) {
+                // Значок поддержавшего exteraGram — наоборот, СПРАВА от имени,
+                // после премиум-статуса (isExteraBadge ниже). Слот верификации
+                // слева остаётся за значком нашего конфига, он приоритетнее.
+                verifiedIcon = .emojiStatus(PeerEmojiStatus(content: .emoji(fileId: badge.emojiId), expirationDate: nil))
+                verifiedBadgeDescription = badge.description
+                isExteraBadge = true
             }
         }
         
@@ -1711,7 +1720,9 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             nextExpandedIconX += 4.0 + titleExpandedCredibilityIconSize.width
         }
                 
-        var verifiedIconGoesRight = false
+        // Shadow: isExteraBadge — значок поддержавшего exteraGram, он рисуется
+        // справа от имени. Значок нашего конфига идёт в слот верификации слева.
+        var verifiedIconGoesRight = isExteraBadge
         if case .verified = verifiedIcon {
             verifiedIconGoesRight = true
         }
