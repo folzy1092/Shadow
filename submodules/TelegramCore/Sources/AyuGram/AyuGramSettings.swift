@@ -208,7 +208,7 @@ public struct AyuGramSettings: Codable, Equatable {
             sendViaScheduled: false,
             sendWithoutOnline: false,
             showMessageSeconds: false,
-            editedIndicatorAsPencil: false,
+            editedIndicatorAsPencil: true,
             editedIndicatorText: "",
             deletedIndicatorText: "",
             regularEmojiFirst: false,
@@ -424,7 +424,7 @@ public struct AyuGramSettings: Codable, Equatable {
         self.sendViaScheduled = ((try container.decodeIfPresent(Int32.self, forKey: "sendViaScheduled")) ?? 0) != 0
         self.sendWithoutOnline = ((try container.decodeIfPresent(Int32.self, forKey: "sendWithoutOnline")) ?? 0) != 0
         self.showMessageSeconds = ((try container.decodeIfPresent(Int32.self, forKey: "showMessageSeconds")) ?? 0) != 0
-        self.editedIndicatorAsPencil = ((try container.decodeIfPresent(Int32.self, forKey: "editedIndicatorAsPencil")) ?? 0) != 0
+        self.editedIndicatorAsPencil = ((try container.decodeIfPresent(Int32.self, forKey: "editedIndicatorAsPencil")) ?? 1) != 0
         self.editedIndicatorText = (try container.decodeIfPresent(String.self, forKey: "editedIndicatorText")) ?? ""
         self.deletedIndicatorText = (try container.decodeIfPresent(String.self, forKey: "deletedIndicatorText")) ?? ""
         self.regularEmojiFirst = ((try container.decodeIfPresent(Int32.self, forKey: "regularEmojiFirst")) ?? 0) != 0

@@ -29,26 +29,23 @@ private func maybeAddRotationAnimation(_ layer: CALayer, duration: Double) {
     layer.add(basicAnimation, forKey: "clockFrameAnimation")
 }
 
-// Shadow: inline icon for the anti-delete/edited-history markers, matching
+// Shadow: tinted icon for the anti-delete/edited-history markers, matching
 // AyuGram Desktop's actual glyph (Chat/AyuGram/Deleted = their "ayu/trash_bin",
 // Chat/AyuGram/Edited = their "ayu/edited") instead of a plain Unicode emoji.
-// Returned as an attributed-string fragment (icon + trailing space) so callers
-// can just append it in front of the date text, same as the old text-prefix did.
-private func ayuMarkerIconFragment(imageName: String, tintColor: UIColor, font: UIFont) -> NSAttributedString {
+// Rendered as its own image (positioned like impressionIcon below), NOT
+// embedded in the date NSAttributedString: dateNode is a TextNode that draws
+// via CoreText directly, with no TextKit/NSLayoutManager underneath, so an
+// NSTextAttachment silently fails to draw there — and the first attempt at
+// that also threw off the measured line width, which is what pushed the
+// read-checkmarks out of position.
+private func ayuMarkerIcon(imageName: String, tintColor: UIColor, font: UIFont) -> UIImage? {
     let iconHeight = floor(font.pointSize)
     let iconSize = CGSize(width: floor(iconHeight * 20.0 / 24.0), height: iconHeight)
-    var image = UIImage(bundleImageName: imageName)
-    if let sourceImage = image, let scaledImage = generateScaledImage(image: sourceImage, size: iconSize, opaque: false, scale: nil) {
-        image = scaledImage
+    guard let sourceImage = UIImage(bundleImageName: imageName) else {
+        return nil
     }
-    let attachment = NSTextAttachment()
-    attachment.image = image.flatMap { generateTintedImage(image: $0, color: tintColor) }
-    // Vertically center the icon against the font's cap-height so it lines up
-    // with the middle of the surrounding text instead of sitting on the baseline.
-    attachment.bounds = CGRect(x: 0.0, y: (font.capHeight - iconSize.height) / 2.0, width: iconSize.width, height: iconSize.height)
-    let result = NSMutableAttributedString(attachment: attachment)
-    result.append(NSAttributedString(string: " ", font: font, textColor: tintColor))
-    return result
+    let scaledImage = generateScaledImage(image: sourceImage, size: iconSize, opaque: false, scale: nil) ?? sourceImage
+    return generateTintedImage(image: scaledImage, color: tintColor)
 }
 
 public enum ChatMessageDateAndStatusOutgoingType: Equatable {
@@ -290,6 +287,13 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
     private var clockMinNode: ASImageNode?
     private let dateNode: TextNode
     private var impressionIcon: ASImageNode?
+    // Shadow: edited/anti-delete marker icons, positioned like impressionIcon —
+    // NOT embedded in dateNode's attributed string. This TextNode renders via
+    // CoreText directly (no TextKit/NSLayoutManager), so an NSTextAttachment
+    // image silently fails to draw and can throw off the measured line width,
+    // which is what broke the read-checkmark position on the first attempt.
+    private var ayuEditedIcon: ASImageNode?
+    private var ayuDeletedIcon: ASImageNode?
     private var reactionNodes: [MessageReaction.Reaction: StatusReactionNode] = [:]
     private let reactionButtonsContainer = ReactionButtonsAsyncLayoutContainer()
     private var reactionButtonNode: HighlightTrackingButtonNode?
@@ -353,6 +357,8 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
         
         var currentBackgroundNode = self.backgroundNode
         var currentImpressionIcon = self.impressionIcon
+        var currentAyuEditedIcon = self.ayuEditedIcon
+        var currentAyuDeletedIcon = self.ayuDeletedIcon
         var currentRepliesIcon = self.repliesIcon
         var currentForwardsIcon = self.forwardsIcon
         var currentStarsIcon = self.starsIcon
@@ -378,6 +384,8 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
             let clockFrameImage: UIImage?
             let clockMinImage: UIImage?
             var impressionImage: UIImage?
+            var ayuEditedImage: UIImage?
+            var ayuDeletedImage: UIImage?
             var repliesImage: UIImage?
             var forwardsImage: UIImage?
             var starsImage: UIImage?
@@ -623,21 +631,16 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
             }
 
             let dateFont = Font.regular(floor(arguments.presentationData.fontSize.baseDisplaySize * 11.0 / 17.0))
-            let dateAttributedString: NSAttributedString
-            if useEditedIcon || useDeletedIcon {
-                let mutableDateString = NSMutableAttributedString()
-                if useEditedIcon {
-                    mutableDateString.append(ayuMarkerIconFragment(imageName: "Chat/AyuGram/Edited", tintColor: dateColor, font: dateFont))
-                }
-                if useDeletedIcon {
-                    mutableDateString.append(ayuMarkerIconFragment(imageName: "Chat/AyuGram/Deleted", tintColor: dateColor, font: dateFont))
-                }
-                mutableDateString.append(NSAttributedString(string: updatedDateText, font: dateFont, textColor: dateColor))
-                dateAttributedString = mutableDateString
-            } else {
-                dateAttributedString = NSAttributedString(string: updatedDateText, font: dateFont, textColor: dateColor)
+            // Shadow: real icons for the markers are separate ASImageNodes
+            // (ayuEditedIcon/ayuDeletedIcon below, positioned like impressionIcon),
+            // not part of this attributed string — see ayuMarkerIcon's comment.
+            if useEditedIcon {
+                ayuEditedImage = ayuMarkerIcon(imageName: "Chat/AyuGram/Edited", tintColor: dateColor, font: dateFont)
             }
-            let (date, dateApply) = dateLayout(TextNodeLayoutArguments(attributedString: dateAttributedString, backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .middle, constrainedSize: arguments.constrainedSize, alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
+            if useDeletedIcon {
+                ayuDeletedImage = ayuMarkerIcon(imageName: "Chat/AyuGram/Deleted", tintColor: dateColor, font: dateFont)
+            }
+            let (date, dateApply) = dateLayout(TextNodeLayoutArguments(attributedString: NSAttributedString(string: updatedDateText, font: dateFont, textColor: dateColor), backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .middle, constrainedSize: arguments.constrainedSize, alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
             
             let checkOffset = floor(arguments.presentationData.fontSize.baseDisplaySize * 6.0 / 17.0)
             
@@ -648,6 +651,42 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
             
             var clockPosition = CGPoint()
             
+            // Shadow: edited/anti-delete marker icons — same "reserve width, place
+            // an ASImageNode" treatment as impressionIcon right below, sitting
+            // ahead of it in the row (edited, then deleted, then impression eye,
+            // then the date text itself).
+            var ayuEditedIconSize = CGSize()
+            var ayuEditedIconWidth: CGFloat = 0.0
+            if let ayuEditedImage = ayuEditedImage {
+                if currentAyuEditedIcon == nil {
+                    let iconNode = ASImageNode()
+                    iconNode.isLayerBacked = true
+                    iconNode.displayWithoutProcessing = true
+                    iconNode.displaysAsynchronously = false
+                    currentAyuEditedIcon = iconNode
+                }
+                ayuEditedIconSize = ayuEditedImage.size
+                ayuEditedIconWidth = ayuEditedIconSize.width + 3.0
+            } else {
+                currentAyuEditedIcon = nil
+            }
+            var ayuDeletedIconSize = CGSize()
+            var ayuDeletedIconWidth: CGFloat = 0.0
+            if let ayuDeletedImage = ayuDeletedImage {
+                if currentAyuDeletedIcon == nil {
+                    let iconNode = ASImageNode()
+                    iconNode.isLayerBacked = true
+                    iconNode.displayWithoutProcessing = true
+                    iconNode.displaysAsynchronously = false
+                    currentAyuDeletedIcon = iconNode
+                }
+                ayuDeletedIconSize = ayuDeletedImage.size
+                ayuDeletedIconWidth = ayuDeletedIconSize.width + 3.0
+            } else {
+                currentAyuDeletedIcon = nil
+            }
+            let ayuMarkerIconsWidth = ayuEditedIconWidth + ayuDeletedIconWidth
+
             var impressionSize = CGSize()
             var impressionWidth: CGFloat = 0.0
             if let impressionImage = impressionImage {
@@ -781,9 +820,9 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
                         let checkSize = loadedCheckFullImage!.size
                         
                         if read {
-                            checkReadFrame = CGRect(origin: CGPoint(x: leftInset + impressionWidth + date.size.width + 5.0 + statusWidth - checkSize.width, y: 3.0 + offset), size: checkSize)
+                            checkReadFrame = CGRect(origin: CGPoint(x: leftInset + ayuMarkerIconsWidth + impressionWidth + date.size.width + 5.0 + statusWidth - checkSize.width, y: 3.0 + offset), size: checkSize)
                         }
-                        checkSentFrame = CGRect(origin: CGPoint(x: leftInset + impressionWidth + date.size.width + 5.0 + statusWidth - checkSize.width - checkOffset, y: 3.0 + offset), size: checkSize)
+                        checkSentFrame = CGRect(origin: CGPoint(x: leftInset + ayuMarkerIconsWidth + impressionWidth + date.size.width + 5.0 + statusWidth - checkSize.width - checkOffset, y: 3.0 + offset), size: checkSize)
                     }
                 case .Failed:
                     statusWidth = 0.0
@@ -890,7 +929,7 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
             
             leftInset += reactionInset
             
-            let layoutSize = CGSize(width: leftInset + impressionWidth + date.size.width + statusWidth + backgroundInsets.left + backgroundInsets.right, height: date.size.height + backgroundInsets.top + backgroundInsets.bottom)
+            let layoutSize = CGSize(width: leftInset + ayuMarkerIconsWidth + impressionWidth + date.size.width + statusWidth + backgroundInsets.left + backgroundInsets.right, height: date.size.height + backgroundInsets.top + backgroundInsets.bottom)
             
             let verticalReactionsInset: CGFloat
             let verticalInset: CGFloat
@@ -1214,9 +1253,45 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
                         }
                         
                         let _ = dateApply()
-                        
+
+                        if let currentAyuEditedIcon = currentAyuEditedIcon {
+                            let ayuEditedIconFrame = CGRect(origin: CGPoint(x: leftOffset + leftInset + backgroundInsets.left, y: backgroundInsets.top + 1.0 + offset + verticalInset + floor((date.size.height - ayuEditedIconSize.height) / 2.0)), size: ayuEditedIconSize)
+                            currentAyuEditedIcon.displaysAsynchronously = false
+                            if currentAyuEditedIcon.image !== ayuEditedImage {
+                                currentAyuEditedIcon.image = ayuEditedImage
+                            }
+                            if currentAyuEditedIcon.supernode == nil {
+                                strongSelf.ayuEditedIcon = currentAyuEditedIcon
+                                strongSelf.addSubnode(currentAyuEditedIcon)
+                                currentAyuEditedIcon.frame = ayuEditedIconFrame
+                            } else {
+                                animation.animator.updateFrame(layer: currentAyuEditedIcon.layer, frame: ayuEditedIconFrame, completion: nil)
+                            }
+                        } else if let ayuEditedIcon = strongSelf.ayuEditedIcon {
+                            ayuEditedIcon.removeFromSupernode()
+                            strongSelf.ayuEditedIcon = nil
+                        }
+
+                        if let currentAyuDeletedIcon = currentAyuDeletedIcon {
+                            let ayuDeletedIconFrame = CGRect(origin: CGPoint(x: leftOffset + leftInset + backgroundInsets.left + ayuEditedIconWidth, y: backgroundInsets.top + 1.0 + offset + verticalInset + floor((date.size.height - ayuDeletedIconSize.height) / 2.0)), size: ayuDeletedIconSize)
+                            currentAyuDeletedIcon.displaysAsynchronously = false
+                            if currentAyuDeletedIcon.image !== ayuDeletedImage {
+                                currentAyuDeletedIcon.image = ayuDeletedImage
+                            }
+                            if currentAyuDeletedIcon.supernode == nil {
+                                strongSelf.ayuDeletedIcon = currentAyuDeletedIcon
+                                strongSelf.addSubnode(currentAyuDeletedIcon)
+                                currentAyuDeletedIcon.frame = ayuDeletedIconFrame
+                            } else {
+                                animation.animator.updateFrame(layer: currentAyuDeletedIcon.layer, frame: ayuDeletedIconFrame, completion: nil)
+                            }
+                        } else if let ayuDeletedIcon = strongSelf.ayuDeletedIcon {
+                            ayuDeletedIcon.removeFromSupernode()
+                            strongSelf.ayuDeletedIcon = nil
+                        }
+
                         if let currentImpressionIcon = currentImpressionIcon {
-                            let impressionIconFrame = CGRect(origin: CGPoint(x: leftOffset + leftInset + backgroundInsets.left, y: backgroundInsets.top + 1.0 + offset + verticalInset + floor((date.size.height - impressionSize.height) / 2.0)), size: impressionSize)
+                            let impressionIconFrame = CGRect(origin: CGPoint(x: leftOffset + leftInset + backgroundInsets.left + ayuMarkerIconsWidth, y: backgroundInsets.top + 1.0 + offset + verticalInset + floor((date.size.height - impressionSize.height) / 2.0)), size: impressionSize)
                             currentImpressionIcon.displaysAsynchronously = false
                             if currentImpressionIcon.image !== impressionImage {
                                 currentImpressionIcon.image = impressionImage
@@ -1232,8 +1307,8 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
                             impressionIcon.removeFromSupernode()
                             strongSelf.impressionIcon = nil
                         }
-                        
-                        animation.animator.updateFrame(layer: strongSelf.dateNode.layer, frame: CGRect(origin: CGPoint(x: leftOffset + leftInset + backgroundInsets.left + impressionWidth, y: backgroundInsets.top + 1.0 + offset + verticalInset), size: date.size), completion: nil)
+
+                        animation.animator.updateFrame(layer: strongSelf.dateNode.layer, frame: CGRect(origin: CGPoint(x: leftOffset + leftInset + backgroundInsets.left + ayuMarkerIconsWidth + impressionWidth, y: backgroundInsets.top + 1.0 + offset + verticalInset), size: date.size), completion: nil)
                         
                         if let clockFrameNode = clockFrameNode {
                             let clockPosition = CGPoint(x: leftOffset + backgroundInsets.left + clockPosition.x + reactionInset, y: backgroundInsets.top + clockPosition.y + verticalInset)
