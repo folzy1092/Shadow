@@ -137,6 +137,16 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     var verifiedIconSize: CGSize?
     let titleExpandedVerifiedIconView: ComponentHostView<Empty>
     var titleExpandedVerifiedIconSize: CGSize?
+
+    // Shadow: отдельный канал под значок поддержавшего exteraGram / AyuGram.
+    // Своя пара вью, а не переиспользование существующих: у человека могут быть
+    // одновременно эмодзи-статус (statusIcon), значок из нашего конфига
+    // (verifiedIcon, слот верификации слева) и значок Extera. Три штатных
+    // канала при этом уже заняты, и значок Extera просто не рисовался.
+    let titleExteraIconView: ComponentHostView<Empty>
+    var exteraIconSize: CGSize?
+    let titleExpandedExteraIconView: ComponentHostView<Empty>
+    var titleExpandedExteraIconSize: CGSize?
     
     let titleStatusIconView: ComponentHostView<Empty>
     var statusIconSize: CGSize?
@@ -252,7 +262,13 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         
         self.titleExpandedVerifiedIconView = ComponentHostView<Empty>()
         self.titleNode.stateNode(forKey: TitleNodeStateExpanded)?.view.addSubview(self.titleExpandedVerifiedIconView)
-        
+
+        self.titleExteraIconView = ComponentHostView<Empty>()
+        self.titleNode.stateNode(forKey: TitleNodeStateRegular)?.view.addSubview(self.titleExteraIconView)
+
+        self.titleExpandedExteraIconView = ComponentHostView<Empty>()
+        self.titleNode.stateNode(forKey: TitleNodeStateExpanded)?.view.addSubview(self.titleExpandedExteraIconView)
+
         self.titleStatusIconView = ComponentHostView<Empty>()
         self.titleNode.stateNode(forKey: TitleNodeStateRegular)?.view.addSubview(self.titleStatusIconView)
         
@@ -677,8 +693,11 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         // слоте верификации сейчас значок форка, а не настоящая верификация;
         // по нему же включается попап с описанием по тапу (displayAyuBadgeInfo).
         var verifiedBadgeDescription = ""
-        // Значок Extera выносится вправо, значок нашего конфига — нет.
-        var isExteraBadge = false
+        // Значок поддержавшего exteraGram — свой канал, рисуется справа от имени
+        // последним в цепочке. Отдельно от verifiedIcon, потому что оба значка
+        // могут быть у одного человека одновременно.
+        var exteraIcon: CredibilityIcon = .none
+        var exteraBadgeDescription = ""
         if let peer {
             if peer.id == self.context.account.peerId && !self.isSettings && !self.isMyProfile {
                 credibilityIcon = .none
@@ -708,13 +727,12 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             if let badge = ayuGramNameBadge(peerId: peer.id, displayName: peer.displayTitle(strings: presentationData.strings, displayOrder: presentationData.nameDisplayOrder)) {
                 verifiedIcon = .emojiStatus(PeerEmojiStatus(content: .emoji(fileId: badge.emojiId), expirationDate: nil))
                 verifiedBadgeDescription = badge.description
-            } else if let badge = ayuExteraBadge(peerId: peer.id) {
-                // Значок поддержавшего exteraGram — наоборот, СПРАВА от имени,
-                // после премиум-статуса (isExteraBadge ниже). Слот верификации
-                // слева остаётся за значком нашего конфига, он приоритетнее.
-                verifiedIcon = .emojiStatus(PeerEmojiStatus(content: .emoji(fileId: badge.emojiId), expirationDate: nil))
-                verifiedBadgeDescription = badge.description
-                isExteraBadge = true
+            }
+            // Значок поддержавшего exteraGram — независимо от значка из конфига:
+            // это разные вещи, и у одного человека вполне могут быть обе.
+            if let badge = ayuExteraBadge(peerId: peer.id) {
+                exteraIcon = .emojiStatus(PeerEmojiStatus(content: .emoji(fileId: badge.emojiId), expirationDate: nil))
+                exteraBadgeDescription = badge.description
             }
         }
         
@@ -1258,7 +1276,69 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             self.verifiedIconSize = iconSize
             self.titleExpandedVerifiedIconSize = expandedIconSize
         }
-        
+
+        // Shadow: значок поддержавшего exteraGram / AyuGram. Свой канал, потому
+        // что три штатных (статус, credibility, верификация) могут быть заняты
+        // одновременно — премиум-статусом, значком из нашего конфига и т.д.
+        do {
+            let exteraRegularContent: EmojiStatusComponent.Content
+            let exteraExpandedContent: EmojiStatusComponent.Content
+            switch exteraIcon {
+            case let .emojiStatus(emojiStatus):
+                exteraRegularContent = .animation(content: .customEmoji(fileId: emojiStatus.fileId), size: CGSize(width: 80.0, height: 80.0), placeholderColor: presentationData.theme.list.mediaPlaceholderColor, themeColor: navigationContentsAccentColor, loopMode: .forever)
+                exteraExpandedContent = .animation(content: .customEmoji(fileId: emojiStatus.fileId), size: CGSize(width: 80.0, height: 80.0), placeholderColor: navigationContentsAccentColor, themeColor: navigationContentsAccentColor, loopMode: .forever)
+            default:
+                exteraRegularContent = .none
+                exteraExpandedContent = .none
+            }
+
+            // Тот же увеличенный бокс, что у значка из конфига: это тоже
+            // кастом-эмодзи, а они визуально мельче штатных глифов.
+            let exteraContainerSize = CGSize(width: 29.0, height: 29.0)
+            let iconSize = self.titleExteraIconView.update(
+                transition: ComponentTransition(navigationTransition),
+                component: AnyComponent(EmojiStatusComponent(
+                    context: self.context,
+                    animationCache: self.animationCache,
+                    animationRenderer: self.animationRenderer,
+                    content: exteraRegularContent,
+                    isVisibleForAnimations: true,
+                    useSharedAnimation: true,
+                    action: exteraBadgeDescription.isEmpty ? nil : { [weak self] in
+                        guard let self else {
+                            return
+                        }
+                        self.displayAyuBadgeInfo?(self.titleExteraIconView, exteraBadgeDescription)
+                    },
+                    emojiFileUpdated: nil
+                )),
+                environment: {},
+                containerSize: exteraContainerSize
+            )
+            let expandedIconSize = self.titleExpandedExteraIconView.update(
+                transition: ComponentTransition(navigationTransition),
+                component: AnyComponent(EmojiStatusComponent(
+                    context: self.context,
+                    animationCache: self.animationCache,
+                    animationRenderer: self.animationRenderer,
+                    content: exteraExpandedContent,
+                    isVisibleForAnimations: true,
+                    useSharedAnimation: true,
+                    action: exteraBadgeDescription.isEmpty ? {} : { [weak self] in
+                        guard let self else {
+                            return
+                        }
+                        self.displayAyuBadgeInfo?(self.titleExpandedExteraIconView, exteraBadgeDescription)
+                    }
+                )),
+                environment: {},
+                containerSize: exteraContainerSize
+            )
+
+            self.exteraIconSize = iconSize
+            self.titleExpandedExteraIconSize = expandedIconSize
+        }
+
         var actualNavigationContentsColor = navigationContentsAccentColor
         actualNavigationContentsColor = presentationData.theme.chat.inputPanel.panelControlColor
         
@@ -1720,9 +1800,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             nextExpandedIconX += 4.0 + titleExpandedCredibilityIconSize.width
         }
                 
-        // Shadow: isExteraBadge — значок поддержавшего exteraGram, он рисуется
-        // справа от имени. Значок нашего конфига идёт в слот верификации слева.
-        var verifiedIconGoesRight = isExteraBadge
+        var verifiedIconGoesRight = false
         if case .verified = verifiedIcon {
             verifiedIconGoesRight = true
         }
@@ -1755,7 +1833,28 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 nextExpandedIconX += 4.0 + titleExpandedVerifiedIconSize.width
             }
         }
-        
+
+        // Shadow: значок Extera — последним в цепочке справа, после эмодзи-статуса
+        // и премиума. Слот верификации слева при этом остаётся за значком из
+        // нашего конфига, так что все три значка видны одновременно.
+        if let exteraIconSize = self.exteraIconSize, let titleExpandedExteraIconSize = self.titleExpandedExteraIconSize, exteraIconSize.width > 0.0 {
+            titleHorizontalOffset -= (exteraIconSize.width + 4.0) / 2.0
+
+            let leftOffset: CGFloat = nextIconX + 4.0
+            let leftExpandedOffset: CGFloat = nextExpandedIconX + 4.0
+
+            var collapsedTransitionOffset: CGFloat = 0.0
+            if let navigationTransition = self.navigationTransition {
+                collapsedTransitionOffset = -10.0 * navigationTransition.fraction
+            }
+
+            transition.updateFrame(view: self.titleExteraIconView, frame: CGRect(origin: CGPoint(x: leftOffset + collapsedTransitionOffset, y: floor((titleSize.height - exteraIconSize.height) / 2.0)), size: exteraIconSize))
+            transition.updateFrame(view: self.titleExpandedExteraIconView, frame: CGRect(origin: CGPoint(x: leftExpandedOffset, y: floor((titleExpandedSize.height - titleExpandedExteraIconSize.height) / 2.0) + 1.0), size: titleExpandedExteraIconSize))
+
+            nextIconX += 4.0 + exteraIconSize.width
+            nextExpandedIconX += 4.0 + titleExpandedExteraIconSize.width
+        }
+
         var titleFrame: CGRect
         var subtitleFrame: CGRect
         let usernameFrame: CGRect
