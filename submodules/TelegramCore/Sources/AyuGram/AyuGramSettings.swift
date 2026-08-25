@@ -56,6 +56,15 @@ public struct AyuGramSettings: Codable, Equatable {
     // Replace the "Изменено" ("edited") text label next to the timestamp with a
     // small pencil icon, Swiftgram/exteraGram-style, instead of the localized word.
     public var editedIndicatorAsPencil: Bool
+    // When editedIndicatorAsPencil is on, overrides the default "✎" with this
+    // string instead (custom text or a single emoji). Empty = use the default.
+    public var editedIndicatorText: String
+    // Overrides the default "🗑" anti-delete badge (StringForMessageTimestampStatus)
+    // with this string instead (custom text or a single emoji). Empty = default.
+    // Unlike editedIndicatorAsPencil this has no separate on/off switch: the
+    // anti-delete badge itself is always shown for a kept-deleted message, this
+    // setting only changes what glyph it uses.
+    public var deletedIndicatorText: String
     // In the emoji keyboard, list the plain Unicode emoji group right after
     // "recent" instead of after every custom/premium emoji pack (Swiftgram-style).
     public var regularEmojiFirst: Bool
@@ -200,6 +209,8 @@ public struct AyuGramSettings: Codable, Equatable {
             sendWithoutOnline: false,
             showMessageSeconds: false,
             editedIndicatorAsPencil: false,
+            editedIndicatorText: "",
+            deletedIndicatorText: "",
             regularEmojiFirst: false,
             doubleTapToEdit: false,
             showExactLastSeen: false,
@@ -305,6 +316,8 @@ public struct AyuGramSettings: Codable, Equatable {
         sendWithoutOnline: Bool,
         showMessageSeconds: Bool,
         editedIndicatorAsPencil: Bool,
+        editedIndicatorText: String,
+        deletedIndicatorText: String,
         regularEmojiFirst: Bool,
         doubleTapToEdit: Bool,
         showExactLastSeen: Bool,
@@ -356,6 +369,8 @@ public struct AyuGramSettings: Codable, Equatable {
         self.sendWithoutOnline = sendWithoutOnline
         self.showMessageSeconds = showMessageSeconds
         self.editedIndicatorAsPencil = editedIndicatorAsPencil
+        self.editedIndicatorText = editedIndicatorText
+        self.deletedIndicatorText = deletedIndicatorText
         self.regularEmojiFirst = regularEmojiFirst
         self.doubleTapToEdit = doubleTapToEdit
         self.showExactLastSeen = showExactLastSeen
@@ -410,6 +425,8 @@ public struct AyuGramSettings: Codable, Equatable {
         self.sendWithoutOnline = ((try container.decodeIfPresent(Int32.self, forKey: "sendWithoutOnline")) ?? 0) != 0
         self.showMessageSeconds = ((try container.decodeIfPresent(Int32.self, forKey: "showMessageSeconds")) ?? 0) != 0
         self.editedIndicatorAsPencil = ((try container.decodeIfPresent(Int32.self, forKey: "editedIndicatorAsPencil")) ?? 0) != 0
+        self.editedIndicatorText = (try container.decodeIfPresent(String.self, forKey: "editedIndicatorText")) ?? ""
+        self.deletedIndicatorText = (try container.decodeIfPresent(String.self, forKey: "deletedIndicatorText")) ?? ""
         self.regularEmojiFirst = ((try container.decodeIfPresent(Int32.self, forKey: "regularEmojiFirst")) ?? 0) != 0
         self.doubleTapToEdit = ((try container.decodeIfPresent(Int32.self, forKey: "doubleTapToEdit")) ?? 0) != 0
         self.showExactLastSeen = ((try container.decodeIfPresent(Int32.self, forKey: "showExactLastSeen")) ?? 0) != 0
@@ -464,6 +481,8 @@ public struct AyuGramSettings: Codable, Equatable {
         try container.encode((self.sendWithoutOnline ? 1 : 0) as Int32, forKey: "sendWithoutOnline")
         try container.encode((self.showMessageSeconds ? 1 : 0) as Int32, forKey: "showMessageSeconds")
         try container.encode((self.editedIndicatorAsPencil ? 1 : 0) as Int32, forKey: "editedIndicatorAsPencil")
+        try container.encode(self.editedIndicatorText, forKey: "editedIndicatorText")
+        try container.encode(self.deletedIndicatorText, forKey: "deletedIndicatorText")
         try container.encode((self.regularEmojiFirst ? 1 : 0) as Int32, forKey: "regularEmojiFirst")
         try container.encode((self.doubleTapToEdit ? 1 : 0) as Int32, forKey: "doubleTapToEdit")
         try container.encode((self.showExactLastSeen ? 1 : 0) as Int32, forKey: "showExactLastSeen")

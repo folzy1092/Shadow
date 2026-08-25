@@ -251,9 +251,12 @@ public func stringForMessageTimestampStatus(
     }
 
     // AyuGram anti-delete: show a trash badge next to the timestamp for messages
-    // that were deleted by the other side but kept locally.
+    // that were deleted by the other side but kept locally. A non-empty
+    // deletedIndicatorText overrides the default 🗑 with whatever text/emoji the
+    // user configured in settings.
     if message.attributes.contains(where: { $0 is DeletedMessageAttribute }) {
-        dateText = "🗑 \(dateText)"
+        let indicator = ayuGramSettingsCurrent.deletedIndicatorText.isEmpty ? "🗑" : ayuGramSettingsCurrent.deletedIndicatorText
+        dateText = "\(indicator) \(dateText)"
     }
 
     return dateText

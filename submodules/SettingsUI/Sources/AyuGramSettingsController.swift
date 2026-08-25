@@ -198,6 +198,8 @@ private func ayuUpdateSettings(context: AccountContext, _ f: @escaping (AyuGramS
 private final class AyuCustomizationArguments {
     let updateShowMessageSeconds: (Bool) -> Void
     let updateEditedIndicatorAsPencil: (Bool) -> Void
+    let updateEditedIndicatorText: (String) -> Void
+    let updateDeletedIndicatorText: (String) -> Void
     let updateRegularEmojiFirst: (Bool) -> Void
     let updateDoubleTapToEdit: (Bool) -> Void
     let updateShowExactLastSeen: (Bool) -> Void
@@ -228,6 +230,8 @@ private final class AyuCustomizationArguments {
     init(
         updateShowMessageSeconds: @escaping (Bool) -> Void,
         updateEditedIndicatorAsPencil: @escaping (Bool) -> Void,
+        updateEditedIndicatorText: @escaping (String) -> Void,
+        updateDeletedIndicatorText: @escaping (String) -> Void,
         updateRegularEmojiFirst: @escaping (Bool) -> Void,
         updateDoubleTapToEdit: @escaping (Bool) -> Void,
         updateShowExactLastSeen: @escaping (Bool) -> Void,
@@ -257,6 +261,8 @@ private final class AyuCustomizationArguments {
     ) {
         self.updateShowMessageSeconds = updateShowMessageSeconds
         self.updateEditedIndicatorAsPencil = updateEditedIndicatorAsPencil
+        self.updateEditedIndicatorText = updateEditedIndicatorText
+        self.updateDeletedIndicatorText = updateDeletedIndicatorText
         self.updateRegularEmojiFirst = updateRegularEmojiFirst
         self.updateDoubleTapToEdit = updateDoubleTapToEdit
         self.updateShowExactLastSeen = updateShowExactLastSeen
@@ -312,6 +318,8 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
     case appearanceHeader
     case showMessageSeconds(Bool)
     case editedIndicatorAsPencil(Bool)
+    case editedIndicatorText(String)
+    case deletedIndicatorText(String)
     case regularEmojiFirst(Bool)
     case doubleTapToEdit(Bool)
     case showExactLastSeen(Bool)
@@ -368,7 +376,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         switch self {
         case .buildInfo:
             return AyuCustomizationSection.buildInfo.rawValue
-        case .appearanceHeader, .showMessageSeconds, .editedIndicatorAsPencil, .regularEmojiFirst, .doubleTapToEdit, .showExactLastSeen, .showExactLastSeenSeconds, .wideChannelPosts, .showExactViewCounts, .showForwardCount, .appearanceFooter:
+        case .appearanceHeader, .showMessageSeconds, .editedIndicatorAsPencil, .editedIndicatorText, .deletedIndicatorText, .regularEmojiFirst, .doubleTapToEdit, .showExactLastSeen, .showExactLastSeenSeconds, .wideChannelPosts, .showExactViewCounts, .showForwardCount, .appearanceFooter:
             return AyuCustomizationSection.appearance.rawValue
         case .chatsHeader, .hideAllChatsFolder, .chatsFooter:
             return AyuCustomizationSection.chats.rawValue
@@ -395,6 +403,8 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .appearanceHeader: return 0
         case .showMessageSeconds: return 1
         case .editedIndicatorAsPencil: return 2
+        case .editedIndicatorText: return 90
+        case .deletedIndicatorText: return 91
         case .regularEmojiFirst: return 3
         case .doubleTapToEdit: return 4
         case .showExactLastSeen: return 5
@@ -463,6 +473,14 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
             return ItemListSwitchItem(presentationData: presentationData, title: "Значок ✎ вместо «Изменено»", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 arguments.updateEditedIndicatorAsPencil(value)
             })
+        case let .editedIndicatorText(value):
+            return ItemListSingleLineInputItem(presentationData: presentationData, title: NSAttributedString(string: "Свой значок правки", textColor: presentationData.theme.list.itemPrimaryTextColor), text: value, placeholder: "По умолчанию: ✎", type: .regular(capitalization: false, autocorrection: false), clearType: .always, sectionId: self.section, textUpdated: { updatedText in
+                arguments.updateEditedIndicatorText(updatedText)
+            }, action: {})
+        case let .deletedIndicatorText(value):
+            return ItemListSingleLineInputItem(presentationData: presentationData, title: NSAttributedString(string: "Свой значок удалёнки", textColor: presentationData.theme.list.itemPrimaryTextColor), text: value, placeholder: "По умолчанию: 🗑", type: .regular(capitalization: false, autocorrection: false), clearType: .always, sectionId: self.section, textUpdated: { updatedText in
+                arguments.updateDeletedIndicatorText(updatedText)
+            }, action: {})
         case let .regularEmojiFirst(value):
             return ItemListSwitchItem(presentationData: presentationData, title: "Обычные эмодзи в начале клавиатуры", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 arguments.updateRegularEmojiFirst(value)
@@ -612,6 +630,8 @@ private func ayuCustomizationEntries(settings: AyuGramSettings) -> [AyuCustomiza
     entries.append(.appearanceHeader)
     entries.append(.showMessageSeconds(settings.showMessageSeconds))
     entries.append(.editedIndicatorAsPencil(settings.editedIndicatorAsPencil))
+    entries.append(.editedIndicatorText(settings.editedIndicatorText))
+    entries.append(.deletedIndicatorText(settings.deletedIndicatorText))
     entries.append(.regularEmojiFirst(settings.regularEmojiFirst))
     entries.append(.doubleTapToEdit(settings.doubleTapToEdit))
     entries.append(.showExactLastSeen(settings.showExactLastSeen))
@@ -684,6 +704,12 @@ private func ayuCustomizationController(context: AccountContext) -> ViewControll
         },
         updateEditedIndicatorAsPencil: { value in
             ayuUpdateSettings(context: context) { var s = $0; s.editedIndicatorAsPencil = value; return s }
+        },
+        updateEditedIndicatorText: { value in
+            ayuUpdateSettings(context: context) { var s = $0; s.editedIndicatorText = value; return s }
+        },
+        updateDeletedIndicatorText: { value in
+            ayuUpdateSettings(context: context) { var s = $0; s.deletedIndicatorText = value; return s }
         },
         updateRegularEmojiFirst: { value in
             ayuUpdateSettings(context: context) { var s = $0; s.regularEmojiFirst = value; return s }

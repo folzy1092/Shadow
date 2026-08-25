@@ -570,7 +570,10 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
                     // compact pencil glyph — same "prefix the date string" mechanism
                     // the anti-delete 🗑 badge uses (StringForMessageTimestampStatus),
                     // so no new icon view / width-reservation plumbing is needed.
-                    updatedDateText = "✎ \(updatedDateText)"
+                    // A non-empty editedIndicatorText overrides the default glyph
+                    // with whatever text/emoji the user configured in settings.
+                    let indicator = ayuGramSettingsCurrent.editedIndicatorText.isEmpty ? "✎" : ayuGramSettingsCurrent.editedIndicatorText
+                    updatedDateText = "\(indicator) \(updatedDateText)"
                 } else {
                     updatedDateText = "\(arguments.presentationData.strings.Conversation_MessageEditedLabel) \(updatedDateText)"
                 }
