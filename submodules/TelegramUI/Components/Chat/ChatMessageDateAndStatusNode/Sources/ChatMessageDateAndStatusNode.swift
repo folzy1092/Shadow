@@ -44,7 +44,18 @@ private func ayuMarkerIcon(imageName: String, tintColor: UIColor, font: UIFont) 
     guard let sourceImage = UIImage(bundleImageName: imageName) else {
         return nil
     }
-    let scaledImage = generateScaledImage(image: sourceImage, size: iconSize, opaque: false, scale: nil) ?? sourceImage
+    // Shadow: re-render into a fresh bitmap before scaling/tinting. These PNGs
+    // are foreign assets (exported by AyuGram Desktop's own Qt pipeline, not
+    // Xcode's PDF-vector rasterizer like the rest of this file's icons) —
+    // generateTintedImage clips using the raw CGImage as a mask, and an
+    // unexpected source pixel format there silently paints a solid tinted
+    // rectangle instead of the silhouette. Redrawing through
+    // UIGraphicsImageRenderer forces a normalized, guaranteed-compatible
+    // RGBA bitmap regardless of how the source PNG was encoded.
+    let normalizedImage = UIGraphicsImageRenderer(size: sourceImage.size).image { _ in
+        sourceImage.draw(in: CGRect(origin: .zero, size: sourceImage.size))
+    }
+    let scaledImage = generateScaledImage(image: normalizedImage, size: iconSize, opaque: false, scale: nil) ?? normalizedImage
     return generateTintedImage(image: scaledImage, color: tintColor)
 }
 
