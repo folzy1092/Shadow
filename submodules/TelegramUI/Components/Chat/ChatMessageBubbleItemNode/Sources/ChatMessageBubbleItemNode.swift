@@ -3921,6 +3921,17 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         strongSelf.currentInputParams = inputParams
         strongSelf.currentApplyParams = applyInfo
         strongSelf.contentLayoutInsets = layoutInsets
+
+        // Shadow: dim the whole bubble for a kept-deleted message — same as
+        // AyuGram Desktop's deletedOpacity() (0.7, applied to the entire paint:
+        // background, text, media, all of it, no exceptions for photo/video).
+        // Setting alpha on this node (the bubble item itself) reproduces that
+        // exactly, since every subnode composites underneath it as one group.
+        let ayuDeletedAlpha: CGFloat = item.message.attributes.contains(where: { $0 is DeletedMessageAttribute }) ? 0.7 : 1.0
+        if strongSelf.alpha != ayuDeletedAlpha {
+            animation.animator.updateAlpha(layer: strongSelf.layer, alpha: ayuDeletedAlpha, completion: nil)
+            strongSelf.alpha = ayuDeletedAlpha
+        }
         
         if item.message.id.namespace == Namespaces.Message.Local || item.message.id.namespace == Namespaces.Message.ScheduledLocal || item.message.id.namespace == Namespaces.Message.QuickReplyLocal {
             strongSelf.wasPending = true
