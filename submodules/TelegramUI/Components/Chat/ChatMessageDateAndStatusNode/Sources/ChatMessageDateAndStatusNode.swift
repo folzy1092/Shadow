@@ -675,6 +675,11 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
                     iconNode.isLayerBacked = true
                     iconNode.displayWithoutProcessing = true
                     iconNode.displaysAsynchronously = false
+                    // Explicit clear background: unlike the sibling icon nodes
+                    // below, this one carries a .tintColor (template rendering),
+                    // and without this it painted a solid black square behind
+                    // the pencil silhouette instead of showing through.
+                    iconNode.backgroundColor = .clear
                     currentAyuEditedIcon = iconNode
                 }
                 ayuEditedIconSize = ayuEditedImage.size
@@ -690,6 +695,7 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
                     iconNode.isLayerBacked = true
                     iconNode.displayWithoutProcessing = true
                     iconNode.displaysAsynchronously = false
+                    iconNode.backgroundColor = .clear
                     currentAyuDeletedIcon = iconNode
                 }
                 ayuDeletedIconSize = ayuDeletedImage.size
