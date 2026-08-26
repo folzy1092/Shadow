@@ -38,7 +38,7 @@ private func maybeAddRotationAnimation(_ layer: CALayer, duration: Double) {
 // NSTextAttachment silently fails to draw there — and the first attempt at
 // that also threw off the measured line width, which is what pushed the
 // read-checkmarks out of position.
-private func ayuMarkerIcon(systemName: String, tintColor: UIColor, font: UIFont) -> UIImage? {
+private func ayuMarkerIcon(systemName: String, font: UIFont) -> UIImage? {
     // Shadow: two PNG-based attempts at this (bundled asset + namespace fix,
     // then a redraw-normalize pass) both still rendered as a solid tinted
     // square instead of the pencil/trash silhouette — something about how
@@ -47,10 +47,13 @@ private func ayuMarkerIcon(systemName: String, tintColor: UIColor, font: UIFont)
     // guess at the exact cause. SF Symbols sidestep the whole PNG/masking
     // question: system-drawn vector glyphs, no bundle asset, no manual tinting
     // pipeline — just the standard withTintColor a system icon already supports.
-    let configuration = UIImage.SymbolConfiguration(pointSize: floor(font.pointSize * 0.85), weight: .regular)
+    // 0.85 * 1.15 ≈ 15% bigger than the first pass.
+    let configuration = UIImage.SymbolConfiguration(pointSize: floor(font.pointSize * 0.85 * 1.15), weight: .regular)
     guard let image = UIImage(systemName: systemName, withConfiguration: configuration) else {
         return nil
     }
+    // Fixed neutral gray instead of the date-text color, per request.
+    let tintColor = UIColor(white: 0.6, alpha: 1.0)
     return image.withTintColor(tintColor, renderingMode: .alwaysOriginal)
 }
 
@@ -641,10 +644,10 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
             // (ayuEditedIcon/ayuDeletedIcon below, positioned like impressionIcon),
             // not part of this attributed string — see ayuMarkerIcon's comment.
             if useEditedIcon {
-                ayuEditedImage = ayuMarkerIcon(systemName: "pencil", tintColor: dateColor, font: dateFont)
+                ayuEditedImage = ayuMarkerIcon(systemName: "pencil", font: dateFont)
             }
             if useDeletedIcon {
-                ayuDeletedImage = ayuMarkerIcon(systemName: "trash", tintColor: dateColor, font: dateFont)
+                ayuDeletedImage = ayuMarkerIcon(systemName: "trash", font: dateFont)
             }
             let (date, dateApply) = dateLayout(TextNodeLayoutArguments(attributedString: NSAttributedString(string: updatedDateText, font: dateFont, textColor: dateColor), backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .middle, constrainedSize: arguments.constrainedSize, alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
             
