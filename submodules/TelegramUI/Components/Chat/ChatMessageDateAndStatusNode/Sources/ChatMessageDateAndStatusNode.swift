@@ -41,25 +41,28 @@ private func maybeAddRotationAnimation(_ layer: CALayer, duration: Double) {
 private func ayuMarkerIcon(imageName: String, font: UIFont) -> UIImage? {
     // Shadow: back to the real AyuGram icons (their "ayu/edited"/"ayu/trash_bin"
     // assets, see Chat/AyuGram/*.imageset) — SF Symbols worked but didn't look
-    // right. The first two attempts at these PNGs went through
-    // generateTintedImage, which clips via context.clip(to:mask:) — a known
-    // class of bug where a solid tinted rectangle comes out instead of the
-    // silhouette if the source image's alpha isn't in exactly the shape that
-    // call expects (confirmed common, not specific to these files, via a web
-    // search of the exact symptom). Sidestepping that entirely this time:
-    // load as a template image and let the icon VIEW tint it (iconNode.tintColor
-    // below), the same mechanism already used elsewhere in this file for e.g.
-    // the "hidden message" badge — no manual CGContext masking at all.
+    // right. The upstream PNGs turned out to be a solid opaque black square
+    // with a white glyph baked in (not a transparent silhouette — AyuGram
+    // Desktop draws them with useIconColor: false, i.e. uses the baked color
+    // as-is), which is why every masking/tinting attempt rendered a solid
+    // box. The xcassets copies here are regenerated from the pristine
+    // upstream files by mapping luminance to alpha AND baking the intended
+    // gray tint directly into the RGB channels — .alwaysTemplate +
+    // ASImageNode.customTintColor (Display's Swift wrapper) looked like the
+    // right fix since ASDisplayNode.tintColor is a documented no-op on
+    // isLayerBacked nodes (ASDisplayNode+UIViewBridge.mm), but
+    // layer.layerTintColor didn't actually tint this raw `contents =
+    // image.cgImage` assignment either — icons rendered pure black. Baking
+    // the color into the asset sidesteps that uncertainty entirely.
     // AyuGram Desktop draws these at their native 20x24px, undistorted, next to
     // msgDateFont (13px) — i.e. icon height is 24/13 of the date font's point
-    // size there. Scale the same ratio off our own dateFont so it matches.
-    let iconHeight = floor(font.pointSize * 24.0 / 13.0)
+    // size there; +12% on top per an explicit "a bit bigger" ask.
+    let iconHeight = floor(font.pointSize * 24.0 / 13.0 * 1.12)
     let iconSize = CGSize(width: floor(iconHeight * 20.0 / 24.0), height: iconHeight)
     guard let sourceImage = UIImage(bundleImageName: imageName) else {
         return nil
     }
-    let scaledImage = generateScaledImage(image: sourceImage, size: iconSize, opaque: false, scale: nil) ?? sourceImage
-    return scaledImage.withRenderingMode(.alwaysTemplate)
+    return generateScaledImage(image: sourceImage, size: iconSize, opaque: false, scale: nil) ?? sourceImage
 }
 
 public enum ChatMessageDateAndStatusOutgoingType: Equatable {
@@ -1280,11 +1283,10 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
                             if currentAyuEditedIcon.image !== ayuEditedImage {
                                 currentAyuEditedIcon.image = ayuEditedImage
                             }
-                            // .tintColor is asserted-undefined on layer-backed ASDisplayNodes
-                            // (see ASDisplayNode+UIViewBridge.mm) and silently no-ops here since
-                            // this node has isLayerBacked = true; customTintColor sets
-                            // layer.layerTintColor directly and actually works.
-                            currentAyuEditedIcon.customTintColor = UIColor(white: 0.6, alpha: 1.0)
+                            // No runtime tint here: the gray color is baked directly into the
+                            // asset (see ayuMarkerIcon) since neither ASDisplayNode.tintColor
+                            // (undefined on isLayerBacked nodes) nor layer.layerTintColor
+                            // actually tinted this raw `contents = image.cgImage` assignment.
                             if currentAyuEditedIcon.supernode == nil {
                                 strongSelf.ayuEditedIcon = currentAyuEditedIcon
                                 strongSelf.addSubnode(currentAyuEditedIcon)
@@ -1303,7 +1305,6 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
                             if currentAyuDeletedIcon.image !== ayuDeletedImage {
                                 currentAyuDeletedIcon.image = ayuDeletedImage
                             }
-                            currentAyuDeletedIcon.customTintColor = UIColor(white: 0.6, alpha: 1.0)
                             if currentAyuDeletedIcon.supernode == nil {
                                 strongSelf.ayuDeletedIcon = currentAyuDeletedIcon
                                 strongSelf.addSubnode(currentAyuDeletedIcon)
