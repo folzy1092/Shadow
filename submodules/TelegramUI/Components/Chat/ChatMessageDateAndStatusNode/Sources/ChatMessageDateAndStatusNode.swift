@@ -56,8 +56,8 @@ private func ayuMarkerIcon(imageName: String, font: UIFont) -> UIImage? {
     // the color into the asset sidesteps that uncertainty entirely.
     // AyuGram Desktop draws these at their native 20x24px, undistorted, next to
     // msgDateFont (13px) — i.e. icon height is 24/13 of the date font's point
-    // size there; +12% on top per an explicit "a bit bigger" ask.
-    let iconHeight = floor(font.pointSize * 24.0 / 13.0 * 1.12)
+    // size there; +20% on top per explicit "a bit bigger" asks.
+    let iconHeight = floor(font.pointSize * 24.0 / 13.0 * 1.2)
     let iconSize = CGSize(width: floor(iconHeight * 20.0 / 24.0), height: iconHeight)
     guard let sourceImage = UIImage(bundleImageName: imageName) else {
         return nil
