@@ -50,8 +50,10 @@ private func ayuMarkerIcon(imageName: String, font: UIFont) -> UIImage? {
     // load as a template image and let the icon VIEW tint it (iconNode.tintColor
     // below), the same mechanism already used elsewhere in this file for e.g.
     // the "hidden message" badge — no manual CGContext masking at all.
-    // 20:24 is these assets' native aspect ratio; *1.15 per the "15% bigger" ask.
-    let iconHeight = floor(font.pointSize * 1.15)
+    // AyuGram Desktop draws these at their native 20x24px, undistorted, next to
+    // msgDateFont (13px) — i.e. icon height is 24/13 of the date font's point
+    // size there. Scale the same ratio off our own dateFont so it matches.
+    let iconHeight = floor(font.pointSize * 24.0 / 13.0)
     let iconSize = CGSize(width: floor(iconHeight * 20.0 / 24.0), height: iconHeight)
     guard let sourceImage = UIImage(bundleImageName: imageName) else {
         return nil

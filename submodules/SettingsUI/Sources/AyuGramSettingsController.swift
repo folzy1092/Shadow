@@ -474,11 +474,11 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
                 arguments.updateEditedIndicatorAsPencil(value)
             })
         case let .editedIndicatorText(value):
-            return ItemListSingleLineInputItem(presentationData: presentationData, title: NSAttributedString(string: "Свой значок правки", textColor: presentationData.theme.list.itemPrimaryTextColor), text: value, placeholder: "По умолчанию: ✎", type: .regular(capitalization: false, autocorrection: false), clearType: .always, sectionId: self.section, textUpdated: { updatedText in
+            return ItemListSingleLineInputItem(presentationData: presentationData, title: NSAttributedString(string: "Свой значок правки", textColor: presentationData.theme.list.itemPrimaryTextColor), text: value, placeholder: "По умолчанию: ✎", type: .regular(capitalization: false, autocorrection: false), spacing: 8.0, clearType: .always, sectionId: self.section, textUpdated: { updatedText in
                 arguments.updateEditedIndicatorText(updatedText)
             }, action: {})
         case let .deletedIndicatorText(value):
-            return ItemListSingleLineInputItem(presentationData: presentationData, title: NSAttributedString(string: "Свой значок удалёнки", textColor: presentationData.theme.list.itemPrimaryTextColor), text: value, placeholder: "По умолчанию: 🗑", type: .regular(capitalization: false, autocorrection: false), clearType: .always, sectionId: self.section, textUpdated: { updatedText in
+            return ItemListSingleLineInputItem(presentationData: presentationData, title: NSAttributedString(string: "Свой значок удалёнки", textColor: presentationData.theme.list.itemPrimaryTextColor), text: value, placeholder: "По умолчанию: 🗑", type: .regular(capitalization: false, autocorrection: false), spacing: 8.0, clearType: .always, sectionId: self.section, textUpdated: { updatedText in
                 arguments.updateDeletedIndicatorText(updatedText)
             }, action: {})
         case let .regularEmojiFirst(value):
