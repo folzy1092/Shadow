@@ -38,25 +38,20 @@ private func maybeAddRotationAnimation(_ layer: CALayer, duration: Double) {
 // NSTextAttachment silently fails to draw there — and the first attempt at
 // that also threw off the measured line width, which is what pushed the
 // read-checkmarks out of position.
-private func ayuMarkerIcon(imageName: String, tintColor: UIColor, font: UIFont) -> UIImage? {
-    let iconHeight = floor(font.pointSize)
-    let iconSize = CGSize(width: floor(iconHeight * 20.0 / 24.0), height: iconHeight)
-    guard let sourceImage = UIImage(bundleImageName: imageName) else {
+private func ayuMarkerIcon(systemName: String, tintColor: UIColor, font: UIFont) -> UIImage? {
+    // Shadow: two PNG-based attempts at this (bundled asset + namespace fix,
+    // then a redraw-normalize pass) both still rendered as a solid tinted
+    // square instead of the pencil/trash silhouette — something about how
+    // these foreign (AyuGram Desktop / Qt-exported) PNGs decode keeps tripping
+    // generateTintedImage's clip(to:mask:) step, and it wasn't worth a third
+    // guess at the exact cause. SF Symbols sidestep the whole PNG/masking
+    // question: system-drawn vector glyphs, no bundle asset, no manual tinting
+    // pipeline — just the standard withTintColor a system icon already supports.
+    let configuration = UIImage.SymbolConfiguration(pointSize: floor(font.pointSize * 0.85), weight: .regular)
+    guard let image = UIImage(systemName: systemName, withConfiguration: configuration) else {
         return nil
     }
-    // Shadow: re-render into a fresh bitmap before scaling/tinting. These PNGs
-    // are foreign assets (exported by AyuGram Desktop's own Qt pipeline, not
-    // Xcode's PDF-vector rasterizer like the rest of this file's icons) —
-    // generateTintedImage clips using the raw CGImage as a mask, and an
-    // unexpected source pixel format there silently paints a solid tinted
-    // rectangle instead of the silhouette. Redrawing through
-    // UIGraphicsImageRenderer forces a normalized, guaranteed-compatible
-    // RGBA bitmap regardless of how the source PNG was encoded.
-    let normalizedImage = UIGraphicsImageRenderer(size: sourceImage.size).image { _ in
-        sourceImage.draw(in: CGRect(origin: .zero, size: sourceImage.size))
-    }
-    let scaledImage = generateScaledImage(image: normalizedImage, size: iconSize, opaque: false, scale: nil) ?? normalizedImage
-    return generateTintedImage(image: scaledImage, color: tintColor)
+    return image.withTintColor(tintColor, renderingMode: .alwaysOriginal)
 }
 
 public enum ChatMessageDateAndStatusOutgoingType: Equatable {
@@ -646,10 +641,10 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
             // (ayuEditedIcon/ayuDeletedIcon below, positioned like impressionIcon),
             // not part of this attributed string — see ayuMarkerIcon's comment.
             if useEditedIcon {
-                ayuEditedImage = ayuMarkerIcon(imageName: "Chat/AyuGram/Edited", tintColor: dateColor, font: dateFont)
+                ayuEditedImage = ayuMarkerIcon(systemName: "pencil", tintColor: dateColor, font: dateFont)
             }
             if useDeletedIcon {
-                ayuDeletedImage = ayuMarkerIcon(imageName: "Chat/AyuGram/Deleted", tintColor: dateColor, font: dateFont)
+                ayuDeletedImage = ayuMarkerIcon(systemName: "trash", tintColor: dateColor, font: dateFont)
             }
             let (date, dateApply) = dateLayout(TextNodeLayoutArguments(attributedString: NSAttributedString(string: updatedDateText, font: dateFont, textColor: dateColor), backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .middle, constrainedSize: arguments.constrainedSize, alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
             
