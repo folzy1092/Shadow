@@ -1280,7 +1280,11 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
                             if currentAyuEditedIcon.image !== ayuEditedImage {
                                 currentAyuEditedIcon.image = ayuEditedImage
                             }
-                            currentAyuEditedIcon.tintColor = UIColor(white: 0.6, alpha: 1.0)
+                            // .tintColor is asserted-undefined on layer-backed ASDisplayNodes
+                            // (see ASDisplayNode+UIViewBridge.mm) and silently no-ops here since
+                            // this node has isLayerBacked = true; customTintColor sets
+                            // layer.layerTintColor directly and actually works.
+                            currentAyuEditedIcon.customTintColor = UIColor(white: 0.6, alpha: 1.0)
                             if currentAyuEditedIcon.supernode == nil {
                                 strongSelf.ayuEditedIcon = currentAyuEditedIcon
                                 strongSelf.addSubnode(currentAyuEditedIcon)
@@ -1299,7 +1303,7 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
                             if currentAyuDeletedIcon.image !== ayuDeletedImage {
                                 currentAyuDeletedIcon.image = ayuDeletedImage
                             }
-                            currentAyuDeletedIcon.tintColor = UIColor(white: 0.6, alpha: 1.0)
+                            currentAyuDeletedIcon.customTintColor = UIColor(white: 0.6, alpha: 1.0)
                             if currentAyuDeletedIcon.supernode == nil {
                                 strongSelf.ayuDeletedIcon = currentAyuDeletedIcon
                                 strongSelf.addSubnode(currentAyuDeletedIcon)
