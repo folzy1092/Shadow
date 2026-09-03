@@ -108,6 +108,8 @@ public struct AyuGramSettings: Codable, Equatable {
     // Render the bottom tab bar (Contacts/Chats/Settings) without text labels
     // and at a reduced height, similar to a compact iOS tab bar.
     public var compactBottomBar: Bool
+    // 0: always visible, 1: hide on downward scroll, 2: also show on stop.
+    public var bottomBarScrollMode: Int32
     // Neutralise copy-protection: allow copy / forward / save in protected
     // (copy-restricted) chats and private channels, exactly like AyuGram.
     public var allowSaveRestrictedContent: Bool
@@ -354,7 +356,8 @@ public struct AyuGramSettings: Codable, Equatable {
         customBannerEnabled: Bool,
         customProfileBackgroundEnabled: Bool,
         customProfileBackgroundForOthers: Bool,
-        customProfileBackgroundForSettings: Bool
+        customProfileBackgroundForSettings: Bool,
+        bottomBarScrollMode: Int32 = 0
     ) {
         self.keepDeletedMessages = keepDeletedMessages
         self.saveEditHistory = saveEditHistory
@@ -382,6 +385,7 @@ public struct AyuGramSettings: Codable, Equatable {
         self.foldersAtBottom = foldersAtBottom
         self.hideBottomSearch = hideBottomSearch
         self.compactBottomBar = compactBottomBar
+        self.bottomBarScrollMode = (0...2).contains(bottomBarScrollMode) ? bottomBarScrollMode : 0
         self.allowSaveRestrictedContent = allowSaveRestrictedContent
         self.roundVideoUseBackCamera = roundVideoUseBackCamera
         self.showCameraTile = showCameraTile
@@ -438,6 +442,8 @@ public struct AyuGramSettings: Codable, Equatable {
         self.foldersAtBottom = ((try container.decodeIfPresent(Int32.self, forKey: "foldersAtBottom")) ?? 0) != 0
         self.hideBottomSearch = ((try container.decodeIfPresent(Int32.self, forKey: "hideBottomSearch")) ?? 0) != 0
         self.compactBottomBar = ((try container.decodeIfPresent(Int32.self, forKey: "compactBottomBar")) ?? 0) != 0
+        let bottomBarScrollMode = try container.decodeIfPresent(Int32.self, forKey: "bottomBarScrollMode") ?? 0
+        self.bottomBarScrollMode = (0...2).contains(bottomBarScrollMode) ? bottomBarScrollMode : 0
         self.allowSaveRestrictedContent = ((try container.decodeIfPresent(Int32.self, forKey: "allowSaveRestrictedContent")) ?? 1) != 0
         self.roundVideoUseBackCamera = ((try container.decodeIfPresent(Int32.self, forKey: "roundVideoUseBackCamera")) ?? 0) != 0
         self.showCameraTile = ((try container.decodeIfPresent(Int32.self, forKey: "showCameraTile")) ?? 1) != 0
@@ -494,6 +500,7 @@ public struct AyuGramSettings: Codable, Equatable {
         try container.encode((self.foldersAtBottom ? 1 : 0) as Int32, forKey: "foldersAtBottom")
         try container.encode((self.hideBottomSearch ? 1 : 0) as Int32, forKey: "hideBottomSearch")
         try container.encode((self.compactBottomBar ? 1 : 0) as Int32, forKey: "compactBottomBar")
+        try container.encode(self.bottomBarScrollMode, forKey: "bottomBarScrollMode")
         try container.encode((self.allowSaveRestrictedContent ? 1 : 0) as Int32, forKey: "allowSaveRestrictedContent")
         try container.encode((self.roundVideoUseBackCamera ? 1 : 0) as Int32, forKey: "roundVideoUseBackCamera")
         try container.encode((self.showCameraTile ? 1 : 0) as Int32, forKey: "showCameraTile")

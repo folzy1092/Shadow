@@ -46,6 +46,71 @@ public protocol TabBarContainedController {
 
 open class TabBarControllerImpl: ViewController, TabBarController {
     private var validLayout: ContainerViewLayout?
+    private var scrollState = TabBarScrollState()
+    private weak var scrollSource: ViewController?
+    private var explicitlyHidden = false
+    private let revealScrollBarControl = UIControl()
+    private var scrollVisibilityObservers: [NSObjectProtocol] = []
+
+    public func configureScrollVisibility(source: ViewController, mode: Int32) {
+        let mode = TabBarScrollMode(rawValue: mode) ?? .alwaysVisible
+        guard self.scrollSource !== source || self.scrollState.mode != mode else { return }
+        self.scrollSource = source
+        self.scrollState.configure(mode: mode)
+        self.applyScrollVisibility(transition: .immediate)
+    }
+
+    private var scrollTransition: ContainedViewLayoutTransition {
+        return UIAccessibility.isReduceMotionEnabled ? .immediate : .animated(duration: 0.22, curve: .custom(0.0, 0.0, 0.58, 1.0))
+    }
+
+    private func acceptsScroll(from controller: ViewController) -> Bool {
+        return self.currentController === controller && self.scrollSource === controller && !self.explicitlyHidden
+            && controller.toolbar == nil && controller.tabBarSearchState?.isActive != true
+            && (self.validLayout?.inputHeight ?? 0.0) == 0.0
+            && !UIAccessibility.isVoiceOverRunning
+            && self.viewIfLoaded?.window != nil
+    }
+
+    public func tabBarScrollBegan(from controller: ViewController) {
+        guard self.acceptsScroll(from: controller) else { return }
+        self.scrollState.beginGesture()
+    }
+
+    public func tabBarScrollChanged(translation: CGFloat, from controller: ViewController) {
+        guard self.acceptsScroll(from: controller) else { return }
+        self.scrollState.updateGesture(translation: Double(translation))
+        self.applyScrollVisibility(transition: self.scrollTransition)
+    }
+
+    public func tabBarScrollEnded(from controller: ViewController) {
+        guard self.currentController === controller && self.scrollSource === controller else { return }
+        self.scrollState.endScrolling()
+        self.applyScrollVisibility(transition: self.scrollTransition)
+    }
+
+    public func revealScrollingTabBar(from controller: ViewController) {
+        guard self.currentController === controller && self.scrollSource === controller else { return }
+        self.resetScrollVisibility(transition: self.scrollTransition)
+    }
+
+    private func resetScrollVisibility(transition: ContainedViewLayoutTransition) {
+        self.scrollState.reset()
+        self.applyScrollVisibility(transition: transition)
+    }
+
+    @objc private func revealScrollBarPressed() {
+        self.resetScrollVisibility(transition: self.scrollTransition)
+    }
+
+    private func applyScrollVisibility(transition: ContainedViewLayoutTransition) {
+        guard self.isNodeLoaded else { return }
+        let hidden = self.explicitlyHidden || self.scrollState.isHidden
+        self.revealScrollBarControl.isHidden = !self.scrollState.isHidden || self.explicitlyHidden
+        guard self.tabBarControllerNode.tabBarHidden != hidden else { return }
+        self.tabBarControllerNode.tabBarHidden = hidden
+        if let layout = self.validLayout { self.containerLayoutUpdated(layout, transition: transition) }
+    }
     
     private var tabBarControllerNode: TabBarControllerNode {
         get {
@@ -100,6 +165,12 @@ open class TabBarControllerImpl: ViewController, TabBarController {
         self.strings = strings
         
         super.init(navigationBarPresentationData: nil)
+
+        for name in [UIApplication.willResignActiveNotification, UIApplication.didBecomeActiveNotification, UIResponder.keyboardWillShowNotification] {
+            self.scrollVisibilityObservers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                self?.resetScrollVisibility(transition: .immediate)
+            })
+        }
         
         self.scrollToTop = { [weak self] in
             guard let strongSelf = self else {
@@ -117,6 +188,7 @@ open class TabBarControllerImpl: ViewController, TabBarController {
     
     deinit {
         self.pendingControllerDisposable.dispose()
+        for observer in self.scrollVisibilityObservers { NotificationCenter.default.removeObserver(observer) }
     }
     
     public func updateTheme(theme: PresentationTheme) {
@@ -147,10 +219,9 @@ open class TabBarControllerImpl: ViewController, TabBarController {
     }
     
     public func updateIsTabBarHidden(_ value: Bool, transition: ContainedViewLayoutTransition) {
-        self.tabBarControllerNode.tabBarHidden = value
-        if let layout = self.validLayout {
-            self.containerLayoutUpdated(layout, transition: .animated(duration: 0.4, curve: .slide))
-        }
+        self.explicitlyHidden = value
+        self.scrollState.reset()
+        self.applyScrollVisibility(transition: transition)
     }
     
     override open func loadDisplayNode() {
@@ -264,6 +335,12 @@ open class TabBarControllerImpl: ViewController, TabBarController {
             self.currentController?.tabBarDeactivateSearch()
         })
         
+        self.revealScrollBarControl.isHidden = true
+        self.revealScrollBarControl.isAccessibilityElement = true
+        self.revealScrollBarControl.accessibilityLabel = "Показать нижнюю панель"
+        self.revealScrollBarControl.accessibilityTraits = .button
+        self.revealScrollBarControl.addTarget(self, action: #selector(self.revealScrollBarPressed), for: .touchUpInside)
+        self.displayNode.view.addSubview(self.revealScrollBarControl)
         self.updateSelectedIndex()
         self.displayNodeDidLoad()
     }
@@ -272,6 +349,7 @@ open class TabBarControllerImpl: ViewController, TabBarController {
     }
     
     private func updateSelectedIndex(animated: Bool = false) {
+        self.resetScrollVisibility(transition: .immediate)
         if !self.isNodeLoaded {
             return
         }
@@ -336,6 +414,7 @@ open class TabBarControllerImpl: ViewController, TabBarController {
                 guard let self else {
                     return
                 }
+                self.resetScrollVisibility(transition: .immediate)
                 if let layout = self.validLayout {
                     self.containerLayoutUpdated(layout, transition: transition)
                 }
@@ -364,8 +443,19 @@ open class TabBarControllerImpl: ViewController, TabBarController {
         super.containerLayoutUpdated(layout, transition: transition)
         
         self.validLayout = layout
+
+        // Reset logical state before calculating layout; never recurse from a
+        // keyboard/toolbar layout pass back into applyScrollVisibility.
+        if (layout.inputHeight ?? 0.0) > 0.0 || self.currentController?.toolbar != nil {
+            self.scrollState.reset()
+            self.tabBarControllerNode.tabBarHidden = self.explicitlyHidden
+        }
+        let revealHeight = max(24.0, layout.intrinsicInsets.bottom)
+        self.revealScrollBarControl.frame = CGRect(x: 0.0, y: layout.size.height - revealHeight, width: layout.size.width, height: revealHeight)
+        self.revealScrollBarControl.isHidden = !self.scrollState.isHidden || self.explicitlyHidden
         
         let bottomInset = self.tabBarControllerNode.containerLayoutUpdated(layout, toolbar: self.currentController?.toolbar, transition: transition)
+        self.displayNode.view.bringSubviewToFront(self.revealScrollBarControl)
         
         if let currentController = self.currentController {
             currentController.view.frame = CGRect(origin: CGPoint(), size: layout.size)
@@ -409,6 +499,7 @@ open class TabBarControllerImpl: ViewController, TabBarController {
     }
     
     override open func navigationStackConfigurationUpdated(next: [ViewController]) {
+        if !next.isEmpty { self.resetScrollVisibility(transition: .immediate) }
         super.navigationStackConfigurationUpdated(next: next)
         for controller in self.controllers {
             controller.navigationStackConfigurationUpdated(next: next)
@@ -416,6 +507,7 @@ open class TabBarControllerImpl: ViewController, TabBarController {
     }
     
     override open func viewWillDisappear(_ animated: Bool) {
+        self.resetScrollVisibility(transition: .immediate)
         if let currentController = self.currentController {
             currentController.viewWillDisappear(animated)
         }

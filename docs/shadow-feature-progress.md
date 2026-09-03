@@ -45,9 +45,37 @@ Validation: five catalog/navigation structural tests, Swift syntax parsing and
 existing test suites. Added 15 Swift Foundation assertions for the CI runner.
 On-device scrolling/highlighting and Swift type-checking remain pending.
 
+## Scroll-driven bottom bar
+
+Added `bottomBarScrollMode` (0 by default, 1 hides on downward scrolling, 2 also
+reveals when scrolling stops). It is account-scoped, migrated from missing/invalid
+values to 0, searchable and included in portable settings exports.
+
+The root registers only the main chat-list controller as the tab bar's scroll
+source. A pure `TabBarScrollState` in Display accumulates finger translation:
+20 pt down to hide, 8 pt up to show. Content/inset changes cannot create fake
+movement. A mid-gesture reset resumes from a new baseline.
+
+The parent tab controller owns state, frames and insets, with separate explicit
+and scroll-driven visibility. Existing hidden-state geometry caching is reused.
+Animation is 0.22 seconds ease-out, immediate with Reduce Motion. A bottom touch
+region reveals the bar. Auto-hiding is disabled during VoiceOver interaction.
+Search, keyboard, compose, presented controllers, folder changes, navigation,
+account source changes and app lifecycle events reset scroll visibility.
+
+Also aligned the customization list comparator with actual item order: later
+controls have stable IDs outside the original sequence and must not violate the
+list diff algorithm's sorted-order contract.
+
+Validation: seven structural integration tests plus Swift syntax checks. Added
+21 Foundation assertions for movement thresholds, direction reversal, mode
+changes, stop behavior, no-motion layout events and mid-gesture reset. Full Swift
+type-checking, slow/fast flicks, compact/standard bars, bottom folders, VoiceOver,
+keyboard and lifecycle testing on iOS remain pending. No IPA containing these
+features has been built yet.
+
 ## Pending features
 
-- Scroll-driven tab bar visibility.
 - Message filtering and rule transfer.
 - Message screenshots.
 - Replies to locally preserved deleted messages.

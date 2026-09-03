@@ -2230,12 +2230,20 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
     private var contentOffsetSyncLockedIn: Bool = false
     
     func willScrollToTop() {
+        self.controller?.shadowRevealScrollingBar()
         if let navigationBarComponentView = self.navigationBarView.view as? ChatListNavigationBar.View {
             navigationBarComponentView.applyScroll(offset: 0.0, allowAvatarsExpansion: false, transition: ComponentTransition(animation: .curve(duration: 0.3, curve: .slide)))
         }
     }
     
     private func contentOffsetChanged(offset: ListViewVisibleContentOffset, listView: ListView, isPrimary: Bool) {
+        if isPrimary && self.inlineStackContainerNode == nil {
+            if case let .known(value) = offset, value <= 0.0 {
+                self.controller?.shadowRevealScrollingBar()
+            } else if listView.isTracking {
+                self.controller?.shadowBarScrollChanged(translation: listView.scroller.panGestureRecognizer.translation(in: listView.view).y)
+            }
+        }
         guard let containerLayout = self.containerLayout else {
             return
         }
@@ -2343,6 +2351,7 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
     }
     
     private func didBeginInteractiveDragging(listView: ListView, isPrimary: Bool) {
+        if isPrimary && self.inlineStackContainerNode == nil { self.controller?.shadowBarScrollBegan() }
         if isPrimary {
             if let chatListNode = listView as? ChatListNode, !chatListNode.hasItemsToBeRevealed() {
                 self.allowOverscrollStoryExpansion = true
@@ -2363,6 +2372,7 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
     }
     
     private func contentScrollingEnded(listView: ListView, isPrimary: Bool) -> Bool {
+        if isPrimary && self.inlineStackContainerNode == nil { self.controller?.shadowBarScrollEnded() }
         if !isPrimary || self.inlineStackContainerNode == nil {
         } else {
             return false

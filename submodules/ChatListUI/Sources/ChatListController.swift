@@ -94,6 +94,27 @@ private final class ContextControllerContentSourceImpl: ContextControllerContent
 
 public class ChatListControllerImpl: TelegramBaseController, ChatListController {
     private var validLayout: ContainerViewLayout?
+
+    func shadowRevealScrollingBar() {
+        (self.parent as? TabBarController)?.revealScrollingTabBar(from: self)
+    }
+
+    func shadowBarScrollBegan() {
+        (self.parent as? TabBarController)?.tabBarScrollBegan(from: self)
+    }
+
+    func shadowBarScrollChanged(translation: CGFloat) {
+        (self.parent as? TabBarController)?.tabBarScrollChanged(translation: translation, from: self)
+    }
+
+    func shadowBarScrollEnded() {
+        (self.parent as? TabBarController)?.tabBarScrollEnded(from: self)
+    }
+
+    override public func present(_ controller: ViewController, in context: PresentationContextType, with arguments: Any? = nil, blockInteraction: Bool = false, completion: @escaping () -> Void = {}) {
+        self.shadowRevealScrollingBar()
+        super.present(controller, in: context, with: arguments, blockInteraction: blockInteraction, completion: completion)
+    }
     
     public let context: AccountContext
     private let controlsHistoryPreload: Bool
@@ -744,6 +765,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                 guard let strongSelf = self else {
                     return
                 }
+                strongSelf.shadowRevealScrollingBar()
                 
                 if let navigationBarView = strongSelf.chatListDisplayNode.navigationBarView.view as? ChatListNavigationBar.View, let headerPanelsView = navigationBarView.headerPanels as? HeaderPanelContainerComponent.View, let tabsView = headerPanelsView.tabs as? HorizontalTabsComponent.View {
                     tabsView.updateTabSwitchFraction(fraction: fraction, isDragging: strongSelf.chatListDisplayNode.mainContainerNode.isSwitchingCurrentItemFilterByDragging, transition: ComponentTransition(transition))
@@ -2832,6 +2854,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
     }
     
     override public func viewWillDisappear(_ animated: Bool) {
+        self.shadowRevealScrollingBar()
         super.viewWillDisappear(animated)
         
         self.chatListDisplayNode.mainContainerNode.updateEnableAdjacentFilterLoading(false)
@@ -4703,6 +4726,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         
     private var previousSearchToggleTimestamp: Double?
     func activateSearch(filter: ChatListSearchFilter = .chats, query: String? = nil, skipScrolling: Bool = false, searchContentNode: NavigationBarSearchContentNode?) {
+        self.shadowRevealScrollingBar()
         Task { @MainActor [weak self] in
             guard let self else {
                 return
@@ -4826,6 +4850,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
     }
     
     @objc fileprivate func composePressed() {
+        self.shadowRevealScrollingBar()
         guard !self.context.isFrozen else {
             let controller = self.context.sharedContext.makeAccountFreezeInfoScreen(context: self.context)
             self.push(controller)

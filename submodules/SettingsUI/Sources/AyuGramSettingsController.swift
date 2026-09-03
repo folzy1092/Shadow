@@ -51,6 +51,14 @@ private func attachmentAgeLabel(_ value: Int32) -> String {
 // The maximum-size steps for the saved-attachments cache, in bytes (0 = ∞).
 private let attachmentSizeLimits: [Int64] = [0, 314572800, 1073741824, 2147483648, 5368709120, 6442450944, 12884901888]
 
+private func shadowBottomBarScrollLabel(_ mode: Int32) -> String {
+    switch mode {
+    case 1: return "Скрывать при прокрутке вниз"
+    case 2: return "Скрывать и показывать при остановке"
+    default: return "Всегда показывать"
+    }
+}
+
 private func attachmentSizeLabel(_ value: Int64) -> String {
     switch value {
     case 314572800:
@@ -269,6 +277,7 @@ private final class AyuCustomizationArguments {
     let updateFoldersAtBottom: (Bool) -> Void
     let updateHideBottomSearch: (Bool) -> Void
     let updateCompactBottomBar: (Bool) -> Void
+    let selectBottomBarScrollMode: () -> Void
     let updateShowProfileId: (Bool) -> Void
     let updateShowProfileDC: (Bool) -> Void
     let updateShowRegistrationDate: (Bool) -> Void
@@ -301,6 +310,7 @@ private final class AyuCustomizationArguments {
         updateFoldersAtBottom: @escaping (Bool) -> Void,
         updateHideBottomSearch: @escaping (Bool) -> Void,
         updateCompactBottomBar: @escaping (Bool) -> Void,
+        selectBottomBarScrollMode: @escaping () -> Void,
         updateShowProfileId: @escaping (Bool) -> Void,
         updateShowProfileDC: @escaping (Bool) -> Void,
         updateShowRegistrationDate: @escaping (Bool) -> Void,
@@ -332,6 +342,7 @@ private final class AyuCustomizationArguments {
         self.updateFoldersAtBottom = updateFoldersAtBottom
         self.updateHideBottomSearch = updateHideBottomSearch
         self.updateCompactBottomBar = updateCompactBottomBar
+        self.selectBottomBarScrollMode = selectBottomBarScrollMode
         self.updateShowProfileId = updateShowProfileId
         self.updateShowProfileDC = updateShowProfileDC
         self.updateShowRegistrationDate = updateShowRegistrationDate
@@ -391,6 +402,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
     case foldersAtBottom(Bool)
     case hideBottomSearch(Bool)
     case compactBottomBar(Bool)
+    case bottomBarScrollMode(Int32)
     case bottomBarFooter
 
     case profilesHeader
@@ -434,7 +446,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
             return AyuCustomizationSection.appearance.rawValue
         case .chatsHeader, .hideAllChatsFolder, .chatsFooter:
             return AyuCustomizationSection.chats.rawValue
-        case .bottomBarHeader, .foldersAtBottom, .hideBottomSearch, .compactBottomBar, .bottomBarFooter:
+        case .bottomBarHeader, .foldersAtBottom, .hideBottomSearch, .compactBottomBar, .bottomBarScrollMode, .bottomBarFooter:
             return AyuCustomizationSection.bottomBar.rawValue
         case .profilesHeader, .showProfileId, .showProfileDC, .showRegistrationDate, .hideOwnPhoneNumber, .profilesFooter:
             return AyuCustomizationSection.profiles.rawValue
@@ -474,6 +486,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .foldersAtBottom: return 15
         case .hideBottomSearch: return 16
         case .compactBottomBar: return 17
+        case .bottomBarScrollMode: return 92
         case .bottomBarFooter: return 18
         case .profilesHeader: return 19
         case .showProfileId: return 20
@@ -505,13 +518,25 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         }
     }
 
+    private var sortKey: (Int32, Int) {
+        switch self {
+        case .editedIndicatorText: return (2, 1)
+        case .deletedIndicatorText: return (2, 2)
+        case .bottomBarScrollMode: return (17, 1)
+        default: return (self.stableId, 0)
+        }
+    }
+
     static func <(lhs: AyuCustomizationEntry, rhs: AyuCustomizationEntry) -> Bool {
-        return lhs.stableId < rhs.stableId
+        // Stable IDs do not encode insertion order for later-added controls.
+        return lhs.sortKey < rhs.sortKey
     }
 
     func item(presentationData: ItemListPresentationData, arguments: Any) -> ListViewItem {
         let arguments = arguments as! AyuCustomizationArguments
         switch self {
+        case let .bottomBarScrollMode(mode):
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Скрытие нижней панели", label: shadowBottomBarScrollLabel(mode), labelStyle: .detailText, sectionId: self.section, style: .blocks, action: arguments.selectBottomBarScrollMode)
         case .buildInfo:
             let bundle = Bundle.main
             let bundleVersion = (bundle.infoDictionary?["CFBundleShortVersionString"] as? String) ?? ""
@@ -705,6 +730,7 @@ private func ayuCustomizationEntries(settings: AyuGramSettings) -> [AyuCustomiza
     entries.append(.foldersAtBottom(settings.foldersAtBottom))
     entries.append(.hideBottomSearch(settings.hideBottomSearch))
     entries.append(.compactBottomBar(settings.compactBottomBar))
+    entries.append(.bottomBarScrollMode(settings.bottomBarScrollMode))
     entries.append(.bottomBarFooter)
 
     entries.append(.profilesHeader)
@@ -810,6 +836,21 @@ private func ayuCustomizationController(context: AccountContext, focus: ShadowSe
         },
         updateCompactBottomBar: { value in
             ayuUpdateSettings(context: context) { var s = $0; s.compactBottomBar = value; return s }
+        },
+        selectBottomBarScrollMode: {
+            let data = context.sharedContext.currentPresentationData.with { $0 }
+            let sheet = ActionSheetController(presentationData: data)
+            let items: [ActionSheetItem] = (0...2).map { mode in
+                ActionSheetButtonItem(title: shadowBottomBarScrollLabel(Int32(mode)), action: { [weak sheet] in
+                    sheet?.dismissAnimated()
+                    ayuUpdateSettings(context: context) { var settings = $0; settings.bottomBarScrollMode = Int32(mode); return settings }
+                })
+            }
+            sheet.setItemGroups([
+                ActionSheetItemGroup(items: items),
+                ActionSheetItemGroup(items: [ActionSheetButtonItem(title: data.strings.Common_Cancel, action: { [weak sheet] in sheet?.dismissAnimated() })])
+            ])
+            presentControllerImpl?(sheet, nil)
         },
         updateShowProfileId: { value in
             ayuUpdateSettings(context: context) { var s = $0; s.showProfileId = value; return s }

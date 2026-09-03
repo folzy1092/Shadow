@@ -269,6 +269,9 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
             }
             let transition: ContainedViewLayoutTransition = ayuIsFirstSettingsEmission ? .immediate : .animated(duration: 0.25, curve: .easeInOut)
             ayuIsFirstSettingsEmission = false
+            if let chatListController = self.chatListController {
+                (self.rootTabController as? TabBarControllerImpl)?.configureScrollVisibility(source: chatListController, mode: settings.bottomBarScrollMode)
+            }
             (self.rootTabController as? TabBarControllerImpl)?.updateLayout(transition: transition)
         })
     }

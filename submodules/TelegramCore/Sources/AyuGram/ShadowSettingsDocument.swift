@@ -41,7 +41,7 @@ public struct ShadowSettingsDocument: Codable, Equatable {
         "showRegistrationDate", "hideOwnPhoneNumber"
     ]
     public static let textKeys: Set<String> = ["editedIndicatorText", "deletedIndicatorText"]
-    public static let integerKeys: Set<String> = ["mediaAutoCleanInterval", "attachmentSizeLimit"]
+    public static let integerKeys: Set<String> = ["mediaAutoCleanInterval", "attachmentSizeLimit", "bottomBarScrollMode"]
     private static let ageIntervals: Set<Int64> = [0, 86400, 259200, 604800, 1209600, 2592000, 7776000, 15552000, 31536000]
     private static let sizeLimits: Set<Int64> = [0, 314572800, 1073741824, 2147483648, 5368709120, 6442450944, 12884901888]
 
@@ -105,6 +105,7 @@ public struct ShadowSettingsDocument: Codable, Equatable {
             case let .text(text) where textKeys.contains(key) && text.count <= 64: break
             case let .integer(number) where key == "mediaAutoCleanInterval" && ageIntervals.contains(number): break
             case let .integer(number) where key == "attachmentSizeLimit" && sizeLimits.contains(number): break
+            case let .integer(number) where key == "bottomBarScrollMode" && (0...2).contains(number): break
             default: throw ShadowSettingsTransferError.invalidValue(key)
             }
         }

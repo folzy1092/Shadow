@@ -66,6 +66,7 @@ public enum ShadowSettingsTransfer {
         values["deletedIndicatorText"] = .text(settings.deletedIndicatorText)
         values["mediaAutoCleanInterval"] = .integer(Int64(settings.mediaAutoCleanInterval))
         values["attachmentSizeLimit"] = .integer(settings.attachmentSizeLimit)
+        values["bottomBarScrollMode"] = .integer(Int64(settings.bottomBarScrollMode))
         return try ShadowSettingsDocument(settings: values)
     }
 
@@ -87,6 +88,7 @@ public enum ShadowSettingsTransfer {
                 switch key {
                 case "mediaAutoCleanInterval": updated.mediaAutoCleanInterval = Int32(number)
                 case "attachmentSizeLimit": updated.attachmentSizeLimit = number
+                case "bottomBarScrollMode": updated.bottomBarScrollMode = Int32(number)
                 default: break
                 }
             }

@@ -49,6 +49,9 @@ struct DocumentTests {
         expectFailure("Overlong marker") { _ = try ShadowSettingsDocument(settings: ["editedIndicatorText": .text(String(repeating: "a", count: 65))]) }
         let marker = try ShadowSettingsDocument(settings: ["editedIndicatorText": .text(String(repeating: "a", count: 64))])
         check(marker.settings.count == 1, "64-character marker is accepted")
+        let scroll = try ShadowSettingsDocument(settings: ["bottomBarScrollMode": .integer(2)])
+        check(scroll.settings["bottomBarScrollMode"] == .integer(2), "Scroll mode is portable")
+        expectFailure("Unsupported scroll mode") { _ = try ShadowSettingsDocument(settings: ["bottomBarScrollMode": .integer(3)]) }
         print("Shadow settings document: \(count) checks passed")
     }
 }

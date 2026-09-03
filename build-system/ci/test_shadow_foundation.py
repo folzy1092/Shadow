@@ -15,6 +15,7 @@ def main():
     cases = [
         ('document', 'submodules/TelegramCore/Sources/AyuGram/ShadowSettingsDocument.swift', 'Tests/ShadowSettings/DocumentTests.swift'),
         ('search', 'submodules/SettingsUI/Sources/ShadowSettingsSearchIndex.swift', 'Tests/ShadowSettings/SearchTests.swift'),
+        ('tab-bar-scroll', 'submodules/Display/Source/TabBarScrollState.swift', 'Tests/ShadowSettings/TabBarScrollTests.swift'),
     ]
     with tempfile.TemporaryDirectory(prefix='shadow-foundation-tests-') as directory:
         for name, source, tests in cases:
