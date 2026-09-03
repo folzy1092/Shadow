@@ -43,6 +43,12 @@ jobs:
           python3 -m unittest discover -s Tests/ShadowCI -v
           python3 build-system/ci/configure_bazel.py --workspace /Users/Shared/telegram-ios
 
+      - name: Verify Shadow settings and screenshot regressions
+        run: |
+          python3 -B -m unittest discover -s Tests/ShadowSettings -p 'test_*.py'
+          python3 build-system/ci/test_shadow_foundation.py
+          python3 build-system/ci/test_shadow_postbox.py
+
       - name: Build the App
         id: build
         env:

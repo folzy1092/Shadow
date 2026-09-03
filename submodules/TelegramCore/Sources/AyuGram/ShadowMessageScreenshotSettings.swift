@@ -31,6 +31,18 @@ public struct ShadowMessageScreenshotSettings: Codable, Equatable {
         self.showTime = try c.decodeIfPresent(Bool.self, forKey: .showTime) ?? true
     }
 
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(self.enabled, forKey: .enabled)
+        // Postbox does not support the single-value container used by a
+        // raw-value enum's synthesized encoder. Use its keyed Int32 overload.
+        try c.encode(self.background.rawValue, forKey: .background)
+        try c.encode(self.showAvatars, forKey: .showAvatars)
+        try c.encode(self.showNames, forKey: .showNames)
+        try c.encode(self.showBadges, forKey: .showBadges)
+        try c.encode(self.showTime, forKey: .showTime)
+    }
+
     // Fixed, account-local path. Never accept a path from an imported settings file.
     public static func backgroundURL(mediaBoxPath: String) -> URL {
         return URL(fileURLWithPath: mediaBoxPath, isDirectory: true).appendingPathComponent("shadow-message-screenshot.jpg")
