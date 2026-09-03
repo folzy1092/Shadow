@@ -82,11 +82,12 @@ private enum AyuHubEntry: ItemListNodeEntry {
     case spy
     case ghost
     case misc
+    case backup
     case infoFooter
 
     var section: ItemListSectionId {
         switch self {
-        case .customization, .spy, .ghost, .misc:
+        case .customization, .spy, .ghost, .misc, .backup:
             return AyuHubSection.sections.rawValue
         case .infoFooter:
             return AyuHubSection.info.rawValue
@@ -104,6 +105,8 @@ private enum AyuHubEntry: ItemListNodeEntry {
         case .misc:
             return 3
         case .infoFooter:
+            return 5
+        case .backup:
             return 4
         }
     }
@@ -133,6 +136,8 @@ private enum AyuHubEntry: ItemListNodeEntry {
             })
         case .infoFooter:
             return ItemListTextItem(presentationData: presentationData, text: .plain("Кастомизация — внешний вид и поведение приложения. Шпион — сохранение информации, которую Telegram скрывает или удаляет. Призрак — максимально незаметное использование Telegram. Разное — визуальная подмена данных профиля для скриншотов."), sectionId: self.section)
+        case .backup:
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Резервная копия настроек", label: "", sectionId: self.section, style: .blocks, action: arguments.openBackup)
         }
     }
 }
@@ -142,12 +147,14 @@ private final class AyuHubArguments {
     let openSpy: () -> Void
     let openGhost: () -> Void
     let openMisc: () -> Void
+    let openBackup: () -> Void
 
-    init(openCustomization: @escaping () -> Void, openSpy: @escaping () -> Void, openGhost: @escaping () -> Void, openMisc: @escaping () -> Void) {
+    init(openCustomization: @escaping () -> Void, openSpy: @escaping () -> Void, openGhost: @escaping () -> Void, openMisc: @escaping () -> Void, openBackup: @escaping () -> Void) {
         self.openCustomization = openCustomization
         self.openSpy = openSpy
         self.openGhost = openGhost
         self.openMisc = openMisc
+        self.openBackup = openBackup
     }
 }
 
@@ -166,10 +173,13 @@ public func ayuGramSettingsController(context: AccountContext) -> ViewController
         },
         openMisc: {
             pushControllerImpl?(ayuMiscController(context: context))
+        },
+        openBackup: {
+            pushControllerImpl?(shadowSettingsBackupController(context: context))
         }
     )
 
-    let entries: [AyuHubEntry] = [.customization, .spy, .ghost, .misc, .infoFooter]
+    let entries: [AyuHubEntry] = [.customization, .spy, .ghost, .misc, .backup, .infoFooter]
 
     let signal = context.sharedContext.presentationData
     |> deliverOnMainQueue
