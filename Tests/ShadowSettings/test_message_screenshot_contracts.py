@@ -28,6 +28,15 @@ class MessageScreenshotContracts(unittest.TestCase):
         self.assertIn('ayuGramSettings(postbox: context.account.postbox)', source)
         self.assertNotIn('UserDefaults', source)
 
+    def test_native_render_dependencies_and_visibility(self):
+        source = (ROOT / 'submodules/TelegramUI/Sources/Chat/ChatControllerMessageScreenshot.swift').read_text()
+        for value in ('import AlertUI', 'import PresentationDataUtils', 'canReadHistory = false', 'node.visibility = .visible', 'node.updateAbsoluteRect', 'recursivelyEnsureDisplaySynchronously(true)', 'defer { self.content.view.transform = previewTransform }'):
+            self.assertIn(value, source)
+        media = (ROOT / 'submodules/TelegramUI/Components/Chat/ChatMessageMediaBubbleContentNode/Sources/ChatMessageMediaBubbleContentNode.swift').read_text()
+        block = media.split('if item.presentationData.shadowScreenshot != nil {', 1)[1].split('var hasReplyMarkup', 1)[0]
+        self.assertIn('automaticPlayback = false', block)
+        self.assertIn('automaticDownload = .none', block)
+
     def test_snapshot_is_opt_in_and_encoded(self):
         source = (ROOT / 'submodules/TelegramPresentationData/Sources/ChatPresentationData.swift').read_text()
         self.assertIn('shadowScreenshot: ShadowMessageScreenshotSettings? = nil', source)

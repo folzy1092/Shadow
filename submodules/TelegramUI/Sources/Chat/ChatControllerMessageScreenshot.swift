@@ -2,6 +2,8 @@ import Foundation
 import UIKit
 import AsyncDisplayKit
 import Display
+import AlertUI
+import PresentationDataUtils
 import SwiftSignalKit
 import TelegramCore
 import TelegramPresentationData
@@ -132,6 +134,7 @@ private final class ShadowMessageScreenshotPreview: UIViewController {
             self.fail("Не удалось подготовить сообщение."); return
         }
         template.controllerInteraction.chatIsRotated = false
+        template.controllerInteraction.canReadHistory = false
         var downloads = template.controllerInteraction.automaticMediaDownloadSettings
         downloads.cellular.enabled = false
         downloads.wifi.enabled = false
@@ -150,6 +153,7 @@ private final class ShadowMessageScreenshotPreview: UIViewController {
             node.frame = CGRect(x: avatarWidth + 4.0, y: self.contentHeight, width: params.width, height: height)
             self.content.addSubnode(node)
             node.isUserInteractionEnabled = false
+            node.visibility = .visible(1.0, CGRect(origin: .zero, size: node.bounds.size))
             if !self.options.showTime { self.hideTime(in: node) }
             if self.options.showAvatars, let author = message.author {
                 let avatar = AvatarNode(font: Font.regular(14.0))
@@ -185,6 +189,12 @@ private final class ShadowMessageScreenshotPreview: UIViewController {
         self.background?.frame = CGRect(origin: .zero, size: size)
         self.background?.updateLayout(size: size, displayMode: .aspectFill, transition: .immediate)
         self.imageBackground?.frame = CGRect(origin: .zero, size: size)
+        for case let node as ListViewItemNode in self.content.subnodes ?? [] {
+            // Native message wallpaper coordinates expect an inverted list.
+            // Convert without rotating the screenshot or the message itself.
+            let rect = CGRect(x: node.frame.minX, y: size.height - node.frame.maxY + node.insets.top, width: node.frame.width, height: node.frame.height)
+            node.updateAbsoluteRect(rect, within: size)
+        }
     }
 
     private func fail(_ text: String) {
@@ -202,6 +212,10 @@ private final class ShadowMessageScreenshotPreview: UIViewController {
         let format = UIGraphicsImageRendererFormat()
         format.scale = CGFloat(scale)
         format.opaque = true
+        self.content.recursivelyEnsureDisplaySynchronously(true)
+        let previewTransform = self.content.view.transform
+        self.content.view.transform = .identity
+        defer { self.content.view.transform = previewTransform }
         // Layer render ignores the outer scroll view and captures the full selection.
         let image = UIGraphicsImageRenderer(size: self.content.bounds.size, format: format).image { renderer in
             self.content.layer.render(in: renderer.cgContext)
