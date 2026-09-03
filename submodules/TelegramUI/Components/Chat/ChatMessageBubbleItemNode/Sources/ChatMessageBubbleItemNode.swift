@@ -4015,8 +4015,12 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         if item.presentationData.theme.theme.forceSync {
             legacyTransition = .immediate
         }
-        strongSelf.backgroundNode.setType(type: backgroundType, highlighted: false, graphics: graphics, maskMode: strongSelf.backgroundMaskMode, hasWallpaper: hasWallpaper, transition: legacyTransition, backgroundNode: presentationContext.backgroundNode)
-        strongSelf.backgroundWallpaperNode.setType(type: backgroundType, theme: item.presentationData.theme, essentialGraphics: graphics, maskMode: strongSelf.backgroundMaskMode, backgroundNode: presentationContext.backgroundNode)
+        // Offscreen screenshot export uses CALayer.render, which cannot capture
+        // wallpaper portal views. Keep the bubble, rendered as native bitmap
+        // graphics, instead of replacing its fill with a portal-backed backdrop.
+        let bubbleBackgroundNode = item.presentationData.shadowScreenshot == nil ? presentationContext.backgroundNode : nil
+        strongSelf.backgroundNode.setType(type: backgroundType, highlighted: false, graphics: graphics, maskMode: strongSelf.backgroundMaskMode, hasWallpaper: hasWallpaper, transition: legacyTransition, backgroundNode: bubbleBackgroundNode)
+        strongSelf.backgroundWallpaperNode.setType(type: backgroundType, theme: item.presentationData.theme, essentialGraphics: graphics, maskMode: strongSelf.backgroundMaskMode, backgroundNode: bubbleBackgroundNode)
         strongSelf.shadowNode.setType(type: backgroundType, hasWallpaper: hasWallpaper, graphics: graphics)
         
         strongSelf.backgroundType = backgroundType
@@ -7383,6 +7387,9 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
     }
     
     private var backgroundMaskMode: Bool {
+        if self.item?.presentationData.shadowScreenshot != nil {
+            return false
+        }
         let hasWallpaper = self.item?.presentationData.theme.wallpaper.hasWallpaper ?? false
         let isPreview = self.item?.presentationData.isPreview ?? false
         return self.mainContextSourceNode.isExtractedToContextPreview || hasWallpaper || isPreview || !self.disablesComments
