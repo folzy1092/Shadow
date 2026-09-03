@@ -37,6 +37,7 @@ enum ShadowSettingsSearchIndex {
         ShadowSettingsSearchItem(destination: .customization, entryId: 5, title: "Точное время последнего захода", description: "Показывать точное время вместо приблизительного", keywords: "last seen online онлайн"),
         ShadowSettingsSearchItem(destination: .customization, entryId: 6, title: "Секунды у последнего захода", description: "После включения точного времени захода", keywords: "last seen seconds", parentEntryId: 5),
         ShadowSettingsSearchItem(destination: .customization, entryId: 7, title: "Широкие посты в каналах", description: "Увеличенная ширина сообщений каналов", keywords: "wide channel posts"),
+        ShadowSettingsSearchItem(destination: .customization, entryId: 93, title: "Скриншоты сообщений", description: "Кнопка камеры при выделении, фон чата, своя картинка, белый и чёрный фон, аватары, имена, значки и время", keywords: "screenshot camera photo export скрин снимок"),
         ShadowSettingsSearchItem(destination: .customization, entryId: 8, title: "Точные просмотры на постах", description: "Полное число просмотров без сокращений", keywords: "exact view count"),
         ShadowSettingsSearchItem(destination: .customization, entryId: 9, title: "Счётчик пересылок", description: "Число пересылок рядом со временем", keywords: "forward count"),
         ShadowSettingsSearchItem(destination: .customization, entryId: 12, title: "Скрыть папку «Все чаты»", description: "Не показывать общую папку", keywords: "hide all chats folder"),

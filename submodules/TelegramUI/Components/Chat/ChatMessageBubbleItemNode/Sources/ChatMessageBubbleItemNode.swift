@@ -1872,6 +1872,13 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             }
         }
         
+        if let screenshot = item.presentationData.shadowScreenshot {
+            // The export owns its avatar column; do not reserve a second one.
+            hasAvatar = false
+            effectiveAuthor = firstMessage.author
+            displayAuthorInfo = screenshot.showNames && effectiveAuthor != nil
+            ignoreNameHiding = true
+        }
         avatarInset = hasAvatar ? layoutConstants.avatarInset : 0.0
         if isSidePanelOpen {
             avatarInset = 0.0
@@ -1968,7 +1975,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             }
         }
         
-        if isPreview {
+        if isPreview || item.presentationData.shadowScreenshot != nil {
             needsShareButton = false
             needsSummarizeButton = false
         }
@@ -2488,7 +2495,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 }
                 authorNameColor = color
 
-                if case let .peer(peerId) = item.chatLocation, let authorPeerId = item.message.author?.id, authorPeerId == peerId {
+                if case let .peer(peerId) = item.chatLocation, let authorPeerId = item.message.author?.id, authorPeerId == peerId, item.presentationData.shadowScreenshot == nil {
                     if effectiveAuthor is TelegramChannel, let emojiStatus = effectiveAuthor.emojiStatus {
                         currentCredibilityIcon = (.animation(content: .customEmoji(fileId: emojiStatus.fileId), size: CGSize(width: 20.0, height: 20.0), placeholderColor: incoming ? item.presentationData.theme.theme.chat.message.incoming.mediaPlaceholderColor : item.presentationData.theme.theme.chat.message.outgoing.mediaPlaceholderColor, themeColor: color.withMultipliedAlpha(0.4), loopMode: .count(2)), nil)
                     }
@@ -2503,6 +2510,9 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 } else if effectiveAuthor.isPremium {
                     currentCredibilityIcon = (.premium(color: color.withMultipliedAlpha(0.4)), nil)
                 }
+            }
+            if item.presentationData.shadowScreenshot?.showBadges == false {
+                currentCredibilityIcon = nil
             }
             if let rawAuthorNameColor = authorNameColor {
                 var dimColors = false

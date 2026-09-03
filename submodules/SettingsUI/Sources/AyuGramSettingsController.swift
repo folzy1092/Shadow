@@ -258,6 +258,7 @@ private func ayuUpdateSettings(context: AccountContext, _ f: @escaping (AyuGramS
 // MARK: - Кастомизация
 
 private final class AyuCustomizationArguments {
+    var openMessageScreenshot: () -> Void = {}
     let updateShowMessageSeconds: (Bool) -> Void
     let updateEditedIndicatorAsPencil: (Bool) -> Void
     let updateEditedIndicatorText: (String) -> Void
@@ -381,6 +382,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
     // so no new build-system wiring is needed — just surfacing existing data.
     case buildInfo
     case appearanceHeader
+    case messageScreenshot
     case showMessageSeconds(Bool)
     case editedIndicatorAsPencil(Bool)
     case editedIndicatorText(String)
@@ -440,6 +442,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
 
     var section: ItemListSectionId {
         switch self {
+        case .messageScreenshot: return AyuCustomizationSection.appearance.rawValue
         case .buildInfo:
             return AyuCustomizationSection.buildInfo.rawValue
         case .appearanceHeader, .showMessageSeconds, .editedIndicatorAsPencil, .editedIndicatorText, .deletedIndicatorText, .regularEmojiFirst, .doubleTapToEdit, .showExactLastSeen, .showExactLastSeenSeconds, .wideChannelPosts, .showExactViewCounts, .showForwardCount, .appearanceFooter:
@@ -465,6 +468,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
 
     var stableId: Int32 {
         switch self {
+        case .messageScreenshot: return 93
         case .buildInfo: return -1
         case .appearanceHeader: return 0
         case .showMessageSeconds: return 1
@@ -520,6 +524,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
 
     private var sortKey: (Int32, Int) {
         switch self {
+        case .messageScreenshot: return (9, 1)
         case .editedIndicatorText: return (2, 1)
         case .deletedIndicatorText: return (2, 2)
         case .bottomBarScrollMode: return (17, 1)
@@ -535,6 +540,8 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
     func item(presentationData: ItemListPresentationData, arguments: Any) -> ListViewItem {
         let arguments = arguments as! AyuCustomizationArguments
         switch self {
+        case .messageScreenshot:
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Скриншоты сообщений", label: "", sectionId: self.section, style: .blocks, action: arguments.openMessageScreenshot)
         case let .bottomBarScrollMode(mode):
             return ItemListDisclosureItem(presentationData: presentationData, title: "Скрытие нижней панели", label: shadowBottomBarScrollLabel(mode), labelStyle: .detailText, sectionId: self.section, style: .blocks, action: arguments.selectBottomBarScrollMode)
         case .buildInfo:
@@ -720,6 +727,7 @@ private func ayuCustomizationEntries(settings: AyuGramSettings) -> [AyuCustomiza
     entries.append(.wideChannelPosts(settings.wideChannelPosts))
     entries.append(.showExactViewCounts(settings.showExactViewCounts))
     entries.append(.showForwardCount(settings.showForwardCount))
+    entries.append(.messageScreenshot)
     entries.append(.appearanceFooter)
 
     entries.append(.chatsHeader)
@@ -960,6 +968,9 @@ private func ayuCustomizationController(context: AccountContext, focus: ShadowSe
         delegate.retainSelf()
         picker.delegate = delegate
         controller.view.window?.rootViewController?.present(picker, animated: true)
+    }
+    arguments.openMessageScreenshot = { [weak controller] in
+        controller?.push(shadowMessageScreenshotSettingsController(context: context))
     }
     return controller
 }

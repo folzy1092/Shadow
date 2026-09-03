@@ -15,10 +15,13 @@ class TransferContracts(unittest.TestCase):
         declared = set(re.findall(r'public var (\w+): Bool', (CORE / 'AyuGramSettings.swift').read_text()))
         block = DOCUMENT.split('booleanKeys: Set<String> = [', 1)[1].split(']', 1)[0]
         allowed = set(re.findall(r'"(\w+)"', block))
-        paths = dict(re.findall(r'"(\w+)": \\\.(\w+)', TRANSFER))
+        paths = dict(re.findall(r'"(\w+)": \\\.([\w.]+)', TRANSFER))
         self.assertEqual(allowed, set(paths))
-        self.assertLessEqual(allowed, declared)
-        self.assertTrue(all(key == value for key, value in paths.items()))
+        nested = {f'messageScreenshot.{name}' for name in re.findall(
+            r'public var (\w+): Bool', (CORE / 'ShadowMessageScreenshotSettings.swift').read_text())}
+        self.assertLessEqual(set(paths.values()), declared | nested)
+        self.assertTrue(all(key == value or (key.startswith('screenshot') and value in nested)
+                            for key, value in paths.items()))
 
     def test_no_private_fields_in_export(self):
         for forbidden in ['spoofProfile', 'customBannerEnabled', 'customProfileBackground', 'api_hash', 'authKey', 'session']:

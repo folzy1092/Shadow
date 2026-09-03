@@ -431,6 +431,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     var chatThemeAndDarkAppearancePreviewPromise = Promise<(ChatTheme?, Bool?)>((nil, nil))
     var didSetPresentationData = false
     var presentationData: PresentationData
+    var shadowScreenshotPreparing = false
     var presentationDataPromise = Promise<PresentationData>()
     override public var updatedPresentationData: (PresentationData, Signal<PresentationData, NoError>) {
         return (self.presentationData, self.presentationDataPromise.get())

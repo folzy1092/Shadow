@@ -113,7 +113,7 @@ private final class GlassButtonView: UIView {
                 return
             }
             if let icon = self.icon {
-                self.iconView.image = UIImage(bundleImageName: icon)?.withRenderingMode(.alwaysTemplate)
+                self.iconView.image = (UIImage(bundleImageName: icon) ?? UIImage(systemName: icon, withConfiguration: UIImage.SymbolConfiguration(pointSize: 20.0, weight: .regular)))?.withRenderingMode(.alwaysTemplate)
             } else {
                 self.iconView.image = nil
             }
@@ -185,6 +185,10 @@ public final class ChatMessageSelectionInputPanelNode: ChatInputPanelNode {
     // picker but sends with sender names hidden. Placed next to the regular
     // forward button in the multi-select panel.
     private let incognitoForwardButton: GlassButtonView
+    private let screenshotButton: GlassButtonView
+    private let screenshotSettingsDisposable = MetaDisposable()
+    private var observingScreenshotSettings = false
+    private var screenshotEnabled = true
     private let shareButton: GlassButtonView
     private let tagButton: GlassButtonView
     private let tagEditButton: GlassButtonView
@@ -240,6 +244,11 @@ public final class ChatMessageSelectionInputPanelNode: ChatInputPanelNode {
         self.incognitoForwardButton.accessibilityLabel = strings.VoiceOver_MessageContextForward
 
         self.shareButton = GlassButtonView()
+        self.screenshotButton = GlassButtonView()
+        self.screenshotButton.icon = "camera"
+        self.screenshotButton.isAccessibilityElement = true
+        self.screenshotButton.accessibilityLabel = "Скриншот сообщений"
+        self.screenshotButton.isEnabled = false
         self.shareButton.icon = "Chat/Input/Accessory Panels/MessageSelectionAction"
         self.shareButton.isAccessibilityElement = true
         self.shareButton.accessibilityLabel = strings.VoiceOver_MessageContextShare
@@ -269,6 +278,7 @@ public final class ChatMessageSelectionInputPanelNode: ChatInputPanelNode {
         self.view.addSubview(self.reportButton)
         self.view.addSubview(self.forwardButton)
         self.view.addSubview(self.incognitoForwardButton)
+        self.view.addSubview(self.screenshotButton)
         self.view.addSubview(self.shareButton)
         self.view.addSubview(self.tagButton)
         self.view.addSubview(self.tagEditButton)
@@ -283,16 +293,19 @@ public final class ChatMessageSelectionInputPanelNode: ChatInputPanelNode {
         self.reportButton.button.addTarget(self, action: #selector(self.reportButtonPressed), for: .touchUpInside)
         self.forwardButton.button.addTarget(self, action: #selector(self.forwardButtonPressed), for: .touchUpInside)
         self.incognitoForwardButton.button.addTarget(self, action: #selector(self.incognitoForwardButtonPressed), for: .touchUpInside)
+        self.screenshotButton.button.addTarget(self, action: #selector(self.screenshotButtonPressed), for: .touchUpInside)
         self.shareButton.button.addTarget(self, action: #selector(self.shareButtonPressed), for: .touchUpInside)
         self.tagButton.button.addTarget(self, action: #selector(self.tagButtonPressed), for: .touchUpInside)
         self.tagEditButton.button.addTarget(self, action: #selector(self.tagButtonPressed), for: .touchUpInside)
     }
     
     deinit {
+        self.screenshotSettingsDisposable.dispose()
         self.canDeleteMessagesDisposable.dispose()
     }
     
     private func updateActions() {
+        self.screenshotButton.isEnabled = !self.selectedMessages.isEmpty
         self.forwardButton.isEnabled = self.selectedMessages.count != 0
         self.incognitoForwardButton.isEnabled = self.selectedMessages.count != 0
         
@@ -375,6 +388,12 @@ public final class ChatMessageSelectionInputPanelNode: ChatInputPanelNode {
         } else if !self.incognitoForwardButton.isImplicitlyDisabled {
             self.interfaceInteraction?.forwardSelectedMessagesWithoutAuthor()
         }
+    }
+
+    @objc private func screenshotButtonPressed() {
+        guard self.screenshotEnabled, !self.selectedMessages.isEmpty, !self.peerMedia else { return }
+        guard !(self.presentationInterfaceState?.renderedPeer?.peer is TelegramSecretChat) else { return }
+        self.interfaceInteraction?.screenshotSelectedMessages()
     }
     
     @objc private func shareButtonPressed() {
@@ -510,6 +529,18 @@ public final class ChatMessageSelectionInputPanelNode: ChatInputPanelNode {
     
     override public func updateLayout(width: CGFloat, leftInset: CGFloat, rightInset: CGFloat, bottomInset: CGFloat, additionalSideInsets: UIEdgeInsets, maxHeight: CGFloat, maxOverlayHeight: CGFloat, isSecondary: Bool, transition: ContainedViewLayoutTransition, interfaceState: ChatPresentationInterfaceState, metrics: LayoutMetrics, deviceMetrics: DeviceMetrics, isMediaInputExpanded: Bool) -> CGFloat {
         self.validLayout = (width, leftInset, rightInset, bottomInset, additionalSideInsets, maxHeight, maxOverlayHeight, metrics, isSecondary, isMediaInputExpanded, deviceMetrics)
+        if !self.observingScreenshotSettings, let context = self.context {
+            self.observingScreenshotSettings = true
+            self.screenshotSettingsDisposable.set((ayuGramSettings(postbox: context.account.postbox)
+            |> map { $0.messageScreenshot.enabled }
+            |> distinctUntilChanged
+            |> deliverOnMainQueue).start(next: { [weak self] enabled in
+                guard let self else { return }
+                self.screenshotEnabled = enabled
+                self.update(transition: .immediate)
+            }))
+        }
+        self.screenshotButton.isHidden = !self.screenshotEnabled || self.peerMedia || interfaceState.renderedPeer?.peer is TelegramSecretChat
         
         var leftInset = leftInset + 8.0
         var rightInset = rightInset + 8.0
@@ -654,15 +685,20 @@ public final class ChatMessageSelectionInputPanelNode: ChatInputPanelNode {
             }
         }
         
+        var visibleButtons = buttons.filter { !$0.isHidden }
+        if !self.screenshotButton.isHidden {
+            let index = visibleButtons.firstIndex(where: { $0 === self.incognitoForwardButton }) ?? max(0, visibleButtons.count - 1)
+            visibleButtons.insert(self.screenshotButton, at: index)
+        }
         let buttonSize = CGSize(width: 40.0, height: 40.0)
         
         let availableWidth = width - leftInset - rightInset
-        let spacing: CGFloat = floor((availableWidth - buttonSize.width * CGFloat(buttons.count)) / CGFloat(buttons.count - 1))
+        let spacing: CGFloat = max(0.0, floor((availableWidth - buttonSize.width * CGFloat(visibleButtons.count)) / CGFloat(max(1, visibleButtons.count - 1))))
         var offset: CGFloat = leftInset
-        for i in 0 ..< buttons.count {
-            let button = buttons[i]
+        for i in 0 ..< visibleButtons.count {
+            let button = visibleButtons[i]
             let buttonFrame: CGRect
-            if i == buttons.count - 1 {
+            if i == visibleButtons.count - 1 {
                 buttonFrame = CGRect(origin: CGPoint(x: width - rightInset - buttonSize.width, y: 0.0), size: buttonSize)
             } else {
                 buttonFrame = CGRect(origin: CGPoint(x: offset, y: 0.0), size: buttonSize)

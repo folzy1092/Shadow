@@ -80,6 +80,7 @@ public final class ChatPanelInterfaceInteraction {
     public let blockMessageAuthor: (EngineRawMessage, ContextControllerProtocol?) -> Void
     public let deleteMessages: ([EngineRawMessage], ContextControllerProtocol?, @escaping (ContextMenuActionResult) -> Void) -> Void
     public let forwardSelectedMessages: () -> Void
+    public let screenshotSelectedMessages: () -> Void
     // Shadow: forward the current message selection with sender names pre-hidden
     // (hideNames = true), i.e. "forward without author" straight from the
     // multi-select panel's anonymous-forward button. Symmetric to
@@ -234,6 +235,7 @@ public final class ChatPanelInterfaceInteraction {
         blockMessageAuthor: @escaping (EngineRawMessage, ContextControllerProtocol?) -> Void,
         deleteMessages: @escaping ([EngineRawMessage], ContextControllerProtocol?, @escaping (ContextMenuActionResult) -> Void) -> Void,
         forwardSelectedMessages: @escaping () -> Void,
+        screenshotSelectedMessages: @escaping () -> Void = {},
         forwardSelectedMessagesWithoutAuthor: @escaping () -> Void = {},
         forwardSelectedMessagesAsCopy: @escaping () -> Void = {},
         forwardCurrentForwardMessages: @escaping () -> Void,
@@ -370,6 +372,7 @@ public final class ChatPanelInterfaceInteraction {
         self.blockMessageAuthor = blockMessageAuthor
         self.deleteMessages = deleteMessages
         self.forwardSelectedMessages = forwardSelectedMessages
+        self.screenshotSelectedMessages = screenshotSelectedMessages
         self.forwardSelectedMessagesWithoutAuthor = forwardSelectedMessagesWithoutAuthor
         self.forwardSelectedMessagesAsCopy = forwardSelectedMessagesAsCopy
         self.forwardCurrentForwardMessages = forwardCurrentForwardMessages

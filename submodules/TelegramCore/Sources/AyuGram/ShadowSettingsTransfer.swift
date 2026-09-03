@@ -54,7 +54,12 @@ public enum ShadowSettingsTransfer {
         "showProfileId": \.showProfileId,
         "showProfileDC": \.showProfileDC,
         "showRegistrationDate": \.showRegistrationDate,
-        "hideOwnPhoneNumber": \.hideOwnPhoneNumber
+        "hideOwnPhoneNumber": \.hideOwnPhoneNumber,
+        "screenshotEnabled": \.messageScreenshot.enabled,
+        "screenshotAvatars": \.messageScreenshot.showAvatars,
+        "screenshotNames": \.messageScreenshot.showNames,
+        "screenshotBadges": \.messageScreenshot.showBadges,
+        "screenshotTime": \.messageScreenshot.showTime
     ]
 
     public static func document(from settings: AyuGramSettings) throws -> ShadowSettingsDocument {
@@ -67,6 +72,7 @@ public enum ShadowSettingsTransfer {
         values["mediaAutoCleanInterval"] = .integer(Int64(settings.mediaAutoCleanInterval))
         values["attachmentSizeLimit"] = .integer(settings.attachmentSizeLimit)
         values["bottomBarScrollMode"] = .integer(Int64(settings.bottomBarScrollMode))
+        values["screenshotBackground"] = .integer(Int64(settings.messageScreenshot.background.rawValue))
         return try ShadowSettingsDocument(settings: values)
     }
 
@@ -89,6 +95,7 @@ public enum ShadowSettingsTransfer {
                 case "mediaAutoCleanInterval": updated.mediaAutoCleanInterval = Int32(number)
                 case "attachmentSizeLimit": updated.attachmentSizeLimit = number
                 case "bottomBarScrollMode": updated.bottomBarScrollMode = Int32(number)
+                case "screenshotBackground": updated.messageScreenshot.background = ShadowMessageScreenshotSettings.Background(rawValue: Int32(number)) ?? .chat
                 default: break
                 }
             }

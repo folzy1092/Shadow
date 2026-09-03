@@ -2068,6 +2068,8 @@ extension ChatControllerImpl {
                     strongSelf.forwardMessages(messageIds: forwardMessageIds)
                 }
             }
+        }, screenshotSelectedMessages: { [weak self] in
+            self?.presentShadowMessageScreenshot()
         }, forwardSelectedMessagesWithoutAuthor: { [weak self] in
             // Shadow: anonymous forward of the current selection (hideNames = true),
             // triggered by the incognito button in the multi-select panel. Same
