@@ -35,6 +35,7 @@ public final class ChatPresentationData {
     public let isPreview: Bool
     public let shadowScreenshot: ShadowMessageScreenshotSettings?
     public let preferUsernameForNonContacts: Bool
+    public let wideChannelPosts: Bool
     
     public let messageFont: UIFont
     public let messageEmojiFont: UIFont
@@ -44,7 +45,7 @@ public final class ChatPresentationData {
     public let messageFixedFont: UIFont
     public let messageBlockQuoteFont: UIFont
     
-    public init(theme: ChatPresentationThemeData, fontSize: PresentationFontSize, strings: PresentationStrings, dateTimeFormat: PresentationDateTimeFormat, nameDisplayOrder: PresentationPersonNameOrder, disableAnimations: Bool, largeEmoji: Bool, chatBubbleCorners: PresentationChatBubbleCorners, animatedEmojiScale: CGFloat = 1.0, isPreview: Bool = false, shadowScreenshot: ShadowMessageScreenshotSettings? = nil, preferUsernameForNonContacts: Bool = false) {
+    public init(theme: ChatPresentationThemeData, fontSize: PresentationFontSize, strings: PresentationStrings, dateTimeFormat: PresentationDateTimeFormat, nameDisplayOrder: PresentationPersonNameOrder, disableAnimations: Bool, largeEmoji: Bool, chatBubbleCorners: PresentationChatBubbleCorners, animatedEmojiScale: CGFloat = 1.0, isPreview: Bool = false, shadowScreenshot: ShadowMessageScreenshotSettings? = nil, preferUsernameForNonContacts: Bool = false, wideChannelPosts: Bool = false) {
         self.theme = theme
         self.fontSize = fontSize
         self.strings = strings
@@ -56,6 +57,7 @@ public final class ChatPresentationData {
         self.isPreview = isPreview
         self.shadowScreenshot = shadowScreenshot
         self.preferUsernameForNonContacts = preferUsernameForNonContacts
+        self.wideChannelPosts = wideChannelPosts
         
         let baseFontSize = fontSize.baseDisplaySize
         self.messageFont = Font.regular(baseFontSize)
@@ -82,7 +84,8 @@ public final class ChatPresentationData {
             animatedEmojiScale: self.animatedEmojiScale,
             isPreview: self.isPreview,
             shadowScreenshot: self.shadowScreenshot,
-            preferUsernameForNonContacts: self.preferUsernameForNonContacts
+            preferUsernameForNonContacts: self.preferUsernameForNonContacts,
+            wideChannelPosts: self.wideChannelPosts
         )
     }
 }

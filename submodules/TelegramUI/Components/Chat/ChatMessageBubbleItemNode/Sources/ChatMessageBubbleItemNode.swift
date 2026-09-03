@@ -1703,10 +1703,14 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         var allowFullWidth = false
         let chatLocationPeerId: PeerId = item.chatLocation.peerId ?? item.content.firstMessage.id.peerId
 
-        // AyuGram fork: wide channel posts. Broadcast-channel messages fill the
-        // full bubble width (like inline articles) so long posts read better.
-        // Only broadcast channels — private chats and groups are untouched.
-        if ayuGramSettingsCurrent.wideChannelPosts, item.content.firstMessage.id.peerId.namespace == Namespaces.Peer.CloudChannel, let channelPeer = item.content.firstMessage.peers[item.content.firstMessage.id.peerId] as? TelegramChannel, case .broadcast = channelPeer.info {
+        // Resolve from this history's account snapshot, never the globally
+        // active account. Forwarded posts in private chats are not channel posts.
+        var expandChannelPost = false
+        if item.presentationData.wideChannelPosts, !isPreview, item.presentationData.shadowScreenshot == nil,
+           !item.associatedData.isRecentActions, firstMessage.adAttribute == nil,
+           case let .peer(currentPeerId) = item.chatLocation, currentPeerId == firstMessage.id.peerId,
+           let channelPeer = firstMessage.peers[currentPeerId] as? TelegramChannel, case .broadcast = channelPeer.info {
+            expandChannelPost = true
             allowFullWidth = true
         }
 
@@ -2045,14 +2049,6 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             }
         }
         maximumContentWidth = max(0.0, maximumContentWidth)
-
-        // AyuGram fork: wide channel posts. Broadcast-channel posts already take
-        // the full-width path above; here we additionally reclaim the residual
-        // side padding so long posts sit closer to the screen edges.
-        if ayuGramSettingsCurrent.wideChannelPosts, item.content.firstMessage.id.peerId.namespace == Namespaces.Peer.CloudChannel, let channelPeer = item.content.firstMessage.peers[item.content.firstMessage.id.peerId] as? TelegramChannel, case .broadcast = channelPeer.info {
-            let wideWidth = floor(tmpWidth - layoutConstants.bubble.edgeInset - layoutConstants.bubble.contentInsets.left - avatarInset)
-            maximumContentWidth = max(maximumContentWidth, max(0.0, wideWidth))
-        }
 
         var contentPropertiesAndPrepareLayouts: [(Message, Bool, ChatMessageEntryAttributes, BubbleItemAttributes, (_ item: ChatMessageBubbleContentItem, _ layoutConstants: ChatMessageItemLayoutConstants, _ preparePosition: ChatMessageBubblePreparePosition, _ messageSelection: Bool?, _ constrainedSize: CGSize, _ avatarInset: CGFloat) -> (ChatMessageBubbleContentProperties, CGSize?, CGFloat, (CGSize, ChatMessageBubbleContentPosition) -> (CGFloat, (CGFloat) -> (CGSize, (ListViewItemUpdateAnimation, Bool, ListViewItemApply?) -> Void))))] = []
         var addedContentNodes: [(Message, Bool, ChatMessageBubbleContentNode, Int?)]?
@@ -3504,6 +3500,13 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             }
         }
         
+        // A larger constraint alone does not widen a short text/file post:
+        // contentNodeLayout still shrink-wraps it. Pass the final bounded width
+        // to every finalize closure so status, reactions and buttons agree.
+        // Keep native media caps, mosaic geometry and non-bubble layouts.
+        if expandChannelPost, !hideBackground, !hasInstantVideo, mosaicRange == nil, case .none = alignment {
+            maxContentWidth = max(maxContentWidth, maximumNodeWidth)
+        }
         var contentSize = CGSize(width: maxContentWidth, height: 0.0)
         var contentNodeFramesPropertiesAndApply: [(CGRect, ChatMessageBubbleContentProperties, Bool, (ListViewItemUpdateAnimation, Bool, ListViewItemApply?) -> Void)] = []
         var contentContainerNodeFrames: [(UInt32, CGRect, Bool?, CGFloat)] = []
