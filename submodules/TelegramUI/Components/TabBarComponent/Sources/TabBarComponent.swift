@@ -13,16 +13,6 @@ import TextBadgeComponent
 import LiquidLens
 import AppBundle
 import SearchBarNode
-
-// Shadow: "compact bottom bar" mirrors Swiftgram's approach — it does NOT scale
-// or narrow the bar. Compact simply hides the tab names and uses the shorter
-// 40pt row height (vs 56pt) via a genuine re-layout, so icons keep their normal
-// proportions and the bar stays full width (identical width to the non-compact
-// state). Read from UserDefaults (written by TelegramCore's AyuGram settings);
-// key must match AyuBottomBarDefaultsKeys.compactBottomBar.
-private var shadowShowTabNames: Bool {
-    return !UserDefaults.standard.bool(forKey: "shadow.compactBottomBar")
-}
 import TabSelectionRecognizer
 
 public final class NavigationSearchView: UIView {
@@ -359,6 +349,10 @@ public final class TabBarComponent: Component {
     public let theme: PresentationTheme
     public let tintSelectedItem: Bool
     public let isLiftedStateEnabled: Bool
+    // Visual settings are explicit component inputs so cached updates and item
+    // measurements are invalidated when compact/search preferences change.
+    public let showTabNames: Bool
+    public let hideBottomSearch: Bool
     public let strings: PresentationStrings
     public let items: [Item]
     public let search: Search?
@@ -369,6 +363,8 @@ public final class TabBarComponent: Component {
         theme: PresentationTheme,
         tintSelectedItem: Bool = true,
         isLiftedStateEnabled: Bool = true,
+        showTabNames: Bool = true,
+        hideBottomSearch: Bool = false,
         strings: PresentationStrings,
         items: [Item],
         search: Search?,
@@ -378,6 +374,8 @@ public final class TabBarComponent: Component {
         self.theme = theme
         self.tintSelectedItem = tintSelectedItem
         self.isLiftedStateEnabled = isLiftedStateEnabled
+        self.showTabNames = showTabNames
+        self.hideBottomSearch = hideBottomSearch
         self.strings = strings
         self.items = items
         self.search = search
@@ -393,6 +391,12 @@ public final class TabBarComponent: Component {
             return false
         }
         if lhs.isLiftedStateEnabled != rhs.isLiftedStateEnabled {
+            return false
+        }
+        if lhs.showTabNames != rhs.showTabNames {
+            return false
+        }
+        if lhs.hideBottomSearch != rhs.hideBottomSearch {
             return false
         }
         if lhs.strings !== rhs.strings {
@@ -666,9 +670,9 @@ public final class TabBarComponent: Component {
             var availableSize = CGSize(width: min(500.0, availableSize.width), height: availableSize.height)
             // Shadow: when the in-bar search field is hidden, reclaim its slot so the
             // tabs use the freed width. Compact mode does NOT change width here — it
-            // only affects row height / tab names (see shadowShowTabNames), so the
+            // only affects row height / tab names (see showTabNames), so the
             // bar keeps identical full width in both compact and normal states.
-            if !(component.search?.isActive ?? false) && UserDefaults.standard.bool(forKey: "shadow.hideBottomSearch") {
+            if !(component.search?.isActive ?? false) && component.hideBottomSearch {
                 availableSize.width -= 48.0
                 availableSize.width -= innerInset * 2.0
             }
@@ -679,7 +683,7 @@ public final class TabBarComponent: Component {
             
             self.overrideUserInterfaceStyle = component.theme.overallDarkAppearance ? .dark : .light
 
-            let barHeight: CGFloat = (shadowShowTabNames ? 56.0 : 40.0) + innerInset * 2.0
+            let barHeight: CGFloat = (component.showTabNames ? 56.0 : 40.0) + innerInset * 2.0
 
             var availableItemsWidth: CGFloat = availableSize.width - innerInset * 2.0
             if component.search != nil {
@@ -708,12 +712,13 @@ public final class TabBarComponent: Component {
                         item: item,
                         theme: component.theme,
                         isCompact: false,
+                        showTabNames: component.showTabNames,
                         isSelected: false,
                         tintSelectedItem: true,
                         isUnconstrained: true
                     )),
                     environment: {},
-                    containerSize: CGSize(width: 200.0, height: shadowShowTabNames ? 56.0 : 40.0)
+                    containerSize: CGSize(width: 200.0, height: component.showTabNames ? 56.0 : 40.0)
                 )
                 
                 unboundItemWidths.append(itemSize.width)
@@ -742,7 +747,7 @@ public final class TabBarComponent: Component {
                 totalItemsWidth = total
             }
 
-            let itemHeight: CGFloat = shadowShowTabNames ? 56.0 : 40.0
+            let itemHeight: CGFloat = component.showTabNames ? 56.0 : 40.0
             let contentWidth: CGFloat = innerInset * 2.0 + totalItemsWidth
             let tabsSize = CGSize(width: min(availableSize.width, contentWidth), height: itemHeight + innerInset * 2.0)
 
@@ -785,6 +790,7 @@ public final class TabBarComponent: Component {
                         item: item,
                         theme: component.theme,
                         isCompact: component.search?.isActive == true,
+                        showTabNames: component.showTabNames,
                         isSelected: false,
                         tintSelectedItem: component.tintSelectedItem,
                         isUnconstrained: false
@@ -798,6 +804,7 @@ public final class TabBarComponent: Component {
                         item: item,
                         theme: component.theme,
                         isCompact: component.search?.isActive == true,
+                        showTabNames: component.showTabNames,
                         isSelected: true,
                         tintSelectedItem: component.tintSelectedItem,
                         isUnconstrained: false
@@ -889,7 +896,7 @@ public final class TabBarComponent: Component {
             } else if let selectionFrame {
                 lensSelection = (selectionFrame.minX - innerInset, selectionFrame.width + innerInset * 2.0)
             } else {
-                lensSelection = (0.0, shadowShowTabNames ? 56.0 : 40.0)
+                lensSelection = (0.0, component.showTabNames ? 56.0 : 40.0)
             }
 
             var lensSize: CGSize = tabsSize
@@ -977,14 +984,16 @@ private final class ItemComponent: Component {
     let item: TabBarComponent.Item
     let theme: PresentationTheme
     let isCompact: Bool
+    let showTabNames: Bool
     let isSelected: Bool
     let tintSelectedItem: Bool
     let isUnconstrained: Bool
     
-    init(item: TabBarComponent.Item, theme: PresentationTheme, isCompact: Bool, isSelected: Bool, tintSelectedItem: Bool, isUnconstrained: Bool) {
+    init(item: TabBarComponent.Item, theme: PresentationTheme, isCompact: Bool, showTabNames: Bool, isSelected: Bool, tintSelectedItem: Bool, isUnconstrained: Bool) {
         self.item = item
         self.theme = theme
         self.isCompact = isCompact
+        self.showTabNames = showTabNames
         self.isSelected = isSelected
         self.tintSelectedItem = tintSelectedItem
         self.isUnconstrained = isUnconstrained
@@ -998,6 +1007,9 @@ private final class ItemComponent: Component {
             return false
         }
         if lhs.isCompact != rhs.isCompact {
+            return false
+        }
+        if lhs.showTabNames != rhs.showTabNames {
             return false
         }
         if lhs.isSelected != rhs.isSelected {
@@ -1303,7 +1315,7 @@ private final class ItemComponent: Component {
                 containerSize: CGSize(width: availableSize.width, height: 100.0)
             )
             let titleFrame = CGRect(origin: CGPoint(x: floor((availableSize.width - titleSize.width) * 0.5), y: availableSize.height - 8.0 - titleSize.height), size: titleSize)
-            if shadowShowTabNames, let titleView = self.title.view {
+            if component.showTabNames, let titleView = self.title.view {
                 if titleView.superview == nil {
                     self.contextContainerView.contentView.addSubview(titleView)
                 }

@@ -314,6 +314,7 @@ public final class ChatTitleComponent: Component {
         private var rightIcon: ComponentView<Empty>?
         private var credibilityIcon: ComponentView<Empty>?
         private var verifiedIcon: ComponentView<Empty>?
+        private var exteraIcon: ComponentView<Empty>?
         private var statusIcon: ComponentView<Empty>?
         
         private var presenceManager: PeerPresenceStatusManager?
@@ -373,11 +374,7 @@ public final class ChatTitleComponent: Component {
             var titleCredibilityIcon: ChatTitleCredibilityIcon = .none
             var titleVerifiedIcon: ChatTitleCredibilityIcon = .none
             var titleStatusIcon: ChatTitleCredibilityIcon = .none
-            // Shadow: true when titleVerifiedIcon holds the fork's remote-config
-            // badge rather than a real bot-verification icon — placed after the
-            // status/premium chain (right of the name) instead of upstream's
-            // before-the-name placement. See its use in the layout section below.
-            var titleVerifiedIconOnRight = false
+            var titleExteraIcon: ChatTitleCredibilityIcon = .none
             var isEnabled = true
             switch component.content {
             case let .peer(peerView, customTitle, _, _, isScheduledMessages, isMuted, _, hidePeerStatus, isEnabledValue):
@@ -470,12 +467,9 @@ public final class ChatTitleComponent: Component {
                         // "не я" выше: свой значок тоже показываем.
                         if let badgeEmojiId = ayuGramNameBadgeEmojiId(peerId: peer.id) {
                             titleVerifiedIcon = .emojiStatus(PeerEmojiStatus(content: .emoji(fileId: badgeEmojiId), expirationDate: nil))
-                        } else if let exteraEmojiId = ayuExteraBadgeEmojiId(peerId: peer.id) {
-                            // Shadow: значок поддержавшего exteraGram — справа от
-                            // имени, после статуса. Значок нашего конфига выше
-                            // приоритетнее и занимает слот верификации слева.
-                            titleVerifiedIcon = .emojiStatus(PeerEmojiStatus(content: .emoji(fileId: exteraEmojiId), expirationDate: nil))
-                            titleVerifiedIconOnRight = true
+                        }
+                        if let exteraEmojiId = ayuExteraBadgeEmojiId(peerId: peer.id) {
+                            titleExteraIcon = .emojiStatus(PeerEmojiStatus(content: .emoji(fileId: exteraEmojiId), expirationDate: nil))
                         }
                     }
                     if peerView.peerId.namespace == Namespaces.Peer.SecretChat {
@@ -1004,14 +998,6 @@ public final class ChatTitleComponent: Component {
                     verifiedIcon = ComponentView()
                     self.verifiedIcon = verifiedIcon
                 }
-                // Shadow: the fork's badge (titleVerifiedIconOnRight) renders a
-                // custom-emoji file, which visually reads smaller than the
-                // premium/verified glyph assets at the same container size — those
-                // are drawn edge-to-edge, custom-emoji stickers commonly carry
-                // their own internal padding. A ~10% bump on the container
-                // compensates; upstream's own bot-verification icon (onRight ==
-                // false) is left at its original size.
-                let verifiedIconContainerSize: CGSize = titleVerifiedIconOnRight ? CGSize(width: 22.0, height: 22.0) : CGSize(width: 20.0, height: 20.0)
                 verifiedIconSize = verifiedIcon.update(
                     transition: .immediate,
                     component: AnyComponent(EmojiStatusComponent(
@@ -1023,7 +1009,7 @@ public final class ChatTitleComponent: Component {
                         action: nil
                     )),
                     environment: {},
-                    containerSize: verifiedIconContainerSize
+                    containerSize: CGSize(width: 20.0, height: 20.0)
                 )
             } else if let verifiedIcon = self.verifiedIcon {
                 self.verifiedIcon = nil
@@ -1035,6 +1021,38 @@ public final class ChatTitleComponent: Component {
                 }
             }
             
+            var exteraIconSize: CGSize?
+            if let titleExteraIcon = mapTitleIcon(titleExteraIcon) {
+                let exteraIcon: ComponentView<Empty>
+                if let current = self.exteraIcon {
+                    exteraIcon = current
+                } else {
+                    exteraIcon = ComponentView()
+                    self.exteraIcon = exteraIcon
+                }
+                exteraIconSize = exteraIcon.update(
+                    transition: .immediate,
+                    component: AnyComponent(EmojiStatusComponent(
+                        context: component.context,
+                        animationCache: component.context.animationCache,
+                        animationRenderer: component.context.animationRenderer,
+                        content: titleExteraIcon,
+                        isVisibleForAnimations: true,
+                        action: nil
+                    )),
+                    environment: {},
+                    containerSize: CGSize(width: 22.0, height: 22.0)
+                )
+            } else if let exteraIcon = self.exteraIcon {
+                self.exteraIcon = nil
+                if let exteraIconView = exteraIcon.view {
+                    transition.setScale(view: exteraIconView, scale: 0.001)
+                    transition.setAlpha(view: exteraIconView, alpha: 0.0, completion: { [weak exteraIconView] _ in
+                        exteraIconView?.removeFromSuperview()
+                    })
+                }
+            }
+
             let subtitleNode: ChatTitleActivityNode
             if let current = self.subtitleNode {
                 subtitleNode = current
@@ -1049,7 +1067,7 @@ public final class ChatTitleComponent: Component {
             if let leftIconSize {
                 titleLeftIconsWidth += leftIconSize.width + leftTitleIconSpacing
             }
-            if let verifiedIconSize, !titleVerifiedIconOnRight {
+            if let verifiedIconSize {
                 titleLeftIconsWidth += verifiedIconSize.width + statusIconsSpacing
             }
 
@@ -1063,14 +1081,11 @@ public final class ChatTitleComponent: Component {
             if let statusIconSize {
                 titleRightIconsWidth += statusIconSize.width + statusIconsSpacing
             }
-            // Shadow: fork badge (titleVerifiedIconOnRight) is the outermost RIGHT
-            // icon — after credibility + status — instead of the upstream LEFT
-            // placement above.
-            if let verifiedIconSize, titleVerifiedIconOnRight {
-                titleRightIconsWidth += verifiedIconSize.width + statusIconsSpacing
+            if let exteraIconSize {
+                titleRightIconsWidth += exteraIconSize.width + statusIconsSpacing
             }
             
-            let maxTitleWidth = availableSize.width - titleLeftIconsWidth - titleRightIconsWidth - containerSideInset * 2.0
+            let maxTitleWidth = max(0.0, availableSize.width - titleLeftIconsWidth - titleRightIconsWidth - containerSideInset * 2.0)
             
             let titleSize = self.title.update(
                 transition: transition,
@@ -1145,7 +1160,7 @@ public final class ChatTitleComponent: Component {
                 transition.setScale(view: leftIconView, scale: 1.0)
             }
             
-            if let verifiedIconSize, let verifiedIconView = self.verifiedIcon?.view, !titleVerifiedIconOnRight {
+            if let verifiedIconSize, let verifiedIconView = self.verifiedIcon?.view {
                 let verifiedIconFrame = CGRect(origin: CGPoint(x: nextLeftIconX - statusIconsSpacing - verifiedIconSize.width, y: titleFrame.minY), size: verifiedIconSize)
                 if verifiedIconView.superview == nil {
                     verifiedIconView.isUserInteractionEnabled = false
@@ -1195,23 +1210,21 @@ public final class ChatTitleComponent: Component {
                 nextRightIconX += statusIconsSpacing + statusIconSize.width
             }
 
-            // Shadow: fork badge placed AFTER credibility + status, i.e. as the
-            // last icon in the row, reusing the same verifiedIcon component the
-            // (unused, in this case) before-name path above would have used.
-            if let verifiedIconSize, let verifiedIconView = self.verifiedIcon?.view, titleVerifiedIconOnRight {
-                let verifiedIconFrame = CGRect(origin: CGPoint(x: nextRightIconX + statusIconsSpacing, y: titleFrame.minY), size: verifiedIconSize)
-                if verifiedIconView.superview == nil {
-                    verifiedIconView.isUserInteractionEnabled = false
-                    self.contentContainer.addSubview(verifiedIconView)
-                    verifiedIconView.frame = verifiedIconFrame
-                    ComponentTransition.immediate.setScale(view: verifiedIconView, scale: 0.001)
-                    verifiedIconView.alpha = 0.0
+            // Keep exteraGram after the status icons, independent of the left badge.
+            if let exteraIconSize, let exteraIconView = self.exteraIcon?.view {
+                let exteraIconFrame = CGRect(origin: CGPoint(x: nextRightIconX + statusIconsSpacing, y: titleFrame.minY), size: exteraIconSize)
+                if exteraIconView.superview == nil {
+                    exteraIconView.isUserInteractionEnabled = false
+                    self.contentContainer.addSubview(exteraIconView)
+                    exteraIconView.frame = exteraIconFrame
+                    ComponentTransition.immediate.setScale(view: exteraIconView, scale: 0.001)
+                    exteraIconView.alpha = 0.0
                 }
-                transition.setPosition(view: verifiedIconView, position: verifiedIconFrame.center)
-                transition.setBounds(view: verifiedIconView, bounds: CGRect(origin: CGPoint(), size: verifiedIconFrame.size))
-                transition.setAlpha(view: verifiedIconView, alpha: 1.0)
-                transition.setScale(view: verifiedIconView, scale: 1.0)
-                nextRightIconX += statusIconsSpacing + verifiedIconSize.width
+                transition.setPosition(view: exteraIconView, position: exteraIconFrame.center)
+                transition.setBounds(view: exteraIconView, bounds: CGRect(origin: CGPoint(), size: exteraIconFrame.size))
+                transition.setAlpha(view: exteraIconView, alpha: 1.0)
+                transition.setScale(view: exteraIconView, scale: 1.0)
+                nextRightIconX += statusIconsSpacing + exteraIconSize.width
             }
 
             if let rightIconSize, let rightIconView = self.rightIcon?.view {

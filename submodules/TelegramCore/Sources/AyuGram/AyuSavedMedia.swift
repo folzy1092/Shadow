@@ -254,7 +254,7 @@ public enum AyuSavedMedia {
     // `saveAllIncomingMedia` setting; independent of copy-protection and of the
     // system "Save to Camera Roll" (we read straight from the MediaBox).
     public static func autoSaveIncomingHook(mediaBox: MediaBox, reference: MediaResourceReference) -> (() -> Void)? {
-        guard ayuGramSettingsCurrent.saveAllIncomingMedia else {
+        guard currentAyuGramSettings(mediaBox: mediaBox).saveAllIncomingMedia else {
             return nil
         }
         guard case let .media(mediaReference, resource) = reference else {

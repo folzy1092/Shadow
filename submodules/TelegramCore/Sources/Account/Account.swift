@@ -1423,9 +1423,9 @@ public class Account {
         self.managedOperationsDisposable.add(managedSynchronizeViewStoriesOperations(postbox: self.postbox, network: self.network, stateManager: self.stateManager).start())
         self.managedOperationsDisposable.add(managedSynchronizePeerStoriesOperations(postbox: self.postbox, network: self.network, stateManager: self.stateManager).start())
         self.managedOperationsDisposable.add(managedLocalTypingActivities(activities: self.localInputActivityManager.allActivities(), postbox: self.stateManager.postbox, network: self.stateManager.network, accountPeerId: self.stateManager.accountPeerId).start())
-        // AyuGram: keep the process-wide settings snapshot in sync with the
-        // persisted preferences so UI-render-path features can read it synchronously.
-        self.managedOperationsDisposable.add(keepAyuGramSettingsUpdated(postbox: self.postbox).start())
+        // AyuGram: maintain this account's synchronous settings cache; only the
+        // active root controller may project it into the visible UI.
+        self.managedOperationsDisposable.add(keepAyuGramSettingsUpdated(postbox: self.postbox, accountId: self.id).start())
         // AyuGram: periodically auto-clean the private saved-media gallery
         // (respects the configured interval and the pinned-chat whitelist).
         self.managedOperationsDisposable.add(managedAyuMediaAutoClean(postbox: self.postbox).start())

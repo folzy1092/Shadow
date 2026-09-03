@@ -562,92 +562,93 @@ extension AyuGramSettings {
     }
 }
 
-// MARK: - Global synchronous snapshot
+// MARK: - Account-scoped snapshots and the active UI projection
 //
-// Some AyuGram features live deep in the UI render path (message-timestamp
-// formatting, copy-protection gating, profile rendering) where there is no
-// Postbox transaction and no reactive Signal to subscribe to. For those we keep
-// a process-wide snapshot of the current settings, refreshed on every write and
-// via a per-account subscription (see `keepAyuGramSettingsUpdated`). Reads are
-// lock-guarded and cheap; writes are rare.
+// Every loaded account has background operations. Their preference reads must
+// never select the settings used by the visible UI. Keep independent snapshots
+// for synchronous consumers, and let the root controller explicitly own the
+// legacy process-wide UI value and the low-level tab-bar bridge.
 private let ayuGramSettingsStateLock = NSLock()
-// nil until the first read/write of this process. The first read restores the
-// last persisted settings from the UserDefaults mirror (see below) instead of
-// falling back to defaults — the postbox-backed snapshot only arrives
-// asynchronously and every UI-render-path consumer would otherwise render the
-// default state on cold start.
-private var ayuGramSettingsStateValue: AyuGramSettings?
+private var ayuGramSettingsAccountValues: [AccountRecordId: AyuGramSettings] = [:]
+private var ayuGramSettingsMediaAccounts: [String: AccountRecordId] = [:]
+private var ayuGramSettingsActiveAccountId: AccountRecordId?
+private var ayuGramSettingsStateValue = AyuGramSettings.defaultSettings
 
+// The old unscoped mirror may belong to any background account. Do not migrate
+// it into another account: Postbox remains authoritative on the first launch
+// after upgrading, then each account has its own synchronous cold-start mirror.
+private func ayuSettingsMirrorKey(accountId: AccountRecordId) -> String {
+    return "shadow.settingsMirror.account.\(accountId.int64)"
+}
+
+// Called with ayuGramSettingsStateLock held.
+private func cachedAyuGramSettings(accountId: AccountRecordId) -> AyuGramSettings {
+    if let value = ayuGramSettingsAccountValues[accountId] {
+        return value
+    }
+    let settings: AyuGramSettings
+    if let data = UserDefaults.standard.data(forKey: ayuSettingsMirrorKey(accountId: accountId)),
+       let restored = try? JSONDecoder().decode(AyuGramSettings.self, from: data) {
+        settings = restored
+    } else {
+        settings = AyuGramSettings.defaultSettings
+    }
+    ayuGramSettingsAccountValues[accountId] = settings
+    return settings
+}
+
+/// Synchronous settings for legacy render paths in the active account's UI.
+/// Background work must use a transaction or an account-scoped snapshot instead.
 public var ayuGramSettingsCurrent: AyuGramSettings {
     ayuGramSettingsStateLock.lock()
     defer { ayuGramSettingsStateLock.unlock() }
-    if let value = ayuGramSettingsStateValue {
-        return value
-    }
-    let restored = readAyuSettingsMirror() ?? AyuGramSettings.defaultSettings
-    ayuGramSettingsStateValue = restored
-    return restored
+    return ayuGramSettingsStateValue
 }
 
-private func setAyuGramSettingsCurrent(_ settings: AyuGramSettings) {
+/// Returns this account's last known settings without opening a transaction.
+public func currentAyuGramSettings(accountId: AccountRecordId) -> AyuGramSettings {
     ayuGramSettingsStateLock.lock()
-    let previous = ayuGramSettingsStateValue
+    defer { ayuGramSettingsStateLock.unlock() }
+    return cachedAyuGramSettings(accountId: accountId)
+}
+
+/// For media hooks that cannot open a nested Postbox transaction. An unknown
+/// MediaBox must not borrow the visible account's privacy/media settings.
+public func currentAyuGramSettings(mediaBox: MediaBox) -> AyuGramSettings {
+    ayuGramSettingsStateLock.lock()
+    defer { ayuGramSettingsStateLock.unlock() }
+    guard let accountId = ayuGramSettingsMediaAccounts[mediaBox.basePath] else {
+        return AyuGramSettings.defaultSettings
+    }
+    return cachedAyuGramSettings(accountId: accountId)
+}
+
+/// Select the account whose UI is being constructed, before creating its views.
+/// UI projection writes run on main, including all three tab-bar defaults, so
+/// layout cannot observe a mixture of two different settings emissions.
+public func activateAyuGramSettings(accountId: AccountRecordId) {
+    precondition(Thread.isMainThread)
+    ayuGramSettingsStateLock.lock()
+    let settings = cachedAyuGramSettings(accountId: accountId)
+    ayuGramSettingsActiveAccountId = accountId
     ayuGramSettingsStateValue = settings
-    let alreadyMirrored = ayuHasMirroredBottomBarDefaults
-    let alreadyMirroredSettings = ayuHasMirroredSettings
     ayuGramSettingsStateLock.unlock()
-    // Full-settings mirror: same idea as the bottom-bar keys below, but for the
-    // whole value, so the very first synchronous read in the next cold start
-    // sees the user's real settings rather than the defaults.
-    if previous != settings || !alreadyMirroredSettings {
-        writeAyuSettingsMirror(settings)
-    }
-    // Mirror the bottom-bar toggles into UserDefaults so the low-level tab-bar
-    // modules (TabBarUI / TabBarComponent) can read them without taking a
-    // dependency on TelegramCore. Keys are shared with those modules; see
-    // AyuBottomBarDefaultsKeys below. This function is called very frequently
-    // (on every settings read inside a transaction), so normally only write when
-    // one of the mirrored values actually changed — BUT the very first mirror
-    // must always be written, even when the settings equal the defaults. Without
-    // this the low-level tab bar could read an absent key (== false) at cold
-    // start and render the wrong bottom-bar state until the next change, which is
-    // exactly the compact/folders desync seen after a restart. See also
-    // ayuSyncBottomBarDefaults(), called early from the root controller.
-    let changed = previous?.foldersAtBottom != settings.foldersAtBottom
-        || previous?.hideBottomSearch != settings.hideBottomSearch
-        || previous?.compactBottomBar != settings.compactBottomBar
-    if changed || !alreadyMirrored {
-        writeAyuBottomBarDefaults(settings)
-    }
+    writeAyuBottomBarDefaults(settings)
 }
 
-// Whether the bottom-bar UserDefaults mirror has been written at least once this
-// process. Guards the "always write the first mirror" rule in
-// setAyuGramSettingsCurrent. Access is guarded by ayuGramSettingsStateLock.
-private var ayuHasMirroredBottomBarDefaults = false
-
-// Same flag for the full-settings mirror below.
-private var ayuHasMirroredSettings = false
-
-// UserDefaults key holding the JSON-encoded last known settings value.
-private let ayuSettingsMirrorKey = "shadow.settingsMirror"
-
-private func writeAyuSettingsMirror(_ settings: AyuGramSettings) {
-    if let data = try? JSONEncoder().encode(settings) {
-        UserDefaults.standard.set(data, forKey: ayuSettingsMirrorKey)
-    }
+/// Publish the root controller's own settings stream. Late callbacks from a
+/// previous account are ignored; background account subscriptions never call it.
+public func setAyuGramSettingsCurrent(_ settings: AyuGramSettings, accountId: AccountRecordId) -> Bool {
+    precondition(Thread.isMainThread)
     ayuGramSettingsStateLock.lock()
-    ayuHasMirroredSettings = true
-    ayuGramSettingsStateLock.unlock()
-}
-
-// Reads the mirror. Called with ayuGramSettingsStateLock HELD — it must not take
-// the lock itself.
-private func readAyuSettingsMirror() -> AyuGramSettings? {
-    guard let data = UserDefaults.standard.data(forKey: ayuSettingsMirrorKey) else {
-        return nil
+    guard ayuGramSettingsActiveAccountId == accountId else {
+        ayuGramSettingsStateLock.unlock()
+        return false
     }
-    return try? JSONDecoder().decode(AyuGramSettings.self, from: data)
+    ayuGramSettingsStateValue = settings
+    ayuGramSettingsStateLock.unlock()
+    writeAyuBottomBarDefaults(settings)
+    return true
 }
 
 private func writeAyuBottomBarDefaults(_ settings: AyuGramSettings) {
@@ -655,18 +656,21 @@ private func writeAyuBottomBarDefaults(_ settings: AyuGramSettings) {
     defaults.set(settings.foldersAtBottom, forKey: AyuBottomBarDefaultsKeys.foldersAtBottom)
     defaults.set(settings.hideBottomSearch, forKey: AyuBottomBarDefaultsKeys.hideBottomSearch)
     defaults.set(settings.compactBottomBar, forKey: AyuBottomBarDefaultsKeys.compactBottomBar)
-    ayuGramSettingsStateLock.lock()
-    ayuHasMirroredBottomBarDefaults = true
-    ayuGramSettingsStateLock.unlock()
 }
 
-// Shadow: synchronously flush the current bottom-bar toggles into their
-// UserDefaults mirror from the process-wide snapshot. Call this once, early
-// (before the tab bar is created), so the low-level tab-bar modules never read a
-// stale/absent mirror on cold start. Safe to call repeatedly; it just rewrites
-// the same three keys.
-public func ayuSyncBottomBarDefaults() {
-    writeAyuBottomBarDefaults(ayuGramSettingsCurrent)
+/// Restore the active root's tab-bar bridge before layout or on foreground.
+/// This does not activate an old root that is still alive during account switching.
+public func ayuSyncBottomBarDefaults(accountId: AccountRecordId) -> Bool {
+    precondition(Thread.isMainThread)
+    ayuGramSettingsStateLock.lock()
+    guard ayuGramSettingsActiveAccountId == accountId else {
+        ayuGramSettingsStateLock.unlock()
+        return false
+    }
+    let settings = ayuGramSettingsStateValue
+    ayuGramSettingsStateLock.unlock()
+    writeAyuBottomBarDefaults(settings)
+    return true
 }
 
 // Shared UserDefaults keys for the three "bottom interface" toggles. Duplicated
@@ -679,8 +683,8 @@ public enum AyuBottomBarDefaultsKeys {
 }
 
 // Synchronous read inside a Postbox transaction — used by the low-level
-// interception points (presence, typing, delete handling). Also refreshes the
-// global snapshot as a side effect.
+// interception points (presence, typing, delete handling). A read must have no
+// side effects on another account's UI or UserDefaults mirrors.
 public func currentAyuGramSettings(transaction: Transaction) -> AyuGramSettings {
     let settings: AyuGramSettings
     if let entry = transaction.getPreferencesEntry(key: PreferencesKeys.ayuGramSettings)?.get(AyuGramSettings.self) {
@@ -688,7 +692,6 @@ public func currentAyuGramSettings(transaction: Transaction) -> AyuGramSettings 
     } else {
         settings = AyuGramSettings.defaultSettings
     }
-    setAyuGramSettingsCurrent(settings)
     return settings
 }
 
@@ -697,7 +700,6 @@ public func updateAyuGramSettings(transaction: Transaction, _ f: (AyuGramSetting
     let updated = f(current)
     if updated != current {
         transaction.setPreferencesEntry(key: PreferencesKeys.ayuGramSettings, value: PreferencesEntry(updated))
-        setAyuGramSettingsCurrent(updated)
     }
 }
 
@@ -716,13 +718,29 @@ public func ayuGramSettings(postbox: Postbox) -> Signal<AyuGramSettings, NoError
     }
 }
 
-// Started once per account (from Account managed operations) so the global
-// snapshot always reflects the persisted settings, even before any low-level
-// interception point has run.
-public func keepAyuGramSettingsUpdated(postbox: Postbox) -> Signal<Never, NoError> {
+// Started once per account. Keep its cache and disk mirror independent; the
+// root controller separately projects its own ordered stream into the UI.
+public func keepAyuGramSettingsUpdated(postbox: Postbox, accountId: AccountRecordId) -> Signal<Never, NoError> {
+    ayuGramSettingsStateLock.lock()
+    ayuGramSettingsMediaAccounts[postbox.mediaBox.basePath] = accountId
+    let _ = cachedAyuGramSettings(accountId: accountId)
+    ayuGramSettingsStateLock.unlock()
+
     return ayuGramSettings(postbox: postbox)
+    |> distinctUntilChanged
     |> map { settings -> AyuGramSettings in
-        setAyuGramSettingsCurrent(settings)
+        ayuGramSettingsStateLock.lock()
+        ayuGramSettingsAccountValues[accountId] = settings
+        // Preserve legacy synchronous consumers in processes without a root UI
+        // (e.g. extensions). Once a root has selected an account, background
+        // subscriptions can no longer touch its projection, even temporarily.
+        if ayuGramSettingsActiveAccountId == nil {
+            ayuGramSettingsStateValue = settings
+        }
+        ayuGramSettingsStateLock.unlock()
+        if let data = try? JSONEncoder().encode(settings) {
+            UserDefaults.standard.set(data, forKey: ayuSettingsMirrorKey(accountId: accountId))
+        }
         return settings
     }
     |> ignoreValues

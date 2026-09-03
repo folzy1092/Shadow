@@ -88,15 +88,8 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
     
     private var applicationInFocusDisposable: Disposable?
     private var storyUploadEventsDisposable: Disposable?
-    // Shadow: keeps the bottom tab bar in sync with the compact / hide-search
-    // toggles across launches (mirrors them into UserDefaults for the low-level
-    // tab-bar modules and forces a relayout so they apply immediately and on
-    // cold start, not only after the next unrelated layout pass).
-    private var ayuBottomBarDisposable: Disposable?
-    // Shadow: remembered showCallsTab so the settings-change handler can rebuild
-    // the root controllers with the correct tab set (the value is only passed
-    // into addRootControllers/updateRootControllers as a parameter otherwise).
-    private var ayuShowCallsTab: Bool = false
+    // Only this root's account may project settings into the visible UI.
+    private var ayuSettingsDisposable: Disposable?
     
     override public var minimizedContainer: MinimizedContainer? {
         didSet {
@@ -109,6 +102,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         
     public init(context: AccountContext) {
         self.context = context
+        activateAyuGramSettings(accountId: context.account.id)
         
         self.presentationData = context.sharedContext.currentPresentationData.with { $0 }
         
@@ -155,7 +149,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         self.presentationDataDisposable?.dispose()
         self.applicationInFocusDisposable?.dispose()
         self.storyUploadEventsDisposable?.dispose()
-        self.ayuBottomBarDisposable?.dispose()
+        self.ayuSettingsDisposable?.dispose()
     }
     
     public func getContactsController() -> ViewController? {
@@ -209,17 +203,8 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
     }
     
     public func addRootControllers(showCallsTab: Bool) {
-        self.ayuShowCallsTab = showCallsTab
-        // Shadow: flush the bottom-bar toggles into their UserDefaults mirror
-        // BEFORE the tab bar is created, so the low-level tab-bar modules
-        // (TabBarComponent / TabBarContollerNode) read the correct compact /
-        // hide-search state on the very first layout instead of an absent key
-        // (== false). Without this the compact bar and the folders-at-bottom
-        // panel restore from different sources at cold start and end up out of
-        // sync (folders stay lowered while the bar reverts to full size). The
-        // reactive ayuBottomBarDisposable below still keeps the mirror live for
-        // later changes.
-        ayuSyncBottomBarDefaults()
+        // Restore this account's cold-start snapshot before the first layout.
+        let _ = ayuSyncBottomBarDefaults(accountId: self.context.account.id)
 
         let tabBarController = TabBarControllerImpl(theme: self.presentationData.theme, strings: self.presentationData.strings)
         tabBarController.navigationPresentation = .master
@@ -270,45 +255,25 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         self.rootTabController = tabBarController
         self.pushViewController(tabBarController, animated: false)
 
-        // Shadow: drive the "compact bottom bar" / "hide bottom search" toggles
-        // reactively from the persisted settings, exactly like folders-at-bottom.
-        // On every emission (including the initial one at cold start) mirror the
-        // values into UserDefaults — the source the low-level tab-bar modules
-        // read — and force the tab bar to relayout so the state is correct on
-        // launch and updates live, instead of reverting until the next layout.
-        self.ayuBottomBarDisposable?.dispose()
-        var ayuIsFirstBottomBarEmission = true
-        self.ayuBottomBarDisposable = (ayuGramSettings(postbox: self.context.account.postbox)
-        |> map { settings -> (Bool, Bool, Bool) in
-            return (settings.compactBottomBar, settings.hideBottomSearch, settings.foldersAtBottom)
-        }
-        |> distinctUntilChanged(isEqual: { $0 == $1 })
-        |> deliverOnMainQueue).start(next: { [weak self] valueTuple in
-            guard let self else {
+        // Publish the full settings value before requesting layout. Restricting
+        // this stream to the bar's three toggles leaves other legacy render
+        // paths stale (e.g. after a Ghost Mode change). Geometry and component
+        // equality include the visual settings, so no tab switch is required.
+        self.ayuSettingsDisposable?.dispose()
+        var ayuIsFirstSettingsEmission = true
+        self.ayuSettingsDisposable = (ayuGramSettings(postbox: self.context.account.postbox)
+        |> distinctUntilChanged
+        |> deliverOnMainQueue).start(next: { [weak self] settings in
+            guard let self, setAyuGramSettingsCurrent(settings, accountId: self.context.account.id) else {
                 return
             }
-            let (compact, hideSearch, _) = valueTuple
-            let defaults = UserDefaults.standard
-            defaults.set(compact, forKey: "shadow.compactBottomBar")
-            defaults.set(hideSearch, forKey: "shadow.hideBottomSearch")
-            (self.rootTabController as? TabBarControllerImpl)?.updateLayout(transition: .animated(duration: 0.25, curve: .easeInOut))
-            // Shadow: on a genuine CHANGE of these bottom-interface toggles (not the
-            // initial cold-start emission), rebuild the root tab controllers so every
-            // dependent component (folders-at-bottom panel, compact bar, search
-            // placement) re-lays-out from the same fresh state at once. This fixes the
-            // partial desync where, after toggling compact / folders-at-bottom, some
-            // pieces reverted on the next layout while the folder strip stayed
-            // displaced until an unrelated full re-render (e.g. opening Contacts).
-            if ayuIsFirstBottomBarEmission {
-                ayuIsFirstBottomBarEmission = false
-            } else {
-                self.updateRootControllers(showCallsTab: self.ayuShowCallsTab)
-            }
+            let transition: ContainedViewLayoutTransition = ayuIsFirstSettingsEmission ? .immediate : .animated(duration: 0.25, curve: .easeInOut)
+            ayuIsFirstSettingsEmission = false
+            (self.rootTabController as? TabBarControllerImpl)?.updateLayout(transition: transition)
         })
     }
         
     public func updateRootControllers(showCallsTab: Bool) {
-        self.ayuShowCallsTab = showCallsTab
         guard let rootTabController = self.rootTabController as? TabBarControllerImpl else {
             return
         }
@@ -323,16 +288,12 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         rootTabController.setControllers(controllers, selectedIndex: nil)
     }
     
-    // Shadow: re-applies all Ayu visual customisations that depend on
-    // UserDefaults mirrors or view-level state (compact tab bar, banner,
-    // profile background). Called on every applicationDidBecomeActive so that
-    // customisations survive background→foreground transitions where iOS may
-    // have unloaded part of the view hierarchy under memory pressure.
-    // Reuses the same path as the cold-start ayuSyncBottomBarDefaults() call
-    // in addRootControllers and the live ayuBottomBarDisposable — no new
-    // mechanism, just an unconditional re-fire on foreground.
+    // Called by applicationDidBecomeActive. Profile headers subscribe to their
+    // own account and foreground events; this restores the active bar's bridge.
     public func reapplyAyuVisualState() {
-        ayuSyncBottomBarDefaults()
+        guard ayuSyncBottomBarDefaults(accountId: self.context.account.id) else {
+            return
+        }
         (self.rootTabController as? TabBarControllerImpl)?.updateLayout(transition: .immediate)
     }
     

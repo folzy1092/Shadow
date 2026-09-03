@@ -8,8 +8,8 @@ import Postbox
 // stays a single call (high merge-conflict risk in that file).
 //
 // Returns the full versions array to store, or nil when there is nothing worth
-// capturing. Reads the setting from the process-wide snapshot (no Postbox
-// transaction) so it is safe to call from inside a message-update closure.
+// capturing. Reads the owning account's snapshot (no nested Postbox transaction)
+// so it is safe to call from inside a message-update closure.
 
 private func ayuPrincipalResourceId(_ mediaList: [Media]) -> String? {
     for media in mediaList {
@@ -21,7 +21,7 @@ private func ayuPrincipalResourceId(_ mediaList: [Media]) -> String? {
 }
 
 func ayuBuildEditHistoryVersions(mediaBox: MediaBox, previousMessage: Message, newText: String, newMedia: [Media]) -> [SavedMessageEditVersion]? {
-    guard ayuGramSettingsCurrent.saveEditHistory else {
+    guard currentAyuGramSettings(mediaBox: mediaBox).saveEditHistory else {
         return nil
     }
 

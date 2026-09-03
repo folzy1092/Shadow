@@ -117,6 +117,8 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     // screen (isMyProfile). Replaces (hides) the official cover when active.
     private var profileBackgroundImageView: UIImageView?
     private var profileBackgroundLoadedSignature: String?
+    private var ayuSettings: AyuGramSettings
+    private var ayuSettingsDisposable: Disposable?
     let buttonsContainerNode: SparseNode
     let buttonsBackgroundNode: NavigationBackgroundNode
     let buttonsMaskView: UIView
@@ -228,6 +230,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     
     init(context: AccountContext, controller: PeerInfoScreenImpl, avatarInitiallyExpanded: Bool, isOpenedFromChat: Bool, isMediaOnly: Bool, isSettings: Bool, isMyProfile: Bool, forumTopicThreadId: Int64?, chatLocation: ChatLocation) {
         self.context = context
+        self.ayuSettings = currentAyuGramSettings(accountId: context.account.id)
         self.controller = controller
         self.isAvatarExpanded = avatarInitiallyExpanded
         self.isOpenedFromChat = isOpenedFromChat
@@ -404,10 +407,28 @@ final class PeerInfoHeaderNode: ASDisplayNode {
 
             strongSelf.animateOverlaysFadeIn?()
         }
+
+        // The background file and its visibility flags must belong to the same
+        // account, including offscreen settings/profile headers. Re-layout on
+        // foreground even when the settings themselves have not changed.
+        self.ayuSettingsDisposable = (combineLatest(
+            ayuGramSettings(postbox: context.account.postbox) |> distinctUntilChanged,
+            context.sharedContext.applicationBindings.applicationIsActive |> distinctUntilChanged
+        )
+        |> deliverOnMainQueue).start(next: { [weak self] settings, isActive in
+            guard let self else {
+                return
+            }
+            self.ayuSettings = settings
+            if isActive {
+                self.requestUpdateLayout?(false)
+            }
+        })
     }
     
     deinit {
         self.emojiStatusPackDisposable.dispose()
+        self.ayuSettingsDisposable?.dispose()
     }
     
     override func didLoad() {
@@ -538,10 +559,10 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         // 1. Это "Мой профиль" И включён customProfileBackgroundEnabled
         // 2. ИЛИ включён customProfileBackgroundForOthers (применять для всех профилей)
         // 3. ИЛИ это Settings И включён customProfileBackgroundForSettings
-        let shouldShowCustomBackground = ayuGramSettingsCurrent.customProfileBackgroundEnabled &&
+        let shouldShowCustomBackground = self.ayuSettings.customProfileBackgroundEnabled &&
             (self.isMyProfile ||
-             ayuGramSettingsCurrent.customProfileBackgroundForOthers ||
-             (self.isSettings && ayuGramSettingsCurrent.customProfileBackgroundForSettings))
+             self.ayuSettings.customProfileBackgroundForOthers ||
+             (self.isSettings && self.ayuSettings.customProfileBackgroundForSettings))
 
         guard shouldShowCustomBackground else {
             clear()
@@ -787,10 +808,10 @@ final class PeerInfoHeaderNode: ASDisplayNode {
 
         // Shadow: когда кастомный фон профиля активен, игнорируем Premium цвета
         // чтобы не было фиолетовых отблесков от оригинального фона
-        let customBackgroundActive = ayuGramSettingsCurrent.customProfileBackgroundEnabled &&
+        let customBackgroundActive = self.ayuSettings.customProfileBackgroundEnabled &&
             (self.isMyProfile ||
-             ayuGramSettingsCurrent.customProfileBackgroundForOthers ||
-             (self.isSettings && ayuGramSettingsCurrent.customProfileBackgroundForSettings))
+             self.ayuSettings.customProfileBackgroundForOthers ||
+             (self.isSettings && self.ayuSettings.customProfileBackgroundForSettings))
 
         if customBackgroundActive {
             // Используем дефолтные цвета темы как будто Premium нет
@@ -1447,9 +1468,9 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 // entirely when "hide own phone" is on, or show the spoofed digits
                 // when a visual spoof is configured. Real user.phone is untouched.
                 var subtitle: String
-                if ayuGramSettingsCurrent.hideOwnPhoneNumber {
+                if self.ayuSettings.hideOwnPhoneNumber {
                     subtitle = ""
-                } else if let spoofedDigits = ayuGramSettingsCurrent.spoofedPhoneDigitsForDisplay() {
+                } else if let spoofedDigits = self.ayuSettings.spoofedPhoneDigitsForDisplay() {
                     subtitle = formatPhoneNumber(context: self.context, number: spoofedDigits)
                 } else {
                     subtitle = formatPhoneNumber(context: self.context, number: user.phone ?? "")

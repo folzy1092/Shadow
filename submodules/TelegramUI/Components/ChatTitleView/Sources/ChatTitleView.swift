@@ -204,6 +204,7 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
     public let titleRightIconNode: ASImageNode
     public let titleCredibilityIconView: ComponentHostView<Empty>
     public let titleVerifiedIconView: ComponentHostView<Empty>
+    public let titleExteraIconView: ComponentHostView<Empty>
     public let titleStatusIconView: ComponentHostView<Empty>
     public let activityNode: ChatTitleActivityNode
     
@@ -221,10 +222,7 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
     private var titleCredibilityIcon: ChatTitleCredibilityIcon = .none
     private var titleVerifiedIcon: ChatTitleCredibilityIcon = .none
     private var titleStatusIcon: ChatTitleCredibilityIcon = .none
-    // Shadow: true when titleVerifiedIcon holds the fork's remote-config badge
-    // rather than a real bot-verification icon — placed AFTER the status/premium
-    // chain (right of the name) instead of upstream's before-the-name placement.
-    private var titleVerifiedIconOnRight: Bool = false
+    private var titleExteraIcon: ChatTitleCredibilityIcon = .none
     
     private var presenceManager: PeerPresenceStatusManager?
     
@@ -273,7 +271,7 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
                 var titleCredibilityIcon: ChatTitleCredibilityIcon = .none
                 var titleVerifiedIcon: ChatTitleCredibilityIcon = .none
                 var titleStatusIcon: ChatTitleCredibilityIcon = .none
-                var titleVerifiedIconOnRight = false
+                var titleExteraIcon: ChatTitleCredibilityIcon = .none
                 var isEnabled = true
                 switch titleContent {
                     case let .peer(peerView, customTitle, _, _, isScheduledMessages, isMuted, _, hidePeerStatus, isEnabledValue):
@@ -331,10 +329,9 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
                                 // свой значок тоже показываем.
                                 if let badgeEmojiId = ayuGramNameBadgeEmojiId(peerId: peer.id) {
                                     titleVerifiedIcon = .emojiStatus(PeerEmojiStatus(content: .emoji(fileId: badgeEmojiId), expirationDate: nil))
-                                } else if let exteraEmojiId = ayuExteraBadgeEmojiId(peerId: peer.id) {
-                                    // Значок поддержавшего exteraGram — справа от имени.
-                                    titleVerifiedIcon = .emojiStatus(PeerEmojiStatus(content: .emoji(fileId: exteraEmojiId), expirationDate: nil))
-                                    titleVerifiedIconOnRight = true
+                                }
+                                if let exteraEmojiId = ayuExteraBadgeEmojiId(peerId: peer.id) {
+                                    titleExteraIcon = .emojiStatus(PeerEmojiStatus(content: .emoji(fileId: exteraEmojiId), expirationDate: nil))
                                 }
                             }
                             if peerView.peerId.namespace == Namespaces.Peer.SecretChat {
@@ -472,8 +469,8 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
                     self.titleVerifiedIcon = titleVerifiedIcon
                     updated = true
                 }
-                if titleVerifiedIconOnRight != self.titleVerifiedIconOnRight {
-                    self.titleVerifiedIconOnRight = titleVerifiedIconOnRight
+                if titleExteraIcon != self.titleExteraIcon {
+                    self.titleExteraIcon = titleExteraIcon
                     updated = true
                 }
                 
@@ -809,6 +806,9 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
         
         self.titleVerifiedIconView = ComponentHostView()
         self.titleVerifiedIconView.isUserInteractionEnabled = false
+
+        self.titleExteraIconView = ComponentHostView()
+        self.titleExteraIconView.isUserInteractionEnabled = false
         
         self.titleStatusIconView = ComponentHostView()
         self.titleStatusIconView.isUserInteractionEnabled = false
@@ -840,16 +840,19 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
                     strongSelf.activityNode.layer.removeAnimation(forKey: "opacity")
                     strongSelf.titleCredibilityIconView.layer.removeAnimation(forKey: "opacity")
                     strongSelf.titleVerifiedIconView.layer.removeAnimation(forKey: "opacity")
+                    strongSelf.titleExteraIconView.layer.removeAnimation(forKey: "opacity")
                     strongSelf.titleStatusIconView.layer.removeAnimation(forKey: "opacity")
                     strongSelf.titleTextNode.alpha = 0.4
                     strongSelf.activityNode.alpha = 0.4
                     strongSelf.titleCredibilityIconView.alpha = 0.4
                     strongSelf.titleVerifiedIconView.alpha = 0.4
+                    strongSelf.titleExteraIconView.alpha = 0.4
                 } else {
                     strongSelf.titleTextNode.alpha = 1.0
                     strongSelf.activityNode.alpha = 1.0
                     strongSelf.titleCredibilityIconView.alpha = 1.0
                     strongSelf.titleVerifiedIconView.alpha = 1.0
+                    strongSelf.titleExteraIconView.alpha = 1.0
                     strongSelf.titleStatusIconView.alpha = 1.0
                     strongSelf.titleTextNode.layer.animateAlpha(from: 0.4, to: 1.0, duration: 0.2)
                     strongSelf.activityNode.layer.animateAlpha(from: 0.4, to: 1.0, duration: 0.2)
@@ -879,6 +882,7 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
             let titleContent = self.titleContent
             self.titleCredibilityIcon = .none
             self.titleVerifiedIcon = .none
+            self.titleExteraIcon = .none
             self.titleContent = titleContent
             let _ = self.updateStatus()
             
@@ -900,6 +904,7 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
         var rightIconWidth: CGFloat = 0.0
         var credibilityIconWidth: CGFloat = 0.0
         var verifiedIconWidth: CGFloat = 0.0
+        var exteraIconWidth: CGFloat = 0.0
         var statusIconWidth: CGFloat = 0.0
         
         if let image = self.titleLeftIconNode.image {
@@ -943,6 +948,13 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
             titleVerifiedContent = .animation(content: .customEmoji(fileId: emojiStatus.fileId), size: CGSize(width: 32.0, height: 32.0), placeholderColor: self.theme.list.mediaPlaceholderColor, themeColor: self.theme.list.itemAccentColor, loopMode: .count(2))
         }
         
+        let titleExteraContent: EmojiStatusComponent.Content
+        if case let .emojiStatus(emojiStatus) = self.titleExteraIcon {
+            titleExteraContent = .animation(content: .customEmoji(fileId: emojiStatus.fileId), size: CGSize(width: 32.0, height: 32.0), placeholderColor: self.theme.list.mediaPlaceholderColor, themeColor: self.theme.list.itemAccentColor, loopMode: .count(2))
+        } else {
+            titleExteraContent = .none
+        }
+
         let titleStatusContent: EmojiStatusComponent.Content
         var titleStatusParticleColor: UIColor?
         switch self.titleStatusIcon {
@@ -983,6 +995,20 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
             containerSize: CGSize(width: 20.0, height: 20.0)
         )
         
+        let titleExteraSize = self.titleExteraIconView.update(
+            transition: .immediate,
+            component: AnyComponent(EmojiStatusComponent(
+                context: self.context,
+                animationCache: self.animationCache,
+                animationRenderer: self.animationRenderer,
+                content: titleExteraContent,
+                isVisibleForAnimations: true,
+                action: nil
+            )),
+            environment: {},
+            containerSize: CGSize(width: 22.0, height: 22.0)
+        )
+
         let titleStatusSize = self.titleStatusIconView.update(
             transition: .immediate,
             component: AnyComponent(EmojiStatusComponent(
@@ -1016,6 +1042,15 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
             }
         }
         
+        if self.titleExteraIcon != .none {
+            self.titleTextNode.view.addSubview(self.titleExteraIconView)
+            exteraIconWidth = titleExteraSize.width + 3.0
+        } else {
+            if self.titleExteraIconView.superview != nil {
+                self.titleExteraIconView.removeFromSuperview()
+            }
+        }
+
         if self.titleStatusIcon != .none {
             self.titleTextNode.view.addSubview(self.titleStatusIconView)
             statusIconWidth = titleStatusSize.width + 3.0
@@ -1044,13 +1079,14 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
         var titleFrame: CGRect
         
         var titleInsets: UIEdgeInsets = .zero
-        if case .emojiStatus = self.titleVerifiedIcon, verifiedIconWidth > 0.0, !self.titleVerifiedIconOnRight {
+        if case .emojiStatus = self.titleVerifiedIcon, verifiedIconWidth > 0.0 {
             titleInsets.left = verifiedIconWidth
         }
         
-        var titleSize = self.titleTextNode.updateLayout(size: CGSize(width: size.width - leftIconWidth - credibilityIconWidth - verifiedIconWidth - statusIconWidth - rightIconWidth - titleSideInset * 2.0, height: size.height), insets: titleInsets, animated: titleTransition.isAnimated)
+        var titleSize = self.titleTextNode.updateLayout(size: CGSize(width: max(0.0, size.width - leftIconWidth - credibilityIconWidth - verifiedIconWidth - exteraIconWidth - statusIconWidth - rightIconWidth - titleSideInset * 2.0), height: size.height), insets: titleInsets, animated: titleTransition.isAnimated)
         titleSize.width += credibilityIconWidth
         titleSize.width += verifiedIconWidth
+        titleSize.width += exteraIconWidth
         if statusIconWidth > 0.0 {
             titleSize.width += statusIconWidth
             if credibilityIconWidth > 0.0 {
@@ -1093,18 +1129,15 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
         
         var nextIconX: CGFloat = titleFrame.width
 
-        // Shadow: the fork badge (titleVerifiedIconOnRight) is placed as the
-        // OUTERMOST icon — furthest right, after the premium/status emoji — by
-        // consuming nextIconX before credibility/status get to it. A real
-        // bot-verification icon keeps upstream's x = 0 placement, BEFORE the name.
-        if self.titleVerifiedIconOnRight, verifiedIconWidth > 0.0 {
-            titleTransition.updateFrame(view: self.titleVerifiedIconView, frame: CGRect(origin: CGPoint(x: nextIconX - titleVerifiedSize.width, y: floor((titleFrame.height - titleVerifiedSize.height) / 2.0)), size: titleVerifiedSize))
-            nextIconX -= titleVerifiedSize.width
+        titleTransition.updateFrame(view: self.titleVerifiedIconView, frame: CGRect(origin: CGPoint(x: 0.0, y: floor((titleFrame.height - titleVerifiedSize.height) / 2.0)), size: titleVerifiedSize))
+
+        // exteraGram is the outermost right icon; Shadow keeps its before-name slot.
+        if exteraIconWidth > 0.0 {
+            titleTransition.updateFrame(view: self.titleExteraIconView, frame: CGRect(origin: CGPoint(x: nextIconX - titleExteraSize.width, y: floor((titleFrame.height - titleExteraSize.height) / 2.0)), size: titleExteraSize))
+            nextIconX -= titleExteraSize.width
             if credibilityIconWidth > 0.0 || statusIconWidth > 0.0 {
                 nextIconX -= statusSpacing
             }
-        } else {
-            titleTransition.updateFrame(view: self.titleVerifiedIconView, frame: CGRect(origin: CGPoint(x: 0.0, y: floor((titleFrame.height - titleVerifiedSize.height) / 2.0)), size: titleVerifiedSize))
         }
 
         self.titleCredibilityIconView.frame = CGRect(origin: CGPoint(x: nextIconX - titleCredibilitySize.width, y: floor((titleFrame.height - titleCredibilitySize.height) / 2.0)), size: titleCredibilitySize)

@@ -739,6 +739,8 @@ public class ItemListPeerItemNode: ItemListRevealOptionsItemNode, ItemListItemNo
     private var credibilityIconView: ComponentHostView<Empty>?
     private var verifiedIconComponent: EmojiStatusComponent?
     private var verifiedIconView: ComponentHostView<Empty>?
+    private var exteraIconComponent: EmojiStatusComponent?
+    private var exteraIconView: ComponentHostView<Empty>?
     private var switchNode: SwitchNode?
     private var checkNode: ASImageNode?
     private var leftCheckNode: CheckNode?
@@ -785,6 +787,14 @@ public class ItemListPeerItemNode: ItemListRevealOptionsItemNode, ItemListItemNo
                         component: AnyComponent(verifiedIconComponent.withVisibleForAnimations(self.visibilityStatus)),
                         environment: {},
                         containerSize: verifiedIconView.bounds.size
+                    )
+                }
+                if let exteraIconView = self.exteraIconView, let exteraIconComponent = self.exteraIconComponent {
+                    let _ = exteraIconView.update(
+                        transition: .immediate,
+                        component: AnyComponent(exteraIconComponent.withVisibleForAnimations(self.visibilityStatus)),
+                        environment: {},
+                        containerSize: exteraIconView.bounds.size
                     )
                 }
                 if let avatarIconView = self.avatarIconView, let avatarIconComponentView = avatarIconView.view, let avatarIconComponent = self.avatarIconComponent {
@@ -931,11 +941,8 @@ public class ItemListPeerItemNode: ItemListRevealOptionsItemNode, ItemListItemNo
             var credibilityIcon: EmojiStatusComponent.Content?
             var credibilityParticleColor: UIColor?
             var verifiedIcon: EmojiStatusComponent.Content?
-            // Shadow: true when verifiedIcon holds the fork's remote-config badge
-            // rather than a real bot-verification icon — placed after
-            // credibilityIcon (right of the name) instead of upstream's
-            // before-the-name placement.
-            var verifiedIconOnRight = false
+            var exteraIcon: EmojiStatusComponent.Content?
+            let exteraIconContainerSize = CGSize(width: 18.0, height: 18.0)
 
             if case .threatSelfAsSaved = item.aliasHandling, item.peer.id == item.context.accountPeerId {
             } else {
@@ -963,10 +970,9 @@ public class ItemListPeerItemNode: ItemListRevealOptionsItemNode, ItemListItemNo
                 // где штатная галочка — перед именем.
                 if let badgeEmojiId = ayuGramNameBadgeEmojiId(peerId: item.peer.id) {
                     verifiedIcon = .animation(content: .customEmoji(fileId: badgeEmojiId), size: CGSize(width: 32.0, height: 32.0), placeholderColor: item.presentationData.theme.list.mediaPlaceholderColor, themeColor: item.presentationData.theme.list.itemAccentColor, loopMode: .count(0))
-                } else if let exteraEmojiId = ayuExteraBadgeEmojiId(peerId: item.peer.id) {
-                    // Значок поддержавшего exteraGram — справа от имени.
-                    verifiedIcon = .animation(content: .customEmoji(fileId: exteraEmojiId), size: CGSize(width: 32.0, height: 32.0), placeholderColor: item.presentationData.theme.list.mediaPlaceholderColor, themeColor: item.presentationData.theme.list.itemAccentColor, loopMode: .count(0))
-                    verifiedIconOnRight = true
+                }
+                if let exteraEmojiId = ayuExteraBadgeEmojiId(peerId: item.peer.id) {
+                    exteraIcon = .animation(content: .customEmoji(fileId: exteraEmojiId), size: CGSize(width: 32.0, height: 32.0), placeholderColor: item.presentationData.theme.list.mediaPlaceholderColor, themeColor: item.presentationData.theme.list.itemAccentColor, loopMode: .count(0))
                 }
             }
             
@@ -994,6 +1000,10 @@ public class ItemListPeerItemNode: ItemListRevealOptionsItemNode, ItemListItemNo
                 }
             }
             
+            if exteraIcon != nil {
+                titleIconsWidth += exteraIconContainerSize.width + 4.0
+            }
+
             var badgeColor: UIColor?
             if case .badge = item.label {
                 badgeColor = item.presentationData.theme.list.itemAccentColor
@@ -1495,7 +1505,7 @@ public class ItemListPeerItemNode: ItemListRevealOptionsItemNode, ItemListItemNo
                     
                     var titleLeftOffset: CGFloat = 0.0
                     var nextIconX: CGFloat = titleFrame.maxX
-                    if let verifiedIcon, !verifiedIconOnRight {
+                    if let verifiedIcon {
                         let animationCache = item.context.animationCache
                         let animationRenderer = item.context.animationRenderer
                         
@@ -1534,7 +1544,7 @@ public class ItemListPeerItemNode: ItemListRevealOptionsItemNode, ItemListItemNo
                       
                         titleLeftOffset += iconSize.width + 4.0
                         nextIconX += iconSize.width + 4.0
-                    } else if !verifiedIconOnRight, let verifiedIconView = strongSelf.verifiedIconView {
+                    } else if let verifiedIconView = strongSelf.verifiedIconView {
                         strongSelf.verifiedIconView = nil
                         verifiedIconView.removeFromSuperview()
                     }
@@ -1586,53 +1596,49 @@ public class ItemListPeerItemNode: ItemListRevealOptionsItemNode, ItemListItemNo
                         credibilityIconView.removeFromSuperview()
                     }
 
-                    // Shadow: fork badge placed AFTER credibility, i.e. as the last
-                    // icon in the row, reusing the verifiedIconView the (unused, in
-                    // this case) before-name path above would have used.
-                    if let verifiedIcon, verifiedIconOnRight {
+                    // exteraGram is independent of the before-name Shadow badge.
+                    if let exteraIcon {
                         let animationCache = item.context.animationCache
                         let animationRenderer = item.context.animationRenderer
 
-                        var verifiedIconTransition = transition
-                        let verifiedIconView: ComponentHostView<Empty>
-                        if let current = strongSelf.verifiedIconView {
-                            verifiedIconView = current
+                        var exteraIconTransition = transition
+                        let exteraIconView: ComponentHostView<Empty>
+                        if let current = strongSelf.exteraIconView {
+                            exteraIconView = current
                         } else {
-                            verifiedIconTransition = .immediate
-                            verifiedIconView = ComponentHostView<Empty>()
-                            strongSelf.containerNode.view.addSubview(verifiedIconView)
-                            strongSelf.verifiedIconView = verifiedIconView
+                            exteraIconTransition = .immediate
+                            exteraIconView = ComponentHostView<Empty>()
+                            strongSelf.containerNode.view.addSubview(exteraIconView)
+                            strongSelf.exteraIconView = exteraIconView
                         }
 
-                        let verifiedIconComponent = EmojiStatusComponent(
+                        let exteraIconComponent = EmojiStatusComponent(
                             postbox: item.context.engine.account.postbox,
                             energyUsageSettings: item.context.energyUsageSettings,
                             resolveInlineStickers: item.context.resolveInlineStickers,
                             animationCache: animationCache,
                             animationRenderer: animationRenderer,
-                            content: verifiedIcon,
+                            content: exteraIcon,
                             isVisibleForAnimations: strongSelf.visibilityStatus,
                             action: nil,
                             emojiFileUpdated: nil
                         )
-                        strongSelf.verifiedIconComponent = verifiedIconComponent
+                        strongSelf.exteraIconComponent = exteraIconComponent
 
-                        // Shadow: ~10% bigger than the upstream 16x16 — a custom-
-                        // emoji file reads smaller than the premium/verified glyph
-                        // assets at the same box.
-                        let iconSize = verifiedIconView.update(
+                        let iconSize = exteraIconView.update(
                             transition: .immediate,
-                            component: AnyComponent(verifiedIconComponent),
+                            component: AnyComponent(exteraIconComponent),
                             environment: {},
-                            containerSize: CGSize(width: 18.0, height: 18.0)
+                            containerSize: exteraIconContainerSize
                         )
 
                         nextIconX += 4.0
-                        verifiedIconTransition.updateFrame(view: verifiedIconView, frame: CGRect(origin: CGPoint(x: nextIconX, y: floorToScreenPixels(titleFrame.midY - iconSize.height / 2.0)), size: iconSize))
+                        exteraIconTransition.updateFrame(view: exteraIconView, frame: CGRect(origin: CGPoint(x: nextIconX, y: floorToScreenPixels(titleFrame.midY - iconSize.height / 2.0)), size: iconSize))
                         nextIconX += iconSize.width
-                    } else if verifiedIconOnRight, let verifiedIconView = strongSelf.verifiedIconView {
-                        strongSelf.verifiedIconView = nil
-                        verifiedIconView.removeFromSuperview()
+                    } else if let exteraIconView = strongSelf.exteraIconView {
+                        strongSelf.exteraIconView = nil
+                        strongSelf.exteraIconComponent = nil
+                        exteraIconView.removeFromSuperview()
                     }
 
                     if let currentSwitchNode = currentSwitchNode {
@@ -2016,8 +2022,15 @@ public class ItemListPeerItemNode: ItemListRevealOptionsItemNode, ItemListItemNo
         transition.updateFrame(node: self.titleNode, frame: CGRect(origin: CGPoint(x: leftInset + revealOffset + editingOffset + titleLeftOffset, y: self.titleNode.frame.minY), size: self.titleNode.bounds.size))
         transition.updateFrame(node: self.statusNode, frame: CGRect(origin: CGPoint(x: leftInset + revealOffset + editingOffset, y: self.statusNode.frame.minY), size: self.statusNode.bounds.size))
         
+        var nextIconX = self.titleNode.frame.maxX
         if let credibilityIconView = self.credibilityIconView {
-            transition.updateFrame(view: credibilityIconView, frame: CGRect(origin: CGPoint(x: self.titleNode.frame.maxX + 4.0, y: credibilityIconView.frame.minY), size: credibilityIconView.bounds.size))
+            nextIconX += 4.0
+            transition.updateFrame(view: credibilityIconView, frame: CGRect(origin: CGPoint(x: nextIconX, y: credibilityIconView.frame.minY), size: credibilityIconView.bounds.size))
+            nextIconX += credibilityIconView.bounds.width
+        }
+        if let exteraIconView = self.exteraIconView {
+            nextIconX += 4.0
+            transition.updateFrame(view: exteraIconView, frame: CGRect(origin: CGPoint(x: nextIconX, y: exteraIconView.frame.minY), size: exteraIconView.bounds.size))
         }
         
         var rightLabelInset: CGFloat = 15.0 + params.rightInset

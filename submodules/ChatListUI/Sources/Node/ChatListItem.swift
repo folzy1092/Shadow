@@ -1,5946 +1,1689 @@
-import Foundation
-import UIKit
-import AsyncDisplayKit
-import Display
-import SwiftSignalKit
-import TelegramCore
-import TelegramPresentationData
-import ItemListUI
-import PresentationDataUtils
-import AvatarNode
-import TelegramStringFormatting
-import AccountContext
-import PeerOnlineMarkerNode
-import LocalizedPeerData
-import PeerPresenceStatusManager
-import PhotoResources
-import ContextUI
-import ChatInterfaceState
-import TextFormat
-import InvisibleInkDustNode
-import GalleryUI
-import HierarchyTrackingLayer
-import TextNodeWithEntities
-import ComponentFlow
-import EmojiStatusComponent
-import AvatarVideoNode
-import AppBundle
-import MultilineTextComponent
-import MultilineTextWithEntitiesComponent
-import ShimmerEffect
-import GlassBackgroundComponent
-
-public enum ChatListItemContent {
-    public final class ThreadInfo: Equatable {
-        public let id: Int64
-        public let info: EngineMessageHistoryThread.Info
-        public let isOwnedByMe: Bool
-        public let isClosed: Bool
-        public let isHidden: Bool
-        public let threadPeer: EnginePeer?
-        
-        public init(id: Int64, info: EngineMessageHistoryThread.Info, isOwnedByMe: Bool, isClosed: Bool, isHidden: Bool, threadPeer: EnginePeer?) {
-            self.id = id
-            self.info = info
-            self.isOwnedByMe = isOwnedByMe
-            self.isClosed = isClosed
-            self.isHidden = isHidden
-            self.threadPeer = threadPeer
-        }
-        
-        public static func ==(lhs: ThreadInfo, rhs: ThreadInfo) -> Bool {
-            if lhs.id != rhs.id {
-                return false
-            }
-            if lhs.info != rhs.info {
-                return false
-            }
-            if lhs.isOwnedByMe != rhs.isOwnedByMe {
-                return false
-            }
-            if lhs.isClosed != rhs.isClosed {
-                return false
-            }
-            if lhs.isHidden != rhs.isHidden {
-                return false
-            }
-            if lhs.threadPeer != rhs.threadPeer {
-                return false
-            }
-            return true
-        }
-    }
-    
-    public final class DraftState: Equatable {
-        let text: String
-        let entities: [MessageTextEntity]
-
-        public init(draft: EngineChatList.Draft) {
-            self.text = draft.text
-            self.entities = draft.entities
-        }
-
-        public static func ==(lhs: DraftState, rhs: DraftState) -> Bool {
-            if lhs.text != rhs.text {
-                return false
-            }
-            if lhs.entities != rhs.entities {
-                return false
-            }
-            return true
-        }
-    }
-    
-    public struct StoryState: Equatable {
-        public var stats: EngineChatList.StoryStats
-        public var hasUnseenCloseFriends: Bool
-        
-        public init(
-            stats: EngineChatList.StoryStats,
-            hasUnseenCloseFriends: Bool
-        ) {
-            self.stats = stats
-            self.hasUnseenCloseFriends = hasUnseenCloseFriends
-        }
-    }
-    
-    public struct Tag: Equatable {
-        public var id: Int32
-        public var title: ChatFolderTitle
-        public var colorId: Int32
-        
-        public init(id: Int32, title: ChatFolderTitle, colorId: Int32) {
-            self.id = id
-            self.title = title
-            self.colorId = colorId
-        }
-    }
-    
-    public struct CustomMessageListData: Equatable {
-        public var commandPrefix: String?
-        public var searchQuery: String?
-        public var messageCount: Int?
-        public var hideSeparator: Bool
-        public var hideDate: Bool
-        public var hidePeerStatus: Bool
-        public var isInTransparentContainer: Bool
-        
-        public init(commandPrefix: String?, searchQuery: String?, messageCount: Int?, hideSeparator: Bool, hideDate: Bool, hidePeerStatus: Bool, isInTransparentContainer: Bool = false) {
-            self.commandPrefix = commandPrefix
-            self.searchQuery = searchQuery
-            self.messageCount = messageCount
-            self.hideSeparator = hideSeparator
-            self.hideDate = hideDate
-            self.hidePeerStatus = hidePeerStatus
-            self.isInTransparentContainer = isInTransparentContainer
-        }
-    }
-    
-    public struct PeerData {
-        public var messages: [EngineMessage]
-        public var peer: EngineRenderedPeer
-        public var avatarPeer: EngineRenderedPeer?
-        public var threadInfo: ThreadInfo?
-        public var combinedReadState: EnginePeerReadCounters?
-        public var isRemovedFromTotalUnreadCount: Bool
-        public var presence: EnginePeer.Presence?
-        public var hasUnseenMentions: Bool
-        public var hasUnseenReactions: Bool
-        public var hasUnseenPollVotes: Bool
-        public var draftState: DraftState?
-        public var mediaDraftContentType: EngineChatList.MediaDraftContentType?
-        public var inputActivities: [(EnginePeer, PeerInputActivity)]?
-        public var promoInfo: ChatListNodeEntryPromoInfo?
-        public var ignoreUnreadBadge: Bool
-        public var displayAsMessage: Bool
-        public var hasFailedMessages: Bool
-        public var forumTopicData: EngineChatList.ForumTopicData?
-        public var topForumTopicItems: [EngineChatList.ForumTopicData]
-        public var autoremoveTimeout: Int32?
-        public var storyState: StoryState?
-        public var requiresPremiumForMessaging: Bool
-        public var displayAsTopicList: Bool
-        public var tags: [Tag]
-        public var customMessageListData: CustomMessageListData?
-        
-        public init(
-            messages: [EngineMessage],
-            peer: EngineRenderedPeer,
-            avatarPeer: EngineRenderedPeer? = nil,
-            threadInfo: ThreadInfo?,
-            combinedReadState: EnginePeerReadCounters?,
-            isRemovedFromTotalUnreadCount: Bool,
-            presence: EnginePeer.Presence?,
-            hasUnseenMentions: Bool,
-            hasUnseenReactions: Bool,
-            hasUnseenPollVotes: Bool,
-            draftState: DraftState?,
-            mediaDraftContentType: EngineChatList.MediaDraftContentType?,
-            inputActivities: [(EnginePeer, PeerInputActivity)]?,
-            promoInfo: ChatListNodeEntryPromoInfo?,
-            ignoreUnreadBadge: Bool,
-            displayAsMessage: Bool,
-            hasFailedMessages: Bool,
-            forumTopicData: EngineChatList.ForumTopicData?,
-            topForumTopicItems: [EngineChatList.ForumTopicData],
-            autoremoveTimeout: Int32?,
-            storyState: StoryState?,
-            requiresPremiumForMessaging: Bool,
-            displayAsTopicList: Bool,
-            tags: [Tag],
-            customMessageListData: CustomMessageListData? = nil
-        ) {
-            self.messages = messages
-            self.peer = peer
-            self.avatarPeer = avatarPeer
-            self.threadInfo = threadInfo
-            self.combinedReadState = combinedReadState
-            self.isRemovedFromTotalUnreadCount = isRemovedFromTotalUnreadCount
-            self.presence =  presence
-            self.hasUnseenMentions = hasUnseenMentions
-            self.hasUnseenReactions =  hasUnseenReactions
-            self.hasUnseenPollVotes = hasUnseenPollVotes
-            self.draftState = draftState
-            self.mediaDraftContentType = mediaDraftContentType
-            self.inputActivities = inputActivities
-            self.promoInfo = promoInfo
-            self.ignoreUnreadBadge = ignoreUnreadBadge
-            self.displayAsMessage = displayAsMessage
-            self.hasFailedMessages = hasFailedMessages
-            self.forumTopicData = forumTopicData
-            self.topForumTopicItems = topForumTopicItems
-            self.autoremoveTimeout = autoremoveTimeout
-            self.storyState = storyState
-            self.requiresPremiumForMessaging = requiresPremiumForMessaging
-            self.displayAsTopicList = displayAsTopicList
-            self.tags = tags
-            self.customMessageListData = customMessageListData
-        }
-    }
-    
-    public struct GroupReferenceData {
-        public var groupId: EngineChatList.Group
-        public var peers: [EngineChatList.GroupItem.Item]
-        public var message: EngineMessage?
-        public var unreadCount: Int
-        public var hiddenByDefault: Bool
-        public var appearsPinned: Bool
-        public var storyState: StoryState?
-        
-        public init(
-            groupId: EngineChatList.Group,
-            peers: [EngineChatList.GroupItem.Item],
-            message: EngineMessage?,
-            unreadCount: Int,
-            hiddenByDefault: Bool,
-            appearsPinned: Bool,
-            storyState: StoryState?
-        ) {
-            self.groupId = groupId
-            self.peers = peers
-            self.message = message
-            self.unreadCount = unreadCount
-            self.hiddenByDefault = hiddenByDefault
-            self.appearsPinned = appearsPinned
-            self.storyState = storyState
-        }
-    }
-
-    case loading
-    case peer(PeerData)
-    case groupReference(GroupReferenceData)
-    
-    public var chatLocation: ChatLocation? {
-        switch self {
-        case .loading:
-            return nil
-        case let .peer(peerData):
-            return .peer(id: peerData.peer.peerId)
-        case .groupReference:
-            return nil
-        }
-    }
-}
-
-private let tagBackgroundImage: UIImage? = {
-    return generateStretchableFilledCircleImage(diameter: 8.0, color: .white)?.withRenderingMode(.alwaysTemplate)
-}()
-
-private final class ChatListItemTagListComponent: Component {
-    let context: AccountContext
-    let tags: [ChatListItemContent.Tag]
-    let theme: PresentationTheme
-    let sizeFactor: CGFloat
-    
-    init(
-        context: AccountContext,
-        tags: [ChatListItemContent.Tag],
-        theme: PresentationTheme,
-        sizeFactor: CGFloat
-    ) {
-        self.context = context
-        self.tags = tags
-        self.theme = theme
-        self.sizeFactor = sizeFactor
-    }
-    
-    static func ==(lhs: ChatListItemTagListComponent, rhs: ChatListItemTagListComponent) -> Bool {
-        if lhs.context !== rhs.context {
-            return false
-        }
-        if lhs.tags != rhs.tags {
-            return false
-        }
-        if lhs.theme !== rhs.theme {
-            return false
-        }
-        if lhs.sizeFactor != rhs.sizeFactor {
-            return false
-        }
-        return true
-    }
-    
-    private final class ItemView: UIView {
-        let backgroundView: UIImageView
-        let title = ComponentView<Empty>()
-        
-        private var currentTitle: ChatFolderTitle?
-        
-        override init(frame: CGRect) {
-            self.backgroundView = UIImageView(image: tagBackgroundImage)
-            
-            super.init(frame: frame)
-            
-            self.addSubview(self.backgroundView)
-        }
-        
-        required init?(coder: NSCoder) {
-            preconditionFailure()
-        }
-        
-        func update(context: AccountContext, title: ChatFolderTitle, backgroundColor: UIColor, foregroundColor: UIColor, sizeFactor: CGFloat) -> CGSize {
-            self.currentTitle = title
-            
-            let titleValue = ChatFolderTitle(text: title.text.isEmpty ? " " : title.text, entities: title.entities, enableAnimations: title.enableAnimations)
-            let titleSize = self.title.update(
-                transition: .immediate,
-                component: AnyComponent(MultilineTextWithEntitiesComponent(
-                    context: context,
-                    animationCache: context.animationCache,
-                    animationRenderer: context.animationRenderer,
-                    placeholderColor: foregroundColor.withMultipliedAlpha(0.1),
-                    text: .plain(titleValue.attributedString(font: Font.semibold(floor(11.0 * sizeFactor)), textColor: foregroundColor)),
-                    manualVisibilityControl: true,
-                    resetAnimationsOnVisibilityChange: true
-                )),
-                environment: {},
-                containerSize: CGSize(width: 100.0, height: 100.0)
-            )
-            
-            let backgroundSideInset: CGFloat = floorToScreenPixels(4.0 * sizeFactor)
-            let backgroundVerticalInset: CGFloat = floorToScreenPixels(2.0 * sizeFactor)
-            let backgroundSize = CGSize(width: titleSize.width + backgroundSideInset * 2.0, height: titleSize.height + backgroundVerticalInset * 2.0)
-            
-            let backgroundFrame = CGRect(origin: CGPoint(), size: backgroundSize)
-            self.backgroundView.frame = backgroundFrame
-            self.backgroundView.tintColor = backgroundColor
-            
-            let titleFrame = titleSize.centered(in: backgroundFrame)
-            if let titleView = self.title.view {
-                if titleView.superview == nil {
-                    self.addSubview(titleView)
-                }
-                titleView.frame = titleFrame
-            }
-            
-            return backgroundSize
-        }
-        
-        func updateVisibility(_ isVisible: Bool) {
-            guard let currentTitle = self.currentTitle else {
-                return
-            }
-            if let titleView = self.title.view as? MultilineTextWithEntitiesComponent.View {
-                titleView.updateVisibility(isVisible && currentTitle.enableAnimations)
-            }
-        }
-    }
-    
-    final class View: UIView {
-        private var itemViews: [Int32: ItemView] = [:]
-        
-        var isVisible: Bool = false {
-            didSet {
-                if self.isVisible != oldValue {
-                    for (_, itemView) in self.itemViews {
-                        itemView.updateVisibility(self.isVisible)
-                    }
-                }
-            }
-        }
-        
-        override init(frame: CGRect) {
-            super.init(frame: frame)
-        }
-        
-        required init?(coder: NSCoder) {
-            preconditionFailure()
-        }
-        
-        func update(component: ChatListItemTagListComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
-            var validIds: [Int32] = []
-            let spacing: CGFloat = floorToScreenPixels(5.0 * component.sizeFactor)
-            var nextX: CGFloat = 0.0
-            for tag in component.tags {
-                if nextX != 0.0 {
-                    nextX += spacing
-                }
-                
-                let itemId: Int32
-                let itemTitle: ChatFolderTitle
-                let itemBackgroundColor: UIColor
-                let itemForegroundColor: UIColor
-                
-                if validIds.count >= 3 {
-                    itemId = Int32.max
-                    itemTitle = ChatFolderTitle(text: "+\(component.tags.count - validIds.count)", entities: [], enableAnimations: true)
-                    itemForegroundColor = component.theme.chatList.dateTextColor
-                    itemBackgroundColor = itemForegroundColor.withMultipliedAlpha(0.1)
-                } else {
-                    itemId = tag.id
-                    
-                    let tagColor = PeerNameColor(rawValue: tag.colorId)
-                    let resolvedColor = component.context.peerNameColors.getChatFolderTag(tagColor, dark: component.theme.overallDarkAppearance)
-                    
-                    itemTitle = ChatFolderTitle(text: tag.title.text.uppercased(), entities: tag.title.entities, enableAnimations: tag.title.enableAnimations)
-                    itemBackgroundColor = resolvedColor.main.withMultipliedAlpha(0.1)
-                    itemForegroundColor = resolvedColor.main
-                }
-                
-                let itemView: ItemView
-                if let current = self.itemViews[itemId] {
-                    itemView = current
-                } else {
-                    itemView = ItemView()
-                    self.itemViews[itemId] = itemView
-                    self.addSubview(itemView)
-                }
-                
-                let itemSize = itemView.update(context: component.context, title: itemTitle, backgroundColor: itemBackgroundColor, foregroundColor: itemForegroundColor, sizeFactor: component.sizeFactor)
-                let itemFrame = CGRect(origin: CGPoint(x: nextX, y: 0.0), size: itemSize)
-                itemView.frame = itemFrame
-                itemView.updateVisibility(self.isVisible)
-                
-                validIds.append(itemId)
-                nextX += itemSize.width
-                
-                if validIds.count >= 4 {
-                    break
-                }
-            }
-            var removedIds: [Int32] = []
-            for (id, itemView) in self.itemViews {
-                if !validIds.contains(id) {
-                    itemView.removeFromSuperview()
-                    removedIds.append(id)
-                }
-            }
-            for id in removedIds {
-                self.itemViews.removeValue(forKey: id)
-            }
-            
-            return availableSize
-        }
-    }
-    
-    func makeView() -> View {
-        return View(frame: CGRect())
-    }
-    
-    func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
-        return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
-    }
-}
-
-public class ChatListItem: ListViewItem {
-    public enum EnabledContextActions {
-        public struct Actions: OptionSet {
-            public var rawValue: Int32
-            
-            public init(rawValue: Int32) {
-                self.rawValue = rawValue
-            }
-            
-            public static let toggleUnread = Actions(rawValue: 1 << 0)
-            public static let delete = Actions(rawValue: 1 << 1)
-            public static let togglePinned = Actions(rawValue: 1 << 2)
-            public static let remove = Actions(rawValue: 1 << 3)
-            public static let toggleMuted = Actions(rawValue: 1 << 4)
-        }
-        
-        case custom(Actions)
-        case auto
-    }
-    
-    let presentationData: ChatListPresentationData
-    let context: AccountContext
-    let chatListLocation: ChatListControllerLocation
-    let filterData: ChatListItemFilterData?
-    let index: EngineChatList.Item.Index
-    public let content: ChatListItemContent
-    let editing: Bool
-    let hasActiveRevealControls: Bool
-    let selected: Bool
-    let enabledContextActions: EnabledContextActions?
-    let hiddenOffset: Bool
-    let interaction: ChatListNodeInteraction
-    let useCommunityViewLayout: Bool
-    let hideCommunityAvatarBadge: Bool
-    let displayHiddenPeerIcon: Bool
-    
-    public let selectable: Bool = true
-    
-    public var approximateHeight: CGFloat {
-        return self.hiddenOffset ? 0.0 : 44.0
-    }
-    
-    let header: ListViewItemHeader?
-    
-    public var isPinned: Bool {
-        switch self.index {
-        case let .chatList(index):
-            return index.pinningIndex != nil
-        case let .forum(pinnedIndex, _, _, _, _):
-            if case .index = pinnedIndex {
-                return true
-            } else {
-                return false
-            }
-        }
-    }
-    
-    public init(presentationData: ChatListPresentationData, context: AccountContext, chatListLocation: ChatListControllerLocation, filterData: ChatListItemFilterData?, index: EngineChatList.Item.Index, content: ChatListItemContent, editing: Bool, hasActiveRevealControls: Bool, selected: Bool, header: ListViewItemHeader?, enabledContextActions: EnabledContextActions?, hiddenOffset: Bool, interaction: ChatListNodeInteraction, useCommunityViewLayout: Bool = false, hideCommunityAvatarBadge: Bool = false, displayHiddenPeerIcon: Bool = false) {
-        self.presentationData = presentationData
-        self.chatListLocation = chatListLocation
-        self.filterData = filterData
-        self.context = context
-        self.index = index
-        self.content = content
-        self.editing = editing
-        self.hasActiveRevealControls = hasActiveRevealControls
-        self.selected = selected
-        self.header = header
-        self.enabledContextActions = enabledContextActions
-        self.hiddenOffset = hiddenOffset
-        self.interaction = interaction
-        self.useCommunityViewLayout = useCommunityViewLayout
-        self.hideCommunityAvatarBadge = hideCommunityAvatarBadge
-        self.displayHiddenPeerIcon = displayHiddenPeerIcon
-    }
-    
-    public func nodeConfiguredForParams(async: @escaping (@escaping () -> Void) -> Void, params: ListViewItemLayoutParams, synchronousLoads: Bool, previousItem: ListViewItem?, nextItem: ListViewItem?, completion: @escaping (ListViewItemNode, @escaping () -> (Signal<Void, NoError>?, (ListViewItemApply) -> Void)) -> Void) {
-        async {
-            let node = ChatListItemNode()
-            let mergeType = ChatListItem.mergeType(item: self, previousItem: previousItem, nextItem: nextItem)
-            let first = mergeType.first
-            var last = mergeType.last
-            let firstWithHeader = mergeType.firstWithHeader
-            let nextIsPinned = mergeType.nextIsPinned
-            let nextHasActiveRevealControls = mergeType.nextHasActiveRevealControls
-            if self.useCommunityViewLayout {
-                last = true
-            }
-            node.insets = ChatListItemNode.insets(first: first, last: last, firstWithHeader: firstWithHeader)
-            
-            let (nodeLayout, apply) = node.asyncLayout()(self, params, first, last, firstWithHeader, nextIsPinned, nextHasActiveRevealControls)
-            
-            node.insets = nodeLayout.insets
-            node.contentSize = nodeLayout.contentSize
-            
-            Queue.mainQueue().async {
-                completion(node, {
-                    return (nil, { _ in
-                        node.setupItem(item: self, synchronousLoads: synchronousLoads)
-                        apply(synchronousLoads, false)
-                        node.updateIsHighlighted(transition: .immediate)
-                    })
-                })
-            }
-        }
-    }
-    
-    public func updateNode(async: @escaping (@escaping () -> Void) -> Void, node: @escaping () -> ListViewItemNode, params: ListViewItemLayoutParams, previousItem: ListViewItem?, nextItem: ListViewItem?, animation: ListViewItemUpdateAnimation, completion: @escaping (ListViewItemNodeLayout, @escaping (ListViewItemApply) -> Void) -> Void) {
-        Queue.mainQueue().async {
-            assert(node() is ChatListItemNode)
-            if let nodeValue = node() as? ChatListItemNode {
-                nodeValue.setupItem(item: self, synchronousLoads: false)
-                let layout = nodeValue.asyncLayout()
-                async {
-                    let mergeType = ChatListItem.mergeType(item: self, previousItem: previousItem, nextItem: nextItem)
-                    let first = mergeType.first
-                    var last = mergeType.last
-                    let firstWithHeader = mergeType.firstWithHeader
-                    let nextIsPinned = mergeType.nextIsPinned
-                    let nextHasActiveRevealControls = mergeType.nextHasActiveRevealControls
-                    if self.useCommunityViewLayout {
-                        last = true
-                    }
-                    var animated = true
-                    if case .None = animation {
-                        animated = false
-                    }
-                    
-                    let (nodeLayout, apply) = layout(self, params, first, last, firstWithHeader, nextIsPinned, nextHasActiveRevealControls)
-                    Queue.mainQueue().async {
-                        completion(nodeLayout, { _ in
-                            apply(false, animated)
-                        })
-                    }
-                }
-            }
-        }
-    }
-    
-    public func selected(listView: ListView) {
-        switch self.content {
-        case .loading:
-            break
-        case let .peer(peerData):
-            if let message = peerData.messages.last, let peer = peerData.peer.peer {
-                if case .community = peer {
-                    self.interaction.peerSelected(peer, nil, nil, peerData.promoInfo, false)
-                    return
-                }
-                let communitySelectedPeer = communitySourcePeer(peerData: peerData, message: message)
-                let selectedPeer = communitySelectedPeer ?? peer
-                var threadId: Int64?
-                if case let .forum(_, _, threadIdValue, _, _) = self.index {
-                    threadId = threadIdValue
-                }
-                if communitySelectedPeer != nil {
-                    threadId = message.threadId
-                }
-                if threadId == nil, self.interaction.searchTextHighightState != nil, case let .channel(channel) = peerData.peer.peer, channel.isForumOrMonoForum {
-                    threadId = message.threadId
-                }
-                if case let .user(user) = peer, let botInfo = user.botInfo, botInfo.flags.contains(.hasForum), let forumTopicData = peerData.forumTopicData {
-                    threadId = forumTopicData.id
-                }
-                self.interaction.messageSelected(selectedPeer, threadId, message, peerData.promoInfo)
-            } else if let peer = peerData.peer.peer {
-                self.interaction.peerSelected(peer, nil, nil, peerData.promoInfo, false)
-            } else if let peer = peerData.peer.peers[peerData.peer.peerId] {
-                self.interaction.peerSelected(peer, nil, nil, peerData.promoInfo, false)
-            }
-        case let .groupReference(groupReferenceData):
-            self.interaction.groupSelected(groupReferenceData.groupId)
-        }
-    }
-        
-    static func mergeType(item: ChatListItem, previousItem: ListViewItem?, nextItem: ListViewItem?) -> (first: Bool, last: Bool, firstWithHeader: Bool, nextIsPinned: Bool, nextHasActiveRevealControls: Bool) {
-        var first = false
-        var last = false
-        var firstWithHeader = false
-        if let previousItem = previousItem {
-            if let header = item.header {
-                if let previousItem = previousItem as? ChatListItem {
-                    firstWithHeader = header.id != previousItem.header?.id
-                } else {
-                    firstWithHeader = true
-                }
-            }
-        } else {
-            first = true
-            firstWithHeader = item.header != nil
-        }
-        var nextIsPinned = false
-        var nextHasActiveRevealControls = false
-        if let nextItem = nextItem as? ChatListItem {
-            if case let .chatList(nextIndex) = nextItem.index, nextIndex.pinningIndex != nil {
-                nextIsPinned = true
-            }
-            nextHasActiveRevealControls = nextItem.hasActiveRevealControls
-        } else {
-            last = true
-        }
-        return (first, last, firstWithHeader, nextIsPinned, nextHasActiveRevealControls)
-    }
-}
-
-private let pinIcon = ItemListRevealOptionIcon.animation(animation: "anim_pin", scale: 1.0, offset: 0.0, replaceColors: nil, flip: false, startFrame: 3)
-private let unpinIcon = ItemListRevealOptionIcon.animation(animation: "anim_unpin", scale: 1.0, offset: 0.0, replaceColors: [0x1993fa], flip: false, startFrame: 5)
-private let muteIcon = ItemListRevealOptionIcon.animation(animation: "anim_mute", scale: 1.0, offset: 0.0, replaceColors: [0xff9500], flip: false, startFrame: 3)
-private let unmuteIcon = ItemListRevealOptionIcon.animation(animation: "anim_unmute", scale: 1.0, offset: 0.0, replaceColors: nil, flip: false, startFrame: 3)
-private let deleteIcon = ItemListRevealOptionIcon.animation(animation: "anim_delete", scale: 1.0, offset: 0.0, replaceColors: nil, flip: false, startFrame: 3)
-private let groupIcon = ItemListRevealOptionIcon.animation(animation: "anim_group", scale: 1.0, offset: 0.0, replaceColors: nil, flip: false, startFrame: 5)
-private let ungroupIcon = ItemListRevealOptionIcon.animation(animation: "anim_ungroup", scale: 1.0, offset: 0.0, replaceColors: nil, flip: false, startFrame: 5)
-private let readIcon = ItemListRevealOptionIcon.animation(animation: "anim_read", scale: 1.0, offset: 0.0, replaceColors: nil, flip: false, startFrame: 5)
-private let unreadIcon = ItemListRevealOptionIcon.animation(animation: "anim_unread", scale: 1.0, offset: 0.0, replaceColors: [0x2194fa], flip: false, startFrame: 5)
-private let archiveIcon = ItemListRevealOptionIcon.animation(animation: "anim_archive", scale: 1.0, offset: 2.0, replaceColors: [0xa9a9ad], flip: false, startFrame: 5)
-private let unarchiveIcon = ItemListRevealOptionIcon.animation(animation: "anim_unarchive", scale: 0.52, offset: -6.0, replaceColors: [0xa9a9ad], flip: false, startFrame: 5)
-private let hideIcon = ItemListRevealOptionIcon.animation(animation: "anim_hide", scale: 1.1, offset: 2.0, replaceColors: [0xbdbdc2], flip: false, startFrame: 5)
-private let unhideIcon = ItemListRevealOptionIcon.animation(animation: "anim_hide", scale: 1.0, offset: -15.0, replaceColors: [0xbdbdc2], flip: true, startFrame: 5)
-private let startIcon = ItemListRevealOptionIcon.animation(animation: "anim_play", scale: 1.0, offset: 0.0, replaceColors: [0xbdbdc2], flip: false, startFrame: 5)
-private let closeIcon = ItemListRevealOptionIcon.animation(animation: "anim_pause", scale: 1.0, offset: 0.0, replaceColors: [0xbdbdc2], flip: false, startFrame: 5)
-private let ungroupCommunityIcon = ItemListRevealOptionIcon.animation(animation: "anim_ungroupcom", scale: 0.5, offset: -4.0, replaceColors: nil, flip: false, startFrame: 0)
-
-private enum RevealOptionKey: Int32 {
-    case pin
-    case unpin
-    case mute
-    case unmute
-    case delete
-    case group
-    case ungroup
-    case toggleMarkedUnread
-    case archive
-    case unarchive
-    case hide
-    case unhide
-    case hidePsa
-    case open
-    case close
-    case edit
-}
-
-private func canArchivePeer(id: EnginePeer.Id, accountPeerId: EnginePeer.Id) -> Bool {
-    if id.isTelegramNotifications {
-        return false
-    }
-    if id == accountPeerId {
-        return false
-    }
-    return true
-}
-
-private func communitySourcePeer(peerData: ChatListItemContent.PeerData, message: EngineMessage) -> EnginePeer? {
-    guard case .community = peerData.peer.peer else {
-        return nil
-    }
-    guard message.id.peerId != peerData.peer.peerId else {
-        return nil
-    }
-    if let sourcePeer = message.enginePeers[message.id.peerId] {
-        return sourcePeer
-    }
-    if let sourcePeer = peerData.peer.peers[message.id.peerId] {
-        return sourcePeer
-    }
-    return nil
-}
-
-public struct ChatListItemFilterData: Equatable {
-    public var excludesArchived: Bool
-    
-    public init(excludesArchived: Bool) {
-        self.excludesArchived = excludesArchived
-    }
-}
-
-private func revealOptions(strings: PresentationStrings, theme: PresentationTheme, isPinned: Bool, isMuted: Bool?, location: ChatListControllerLocation, peerId: EnginePeer.Id, accountPeerId: EnginePeer.Id, canDelete: Bool, isEditing: Bool, filterData: ChatListItemFilterData?) -> [ItemListRevealOption] {
-    var options: [ItemListRevealOption] = []
-    if !isEditing {
-        if case .savedMessagesChats = location {
-            if isPinned {
-                options.append(ItemListRevealOption(key: RevealOptionKey.unpin.rawValue, title: strings.DialogList_Unpin, icon: unpinIcon, color: theme.list.itemDisclosureActions.constructive.fillColor, iconColor: theme.list.itemDisclosureActions.constructive.foregroundColor, textColor: theme.chatList.dateTextColor))
-            } else {
-                options.append(ItemListRevealOption(key: RevealOptionKey.pin.rawValue, title: strings.DialogList_Pin, icon: pinIcon, color: theme.list.itemDisclosureActions.constructive.fillColor, iconColor: theme.list.itemDisclosureActions.constructive.foregroundColor, textColor: theme.chatList.dateTextColor))
-            }
-        } else if case .chatList(.archive) = location {
-            if isPinned {
-                options.append(ItemListRevealOption(key: RevealOptionKey.unpin.rawValue, title: strings.DialogList_Unpin, icon: unpinIcon, color: theme.list.itemDisclosureActions.constructive.fillColor, iconColor: theme.list.itemDisclosureActions.constructive.foregroundColor, textColor: theme.chatList.dateTextColor))
-            } else {
-                options.append(ItemListRevealOption(key: RevealOptionKey.pin.rawValue, title: strings.DialogList_Pin, icon: pinIcon, color: theme.list.itemDisclosureActions.constructive.fillColor, iconColor: theme.list.itemDisclosureActions.constructive.foregroundColor, textColor: theme.chatList.dateTextColor))
-            }
-        } else {
-            if let isMuted = isMuted {
-                if isMuted {
-                    options.append(ItemListRevealOption(key: RevealOptionKey.unmute.rawValue, title: strings.ChatList_Unmute, icon: unmuteIcon, color: theme.list.itemDisclosureActions.neutral2.fillColor, iconColor: theme.list.itemDisclosureActions.neutral2.foregroundColor, textColor: theme.chatList.dateTextColor))
-                } else {
-                    options.append(ItemListRevealOption(key: RevealOptionKey.mute.rawValue, title: strings.ChatList_Mute, icon: muteIcon, color: theme.list.itemDisclosureActions.neutral2.fillColor, iconColor: theme.list.itemDisclosureActions.neutral2.foregroundColor, textColor: theme.chatList.dateTextColor))
-                }
-            }
-        }
-    }
-    if canDelete {
-        options.append(ItemListRevealOption(key: RevealOptionKey.delete.rawValue, title: strings.Common_Delete, icon: deleteIcon, color: theme.list.itemDisclosureActions.destructive.fillColor, iconColor: theme.list.itemDisclosureActions.destructive.foregroundColor, textColor: theme.chatList.dateTextColor))
-    }
-    if case .savedMessagesChats = location {
-    } else {
-        if !isEditing {
-            var canArchive = false
-            var canUnarchive = false
-            if let filterData = filterData {
-                if filterData.excludesArchived {
-                    canArchive = true
-                }
-            } else {
-                if case let .chatList(groupId) = location {
-                    if case .root = groupId {
-                        canArchive = true
-                    } else {
-                        canUnarchive = true
-                    }
-                }
-            }
-            if canArchive {
-                if canArchivePeer(id: peerId, accountPeerId: accountPeerId) {
-                    options.append(ItemListRevealOption(key: RevealOptionKey.archive.rawValue, title: strings.ChatList_ArchiveAction, icon: archiveIcon, color: theme.list.itemDisclosureActions.inactive.fillColor, iconColor: theme.list.itemDisclosureActions.inactive.foregroundColor, textColor: theme.chatList.dateTextColor))
-                }
-            } else if canUnarchive {
-                options.append(ItemListRevealOption(key: RevealOptionKey.unarchive.rawValue, title: strings.ChatList_UnarchiveAction, icon: unarchiveIcon, color: theme.list.itemDisclosureActions.inactive.fillColor, iconColor: theme.list.itemDisclosureActions.inactive.foregroundColor, textColor: theme.chatList.dateTextColor))
-            }
-        }
-    }
-    return options
-}
-
-private func groupReferenceRevealOptions(strings: PresentationStrings, theme: PresentationTheme, isEditing: Bool, hiddenByDefault: Bool) -> [ItemListRevealOption] {
-    var options: [ItemListRevealOption] = []
-    if !isEditing {
-        if hiddenByDefault {
-            options.append(ItemListRevealOption(key: RevealOptionKey.unhide.rawValue, title: strings.ChatList_UnhideAction, icon: unhideIcon, color: theme.list.itemDisclosureActions.constructive.fillColor, iconColor: theme.list.itemDisclosureActions.constructive.foregroundColor, textColor: theme.chatList.dateTextColor))
-        } else {
-            options.append(ItemListRevealOption(key: RevealOptionKey.hide.rawValue, title: strings.ChatList_HideAction, icon: hideIcon, color: theme.list.itemDisclosureActions.inactive.fillColor, iconColor: theme.list.itemDisclosureActions.neutral1.foregroundColor, textColor: theme.chatList.dateTextColor))
-        }
-    }
-    return options
-}
-
-private func forumGeneralRevealOptions(strings: PresentationStrings, theme: PresentationTheme, isMuted: Bool?, isClosed: Bool, isEditing: Bool, canOpenClose: Bool, canHide: Bool, hiddenByDefault: Bool) -> [ItemListRevealOption] {
-    var options: [ItemListRevealOption] = []
-    if !isEditing {
-        if let isMuted = isMuted {
-            if isMuted {
-                options.append(ItemListRevealOption(key: RevealOptionKey.unmute.rawValue, title: strings.ChatList_Unmute, icon: unmuteIcon, color: theme.list.itemDisclosureActions.neutral2.fillColor, iconColor: theme.list.itemDisclosureActions.neutral2.foregroundColor, textColor: theme.chatList.dateTextColor))
-            } else {
-                options.append(ItemListRevealOption(key: RevealOptionKey.mute.rawValue, title: strings.ChatList_Mute, icon: muteIcon, color: theme.list.itemDisclosureActions.neutral2.fillColor, iconColor: theme.list.itemDisclosureActions.neutral2.foregroundColor, textColor: theme.chatList.dateTextColor))
-            }
-        }
-    }
-    if canOpenClose && !hiddenByDefault {
-        if !isEditing {
-            if !isClosed {
-
-            } else {
-                options.append(ItemListRevealOption(key: RevealOptionKey.open.rawValue, title: strings.ChatList_StartAction, icon: startIcon, color: theme.list.itemDisclosureActions.constructive.fillColor, iconColor: theme.list.itemDisclosureActions.constructive.foregroundColor, textColor: theme.chatList.dateTextColor))
-            }
-        }
-    }
-    if canHide {
-        if !isEditing {
-            if hiddenByDefault {
-                options.append(ItemListRevealOption(key: RevealOptionKey.unhide.rawValue, title: strings.ChatList_ThreadUnhideAction, icon: unhideIcon, color: theme.list.itemDisclosureActions.constructive.fillColor, iconColor: theme.list.itemDisclosureActions.constructive.foregroundColor, textColor: theme.chatList.dateTextColor))
-            } else {
-                options.append(ItemListRevealOption(key: RevealOptionKey.hide.rawValue, title: strings.ChatList_ThreadHideAction, icon: hideIcon, color: theme.list.itemDisclosureActions.inactive.fillColor, iconColor: theme.list.itemDisclosureActions.neutral1.foregroundColor, textColor: theme.chatList.dateTextColor))
-            }
-        }
-    }
-    return options
-}
-
-private func forumThreadRevealOptions(strings: PresentationStrings, theme: PresentationTheme, isMuted: Bool?, isClosed: Bool, isEditing: Bool, canOpenClose: Bool, canDelete: Bool) -> [ItemListRevealOption] {
-    var options: [ItemListRevealOption] = []
-    if !isEditing {
-        if let isMuted = isMuted {
-            if isMuted {
-                options.append(ItemListRevealOption(key: RevealOptionKey.unmute.rawValue, title: strings.ChatList_Unmute, icon: unmuteIcon, color: theme.list.itemDisclosureActions.neutral2.fillColor, iconColor: theme.list.itemDisclosureActions.neutral2.foregroundColor, textColor: theme.chatList.dateTextColor))
-            } else {
-                options.append(ItemListRevealOption(key: RevealOptionKey.mute.rawValue, title: strings.ChatList_Mute, icon: muteIcon, color: theme.list.itemDisclosureActions.neutral2.fillColor, iconColor: theme.list.itemDisclosureActions.neutral2.foregroundColor, textColor: theme.chatList.dateTextColor))
-            }
-        }
-    }
-    if canDelete {
-        options.append(ItemListRevealOption(key: RevealOptionKey.delete.rawValue, title: strings.Common_Delete, icon: deleteIcon, color: theme.list.itemDisclosureActions.destructive.fillColor, iconColor: theme.list.itemDisclosureActions.destructive.foregroundColor, textColor: theme.chatList.dateTextColor))
-    }
-    if canOpenClose {
-        if !isEditing {
-            if !isClosed {
-                options.append(ItemListRevealOption(key: RevealOptionKey.close.rawValue, title: strings.ChatList_CloseAction, icon: closeIcon, color: theme.list.itemDisclosureActions.inactive.fillColor, iconColor: theme.list.itemDisclosureActions.inactive.foregroundColor, textColor: theme.chatList.dateTextColor))
-            } else {
-                options.append(ItemListRevealOption(key: RevealOptionKey.open.rawValue, title: strings.ChatList_StartAction, icon: startIcon, color: theme.list.itemDisclosureActions.constructive.fillColor, iconColor: theme.list.itemDisclosureActions.constructive.foregroundColor, textColor: theme.chatList.dateTextColor))
-            }
-        }
-    }
-    return options
-}
-
-private func leftRevealOptions(strings: PresentationStrings, theme: PresentationTheme, isUnread: Bool, isEditing: Bool, isPinned: Bool, isSavedMessages: Bool, location: ChatListControllerLocation, peer: EnginePeer, filterData: ChatListItemFilterData?) -> [ItemListRevealOption] {
-    switch location {
-    case let .chatList(groupId):
-        if case .root = groupId {
-            var options: [ItemListRevealOption] = []
-            let canToggleReadState: Bool
-            if case .community = peer {
-                canToggleReadState = false
-            } else {
-                canToggleReadState = true
-            }
-            if canToggleReadState {
-                if isUnread {
-                    options.append(ItemListRevealOption(key: RevealOptionKey.toggleMarkedUnread.rawValue, title: strings.DialogList_Read, icon: readIcon, color: theme.list.itemDisclosureActions.inactive.fillColor, iconColor: theme.list.itemDisclosureActions.neutral1.foregroundColor, textColor: theme.chatList.dateTextColor))
-                } else {
-                    var canMarkUnread = true
-                    if case let .channel(channel) = peer, channel.isForumOrMonoForum {
-                        canMarkUnread = false
-                    }
-
-                    if canMarkUnread {
-                        options.append(ItemListRevealOption(key: RevealOptionKey.toggleMarkedUnread.rawValue, title: strings.DialogList_Unread, icon: unreadIcon, color: theme.list.itemDisclosureActions.accent.fillColor, iconColor: theme.list.itemDisclosureActions.accent.foregroundColor, textColor: theme.chatList.dateTextColor))
-                    }
-                }
-            }
-            if !isEditing {
-                if isPinned {
-                    options.append(ItemListRevealOption(key: RevealOptionKey.unpin.rawValue, title: strings.DialogList_Unpin, icon: unpinIcon, color: theme.list.itemDisclosureActions.constructive.fillColor, iconColor: theme.list.itemDisclosureActions.constructive.foregroundColor, textColor: theme.chatList.dateTextColor))
-                } else {
-                    if filterData == nil || peer.id.namespace != Namespaces.Peer.SecretChat {
-                        options.append(ItemListRevealOption(key: RevealOptionKey.pin.rawValue, title: strings.DialogList_Pin, icon: pinIcon, color: theme.list.itemDisclosureActions.constructive.fillColor, iconColor: theme.list.itemDisclosureActions.constructive.foregroundColor, textColor: theme.chatList.dateTextColor))
-                    }
-                }
-            }
-            return options
-        } else {
-            return []
-        }
-    case .forum:
-       return []
-    case .savedMessagesChats:
-        return []
-    }
-}
-
-private final class ChatListItemAccessibilityCustomAction: UIAccessibilityCustomAction {
-    let key: Int32
-    
-    init(name: String, target: Any?, selector: Selector, key: Int32) {
-        self.key = key
-        
-        super.init(name: name, target: target, selector: selector)
-    }
-}
-
-private let separatorHeight = 1.0 / UIScreen.main.scale
-
-private final class CachedChatListSearchResult {
-    let text: String
-    let searchQuery: String
-    let resultRanges: [Range<String.Index>]
-    
-    init(text: String, searchQuery: String, resultRanges: [Range<String.Index>]) {
-        self.text = text
-        self.searchQuery = searchQuery
-        self.resultRanges = resultRanges
-    }
-    
-    func matches(text: String, searchQuery: String) -> Bool {
-        if self.text != text {
-            return false
-        }
-        if self.searchQuery != searchQuery {
-            return false
-        }
-        return true
-    }
-}
-
-private final class CachedCustomTextEntities {
-    let text: String
-    let textEntities: [MessageTextEntity]
-    
-    init(text: String, textEntities: [MessageTextEntity]) {
-        self.text = text
-        self.textEntities = textEntities
-    }
-    
-    func matches(text: String) -> Bool {
-        if self.text != text {
-            return false
-        }
-        return true
-    }
-}
-
-private let playIconImage = UIImage(bundleImageName: "Chat List/MiniThumbnailPlay")?.precomposed()
-
-private final class ChatListMediaPreviewNode: ASDisplayNode {
-    private let context: AccountContext
-    let message: EngineMessage
-    let media: EngineMedia
-    
-    private let imageNode: TransformImageNode
-    private let playIcon: ASImageNode
-    
-    private var requestedImage: Bool = false
-    private var disposable: Disposable?
-    
-    init(context: AccountContext, message: EngineMessage, media: EngineMedia) {
-        self.context = context
-        self.message = message
-        self.media = media
-        
-        self.imageNode = TransformImageNode()
-        self.playIcon = ASImageNode()
-        self.playIcon.image = playIconImage
-        
-        super.init()
-        
-        self.addSubnode(self.imageNode)
-        self.addSubnode(self.playIcon)
-    }
-    
-    deinit {
-        self.disposable?.dispose()
-    }
-    
-    func updateLayout(size: CGSize, synchronousLoads: Bool) {
-        if let image = self.playIcon.image {
-            self.playIcon.frame = CGRect(origin: CGPoint(x: floor((size.width - image.size.width) / 2.0), y: floor((size.height - image.size.height) / 2.0)), size: image.size)
-        }
-        
-        let hasSpoiler = self.message.attributes.contains(where: { $0 is MediaSpoilerMessageAttribute })
-        
-        var isRound = false
-        var dimensions = CGSize(width: 100.0, height: 100.0)
-        if case let .image(image) = self.media {
-            self.playIcon.isHidden = true
-            if let largest = largestImageRepresentation(image.representations) {
-                dimensions = largest.dimensions.cgSize
-                if !self.requestedImage {
-                    self.requestedImage = true
-                    let signal = mediaGridMessagePhoto(account: self.context.account, userLocation: .peer(self.message.id.peerId), photoReference: .message(message: MessageReference(self.message._asMessage()), media: image), fullRepresentationSize: CGSize(width: 36.0, height: 36.0), blurred: hasSpoiler, synchronousLoad: synchronousLoads)
-                    self.imageNode.setSignal(signal, attemptSynchronously: synchronousLoads)
-                }
-            } else {
-                let signal = chatSecretPhoto(account: self.context.account, userLocation: .peer(self.message.id.peerId), photoReference: .standalone(media: image), ignoreFullSize: true, synchronousLoad: synchronousLoads)
-                self.imageNode.setSignal(signal, attemptSynchronously: synchronousLoads)
-            }
-        } else if case let .action(action) = self.media, case let .suggestedProfilePhoto(image) = action.action, let image = image {
-            isRound = true
-            self.playIcon.isHidden = true
-            if let largest = largestImageRepresentation(image.representations) {
-                dimensions = largest.dimensions.cgSize
-                if !self.requestedImage {
-                    self.requestedImage = true
-                    let signal = mediaGridMessagePhoto(account: self.context.account, userLocation: .peer(self.message.id.peerId), photoReference: .message(message: MessageReference(self.message._asMessage()), media: image), fullRepresentationSize: CGSize(width: 36.0, height: 36.0), synchronousLoad: synchronousLoads)
-                    self.imageNode.setSignal(signal, attemptSynchronously: synchronousLoads)
-                }
-            }
-        } else if case let .file(file) = self.media {
-            if file.isInstantVideo {
-                isRound = true
-            }
-            if file.isVideo && !file.isAnimated {
-                self.playIcon.isHidden = false
-            } else {
-                self.playIcon.isHidden = true
-            }
-            if let mediaDimensions = file.dimensions {
-                dimensions = mediaDimensions.cgSize
-                if !self.requestedImage {
-                    self.requestedImage = true
-                    let signal = mediaGridMessageVideo(postbox: self.context.account.postbox, userLocation: .peer(self.message.id.peerId), videoReference: .message(message: MessageReference(self.message._asMessage()), media: file), synchronousLoad: synchronousLoads, autoFetchFullSizeThumbnail: true, useMiniThumbnailIfAvailable: true, blurred: hasSpoiler)
-                    self.imageNode.setSignal(signal, attemptSynchronously: synchronousLoads)
-                }
-            }
-        }
-        
-        let radius: CGFloat
-        if isRound {
-            radius = size.width / 2.0
-        } else if size.width >= 30.0 {
-            radius = 8.0
-        } else {
-            radius = 2.0
-        }
-        
-        let makeLayout = self.imageNode.asyncLayout()
-        self.imageNode.frame = CGRect(origin: CGPoint(), size: size)
-        let apply = makeLayout(TransformImageArguments(corners: ImageCorners(radius: radius), imageSize: dimensions.aspectFilled(size), boundingSize: size, intrinsicInsets: UIEdgeInsets()))
-        apply()
-    }
-}
-
-private let telegramCodeRegex = try? NSRegularExpression(pattern: "(?<=: )\\b\\d{5,8}\\b(?=\\.)", options: [])
-private let loginCodeRegex = try? NSRegularExpression(pattern: "\\b\\d{5,8}\\b", options: [])
-
-public class ChatListItemNode: ItemListRevealOptionsItemNode {
-    final class TopicItemNode: ASDisplayNode {
-        let topicTitleNode: TextNode
-        let titleTopicIconView: ComponentHostView<Empty>?
-        var titleTopicAvatarNode: AvatarNode?
-        var titleTopicIconComponent: EmojiStatusComponent?
-        
-        var visibilityStatus: Bool = false {
-            didSet {
-                if self.visibilityStatus != oldValue {
-                    if let titleTopicIconView = self.titleTopicIconView, let titleTopicIconComponent = self.titleTopicIconComponent {
-                        let _ = titleTopicIconView.update(
-                            transition: .immediate,
-                            component: AnyComponent(titleTopicIconComponent.withVisibleForAnimations(self.visibilityStatus)),
-                            environment: {},
-                            containerSize: titleTopicIconView.bounds.size
-                        )
-                    }
-                }
-            }
-        }
-        
-        private init(topicTitleNode: TextNode, titleTopicIconView: ComponentHostView<Empty>?, titleTopicAvatarNode: AvatarNode?, titleTopicIconComponent: EmojiStatusComponent?) {
-            self.topicTitleNode = topicTitleNode
-            self.titleTopicIconView = titleTopicIconView
-            self.titleTopicAvatarNode = titleTopicAvatarNode
-            self.titleTopicIconComponent = titleTopicIconComponent
-            
-            super.init()
-            
-            self.addSubnode(self.topicTitleNode)
-            if let titleTopicAvatarNode = self.titleTopicAvatarNode {
-                self.view.addSubview(titleTopicAvatarNode.view)
-            }
-            if let titleTopicIconView = self.titleTopicIconView {
-                self.view.addSubview(titleTopicIconView)
-            }
-        }
-        
-        static func asyncLayout(_ currentNode: TopicItemNode?) -> (_ constrainedWidth: CGFloat, _ context: AccountContext, _ theme: PresentationTheme, _ threadId: Int64, _ threadPeer: EnginePeer?, _ title: NSAttributedString, _ iconId: Int64?, _ iconColor: Int32?) -> (CGSize, () -> TopicItemNode) {
-            let makeTopicTitleLayout = TextNode.asyncLayout(currentNode?.topicTitleNode)
-            
-            return { constrainedWidth, context, theme, threadId, threadPeer, title, iconId, iconColor in
-                let remainingWidth = max(1.0, constrainedWidth - (((iconId == nil && iconColor == nil && threadPeer == nil) ? 1.0 : 18.0) + 2.0))
-                
-                let topicTitleArguments = TextNodeLayoutArguments(attributedString: title, backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: CGSize(width: remainingWidth, height: CGFloat.greatestFiniteMagnitude), alignment: .natural, cutout: nil, insets: UIEdgeInsets(top: 2.0, left: 1.0, bottom: 2.0, right: 1.0))
-                
-                let topicTitleLayout = makeTopicTitleLayout(topicTitleArguments)
-                
-                return (CGSize(width: ((iconId == nil && iconColor == nil && threadPeer == nil) ? 1.0 : 18.0) + 2.0 + topicTitleLayout.0.size.width, height: topicTitleLayout.0.size.height), {
-                    let topicTitleNode = topicTitleLayout.1()
-                    
-                    let titleTopicIconContent: EmojiStatusComponent.Content?
-                    if threadId == 1 {
-                        titleTopicIconContent = .image(image: PresentationResourcesChatList.generalTopicSmallIcon(theme), tintColor: nil)
-                    } else if let fileId = iconId, fileId != 0 {
-                        titleTopicIconContent = .animation(content: .customEmoji(fileId: fileId), size: CGSize(width: 36.0, height: 36.0), placeholderColor: theme.list.mediaPlaceholderColor, themeColor: theme.list.itemAccentColor, loopMode: .count(0))
-                    } else if let iconColor {
-                        titleTopicIconContent = .topic(title: String(title.string.prefix(1)), color: iconColor, size: CGSize(width: 18.0, height: 18.0))
-                    } else {
-                        titleTopicIconContent = nil
-                    }
-                    
-                    var titleTopicIconComponent: EmojiStatusComponent?
-                    var titleTopicIconView: ComponentHostView<Empty>?
-                    
-                    if let titleTopicIconContent {
-                        titleTopicIconComponent = EmojiStatusComponent(
-                            context: context,
-                            animationCache: context.animationCache,
-                            animationRenderer: context.animationRenderer,
-                            content: titleTopicIconContent,
-                            isVisibleForAnimations: (currentNode?.visibilityStatus ?? false) && context.sharedContext.energyUsageSettings.loopEmoji,
-                            action: nil
-                        )
-                        
-                        if let current = currentNode?.titleTopicIconView {
-                            titleTopicIconView = current
-                        } else {
-                            titleTopicIconView = ComponentHostView<Empty>()
-                        }
-                    }
-                    
-                    var titleTopicAvatarNode: AvatarNode?
-                    if let _ = threadPeer {
-                        if let current = currentNode?.titleTopicAvatarNode {
-                            titleTopicAvatarNode = current
-                        } else {
-                            titleTopicAvatarNode = AvatarNode(font: avatarPlaceholderFont(size: 8.0))
-                        }
-                    }
-                    
-                    let targetNode = currentNode ?? TopicItemNode(topicTitleNode: topicTitleNode, titleTopicIconView: titleTopicIconView, titleTopicAvatarNode: titleTopicAvatarNode, titleTopicIconComponent: titleTopicIconComponent)
-                    
-                    targetNode.titleTopicIconComponent = titleTopicIconComponent
-                    
-                    if let titleTopicIconView, let titleTopicIconComponent {
-                        let iconSize = titleTopicIconView.update(
-                            transition: .immediate,
-                            component: AnyComponent(titleTopicIconComponent),
-                            environment: {},
-                            containerSize: CGSize(width: 18.0, height: 18.0)
-                        )
-                        titleTopicIconView.frame = CGRect(origin: CGPoint(x: 0.0, y: 2.0), size: iconSize)
-                        
-                        topicTitleNode.frame = CGRect(origin: CGPoint(x: 18.0 + 2.0, y: 0.0), size: topicTitleLayout.0.size)
-                    } else if let titleTopicAvatarNode, let threadPeer {
-                        let iconSize = CGSize(width: 18.0, height: 18.0)
-                        
-                        titleTopicAvatarNode.frame = CGRect(origin: CGPoint(x: 0.0, y: 2.0), size: iconSize)
-                        titleTopicAvatarNode.updateSize(size: iconSize)
-                        if threadPeer.smallProfileImage != nil {
-                            titleTopicAvatarNode.setPeerV2(context: context, theme: theme, peer: threadPeer, overrideImage: nil, emptyColor: theme.list.mediaPlaceholderColor, clipStyle: .round, synchronousLoad: false, displayDimensions: iconSize)
-                        } else {
-                            titleTopicAvatarNode.setPeer(context: context, theme: theme, peer: threadPeer, overrideImage: nil, emptyColor: theme.list.mediaPlaceholderColor, clipStyle: .round, synchronousLoad: false, displayDimensions: iconSize)
-                        }
-                        
-                        topicTitleNode.frame = CGRect(origin: CGPoint(x: 18.0 + 2.0, y: 0.0), size: topicTitleLayout.0.size)
-                    } else {
-                        topicTitleNode.frame = CGRect(origin: CGPoint(x: 1.0, y: 0.0), size: topicTitleLayout.0.size)
-                    }
-                    
-                    return targetNode
-                })
-            }
-        }
-    }
-    
-    public final class AuthorNode: ASDisplayNode {
-        public let authorNode: TextNode
-        var titleTopicArrowNode: ASImageNode?
-        var topicNodes: [Int64: TopicItemNode] = [:]
-        var topicNodeOrder: [Int64] = []
-        
-        public var visibilityStatus: Bool = false {
-            didSet {
-                if self.visibilityStatus != oldValue {
-                    for (_, topicNode) in self.topicNodes {
-                        topicNode.visibilityStatus = self.visibilityStatus
-                    }
-                }
-            }
-        }
-        
-        override public init() {
-            self.authorNode = TextNode()
-            self.authorNode.displaysAsynchronously = true
-            
-            super.init()
-            
-            self.addSubnode(self.authorNode)
-        }
-        
-        func setFirstTopicHighlighted(_ isHighlighted: Bool) {
-            guard let id = self.topicNodeOrder.first, let itemNode = self.topicNodes[id] else {
-                return
-            }
-            if isHighlighted {
-                itemNode.layer.removeAnimation(forKey: "opacity")
-                itemNode.alpha = 0.65
-            } else {
-                itemNode.alpha = 1.0
-                itemNode.layer.animateAlpha(from: 0.65, to: 1.0, duration: 0.2)
-            }
-        }
-        
-        func assignParentNode(parentNode: ASDisplayNode?) {
-            for (id, topicNode) in self.topicNodes {
-                if id == self.topicNodeOrder.first, let parentNode {
-                    if topicNode.supernode !== parentNode {
-                        parentNode.addSubnode(topicNode)
-                    }
-                } else {
-                    if topicNode.supernode !== self {
-                        self.addSubnode(topicNode)
-                    }
-                }
-            }
-        }
-        
-        func asyncLayout() -> (_ context: AccountContext, _ constrainedWidth: CGFloat, _ theme: PresentationTheme, _ authorTitle: NSAttributedString?, _ topics: [(id: Int64, threadPeer: EnginePeer?, title: NSAttributedString, iconId: Int64?, iconColor: Int32?)], _ arrowColor: UIColor?) -> (CGSize, () -> CGRect?) {
-            let makeAuthorLayout = TextNode.asyncLayout(self.authorNode)
-            var makeExistingTopicLayouts: [Int64: (_ constrainedWidth: CGFloat, _ context: AccountContext, _ theme: PresentationTheme, _ threadId: Int64, _ threadPeer: EnginePeer?, _ title: NSAttributedString, _ iconId: Int64?, _ iconColor: Int32?) -> (CGSize, () -> TopicItemNode)] = [:]
-            for (topicId, topicNode) in self.topicNodes {
-                makeExistingTopicLayouts[topicId] = TopicItemNode.asyncLayout(topicNode)
-            }
-            
-            return { [weak self] context, constrainedWidth, theme, authorTitle, topics, arrowColor in
-                var maxTitleWidth = constrainedWidth
-                if !topics.isEmpty {
-                    maxTitleWidth = floor(constrainedWidth * 0.7)
-                }
-                
-                let authorTitleLayout = makeAuthorLayout(TextNodeLayoutArguments(attributedString: authorTitle, backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: CGSize(width: maxTitleWidth, height: CGFloat.greatestFiniteMagnitude), alignment: .natural, cutout: nil, insets: UIEdgeInsets(top: 2.0, left: 1.0, bottom: 2.0, right: 1.0)))
-                
-                var remainingWidth = constrainedWidth - authorTitleLayout.0.size.width
-                
-                var arrowIconImage: UIImage?
-                if !topics.isEmpty {
-                    if authorTitle != nil {
-                        if let arrowColor {
-                            arrowIconImage = generateTintedImage(image: UIImage(bundleImageName: "Chat List/TopicArrowIcon"), color: arrowColor)
-                        } else {
-                            arrowIconImage = PresentationResourcesChatList.topicArrowIcon(theme)
-                        }
-                        if let arrowIconImage = arrowIconImage {
-                            remainingWidth -= arrowIconImage.size.width + 6.0 * 2.0
-                        }
-                    }
-                }
-                
-                var topicsSizeAndApply: [(Int64, CGSize, () -> TopicItemNode)] = []
-                for topic in topics {
-                    if remainingWidth <= ((topic.iconId == nil && topic.iconColor == nil) ? 8.0 : 22.0) + 2.0 + 10.0 {
-                        break
-                    }
-                    
-                    let makeTopicLayout = makeExistingTopicLayouts[topic.id] ?? TopicItemNode.asyncLayout(nil)
-                    let (topicSize, topicApply) = makeTopicLayout(remainingWidth, context, theme, topic.id, topic.threadPeer, topic.title, topic.iconId, topic.iconColor)
-                    topicsSizeAndApply.append((topic.id, topicSize, topicApply))
-                    
-                    remainingWidth -= topicSize.width + 4.0
-                }
-                
-                var size = authorTitleLayout.0.size
-                if !topicsSizeAndApply.isEmpty {
-                    for item in topicsSizeAndApply {
-                        size.height = max(size.height, item.1.height)
-                        size.width += 10.0 + item.1.width
-                    }
-                }
-                
-                return (size, {
-                    guard let self else {
-                        return nil
-                    }
-                    
-                    let _ = authorTitleLayout.1()
-                    let authorFrame = CGRect(origin: CGPoint(), size: authorTitleLayout.0.size)
-                    self.authorNode.frame = authorFrame
-                    
-                    var nextX = authorFrame.maxX - 1.0
-                    if authorTitle == nil {
-                        nextX = 0.0
-                    }
-                    
-                    if let arrowIconImage = arrowIconImage {
-                        let titleTopicArrowNode: ASImageNode
-                        if let current = self.titleTopicArrowNode {
-                            titleTopicArrowNode = current
-                        } else {
-                            titleTopicArrowNode = ASImageNode()
-                            self.titleTopicArrowNode = titleTopicArrowNode
-                            self.addSubnode(titleTopicArrowNode)
-                        }
-                        titleTopicArrowNode.image = arrowIconImage
-                        nextX += 6.0
-                        titleTopicArrowNode.frame = CGRect(origin: CGPoint(x: nextX, y: 5.0), size: arrowIconImage.size)
-                        nextX += arrowIconImage.size.width + 6.0
-                    } else {
-                        if let titleTopicArrowNode = self.titleTopicArrowNode {
-                            self.titleTopicArrowNode = nil
-                            titleTopicArrowNode.removeFromSupernode()
-                        }
-                    }
-                    
-                    var topTopicRect: CGRect?
-                    var topicNodeOrder: [Int64] = []
-                    for item in topicsSizeAndApply {
-                        topicNodeOrder.append(item.0)
-                        let itemNode = item.2()
-                        if self.topicNodes[item.0] != itemNode {
-                            self.topicNodes[item.0]?.removeFromSupernode()
-                            self.topicNodes[item.0] = itemNode
-                        }
-                        let itemFrame = CGRect(origin: CGPoint(x: nextX - 1.0, y: 0.0), size: item.1)
-                        itemNode.frame = itemFrame
-                        if topTopicRect == nil {
-                            topTopicRect = itemFrame
-                        }
-                        nextX += item.1.width + 4.0
-                    }
-                    var removeIds: [Int64] = []
-                    for (id, itemNode) in self.topicNodes {
-                        if !topicsSizeAndApply.contains(where: { $0.0 == id }) {
-                            removeIds.append(id)
-                            itemNode.removeFromSupernode()
-                        }
-                    }
-                    for id in removeIds {
-                        self.topicNodes.removeValue(forKey: id)
-                    }
-                    self.topicNodeOrder = topicNodeOrder
-                    
-                    return topTopicRect
-                })
-            }
-        }
-    }
-    
-    private struct ContentImageSpec {
-        var message: EngineMessage
-        var media: EngineMedia
-        var size: CGSize
-        
-        init(message: EngineMessage, media: EngineMedia, size: CGSize) {
-            self.message = message
-            self.media = media
-            self.size = size
-        }
-    }
-    
-    public private(set) var item: ChatListItem?
-    
-    private let backgroundNode: ASDisplayNode
-    private let highlightedBackgroundNode: ASDisplayNode
-    
-    let contextContainer: ContextControllerSourceNode
-    let mainContentContainerNode: ASDisplayNode
-    
-    public let avatarContainerNode: ASDisplayNode
-    private let communityAvatarShadowNode: ASImageNode
-    private var communityAvatarBadgeBackgroundView: GlassBackgroundView?
-    private var communityAvatarBadgeIconView: GlassBackgroundView.ContentImageView?
-    public let avatarNode: AvatarNode
-    var avatarIconView: ComponentHostView<Empty>?
-    var avatarIconComponent: EmojiStatusComponent?
-    var avatarVideoNode: AvatarVideoNode?
-    var avatarTapRecognizer: UITapGestureRecognizer?
-    private var avatarMediaNode: ChatListMediaPreviewNode?
-    
-    private var inlineNavigationMarkLayer: SimpleLayer?
-    
-    public let titleNode: TextNode
-    private var titleBadge: (backgroundView: UIImageView, textNode: TextNode)?
-    public let authorNode: AuthorNode
-    private var compoundHighlightingNode: LinkHighlightingNode?
-    private var textArrowNode: ASImageNode?
-    private var compoundTextButtonNode: HighlightTrackingButtonNode?
-    let measureNode: TextNode
-    private var currentItemHeight: CGFloat?
-    let forwardedIconNode: ASImageNode
-    public let textNode: TextNodeWithEntities
-    var trailingTextBadgeNode: TextNode?
-    var trailingTextBadgeBackground: UIImageView?
-    var dustNode: InvisibleInkDustNode?
-    let inputActivitiesNode: ChatListInputActivitiesNode
-    public let dateNode: TextNode
-    var dateStatusIconNode: ASImageNode?
-    var dateDisclosureIconView: UIImageView?
-    public let separatorNode: ASDisplayNode
-    let statusNode: ChatListStatusNode
-    let badgeNode: ChatListBadgeNode
-    let mentionBadgeNode: ChatListBadgeNode
-    var avatarBadgeNode: ChatListBadgeNode?
-    var avatarBadgeBackground: ASImageNode?
-    let onlineNode: PeerOnlineMarkerNode
-    var avatarTimerBadge: AvatarBadgeView?
-    private var starView: StarView?
-    var avatarLiveBadge: (outline: UIImageView, foreground: UIImageView)?
-    let pinnedIconNode: ASImageNode
-    var secretIconNode: ASImageNode?
-    var verifiedIconView: ComponentHostView<Empty>?
-    var verifiedIconComponent: EmojiStatusComponent?
-    var credibilityIconView: ComponentHostView<Empty>?
-    var credibilityIconComponent: EmojiStatusComponent?
-    var statusIconView: ComponentHostView<Empty>?
-    var statusIconComponent: EmojiStatusComponent?
-    let hiddenPeerIconNode: ASImageNode
-    let mutedIconNode: ASImageNode
-    var itemTagList: ComponentView<Empty>?
-    var actionButtonTitleNode: TextNode?
-    var actionButtonBackgroundView: UIImageView?
-    var actionButtonNode: HighlightableButtonNode?
-    
-    private var placeholderNode: ShimmerEffectNode?
-    private var absoluteLocation: (CGRect, CGSize)?
-    
-    private var hierarchyTrackingLayer: HierarchyTrackingLayer?
-    private var cachedDataDisposable = MetaDisposable()
-    
-    private var currentTextLeftCutout: CGFloat = 0.0
-    private var currentMediaPreviewSpecs: [ContentImageSpec] = []
-    private var mediaPreviewNodes: [EngineMedia.Id: ChatListMediaPreviewNode] = [:]
-    
-    var selectableControlNode: ItemListSelectableControlNode?
-    var reorderControlNode: ItemListEditableReorderControlNode?
-    
-    private var peerPresenceManager: PeerPresenceStatusManager?
-    
-    private var cachedChatListText: (String, String)?
-    private var cachedChatListSearchResult: CachedChatListSearchResult?
-    private var cachedChatListQuoteSearchResult: CachedChatListSearchResult?
-    private var cachedCustomTextEntities: CachedCustomTextEntities?
-    
-    var layoutParams: (ChatListItem, first: Bool, last: Bool, firstWithHeader: Bool, nextIsPinned: Bool, nextHasActiveRevealControls: Bool, ListViewItemLayoutParams, countersSize: CGFloat)?
-    
-    private var isHighlighted: Bool = false
-    private var nextHasActiveRevealControls: Bool = false
-    private var skipFadeout: Bool = false
-    private var customAnimationInProgress: Bool = false
-    
-    private var onlineIsVoiceChat: Bool = false
-    private var currentOnline: Bool?
-    
-    override public var canBeSelected: Bool {
-        if self.selectableControlNode != nil || self.item?.editing == true {
-            return false
-        } else {
-            return super.canBeSelected
-        }
-    }
-    
-    override public var defaultAccessibilityLabel: String? {
-        get {
-            return self.accessibilityLabel
-        } set(value) {
-        }
-    }
-    override public var accessibilityAttributedLabel: NSAttributedString? {
-        get {
-            return self.accessibilityLabel.flatMap(NSAttributedString.init(string:))
-        } set(value) {
-        }
-    }
-    override public var accessibilityAttributedValue: NSAttributedString? {
-        get {
-            return self.accessibilityValue.flatMap(NSAttributedString.init(string:))
-        } set(value) {
-        }
-    }
-    
-    override public var accessibilityLabel: String? {
-        get {
-            guard let item = self.item else {
-                return nil
-            }
-            switch item.content {
-                case .loading:
-                    return nil
-                case let .groupReference(groupReferenceData):
-                    var result = item.presentationData.strings.ChatList_ArchivedChatsTitle
-                let allCount = groupReferenceData.unreadCount
-                    if allCount > 0 {
-                        result += "\n\(item.presentationData.strings.VoiceOver_Chat_UnreadMessages(Int32(allCount)))"
-                    }
-                    return result
-                case let .peer(peerData):
-                    guard let chatMainPeer = peerData.peer.chatOrMonoforumMainPeer else {
-                        return nil
-                    }
-                    var result = ""
-                    if item.context.account.peerId == chatMainPeer.id {
-                        result += item.presentationData.strings.DialogList_SavedMessages
-                    } else {
-                        result += chatMainPeer.displayTitle(strings: item.presentationData.strings, displayOrder: item.presentationData.nameDisplayOrder)
-                    }
-                    if let combinedReadState = peerData.combinedReadState, combinedReadState.count > 0 {
-                        result += "\n\(item.presentationData.strings.VoiceOver_Chat_UnreadMessages(combinedReadState.count))"
-                    }
-                    return result
-            }
-        } set(value) {
-        }
-    }
-    
-    override public var accessibilityValue: String? {
-        get {
-            guard let item = self.item else {
-                return nil
-            }
-            switch item.content {
-                case .loading:
-                    return nil
-                case let .groupReference(groupReferenceData):
-                    let peers = groupReferenceData.peers
-                    let messageValue = groupReferenceData.message
-                    if let message = messageValue, let peer = peers.first?.peer {
-                        let messages = [message]
-                        var result = ""
-                        if message.flags.contains(.Incoming) {
-                            result += item.presentationData.strings.VoiceOver_ChatList_Message
-                        } else {
-                            result += item.presentationData.strings.VoiceOver_ChatList_OutgoingMessage
-                        }
-                        let (_, initialHideAuthor, messageText, _, _, _, _) = chatListItemStrings(strings: item.presentationData.strings, nameDisplayOrder: item.presentationData.nameDisplayOrder, dateTimeFormat: item.presentationData.dateTimeFormat, contentSettings: item.context.currentContentSettings.with { $0 }, messages: messages, chatPeer: peer, accountPeerId: item.context.account.peerId, isPeerGroup: false)
-                        if message.flags.contains(.Incoming), !initialHideAuthor, let author = message.author, case .user = author {
-                            result += "\n\(item.presentationData.strings.VoiceOver_ChatList_MessageFrom(author.displayTitle(strings: item.presentationData.strings, displayOrder: item.presentationData.nameDisplayOrder)).string)"
-                        }
-                        result += "\n\(messageText)"
-                        return result
-                    } else if !peers.isEmpty {
-                        var result = ""
-                        var isFirst = true
-                        for peer in peers {
-                            if let chatMainPeer = peer.peer.chatOrMonoforumMainPeer {
-                                let peerTitle = chatMainPeer.compactDisplayTitle
-                                if !peerTitle.isEmpty {
-                                    if isFirst {
-                                        isFirst = false
-                                    } else {
-                                        result.append(", ")
-                                    }
-                                    result.append(peerTitle)
-                                }
-                            }
-                        }
-                        return result
-                    } else {
-                        return item.presentationData.strings.VoiceOver_ChatList_MessageEmpty
-                    }
-                case let .peer(peerData):
-                    if let message = peerData.messages.last {
-                        var result = ""
-                        if message.flags.contains(.Incoming) {
-                            result += item.presentationData.strings.VoiceOver_ChatList_Message
-                        } else {
-                            result += item.presentationData.strings.VoiceOver_ChatList_OutgoingMessage
-                        }
-                        let (_, initialHideAuthor, messageText, _, _, _, _) = chatListItemStrings(strings: item.presentationData.strings, nameDisplayOrder: item.presentationData.nameDisplayOrder, dateTimeFormat: item.presentationData.dateTimeFormat, contentSettings: item.context.currentContentSettings.with { $0 }, messages: peerData.messages, chatPeer: peerData.peer, accountPeerId: item.context.account.peerId, isPeerGroup: false)
-                        if message.flags.contains(.Incoming), !initialHideAuthor, let author = message.author, case .user = author {
-                            result += "\n\(item.presentationData.strings.VoiceOver_ChatList_MessageFrom(author.displayTitle(strings: item.presentationData.strings, displayOrder: item.presentationData.nameDisplayOrder)).string)"
-                        }
-                        if !message.flags.contains(.Incoming), let combinedReadState = peerData.combinedReadState, combinedReadState.isOutgoingMessageIndexRead(message.index) {
-                            result += "\n\(item.presentationData.strings.VoiceOver_ChatList_MessageRead)"
-                        }
-                        result += "\n\(messageText)"
-                        return result
-                    } else {
-                        return item.presentationData.strings.VoiceOver_ChatList_MessageEmpty
-                    }
-            }
-        } set(value) {
-        }
-    }
-    
-    override public var visibility: ListViewItemNodeVisibility {
-        didSet {
-            let wasVisible = self.visibilityStatus
-            let isVisible: Bool
-            switch self.visibility {
-                case let .visible(fraction, _):
-                    isVisible = fraction > 0.2
-                case .none:
-                    isVisible = false
-            }
-            if wasVisible != isVisible {
-                self.visibilityStatus = isVisible
-            }
-        }
-    }
-    
-    private var visibilityStatus: Bool = false {
-        didSet {
-            if self.visibilityStatus != oldValue {
-                if self.visibilityStatus {
-                    self.avatarVideoNode?.resetPlayback()
-                }
-                self.updateVideoVisibility()
-                
-                self.textNode.visibilityRect = self.visibilityStatus ? CGRect.infinite : nil
-                
-                if let verifiedIconView = self.verifiedIconView, let verifiedIconComponent = self.verifiedIconComponent {
-                    let _ = verifiedIconView.update(
-                        transition: .immediate,
-                        component: AnyComponent(verifiedIconComponent.withVisibleForAnimations(self.visibilityStatus)),
-                        environment: {},
-                        containerSize: verifiedIconView.bounds.size
-                    )
-                }
-                if let credibilityIconView = self.credibilityIconView, let credibilityIconComponent = self.credibilityIconComponent {
-                    let _ = credibilityIconView.update(
-                        transition: .immediate,
-                        component: AnyComponent(credibilityIconComponent.withVisibleForAnimations(self.visibilityStatus)),
-                        environment: {},
-                        containerSize: credibilityIconView.bounds.size
-                    )
-                }
-                if let avatarIconView = self.avatarIconView, let avatarIconComponent = self.avatarIconComponent {
-                    let _ = avatarIconView.update(
-                        transition: .immediate,
-                        component: AnyComponent(avatarIconComponent.withVisibleForAnimations(self.visibilityStatus)),
-                        environment: {},
-                        containerSize: avatarIconView.bounds.size
-                    )
-                }
-                self.authorNode.visibilityStatus = self.visibilityStatus
-                
-                if let itemTagListView = self.itemTagList?.view as? ChatListItemTagListComponent.View {
-                    itemTagListView.isVisible = self.visibilityStatus
-                }
-            }
-        }
-    }
-    
-    private var trackingIsInHierarchy: Bool = false {
-        didSet {
-            if self.trackingIsInHierarchy != oldValue {
-                Queue.mainQueue().justDispatch {
-                    if self.trackingIsInHierarchy {
-                        self.avatarVideoNode?.resetPlayback()
-                    }
-                    self.updateVideoVisibility()
-                }
-            }
-        }
-    }
-    
-    required init() {
-        self.backgroundNode = ASDisplayNode()
-        self.backgroundNode.isLayerBacked = true
-        self.backgroundNode.displaysAsynchronously = false
-        
-        self.avatarContainerNode = ASDisplayNode()
-        self.communityAvatarShadowNode = ASImageNode()
-        self.communityAvatarShadowNode.displaysAsynchronously = false
-        self.communityAvatarShadowNode.displayWithoutProcessing = true
-        self.communityAvatarShadowNode.isHidden = true
-        self.communityAvatarBadgeBackgroundView = nil
-        self.communityAvatarBadgeIconView = nil
-        self.avatarNode = AvatarNode(font: avatarPlaceholderFont(size: 26.0))
-        
-        self.highlightedBackgroundNode = ASDisplayNode()
-        self.highlightedBackgroundNode.isLayerBacked = true
-        
-        self.contextContainer = ContextControllerSourceNode()
-        
-        self.mainContentContainerNode = ASDisplayNode()
-        self.mainContentContainerNode.clipsToBounds = true
-        
-        self.measureNode = TextNode()
-        
-        self.titleNode = TextNode()
-        self.titleNode.isUserInteractionEnabled = false
-        self.titleNode.displaysAsynchronously = true
-        
-        self.authorNode = AuthorNode()
-        self.authorNode.isUserInteractionEnabled = false
-        
-        self.textNode = TextNodeWithEntities()
-        self.textNode.textNode.isUserInteractionEnabled = false
-        self.textNode.textNode.displaysAsynchronously = true
-        self.textNode.textNode.anchorPoint = CGPoint()
-        
-        self.inputActivitiesNode = ChatListInputActivitiesNode()
-        self.inputActivitiesNode.isUserInteractionEnabled = false
-        self.inputActivitiesNode.alpha = 0.0
-        
-        self.dateNode = TextNode()
-        self.dateNode.isUserInteractionEnabled = false
-        self.dateNode.displaysAsynchronously = true
-        
-        self.statusNode = ChatListStatusNode()
-        self.badgeNode = ChatListBadgeNode()
-        self.mentionBadgeNode = ChatListBadgeNode()
-        self.onlineNode = PeerOnlineMarkerNode()
-        
-        self.forwardedIconNode = ASImageNode()
-        self.forwardedIconNode.isLayerBacked = true
-        self.forwardedIconNode.displaysAsynchronously = false
-        self.forwardedIconNode.displayWithoutProcessing = true
-        
-        self.pinnedIconNode = ASImageNode()
-        self.pinnedIconNode.isLayerBacked = true
-        self.pinnedIconNode.displaysAsynchronously = false
-        self.pinnedIconNode.displayWithoutProcessing = true
-        
-        self.hiddenPeerIconNode = ASImageNode()
-        self.hiddenPeerIconNode.isLayerBacked = true
-        self.hiddenPeerIconNode.displaysAsynchronously = false
-        self.hiddenPeerIconNode.displayWithoutProcessing = true
-
-        self.mutedIconNode = ASImageNode()
-        self.mutedIconNode.isLayerBacked = true
-        self.mutedIconNode.displaysAsynchronously = false
-        self.mutedIconNode.displayWithoutProcessing = true
-        
-        self.separatorNode = ASDisplayNode()
-        self.separatorNode.isLayerBacked = true
-        
-        super.init(layerBacked: false, rotated: false, seeThrough: false)
-        
-        self.isAccessibilityElement = true
-        
-        self.addSubnode(self.backgroundNode)
-        self.addSubnode(self.separatorNode)
-        
-        self.addSubnode(self.contextContainer)
-        self.contextContainer.addSubnode(self.mainContentContainerNode)
-        
-        self.avatarContainerNode.addSubnode(self.communityAvatarShadowNode)
-        self.avatarContainerNode.addSubnode(self.avatarNode)
-
-        self.contextContainer.addSubnode(self.avatarContainerNode)
-        self.avatarNode.addSubnode(self.onlineNode)
-        
-        self.mainContentContainerNode.addSubnode(self.titleNode)
-        self.mainContentContainerNode.addSubnode(self.authorNode)
-        self.mainContentContainerNode.addSubnode(self.textNode.textNode)
-        self.mainContentContainerNode.addSubnode(self.dateNode)
-        self.mainContentContainerNode.addSubnode(self.statusNode)
-        self.mainContentContainerNode.addSubnode(self.pinnedIconNode)
-        self.mainContentContainerNode.addSubnode(self.badgeNode)
-        self.mainContentContainerNode.addSubnode(self.mentionBadgeNode)
-        self.mainContentContainerNode.addSubnode(self.hiddenPeerIconNode)
-        self.mainContentContainerNode.addSubnode(self.mutedIconNode)
-        
-        self.peerPresenceManager = PeerPresenceStatusManager(update: { [weak self] in
-            if let strongSelf = self, let layoutParams = strongSelf.layoutParams {
-                let (_, apply) = strongSelf.asyncLayout()(layoutParams.0, layoutParams.6, layoutParams.1, layoutParams.2, layoutParams.3, layoutParams.4, layoutParams.5)
-                let _ = apply(false, false)
-            }
-        })
-        
-        self.contextContainer.shouldBegin = { [weak self] location in
-            guard let strongSelf = self, let item = strongSelf.item else {
-                return false
-            }
-            
-            strongSelf.contextContainer.additionalActivationProgressLayer = nil
-            if let inlineNavigationLocation = item.interaction.inlineNavigationLocation {
-                if case let .peer(peerId) = inlineNavigationLocation.location {
-                    if case let .chatList(index) = item.index, index.messageIndex.id.peerId == peerId {
-                        return false
-                    }
-                }
-                strongSelf.contextContainer.targetNodeForActivationProgress = strongSelf.avatarContainerNode
-            } else if let value = strongSelf.hitTest(location, with: nil), value === strongSelf.compoundTextButtonNode?.view {
-                strongSelf.contextContainer.targetNodeForActivationProgress = strongSelf.compoundTextButtonNode
-                strongSelf.contextContainer.additionalActivationProgressLayer = strongSelf.compoundHighlightingNode?.layer
-            } else {
-                strongSelf.contextContainer.targetNodeForActivationProgress = nil
-            }
-            
-            return true
-        }
-        
-        self.contextContainer.activated = { [weak self] gesture, location in
-            guard let strongSelf = self, let item = strongSelf.item else {
-                return
-            }
-            var threadId: Int64?
-            if let value = strongSelf.hitTest(location, with: nil), value === strongSelf.compoundTextButtonNode?.view {
-                if case let .peer(peerData) = item.content, let topicItem = peerData.topForumTopicItems.first {
-                    threadId = topicItem.id
-                }
-            }
-            item.interaction.activateChatPreview?(item, threadId, strongSelf.contextContainer, gesture, nil)
-        }
-        
-        self.onDidLoad { [weak self] _  in
-            guard let self else {
-                return
-            }
-            let avatarTapRecognizer = UITapGestureRecognizer(target: self, action: #selector(self.avatarStoryTapGesture(_:)))
-            self.avatarTapRecognizer = avatarTapRecognizer
-            self.avatarNode.view.addGestureRecognizer(avatarTapRecognizer)
-        }
-    }
-
-    deinit {
-        self.cachedDataDisposable.dispose()
-    }
-    
-    override public func secondaryAction(at point: CGPoint) {
-        guard let item = self.item else {
-            return
-        }
-        item.interaction.activateChatPreview?(item, nil, self.contextContainer, nil, point)
-    }
-    
-    func setupItem(item: ChatListItem, synchronousLoads: Bool) {
-        let previousItem = self.item
-        self.item = item
-        
-        var storyState: ChatListItemContent.StoryState?
-        if case let .peer(peerData) = item.content {
-            storyState = peerData.storyState
-        } else if case let .groupReference(groupReference) = item.content {
-            storyState = groupReference.storyState
-        }
-        
-        var peer: EnginePeer?
-        var displayAsMessage = false
-        var enablePreview = true
-        var peerIsMonoforum = false
-        var peerIsCommunity = false
-        var peerLinkedCommunityId: EnginePeer.Id?
-        switch item.content {
-        case .loading:
-            displayAsMessage = true
-            enablePreview = false
-        case let .peer(peerData):
-            displayAsMessage = peerData.displayAsMessage
-            if displayAsMessage, case let .user(author) = peerData.messages.last?.author {
-                peer = .user(author)
-            } else if let mainPeer = peerData.peer.peer, case .community = mainPeer {
-                peerIsCommunity = true
-                peer = mainPeer
-            } else {
-                peer = peerData.peer.chatOrMonoforumMainPeer
-                if case let .channel(channel) = peerData.peer.peer, channel.isMonoForum {
-                    peerIsMonoforum = true
-                }
-                peerLinkedCommunityId = peerData.peer.peer?.containerPeerId
-            }
-            if peerData.peer.peerId.namespace == Namespaces.Peer.SecretChat {
-                enablePreview = false
-            }
-        case let .groupReference(groupReferenceData):
-            if let previousItem = previousItem, case let .groupReference(previousGroupReferenceData) = previousItem.content, groupReferenceData.hiddenByDefault != previousGroupReferenceData.hiddenByDefault {
-                UIView.transition(with: self.avatarNode.view, duration: 0.3, options: [.transitionCrossDissolve], animations: {
-                }, completion: nil)
-            }
-            self.avatarNode.setPeer(context: item.context, theme: item.presentationData.theme, peer: peer, overrideImage: .archivedChatsIcon(hiddenByDefault: groupReferenceData.hiddenByDefault), emptyColor: item.presentationData.theme.list.mediaPlaceholderColor, synchronousLoad: synchronousLoads)
-        }
-        
-        if item.interaction.activateChatPreview == nil {
-            enablePreview = false
-        }
-        
-        self.avatarNode.setStoryStats(storyStats: storyState.flatMap { storyState in
-            return AvatarNode.StoryStats(
-                totalCount: storyState.stats.totalCount,
-                unseenCount: storyState.stats.unseenCount,
-                hasUnseenCloseFriendsItems: storyState.hasUnseenCloseFriends,
-                hasLiveItems: storyState.stats.hasLiveItems
-            )
-        }, presentationParams: AvatarNode.StoryPresentationParams(
-            colors: AvatarNode.Colors(theme: item.presentationData.theme),
-            lineWidth: 2.33,
-            inactiveLineWidth: 1.33
-        ), transition: .immediate)
-        self.avatarNode.isUserInteractionEnabled = !item.useCommunityViewLayout && ((storyState != nil && !peerIsCommunity) || peerLinkedCommunityId != nil)
-        
-        if let stats = storyState?.stats, stats.hasLiveItems {
-            if self.avatarLiveBadge == nil {
-                let avatarLiveBadge: (outline: UIImageView, foreground: UIImageView) = (UIImageView(), UIImageView())
-                self.avatarLiveBadge = avatarLiveBadge
-                self.avatarNode.view.addSubview(avatarLiveBadge.outline)
-                self.avatarNode.view.addSubview(avatarLiveBadge.foreground)
-                
-                let liveString = NSAttributedString(string: item.presentationData.strings.Story_LiveBadge, font: Font.semibold(10.0), textColor: .white)
-                let liveStringBounds = liveString.boundingRect(with: CGSize(width: 100.0, height: 100.0), options: .usesLineFragmentOrigin, context: nil)
-                let liveBadgeSize = CGSize(width: ceil(liveStringBounds.width) + 4.0 * 2.0, height: ceil(liveStringBounds.height) + 2.0 * 2.0)
-                avatarLiveBadge.foreground.image = generateImage(liveBadgeSize, rotatedContext: { size, context in
-                    UIGraphicsPushContext(context)
-                    defer {
-                        UIGraphicsPopContext()
-                    }
-                    
-                    context.clear(CGRect(origin: CGPoint(), size: size))
-                    context.setFillColor(UIColor(rgb: 0xFF2D55).cgColor)
-                    
-                    func roundedRectCgPath(roundRect rect: CGRect, topLeftRadius: CGFloat, topRightRadius: CGFloat, bottomLeftRadius: CGFloat, bottomRightRadius: CGFloat) -> CGPath {
-                        let path = CGMutablePath()
-
-                        let topLeft = rect.origin
-                        let topRight = CGPoint(x: rect.maxX, y: rect.minY)
-                        let bottomRight = CGPoint(x: rect.maxX, y: rect.maxY)
-                        let bottomLeft = CGPoint(x: rect.minX, y: rect.maxY)
-
-                        if topLeftRadius != .zero {
-                            path.move(to: CGPoint(x: topLeft.x+topLeftRadius, y: topLeft.y))
-                        } else {
-                            path.move(to: CGPoint(x: topLeft.x, y: topLeft.y))
-                        }
-
-                        if topRightRadius != .zero {
-                            path.addLine(to: CGPoint(x: topRight.x-topRightRadius, y: topRight.y))
-                            path.addCurve(to:  CGPoint(x: topRight.x, y: topRight.y+topRightRadius), control1: CGPoint(x: topRight.x, y: topRight.y), control2:CGPoint(x: topRight.x, y: topRight.y + topRightRadius))
-                        } else {
-                             path.addLine(to: CGPoint(x: topRight.x, y: topRight.y))
-                        }
-
-                        if bottomRightRadius != .zero {
-                            path.addLine(to: CGPoint(x: bottomRight.x, y: bottomRight.y-bottomRightRadius))
-                            path.addCurve(to: CGPoint(x: bottomRight.x-bottomRightRadius, y: bottomRight.y), control1: CGPoint(x: bottomRight.x, y: bottomRight.y), control2: CGPoint(x: bottomRight.x-bottomRightRadius, y: bottomRight.y))
-                        } else {
-                            path.addLine(to: CGPoint(x: bottomRight.x, y: bottomRight.y))
-                        }
-
-                        if bottomLeftRadius != .zero {
-                            path.addLine(to: CGPoint(x: bottomLeft.x+bottomLeftRadius, y: bottomLeft.y))
-                            path.addCurve(to: CGPoint(x: bottomLeft.x, y: bottomLeft.y-bottomLeftRadius), control1: CGPoint(x: bottomLeft.x, y: bottomLeft.y), control2: CGPoint(x: bottomLeft.x, y: bottomLeft.y-bottomLeftRadius))
-                        } else {
-                            path.addLine(to: CGPoint(x: bottomLeft.x, y: bottomLeft.y))
-                        }
-
-                        if topLeftRadius != .zero {
-                            path.addLine(to: CGPoint(x: topLeft.x, y: topLeft.y+topLeftRadius))
-                            path.addCurve(to: CGPoint(x: topLeft.x+topLeftRadius, y: topLeft.y) , control1: CGPoint(x: topLeft.x, y: topLeft.y) , control2: CGPoint(x: topLeft.x+topLeftRadius, y: topLeft.y))
-                        } else {
-                            path.addLine(to: CGPoint(x: topLeft.x, y: topLeft.y))
-                        }
-
-                        path.closeSubpath()
-                                
-                        return path
-                    }
-                    
-                    let radius = size.height * 0.5
-                    context.addPath(roundedRectCgPath(roundRect: CGRect(origin: CGPoint(), size: size), topLeftRadius: radius, topRightRadius: radius, bottomLeftRadius: radius, bottomRightRadius: radius))
-                    context.fillPath()
-                    
-                    liveString.draw(at: CGPoint(x: floorToScreenPixels((size.width - liveStringBounds.width) * 0.5), y: floorToScreenPixels((size.height - liveStringBounds.height) * 0.5)))
-                })
-                
-                if let image = avatarLiveBadge.foreground.image {
-                    avatarLiveBadge.outline.image = generateStretchableFilledCircleImage(diameter: image.size.height + 2.0 * 2.0, color: .white)?.withRenderingMode(.alwaysTemplate)
-                }
-            }
-        } else {
-            if let avatarLiveBadge = self.avatarLiveBadge {
-                self.avatarLiveBadge = nil
-                avatarLiveBadge.outline.removeFromSuperview()
-                avatarLiveBadge.foreground.removeFromSuperview()
-            }
-        }
-        
-        if let peer = peer {
-            let avatarPeer: EnginePeer
-            if case let .peer(peerData) = item.content, let avatarMainPeer = peerData.avatarPeer?.chatOrMonoforumMainPeer {
-                avatarPeer = avatarMainPeer
-            } else {
-                avatarPeer = peer
-            }
-            var overrideImage: AvatarNodeImageOverride?
-            if case let .peer(peerData) = item.content, peerData.customMessageListData != nil {
-            } else if peer.id.isReplies {
-                overrideImage = .repliesIcon
-            } else if peer.id.isAnonymousSavedMessages {
-                overrideImage = .anonymousSavedMessagesIcon(isColored: true)
-            } else if peer.id == item.context.account.peerId && !displayAsMessage {
-                if case .savedMessagesChats = item.chatListLocation {
-                    overrideImage = .myNotesIcon
-                } else {
-                    overrideImage = .savedMessagesIcon
-                }
-            } else if peer.isDeleted {
-                overrideImage = .deletedIcon
-            }
-            var isForumAvatar = false
-            if peerIsMonoforum {
-                isForumAvatar = true
-            }
-            if peerIsCommunity {
-                isForumAvatar = true
-            }
-            if case let .channel(channel) = peer, channel.isForumOrMonoForum {
-                isForumAvatar = true
-            }
-            if case let .peer(data) = item.content {
-                if data.displayAsTopicList {
-                    isForumAvatar = true
-                }
-            }
-            
-            var avatarDiameter = min(60.0, floor(item.presentationData.fontSize.baseDisplaySize * 60.0 / 17.0))
-            
-            if case let .peer(peerData) = item.content, let customMessageListData = peerData.customMessageListData, customMessageListData.commandPrefix != nil {
-                avatarDiameter = 40.0
-            }
-                
-            if avatarDiameter != 60.0 {
-                let avatarFontSize = floor(avatarDiameter * 26.0 / 60.0)
-                if self.avatarNode.font.pointSize != avatarFontSize {
-                    self.avatarNode.font = avatarPlaceholderFont(size: avatarFontSize)
-                }
-            }
-            let avatarClipStyle: AvatarNodeClipStyle
-            if peerIsMonoforum {
-                avatarClipStyle = .bubble
-            } else if isForumAvatar {
-                avatarClipStyle = .roundedRect
-            } else {
-                avatarClipStyle = .round
-            }
-
-            if item.useCommunityViewLayout {
-                self.avatarNode.setPeer(context: item.context, theme: item.presentationData.theme, peer: avatarPeer, overrideImage: overrideImage, emptyColor: item.presentationData.theme.list.mediaPlaceholderColor, clipStyle: avatarClipStyle, synchronousLoad: synchronousLoads, displayDimensions: CGSize(width: avatarDiameter, height: avatarDiameter), cutoutRect: nil)
-            } else if avatarPeer.smallProfileImage != nil && overrideImage == nil {
-                self.avatarNode.setPeerV2(context: item.context, theme: item.presentationData.theme, peer: avatarPeer, overrideImage: overrideImage, emptyColor: item.presentationData.theme.list.mediaPlaceholderColor, clipStyle: avatarClipStyle, synchronousLoad: synchronousLoads, displayDimensions: CGSize(width: avatarDiameter, height: avatarDiameter))
-            } else {
-                self.avatarNode.setPeer(context: item.context, theme: item.presentationData.theme, peer: avatarPeer, overrideImage: overrideImage, emptyColor: item.presentationData.theme.list.mediaPlaceholderColor, clipStyle: avatarClipStyle, synchronousLoad: synchronousLoads, displayDimensions: CGSize(width: 60.0, height: 60.0))
-            }
-            
-            if peer.isPremium && peer.id != item.context.account.peerId {
-                let context = item.context
-                self.cachedDataDisposable.set((context.account.postbox.peerView(id: peer.id)
-                |> deliverOnMainQueue).startStrict(next: { [weak self] peerView in
-                    guard let strongSelf = self else {
-                        return
-                    }
-                    let cachedPeerData = peerView.cachedData as? CachedUserData
-                    var personalPhoto: TelegramMediaImage?
-                    var profilePhoto: TelegramMediaImage?
-                    var isKnown = false
-                    
-                    if let cachedPeerData = cachedPeerData {
-                        if case let .known(maybePersonalPhoto) = cachedPeerData.personalPhoto {
-                            personalPhoto = maybePersonalPhoto
-                            isKnown = true
-                        }
-                        if case let .known(maybePhoto) = cachedPeerData.photo {
-                            profilePhoto = maybePhoto
-                            isKnown = true
-                        }
-                        if profilePhoto == nil, case let .known(maybePhoto) = cachedPeerData.fallbackPhoto {
-                            profilePhoto = maybePhoto
-                            isKnown = true
-                        }
-                    }
-                    
-                    if isKnown {
-                        let photo = personalPhoto ?? profilePhoto
-                        if let photo = photo, item.context.sharedContext.energyUsageSettings.loopEmoji, (!photo.videoRepresentations.isEmpty || photo.emojiMarkup != nil) {
-                            let videoNode: AvatarVideoNode
-                            if let current = strongSelf.avatarVideoNode {
-                                videoNode = current
-                            } else {
-                                videoNode = AvatarVideoNode(context: item.context)
-                                strongSelf.avatarNode.contentNode.addSubnode(videoNode)
-                                strongSelf.avatarVideoNode = videoNode
-                            }
-                            videoNode.update(peer: peer, photo: photo, size: CGSize(width: 60.0, height: 60.0))
-                            
-                            if strongSelf.hierarchyTrackingLayer == nil {
-                                let hierarchyTrackingLayer = HierarchyTrackingLayer()
-                                hierarchyTrackingLayer.didEnterHierarchy = { [weak self] in
-                                    guard let strongSelf = self else {
-                                        return
-                                    }
-                                    strongSelf.trackingIsInHierarchy = true
-                                }
-                                
-                                hierarchyTrackingLayer.didExitHierarchy = { [weak self] in
-                                    guard let strongSelf = self else {
-                                        return
-                                    }
-                                    strongSelf.trackingIsInHierarchy = false
-                                }
-                                strongSelf.hierarchyTrackingLayer = hierarchyTrackingLayer
-                                strongSelf.layer.addSublayer(hierarchyTrackingLayer)
-                            }
-                        } else {
-                            if let avatarVideoNode = strongSelf.avatarVideoNode {
-                                avatarVideoNode.removeFromSupernode()
-                                strongSelf.avatarVideoNode = nil
-                            }
-                            strongSelf.hierarchyTrackingLayer?.removeFromSuperlayer()
-                            strongSelf.hierarchyTrackingLayer = nil
-                        }                 
-                        strongSelf.updateVideoVisibility()
-                    } else {
-                        if let photo = peer.largeProfileImage, photo.hasVideo {
-                            let _ = context.engine.peers.fetchAndUpdateCachedPeerData(peerId: peer.id).startStandalone()
-                        }
-                    }
-                }))
-            } else {
-                self.cachedDataDisposable.set(nil)
-                
-                self.avatarVideoNode?.removeFromSupernode()
-                self.avatarVideoNode = nil
-                
-                self.hierarchyTrackingLayer?.removeFromSuperlayer()
-                self.hierarchyTrackingLayer = nil
-            }
-        }
-        
-        self.contextContainer.isGestureEnabled = enablePreview && !item.editing
-    }
-    
-    override public func layoutForParams(_ params: ListViewItemLayoutParams, item: ListViewItem, previousItem: ListViewItem?, nextItem: ListViewItem?) {
-        let layout = self.asyncLayout()
-        let (first, last, firstWithHeader, nextIsPinned, nextHasActiveRevealControls) = ChatListItem.mergeType(item: item as! ChatListItem, previousItem: previousItem, nextItem: nextItem)
-        let (nodeLayout, apply) = layout(item as! ChatListItem, params, first, last, firstWithHeader, nextIsPinned, nextHasActiveRevealControls)
-        apply(false, false)
-        self.contentSize = nodeLayout.contentSize
-        self.insets = nodeLayout.insets
-    }
-    
-    class func insets(first: Bool, last: Bool, firstWithHeader: Bool) -> UIEdgeInsets {
-        return UIEdgeInsets(top: firstWithHeader ? 29.0 : 0.0, left: 0.0, bottom: 0.0, right: 0.0)
-    }
-    
-    override public func setHighlighted(_ highlighted: Bool, at point: CGPoint, animated: Bool) {
-        super.setHighlighted(highlighted, at: point, animated: animated)
-        
-        self.isHighlighted = highlighted
-        
-        self.updateIsHighlighted(transition: (animated && !highlighted) ? .animated(duration: 0.3, curve: .easeInOut) : .immediate)
-    }
-    
-    var reallyHighlighted: Bool {
-        var reallyHighlighted = self.isHighlighted || self.isRevealOptionsActive
-        if let item = self.item {
-            if let itemChatLocation = item.content.chatLocation {
-                if itemChatLocation == item.interaction.highlightedChatLocation?.location {
-                    reallyHighlighted = true
-                }
-            }
-            if case let .peer(peerData) = item.content, let customMessageListData = peerData.customMessageListData {
-                if customMessageListData.isInTransparentContainer {
-                    reallyHighlighted = false
-                }
-            }
-        }
-        return reallyHighlighted
-    }
-    
-    func updateIsHighlighted(transition: ContainedViewLayoutTransition) {
-        let highlightProgress: CGFloat = self.item?.interaction.highlightedChatLocation?.progress ?? 1.0
-        transition.updateCornerRadius(node: self.highlightedBackgroundNode, cornerRadius: self.isRevealOptionsActive ? 26.0 : 0.0)
-        self.updateSeparatorAlpha(transition: transition)
-        
-        if self.reallyHighlighted {
-            if self.highlightedBackgroundNode.supernode == nil {
-                self.insertSubnode(self.highlightedBackgroundNode, aboveSubnode: self.separatorNode)
-                self.highlightedBackgroundNode.alpha = 0.0
-            }
-            self.highlightedBackgroundNode.layer.removeAllAnimations()
-            transition.updateAlpha(layer: self.highlightedBackgroundNode.layer, alpha: highlightProgress)
-            
-            if let compoundHighlightingNode = self.compoundHighlightingNode {
-                transition.updateAlpha(layer: compoundHighlightingNode.layer, alpha: 0.0)
-            }
-            
-            if let item = self.item, case .chatList = item.index {
-                self.onlineNode.setImage(PresentationResourcesChatList.recentStatusOnlineIcon(item.presentationData.theme, state: .highlighted, voiceChat: self.onlineIsVoiceChat), color: nil, transition: transition)
-                self.starView?.setOutlineColor(item.presentationData.theme.chatList.itemHighlightedBackgroundColor, transition: transition)
-            }
-        } else {
-            if self.highlightedBackgroundNode.supernode != nil {
-                transition.updateAlpha(layer: self.highlightedBackgroundNode.layer, alpha: 1.0 - highlightProgress, completion: { [weak self] completed in
-                    if let strongSelf = self {
-                        if completed {
-                            strongSelf.highlightedBackgroundNode.removeFromSupernode()
-                        }
-                    }
-                })
-            }
-            
-            if let compoundHighlightingNode = self.compoundHighlightingNode {
-                transition.updateAlpha(layer: compoundHighlightingNode.layer, alpha: self.authorNode.alpha)
-            }
-            
-            if let item = self.item {
-                let onlineIcon: UIImage?
-                let effectiveBackgroundColor: UIColor
-                if item.isPinned {
-                    onlineIcon = PresentationResourcesChatList.recentStatusOnlineIcon(item.presentationData.theme, state: .pinned, voiceChat: self.onlineIsVoiceChat)
-                    effectiveBackgroundColor = item.presentationData.theme.chatList.pinnedItemBackgroundColor
-                } else {
-                    onlineIcon = PresentationResourcesChatList.recentStatusOnlineIcon(item.presentationData.theme, state: .regular, voiceChat: self.onlineIsVoiceChat)
-                    effectiveBackgroundColor = item.presentationData.theme.chatList.itemBackgroundColor
-                }
-                self.onlineNode.setImage(onlineIcon, color: nil, transition: transition)
-                self.starView?.setOutlineColor(effectiveBackgroundColor, transition: transition)
-            }
-        }
-        
-        if let item = self.item {
-            if let avatarLiveBadge = self.avatarLiveBadge {
-                let effectiveBackgroundColor: UIColor
-                if item.isPinned {
-                    effectiveBackgroundColor = item.presentationData.theme.chatList.pinnedItemBackgroundColor
-                } else {
-                    effectiveBackgroundColor = item.presentationData.theme.chatList.itemBackgroundColor
-                }
-                
-                let highlightAlpha = self.highlightedBackgroundNode.supernode == nil ? 0.0 : self.highlightedBackgroundNode.alpha
-                let outlineColor = item.presentationData.theme.chatList.itemHighlightedBackgroundColor.mixedWith(effectiveBackgroundColor, alpha: 1.0 - highlightAlpha)
-                transition.updateTintColor(view: avatarLiveBadge.outline, color: outlineColor)
-            }
-        }
-    }
-
-    private func updateSeparatorAlpha(transition: ContainedViewLayoutTransition, inlineNavigationProgress: CGFloat? = nil) {
-        let revealSeparatorAlpha: CGFloat = (self.isRevealOptionsActive || self.isNextRevealOptionsActive || self.nextHasActiveRevealControls) ? 0.0 : 1.0
-        if let inlineNavigationProgress = inlineNavigationProgress ?? self.item?.interaction.inlineNavigationLocation?.progress {
-            transition.updateAlpha(node: self.separatorNode, alpha: (1.0 - inlineNavigationProgress) * revealSeparatorAlpha)
-        } else {
-            transition.updateAlpha(node: self.separatorNode, alpha: revealSeparatorAlpha)
-        }
-    }
-    
-    override public func tapped() {
-        guard let item = self.item, item.editing else {
-            return
-        }
-        if case let .peer(peerData) = item.content {
-            if peerData.promoInfo == nil, let mainPeer = peerData.peer.peer {
-                switch item.index {
-                case let .forum(_, _, threadIdValue, _, _):
-                    item.interaction.toggleThreadsSelection([threadIdValue], !item.selected)
-                case .chatList:
-                    item.interaction.togglePeerSelected(mainPeer, nil)
-                }
-            }
-        }
-    }
-    
-    func asyncLayout() -> (_ item: ChatListItem, _ params: ListViewItemLayoutParams, _ first: Bool, _ last: Bool, _ firstWithHeader: Bool, _ nextIsPinned: Bool, _ nextHasActiveRevealControls: Bool) -> (ListViewItemNodeLayout, (Bool, Bool) -> Void) {
-        let dateLayout = TextNode.asyncLayout(self.dateNode)
-        let textLayout = TextNodeWithEntities.asyncLayout(self.textNode)
-        let makeTrailingTextBadgeLayout = TextNode.asyncLayout(self.trailingTextBadgeNode)
-        let titleLayout = TextNode.asyncLayout(self.titleNode)
-        let titleBadgeLayout = TextNode.asyncLayout(self.titleBadge?.textNode)
-        let authorLayout = self.authorNode.asyncLayout()
-        let makeMeasureLayout = TextNode.asyncLayout(self.measureNode)
-        let inputActivitiesLayout = self.inputActivitiesNode.asyncLayout()
-        let badgeLayout = self.badgeNode.asyncLayout()
-        let mentionBadgeLayout = self.mentionBadgeNode.asyncLayout()
-        let onlineLayout = self.onlineNode.asyncLayout()
-        let selectableControlLayout = ItemListSelectableControlNode.asyncLayout(self.selectableControlNode)
-        let reorderControlLayout = ItemListEditableReorderControlNode.asyncLayout(self.reorderControlNode)
-        let makeActionButtonTitleNodeLayout = TextNode.asyncLayout(self.actionButtonTitleNode)
-        
-        let currentItem = self.layoutParams?.0
-        let currentChatListText = self.cachedChatListText
-        let currentChatListSearchResult = self.cachedChatListSearchResult
-        let currentChatListQuoteSearchResult = self.cachedChatListQuoteSearchResult
-        let currentCustomTextEntities = self.cachedCustomTextEntities
-        
-        return { item, params, first, last, firstWithHeader, nextIsPinned, nextHasActiveRevealControls in
-            let titleFont = Font.semibold(floor(item.presentationData.fontSize.itemListBaseFontSize * 16.0 / 17.0))
-            let textFont = Font.regular(floor(item.presentationData.fontSize.itemListBaseFontSize * 15.0 / 17.0))
-            let italicTextFont = Font.italic(floor(item.presentationData.fontSize.itemListBaseFontSize * 15.0 / 17.0))
-            let dateFont = Font.regular(floor(item.presentationData.fontSize.itemListBaseFontSize * 14.0 / 17.0))
-            let badgeFont = Font.with(size: floor(item.presentationData.fontSize.itemListBaseFontSize * 12.0 / 17.0), design: .regular, weight: .semibold, traits: [.monospacedNumbers])
-            let avatarBadgeFont = Font.with(size: floor(item.presentationData.fontSize.itemListBaseFontSize * 16.0 / 17.0), design: .regular, weight: .regular, traits: [.monospacedNumbers])
-            
-            let account = item.context.account
-            var messages: [EngineMessage]
-            enum ContentPeer {
-                case chat(EngineRenderedPeer)
-                case group([EngineChatList.GroupItem.Item])
-            }
-            let contentPeer: ContentPeer
-            let combinedReadState: EnginePeerReadCounters?
-            let unreadCount: (count: Int32, unread: Bool, muted: Bool, mutedCount: Int32?, isProvisonal: Bool)
-            let isRemovedFromTotalUnreadCount: Bool
-            let peerPresence: EnginePeer.Presence?
-            let draftState: ChatListItemContent.DraftState?
-            let mediaDraftContentType: EngineChatList.MediaDraftContentType?
-            let hasUnseenMentions: Bool
-            let hasUnseenReactions: Bool
-            let hasUnseenPollVotes: Bool
-            let inputActivities: [(EnginePeer, PeerInputActivity)]?
-            let isPeerGroup: Bool
-            let promoInfo: ChatListNodeEntryPromoInfo?
-            let displayAsMessage: Bool
-            let hasFailedMessages: Bool
-            var threadInfo: ChatListItemContent.ThreadInfo?
-            var forumTopicData: EngineChatList.ForumTopicData?
-            var topForumTopicItems: [EngineChatList.ForumTopicData] = []
-            var autoremoveTimeout: Int32?
-            var itemTags: [ChatListItemContent.Tag] = []
-            var isCommunity = false
-            var displayCommunityAvatarBadge = false
-            
-            var groupHiddenByDefault = false
-            
-            switch item.content {
-                case .loading:
-                    messages = []
-                    contentPeer = .group([])
-                    combinedReadState = nil
-                    unreadCount = (0, false, false, nil, false)
-                    isRemovedFromTotalUnreadCount = false
-                    peerPresence = nil
-                    draftState = nil
-                    mediaDraftContentType = nil
-                    hasUnseenMentions = false
-                    hasUnseenReactions = false
-                    hasUnseenPollVotes = false
-                    inputActivities = nil
-                    isPeerGroup = false
-                    promoInfo = nil
-                    displayAsMessage = true
-                    hasFailedMessages = false
-                case let .peer(peerData):
-                    let messagesValue = peerData.messages
-                    let peerValue = peerData.peer
-                    if case .community = peerValue.peer {
-                        isCommunity = true
-                    } else if !item.hideCommunityAvatarBadge, peerValue.peer?.containerPeerId != nil {
-                        displayCommunityAvatarBadge = true
-                    }
-                    let threadInfoValue = peerData.threadInfo
-                    let combinedReadStateValue = peerData.combinedReadState
-                    let isRemovedFromTotalUnreadCountValue = peerData.isRemovedFromTotalUnreadCount
-                    let peerPresenceValue = peerData.presence
-                    let hasUnseenMentionsValue = peerData.hasUnseenMentions
-                    let hasUnseenReactionsValue = peerData.hasUnseenReactions
-                    let hasUnseenPollVotesValue = peerData.hasUnseenPollVotes
-                    let draftStateValue = peerData.draftState
-                    let inputActivitiesValue = peerData.inputActivities
-                    let promoInfoValue = peerData.promoInfo
-                    let ignoreUnreadBadge = peerData.ignoreUnreadBadge
-                    let displayAsMessageValue = peerData.displayAsMessage
-                    let forumTopicDataValue = peerData.forumTopicData
-                    let topForumTopicItemsValue = peerData.topForumTopicItems
-                    
-                    itemTags = peerData.tags
-                
-                    autoremoveTimeout = peerData.autoremoveTimeout
-                
-                    messages = messagesValue
-                    contentPeer = .chat(peerValue)
-                    combinedReadState = combinedReadStateValue
-                    if let combinedReadState = combinedReadState, promoInfoValue == nil && !ignoreUnreadBadge {
-                        unreadCount = (combinedReadState.count, combinedReadState.isUnread, isRemovedFromTotalUnreadCountValue || combinedReadState.isMuted, nil, !combinedReadState.hasEverRead)
-                    } else {
-                        unreadCount = (0, false, false, nil, false)
-                    }
-                    if let _ = promoInfoValue {
-                        isRemovedFromTotalUnreadCount = false
-                    } else {
-                        isRemovedFromTotalUnreadCount = isRemovedFromTotalUnreadCountValue
-                    }
-                    peerPresence = peerPresenceValue.flatMap { presence -> EnginePeer.Presence in
-                        return EnginePeer.Presence(status: presence.status, lastActivity: 0)
-                    }
-                    draftState = draftStateValue
-                    mediaDraftContentType = peerData.mediaDraftContentType
-                    threadInfo = threadInfoValue
-                    hasUnseenMentions = hasUnseenMentionsValue
-                    hasUnseenReactions = hasUnseenReactionsValue
-                    hasUnseenPollVotes = hasUnseenPollVotesValue
-                    forumTopicData = forumTopicDataValue
-                    topForumTopicItems = topForumTopicItemsValue
-                
-                    if item.interaction.searchTextHighightState != nil, threadInfo == nil, topForumTopicItems.isEmpty, let message = messagesValue.first, let threadId = message.threadId, let associatedThreadInfo = message.associatedThreadInfo {
-                        var threadPeer: EnginePeer?
-                        if case let .channel(channel) = peerValue.peer, channel.isMonoForum {
-                            threadPeer = message.peers[EnginePeer.Id(threadId)].flatMap(EnginePeer.init)
-                        }
-                        topForumTopicItems = [EngineChatList.ForumTopicData(id: threadId, title: associatedThreadInfo.title, iconFileId: associatedThreadInfo.icon, iconColor: associatedThreadInfo.iconColor, maxOutgoingReadMessageId: message.id, isUnread: false, threadPeer: threadPeer)]
-                    }
-                    
-                    switch peerValue.peer {
-                    case .user, .secretChat:
-                        if let peerPresence = peerPresence {
-                            if case .present = peerPresence.status {
-                                inputActivities = inputActivitiesValue
-                            } else if item.context.sharedContext.immediateExperimentalUISettings.alwaysDisplayTyping {
-                                inputActivities = inputActivitiesValue
-                            } else {
-                                inputActivities = nil
-                            }
-                        } else {
-                            inputActivities = nil
-                        }
-                    default:
-                        inputActivities = inputActivitiesValue
-                    }
-                    
-                    isPeerGroup = false
-                    promoInfo = promoInfoValue
-                    displayAsMessage = displayAsMessageValue
-                    hasFailedMessages = messagesValue.last?.flags.contains(.Failed) ?? false // hasFailedMessagesValue
-                case let .groupReference(groupReferenceData):
-                    let peers = groupReferenceData.peers
-                    let messageValue = groupReferenceData.message
-                    let unreadCountValue = groupReferenceData.unreadCount
-                    let hiddenByDefault = groupReferenceData.hiddenByDefault
-                
-                    if let _ = messageValue, !peers.isEmpty {
-                        contentPeer = .chat(peers[0].peer)
-                    } else {
-                        contentPeer = .group(peers)
-                    }
-                    if let message = messageValue {
-                        messages = [message]
-                    } else {
-                        messages = []
-                    }
-                    combinedReadState = nil
-                    isRemovedFromTotalUnreadCount = false
-                    draftState = nil
-                    mediaDraftContentType = nil
-                    hasUnseenMentions = false
-                    hasUnseenReactions = false
-                    hasUnseenPollVotes = false
-                    inputActivities = nil
-                    isPeerGroup = true
-                    groupHiddenByDefault = hiddenByDefault
-                    unreadCount = (Int32(unreadCountValue), unreadCountValue != 0, true, nil, false)
-                    peerPresence = nil
-                    promoInfo = nil
-                    displayAsMessage = false
-                    hasFailedMessages = false
-            }
-            
-            if let messageValue = messages.last {
-                for media in messageValue.media {
-                    if let media = media as? TelegramMediaAction, case .historyCleared = media.action {
-                        messages = []
-                    }
-                }
-            }
-            
-            let useChatListLayout: Bool
-            if case .chatList = item.chatListLocation {
-                useChatListLayout = true
-            } else if case .savedMessagesChats = item.chatListLocation {
-                useChatListLayout = true
-            } else if displayAsMessage {
-                useChatListLayout = true
-            } else {
-                useChatListLayout = false
-            }
-            
-            let theme = item.presentationData.theme.chatList
-            
-            var updatedTheme: PresentationTheme?
-            
-            if currentItem?.presentationData.theme !== item.presentationData.theme {
-                updatedTheme = item.presentationData.theme
-            }
-            
-            var authorAttributedString: NSAttributedString?
-            var authorIsCurrentChat: Bool = false
-            var textAttributedString: NSAttributedString?
-            var textLeftCutout: CGFloat = 0.0
-            var dateAttributedString: NSAttributedString?
-            var titleAttributedString: NSAttributedString?
-            var titleBadgeText: String?
-            var badgeContent = ChatListBadgeContent.none
-            var mentionBadgeContent = ChatListBadgeContent.none
-            var statusState = ChatListStatusNodeState.none
-            
-            var currentBadgeBackgroundImage: UIImage?
-            var currentAvatarBadgeBackgroundImage: UIImage?
-            var currentMentionBadgeImage: UIImage?
-            var currentPinnedIconImage: UIImage?
-            var currentHiddenIconImage: UIImage?
-            var currentMutedIconImage: UIImage?
-            var currentCredibilityIconContent: EmojiStatusComponent.Content?
-            var currentVerifiedIconContent: EmojiStatusComponent.Content?
-            // Shadow: true when currentVerifiedIconContent holds the fork's
-            // remote-config badge rather than a real bot-verification icon â€”
-            // placed after the status/credibility icons (right of the name)
-            // instead of upstream's before-the-name placement for a verified
-            // ".animation" content.
-            var currentVerifiedIconOnRight = false
-            var currentStatusIconContent: EmojiStatusComponent.Content?
-            var currentStatusIconParticleColor: UIColor?
-            var currentSecretIconImage: UIImage?
-            var currentMessageTypeIcon: UIImage?
-            var currentMessageTypeIconOffset: CGPoint = .zero
-            
-            var selectableControlSizeAndApply: (CGFloat, (CGSize, Bool) -> ItemListSelectableControlNode)?
-            var reorderControlSizeAndApply: (CGFloat, (CGFloat, Bool, ContainedViewLayoutTransition) -> ItemListEditableReorderControlNode)?
-            
-            let editingOffset: CGFloat
-            var reorderInset: CGFloat = 0.0
-            if item.editing {
-                let selectionControlStyle: ItemListSelectableControlNode.Style
-                if case let .peer(peerData) = item.content, let customMessageListData = peerData.customMessageListData, customMessageListData.commandPrefix != nil {
-                    selectionControlStyle = .small
-                } else {
-                    selectionControlStyle = .compact
-                }
-                
-                let sizeAndApply = selectableControlLayout(item.presentationData.theme.list.itemCheckColors.strokeColor, item.presentationData.theme.list.itemCheckColors.fillColor, item.presentationData.theme.list.itemCheckColors.foregroundColor, item.selected, selectionControlStyle, nil)
-                if promoInfo == nil && !isPeerGroup {
-                    selectableControlSizeAndApply = sizeAndApply
-                }
-                editingOffset = sizeAndApply.0
-                
-                var canReorder = false
-                
-                if case let .chatList(index) = item.index, index.pinningIndex != nil, promoInfo == nil, !isPeerGroup {
-                    canReorder = true
-                } else if case let .forum(pinnedIndex, _, _, _, _) = item.index, case .index = pinnedIndex {
-                    if case let .chat(itemPeer) = contentPeer, case let .channel(channel) = itemPeer.peer {
-                        let canPin = channel.flags.contains(.isCreator) || channel.hasPermission(.pinMessages)
-                        if canPin {
-                            canReorder = true
-                        }
-                    }
-                }
-                
-                if case let .peer(peerData) = item.content, let customMessageListData = peerData.customMessageListData, customMessageListData.commandPrefix != nil {
-                    canReorder = true
-                }
-                
-                if canReorder {
-                    let sizeAndApply = reorderControlLayout(item.presentationData.theme)
-                    reorderControlSizeAndApply = sizeAndApply
-                    reorderInset = sizeAndApply.0
-                }
-            } else {
-                editingOffset = 0.0
-            }
-            
-            let enableChatListPhotos = true
-            
-            // if changed, adjust setupItem accordingly
-            var avatarDiameter = min(60.0, floor(item.presentationData.fontSize.baseDisplaySize * 60.0 / 17.0))
-            let avatarLeftEdgeInset: CGFloat = item.useCommunityViewLayout ? 10.0 : 16.0
-            let avatarLeftInset: CGFloat
-            
-            if case let .peer(peerData) = item.content, let customMessageListData = peerData.customMessageListData, customMessageListData.commandPrefix != nil {
-                avatarDiameter = 40.0
-                avatarLeftInset = 17.0 + avatarDiameter
-            } else if item.useCommunityViewLayout {
-                avatarLeftInset = avatarLeftEdgeInset + 8.0 + avatarDiameter
-            } else {
-                if item.interaction.isInlineMode {
-                    avatarLeftInset = 12.0
-                } else if !useChatListLayout {
-                    avatarLeftInset = 50.0
-                } else {
-                    avatarLeftInset = 24.0 + avatarDiameter
-                }
-            }
-            
-            let badgeDiameter = floor(item.presentationData.fontSize.baseDisplaySize * 20.0 / 17.0)
-            let avatarBadgeDiameter: CGFloat = floor(floor(item.presentationData.fontSize.itemListBaseFontSize * 22.0 / 17.0))
-            let avatarTimerBadgeDiameter: CGFloat = floor(floor(item.presentationData.fontSize.itemListBaseFontSize * 24.0 / 17.0))
-            
-            let currentAvatarBadgeCleanBackgroundImage: UIImage? = PresentationResourcesChatList.badgeBackgroundBorder(item.presentationData.theme, diameter: avatarBadgeDiameter + 4.0)
-            
-            let leftInset: CGFloat = params.leftInset + avatarLeftInset
-            
-            enum ContentData {
-                case chat(itemPeer: EngineRenderedPeer, threadInfo: ChatListItemContent.ThreadInfo?, peer: EnginePeer?, hideAuthor: Bool, messageText: String, messageEntities: [MessageTextEntity], spoilers: [NSRange]?, customEmojiRanges: [(NSRange, ChatTextInputTextCustomEmojiAttribute)]?, richTextPreview: NSAttributedString?)
-                case group(peers: [EngineChatList.GroupItem.Item])
-            }
-            
-            let contentData: ContentData
-            
-            var hideAuthor = false
-            switch contentPeer {
-                case let .chat(itemPeer):
-                    var (peer, initialHideAuthor, messageText, messageEntities, spoilers, customEmojiRanges, richTextPreview) = chatListItemStrings(strings: item.presentationData.strings, nameDisplayOrder: item.presentationData.nameDisplayOrder, dateTimeFormat: item.presentationData.dateTimeFormat, contentSettings: item.context.currentContentSettings.with { $0 }, messages: messages, chatPeer: itemPeer, accountPeerId: item.context.account.peerId, enableMediaEmoji: !enableChatListPhotos, isPeerGroup: isPeerGroup)
-                    
-                    if case let .psa(_, maybePsaText) = promoInfo, let psaText = maybePsaText {
-                        initialHideAuthor = true
-                        messageText = psaText
-                        richTextPreview = nil
-                    }
-                
-                    switch itemPeer.peer {
-                    case .user:
-                        if let attribute = messages.first?._asMessage().reactionsAttribute {
-                            loop: for recentPeer in attribute.recentPeers {
-                                if recentPeer.isUnseen {
-                                    switch recentPeer.value {
-                                    case let .builtin(value):
-                                        messageText = item.presentationData.strings.ChatList_UserReacted(value).string
-                                        richTextPreview = nil
-                                    case .custom:
-                                        break
-                                    case .stars:
-                                        break
-                                    }
-                                    break loop
-                                }
-                            }
-                        }
-                    default:
-                        break
-                    }
-                    
-                    contentData = .chat(itemPeer: itemPeer, threadInfo: threadInfo, peer: peer, hideAuthor: hideAuthor, messageText: messageText, messageEntities: messageEntities, spoilers: spoilers, customEmojiRanges: customEmojiRanges, richTextPreview: richTextPreview)
-                    hideAuthor = initialHideAuthor
-                case let .group(groupPeers):
-                    contentData = .group(peers: groupPeers)
-                    hideAuthor = true
-            }
-            
-            var attributedText: NSAttributedString
-            var hasDraft = false
-            
-            var inlineAuthorPrefix: String?
-            var useInlineAuthorPrefix = false
-            if case .groupReference = item.content {
-                useInlineAuthorPrefix = true
-            }
-            if !itemTags.isEmpty {
-                forumTopicData = nil
-                topForumTopicItems = []
-                
-                if case let .chat(itemPeer, _, _, _, _, _, _, _, _) = contentData {
-                    if let messagePeer = itemPeer.chatMainPeer {
-                        switch messagePeer {
-                        case let .channel(channel):
-                            if case .group = channel.info {
-                                useInlineAuthorPrefix = true
-                            }
-                        case .legacyGroup:
-                            useInlineAuthorPrefix = true
-                        default:
-                            break
-                        }
-                    }
-                }
-            }
-            
-            if useInlineAuthorPrefix {
-                if case let .user(author) = messages.last?.author {
-                    if author.id == item.context.account.peerId {
-                        inlineAuthorPrefix = item.presentationData.strings.DialogList_You
-                    } else if messages.last?.id.peerId.namespace != Namespaces.Peer.CloudUser && messages.last?.id.peerId.namespace != Namespaces.Peer.SecretChat {
-                        inlineAuthorPrefix = EnginePeer.user(author).compactDisplayTitle
-                    }
-                }
-            }
-            
-            var chatListText: (String, String)?
-            var chatListSearchResult: CachedChatListSearchResult?
-            var chatListQuoteSearchResult: CachedChatListSearchResult?
-            var customTextEntities: CachedCustomTextEntities?
-            
-            let contentImageSide: CGFloat = max(10.0, min(20.0, floor(item.presentationData.fontSize.baseDisplaySize * 18.0 / 17.0)))
-            let contentImageSize = CGSize(width: contentImageSide, height: contentImageSide)
-            let contentImageSpacing: CGFloat = 2.0
-            let forwardedIconSpacing: CGFloat = 6.0
-            let contentImageTrailingSpace: CGFloat = 5.0
-            
-            var contentImageSpecs: [ContentImageSpec] = []
-            var avatarContentImageSpec: ContentImageSpec?
-            var forumThread: (id: Int64, title: String, iconId: Int64?, iconColor: Int32, threadPeer: EnginePeer?, isUnread: Bool)?
-
-            enum MessageTypeIcon {
-                enum CallType {
-                    case voice
-                    case video
-                }
-                enum CallDirection {
-                    case incoming
-                    case outgoing
-                }
-                case call(CallType, CallDirection)
-                case forward
-                case story
-                case gift
-                case location
-                case poll
-                case todo
-                case game
-                case voiceMessage
-                case audio
-            }
-            var messageTypeIcon: MessageTypeIcon?
-            var ignoreForwardedIcon = false
-            
-            switch contentData {
-                case let .chat(itemPeer, _, _, _, text, entities, spoilers, customEmojiRanges, richTextPreview):
-                    var isUser = false
-                    if case .user = itemPeer.chatMainPeer {
-                        isUser = true
-                    }
-                    var isGuestChatAuthor = false
-                    if let message = messages.last, case let .user(user) = message.author, user.id != message.id.peerId, let botInfo = user.botInfo, botInfo.flags.contains(.isGuestChat) {
-                        isGuestChatAuthor = true
-                    }
-
-                    var peerText: String?
-                    if case .savedMessagesChats = item.chatListLocation {
-                        if let message = messages.last, let forwardInfo = message.forwardInfo, let author = forwardInfo.author {
-                            if author.id != itemPeer.chatMainPeer?.id {
-                                peerText = EnginePeer(author).displayTitle(strings: item.presentationData.strings, displayOrder: item.presentationData.nameDisplayOrder)
-                            }
-                        }
-                    } else if case .groupReference = item.content {
-                        if let messagePeer = itemPeer.chatMainPeer {
-                            peerText = messagePeer.displayTitle(strings: item.presentationData.strings, displayOrder: item.presentationData.nameDisplayOrder)
-                        }
-                    } else if let message = messages.last, let author = message.author?._asPeer(), let peer = itemPeer.chatMainPeer {
-                        if peer.id.isVerificationCodes {
-                            if let message = messages.last, let forwardInfo = message.forwardInfo, let author = forwardInfo.author {
-                                peerText = EnginePeer(author).compactDisplayTitle
-                            }
-                        } else if !isUser || isGuestChatAuthor {
-                            if case let .channel(peer) = peer, case .broadcast = peer.info {
-                            } else if !displayAsMessage {
-                                if let forwardInfo = message.forwardInfo, forwardInfo.flags.contains(.isImported), let authorSignature = forwardInfo.authorSignature {
-                                    peerText = authorSignature
-                                } else {
-                                    peerText = author.id == account.peerId ? item.presentationData.strings.DialogList_You : EnginePeer(author).displayTitle(strings: item.presentationData.strings, displayOrder: item.presentationData.nameDisplayOrder)
-                                    authorIsCurrentChat = !isGuestChatAuthor && author.id == peer.id
-                                }
-                            }
-                        }
-                    }
-                
-                    if case .chatList = item.chatListLocation, itemPeer.peerId == item.context.account.peerId, let message = messages.first {
-                        var effectiveAuthor: EngineRawPeer? = message.author?._asPeer()
-                        if let forwardInfo = message.forwardInfo {
-                            effectiveAuthor = forwardInfo.author
-                            if effectiveAuthor == nil, let authorSignature = forwardInfo.authorSignature  {
-                                effectiveAuthor = TelegramUser(id: EnginePeer.Id(namespace: Namespaces.Peer.Empty, id: EnginePeer.Id.Id._internalFromInt64Value(Int64(authorSignature.persistentHashValue % 32))), accessHash: nil, firstName: authorSignature, lastName: nil, username: nil, phone: nil, photo: [], botInfo: nil, restrictionInfo: nil, flags: [], emojiStatus: nil, usernames: [], storiesHidden: nil, nameColor: nil, backgroundEmojiId: nil, profileColor: nil, profileBackgroundEmojiId: nil, subscriberCount: nil, verificationIconFileId: nil)
-                            }
-                        }
-                        if let sourceAuthorInfo = message._asMessage().sourceAuthorInfo {
-                            if let originalAuthor = sourceAuthorInfo.originalAuthor, let peer = message.peers[originalAuthor] {
-                                effectiveAuthor = peer
-                            } else if let authorSignature = sourceAuthorInfo.originalAuthorName {
-                                effectiveAuthor = TelegramUser(id: EnginePeer.Id(namespace: Namespaces.Peer.Empty, id: EnginePeer.Id.Id._internalFromInt64Value(Int64(authorSignature.persistentHashValue % 32))), accessHash: nil, firstName: authorSignature, lastName: nil, username: nil, phone: nil, photo: [], botInfo: nil, restrictionInfo: nil, flags: [], emojiStatus: nil, usernames: [], storiesHidden: nil, nameColor: nil, backgroundEmojiId: nil, profileColor: nil, profileBackgroundEmojiId: nil, subscriberCount: nil, verificationIconFileId: nil)
-                            }
-                        }
-                        
-                        if let effectiveAuthor, effectiveAuthor.id != itemPeer.chatMainPeer?.id {
-                            authorIsCurrentChat = false
-                            peerText = EnginePeer(effectiveAuthor).displayTitle(strings: item.presentationData.strings, displayOrder: item.presentationData.nameDisplayOrder)
-                            ignoreForwardedIcon = true
-                        }
-                    }
-                
-                    if let _ = peerText, case let .channel(channel) = itemPeer.chatMainPeer, channel.isForumOrMonoForum, threadInfo == nil {
-                        if let forumTopicData {
-                            forumThread = (forumTopicData.id, forumTopicData.title, forumTopicData.iconFileId, forumTopicData.iconColor, forumTopicData.threadPeer, forumTopicData.isUnread)
-                        } else if let threadInfo {
-                            forumThread = (threadInfo.id, threadInfo.info.title, threadInfo.info.icon, threadInfo.info.iconColor, nil, false)
-                        }
-                    }
-                    if let forumTopicData, forumThread == nil, case let .user(user) = itemPeer.chatMainPeer, let botInfo = user.botInfo, botInfo.flags.contains(.hasForum) {
-                        forumThread = (forumTopicData.id, forumTopicData.title, forumTopicData.iconFileId, forumTopicData.iconColor, forumTopicData.threadPeer, forumTopicData.isUnread)
-                    }
-                    
-                    let messageText: String
-                    let foldedRichTextPreview: NSAttributedString?
-                    if let currentChatListText = currentChatListText, currentChatListText.0 == text {
-                        messageText = currentChatListText.1
-                        chatListText = currentChatListText
-                    } else {
-                        if let spoilers = spoilers, !spoilers.isEmpty {
-                            messageText = text
-                        } else if let customEmojiRanges = customEmojiRanges, !customEmojiRanges.isEmpty {
-                            messageText = text
-                        } else {
-                            messageText = foldLineBreaks(text)
-                        }
-                        chatListText = (text, messageText)
-                    }
-                    if let richTextPreview {
-                        let foldedPreview = foldLineBreaks(richTextPreview)
-                        foldedRichTextPreview = foldedPreview.string == messageText ? foldedPreview : nil
-                    } else {
-                        foldedRichTextPreview = nil
-                    }
-                
-                    if inlineAuthorPrefix == nil, let mediaDraftContentType {
-                        hasDraft = true
-                        authorAttributedString = NSAttributedString(string: item.presentationData.strings.DialogList_Draft, font: textFont, textColor: theme.messageDraftTextColor)
-                        
-                        switch mediaDraftContentType {
-                        case .audio:
-                            attributedText = NSAttributedString(string: item.presentationData.strings.Message_Audio, font: textFont, textColor: theme.messageTextColor)
-                        case .video:
-                            attributedText = NSAttributedString(string: item.presentationData.strings.Message_VideoMessage, font: textFont, textColor: theme.messageTextColor)
-                        }
-                    } else if inlineAuthorPrefix == nil, let draftState = draftState {
-                        hasDraft = true
-                        let draftText = stringWithAppliedEntities(draftState.text, entities: draftState.entities, baseColor: theme.messageTextColor, linkColor: theme.messageTextColor, baseFont: textFont, linkFont: textFont, boldFont: textFont, italicFont: textFont, boldItalicFont: textFont, fixedFont: textFont, blockQuoteFont: textFont, message: nil)
-                        
-                        if !itemTags.isEmpty {
-                            let tempAttributedText = foldLineBreaks(draftText)
-                            let attributedTextWithDraft = NSMutableAttributedString()
-                            attributedTextWithDraft.append(NSAttributedString(string: item.presentationData.strings.DialogList_Draft + ": ", font: textFont, textColor: theme.messageDraftTextColor))
-                            attributedTextWithDraft.append(tempAttributedText)
-                            attributedText = attributedTextWithDraft
-                        } else {
-                            authorAttributedString = NSAttributedString(string: item.presentationData.strings.DialogList_Draft, font: textFont, textColor: theme.messageDraftTextColor)
-                            
-                            attributedText = foldLineBreaks(draftText)
-                        }
-                    } else if let message = messages.last {
-                        var composedString: NSMutableAttributedString
-                        
-                        if let peerText = peerText {
-                            authorAttributedString = NSAttributedString(string: peerText, font: textFont, textColor: theme.authorNameColor)
-                        }
-                                       
-                        var entities = entities.filter { entity in
-                            switch entity.type {
-                            case .Spoiler, .CustomEmoji, .FormattedDate:
-                                return true
-                            case .Strikethrough, .Underline, .Italic, .Bold:
-                                return true
-                            default:
-                                return false
-                            }
-                        }
-                        if let _ = message.media.first(where: { $0 is TelegramMediaPoll }) {
-                            entities = []
-                        }
-                        
-                        if message.id.peerId.isTelegramNotifications || message.id.peerId.isVerificationCodes {
-                            let regex: NSRegularExpression?
-                            if message.id.peerId.isTelegramNotifications {
-                                regex = telegramCodeRegex
-                            } else {
-                                regex = loginCodeRegex
-                            }
-                            if let cached = currentCustomTextEntities, cached.matches(text: messageText) {
-                                customTextEntities = cached
-                            } else if let matches = regex?.matches(in: messageText, options: [], range: NSMakeRange(0, (messageText as NSString).length)) {
-                                var entities: [MessageTextEntity] = []
-                                if let first = matches.first {
-                                    entities.append(MessageTextEntity(range: first.range.location ..< first.range.location + first.range.length, type: .Spoiler))
-                                }
-                                customTextEntities = CachedCustomTextEntities(text: messageText, textEntities: entities)
-                            }
-                        }
-                        
-                        if let customTextEntities, !customTextEntities.textEntities.isEmpty {
-                            entities.append(contentsOf: customTextEntities.textEntities)
-                        }
-                        
-                        let messageString: NSAttributedString
-                        if !messageText.isEmpty && entities.count > 0 {
-                            let appliedString = stringWithAppliedEntities(messageText, entities: entities, strings: item.presentationData.strings, dateTimeFormat: item.presentationData.dateTimeFormat, baseColor: theme.messageTextColor, linkColor: theme.messageTextColor, baseFont: textFont, linkFont: textFont, boldFont: textFont, italicFont: italicTextFont, boldItalicFont: textFont, fixedFont: textFont, blockQuoteFont: textFont, underlineLinks: false, message: message._asMessage())
-                            messageString = foldLineBreaks(appliedString)
-                        } else if spoilers != nil || customEmojiRanges != nil {
-                            let mutableString = NSMutableAttributedString(string: messageText, font: textFont, textColor: theme.messageTextColor)
-                            if let spoilers = spoilers {
-                                for range in spoilers {
-                                    var range = range
-                                    if range.location > mutableString.length {
-                                        continue
-                                    } else if range.location + range.length > mutableString.length {
-                                        range.length = mutableString.length - range.location
-                                    }
-                                    mutableString.addAttribute(NSAttributedString.Key(rawValue: TelegramTextAttributes.Spoiler), value: true, range: range)
-                                }
-                            }
-                            if let customEmojiRanges = customEmojiRanges {
-                                for (range, attribute) in customEmojiRanges {
-                                    var range = range
-                                    if range.location > mutableString.length {
-                                        continue
-                                    } else if range.location + range.length > mutableString.length {
-                                        range.length = mutableString.length - range.location
-                                    }
-                                    mutableString.addAttribute(ChatTextInputAttributes.customEmoji, value: attribute, range: range)
-                                }
-                            }
-                            messageString = mutableString
-                        } else if let foldedRichTextPreview {
-                            let mutableString = NSMutableAttributedString(attributedString: foldedRichTextPreview)
-                            mutableString.addAttributes([
-                                .font: textFont,
-                                .foregroundColor: theme.messageTextColor
-                            ], range: NSRange(location: 0, length: mutableString.length))
-                            messageString = mutableString
-                        } else {
-                            messageString = NSAttributedString(string: messageText, font: textFont, textColor: theme.messageTextColor)
-                        }
-                        if let inlineAuthorPrefix = inlineAuthorPrefix {
-                            composedString = NSMutableAttributedString()
-                            composedString.append(NSAttributedString(string: "\(inlineAuthorPrefix): ", font: textFont, textColor: theme.titleColor))
-                            composedString.append(messageString)
-                        } else {
-                            composedString = NSMutableAttributedString(attributedString: messageString)
-                        }
-                        
-                        var composedReplyString: NSMutableAttributedString?
-                        if let searchQuery = item.interaction.searchTextHighightState {
-                            var quoteText: String?
-                            for attribute in message.attributes {
-                                if let attribute = attribute as? ReplyMessageAttribute {
-                                    if let quote = attribute.quote {
-                                        quoteText = quote.text
-                                    }
-                                } else if let attribute = attribute as? QuotedReplyMessageAttribute {
-                                    if let quote = attribute.quote {
-                                        quoteText = quote.text
-                                    }
-                                }
-                            }
-                            if let quoteText {
-                                let quoteString = foldLineBreaks(stringWithAppliedEntities(quoteText, entities: [], baseColor: theme.messageTextColor, linkColor: theme.messageTextColor, baseFont: textFont, linkFont: textFont, boldFont: textFont, italicFont: italicTextFont, boldItalicFont: textFont, fixedFont: textFont, blockQuoteFont: textFont, underlineLinks: false, message: nil))
-                                composedReplyString = NSMutableAttributedString(attributedString: quoteString)
-                            }
-                            
-                            if let cached = currentChatListSearchResult, cached.matches(text: composedString.string, searchQuery: searchQuery) {
-                                chatListSearchResult = cached
-                            } else {
-                                let (ranges, text) = findSubstringRanges(in: composedString.string, query: searchQuery)
-                                chatListSearchResult = CachedChatListSearchResult(text: text, searchQuery: searchQuery, resultRanges: ranges)
-                            }
-                            
-                            if let composedReplyString {
-                                if let cached = currentChatListQuoteSearchResult, cached.matches(text: composedReplyString.string, searchQuery: searchQuery) {
-                                    chatListQuoteSearchResult = cached
-                                } else {
-                                    let (ranges, text) = findSubstringRanges(in: composedReplyString.string, query: searchQuery)
-                                    chatListQuoteSearchResult = CachedChatListSearchResult(text: text, searchQuery: searchQuery, resultRanges: ranges)
-                                }
-                            } else {
-                                chatListQuoteSearchResult = nil
-                            }
-                        } else {
-                            chatListSearchResult = nil
-                            chatListQuoteSearchResult = nil
-                        }
-                        
-                        if let chatListSearchResult = chatListSearchResult, let firstRange = chatListSearchResult.resultRanges.first {
-                            for range in chatListSearchResult.resultRanges {
-                                let stringRange = NSRange(range, in: chatListSearchResult.text)
-                                if stringRange.location >= 0 && stringRange.location + stringRange.length <= composedString.length {
-                                    var stringRange = stringRange
-                                    if stringRange.location > composedString.length {
-                                        continue
-                                    } else if stringRange.location + stringRange.length > composedString.length {
-                                        stringRange.length = composedString.length - stringRange.location
-                                    }
-                                    composedString.addAttribute(.foregroundColor, value: theme.messageHighlightedTextColor, range: stringRange)
-                                }
-                            }
-                            
-                            let firstRangeOrigin = chatListSearchResult.text.distance(from: chatListSearchResult.text.startIndex, to: firstRange.lowerBound)
-                            if firstRangeOrigin > 24 && !chatListSearchResult.searchQuery.hasPrefix("#") {
-                                var leftOrigin: Int = 0
-                                (composedString.string as NSString).enumerateSubstrings(in: NSMakeRange(0, firstRangeOrigin), options: [.byWords, .reverse]) { (str, range1, _, _) in
-                                    let distanceFromEnd = firstRangeOrigin - range1.location
-                                    if (distanceFromEnd > 12 || range1.location == 0) && leftOrigin == 0 {
-                                        leftOrigin = range1.location
-                                    }
-                                }
-                                composedString = composedString.attributedSubstring(from: NSMakeRange(leftOrigin, composedString.length - leftOrigin)).mutableCopy() as! NSMutableAttributedString
-                                composedString.insert(NSAttributedString(string: "\u{2026}", attributes: [NSAttributedString.Key.font: textFont, NSAttributedString.Key.foregroundColor: theme.messageTextColor]), at: 0)
-                            }
-                        } else if var composedReplyString, let chatListQuoteSearchResult, let firstRange = chatListQuoteSearchResult.resultRanges.first {
-                            for range in chatListQuoteSearchResult.resultRanges {
-                                let stringRange = NSRange(range, in: chatListQuoteSearchResult.text)
-                                if stringRange.location >= 0 && stringRange.location + stringRange.length <= composedReplyString.length {
-                                    var stringRange = stringRange
-                                    if stringRange.location > composedReplyString.length {
-                                        continue
-                                    } else if stringRange.location + stringRange.length > composedReplyString.length {
-                                        stringRange.length = composedReplyString.length - stringRange.location
-                                    }
-                                    composedReplyString.addAttribute(.foregroundColor, value: theme.messageHighlightedTextColor, range: stringRange)
-                                }
-                            }
-                            
-                            let firstRangeOrigin = chatListQuoteSearchResult.text.distance(from: chatListQuoteSearchResult.text.startIndex, to: firstRange.lowerBound)
-                            if firstRangeOrigin > 24 {
-                                var leftOrigin: Int = 0
-                                (composedReplyString.string as NSString).enumerateSubstrings(in: NSMakeRange(0, firstRangeOrigin), options: [.byWords, .reverse]) { (str, range1, _, _) in
-                                    let distanceFromEnd = firstRangeOrigin - range1.location
-                                    if (distanceFromEnd > 12 || range1.location == 0) && leftOrigin == 0 {
-                                        leftOrigin = range1.location
-                                    }
-                                }
-                                composedReplyString = composedReplyString.attributedSubstring(from: NSMakeRange(leftOrigin, composedReplyString.length - leftOrigin)).mutableCopy() as! NSMutableAttributedString
-                                composedReplyString.insert(NSAttributedString(string: "\u{2026}", attributes: [NSAttributedString.Key.font: textFont, NSAttributedString.Key.foregroundColor: theme.messageTextColor]), at: 0)
-                            }
-                            
-                            composedString = composedReplyString
-                        }
-                        
-                        attributedText = composedString
-                        
-                        if case let .peer(peerData) = item.content, let customMessageListData = peerData.customMessageListData, let commandPrefix = customMessageListData.commandPrefix {
-                            let mutableAttributedText = NSMutableAttributedString(attributedString: attributedText)
-                            let boldTextFont = Font.semibold(floor(item.presentationData.fontSize.itemListBaseFontSize * 15.0 / 17.0))
-                            mutableAttributedText.insert(NSAttributedString(string: commandPrefix + " ", font: boldTextFont, textColor: theme.titleColor), at: 0)
-                            if let searchQuery = customMessageListData.searchQuery {
-                                let range = (mutableAttributedText.string as NSString).range(of: searchQuery)
-                                if range.location == 0 {
-                                    mutableAttributedText.addAttribute(.foregroundColor, value: item.presentationData.theme.list.itemAccentColor, range: range)
-                                }
-                            }
-                            attributedText = mutableAttributedText
-                        }
-                        
-                        if !ignoreForwardedIcon {
-                            if case .savedMessagesChats = item.chatListLocation {
-                            } else if let forwardInfo = message.forwardInfo, !forwardInfo.flags.contains(.isImported) && !message.id.peerId.isVerificationCodes {
-                                messageTypeIcon = .forward
-                            } else if let _ = message.attributes.first(where: { $0 is ReplyStoryAttribute }) {
-                                messageTypeIcon = .story
-                            } else {
-                                for media in message.media {
-                                    if let file = media as? TelegramMediaFile {
-                                        if file.isVoice {
-                                            messageTypeIcon = .voiceMessage
-                                        } else if file.isMusic {
-                                            messageTypeIcon = .audio
-                                        }
-                                    } else if let _ = media as? TelegramMediaPoll {
-                                        messageTypeIcon = .poll
-                                    } else if let _ = media as? TelegramMediaTodo {
-                                        messageTypeIcon = .todo
-                                    } else if let _ = media as? TelegramMediaGame {
-                                        messageTypeIcon = .game
-                                    } else if let _ = media as? TelegramMediaMap {
-                                        messageTypeIcon = .location
-                                    } else if let action = media as? TelegramMediaAction {
-                                        switch action.action {
-                                        case let .phoneCall(_, _, _, isVideo):
-                                            messageTypeIcon = .call(isVideo ? .video : .voice, message.flags.contains(.Incoming) ? .incoming : .outgoing)
-                                        case .giftPremium, .giftStars, .starGift, .starGiftUnique:
-                                            messageTypeIcon = .gift
-                                        case let .giftCode(_, _, _, boostPeerId, _, _, _, _, _, _, _):
-                                            if boostPeerId == nil {
-                                                messageTypeIcon = .gift
-                                            }
-                                        default:
-                                            break
-                                        }
-                                    }
-                                    break
-                                }
-                            }
-                        }
-                
-                        var displayMediaPreviews = true
-                        if message._asMessage().containsSecretMedia {
-                            displayMediaPreviews = false
-                        } else if let _ = message.peers[message.id.peerId] as? TelegramSecretChat {
-                            displayMediaPreviews = false
-                        }
-                        if displayMediaPreviews {
-                            let contentImageFillSize = CGSize(width: 8.0, height: contentImageSize.height)
-                            _ = contentImageFillSize
-                            
-                            var contentImageIsDisplayedAsAvatar = false
-                            if case let .peer(peerData) = item.content, let customMessageListData = peerData.customMessageListData, customMessageListData.commandPrefix != nil {
-                                contentImageIsDisplayedAsAvatar = true
-                            }
-                            
-                            for message in messages {
-                                if contentImageSpecs.count >= 3 {
-                                    break
-                                }
-                                
-                                inner: for media in message.media {
-                                    if let paidContent = media as? TelegramMediaPaidContent {
-                                        let fitSize = contentImageSize
-                                        var index: Int64 = 0
-                                        for media in paidContent.extendedMedia.prefix(3) {
-                                            switch media {
-                                            case let .preview(dimensions, immediateThumbnailData, videoDuration):
-                                                if let immediateThumbnailData {
-                                                    if let videoDuration {
-                                                        let thumbnailMedia = TelegramMediaFile(fileId: EngineMedia.Id(namespace: 0, id: index), partialReference: nil, resource: EmptyMediaResource(), previewRepresentations: [], videoThumbnails: [], immediateThumbnailData: immediateThumbnailData, mimeType: "video/mp4", size: nil, attributes: [.Video(duration: Double(videoDuration), size: dimensions ?? PixelDimensions(width: 1, height: 1), flags: [], preloadSize: nil, coverTime: nil, videoCodec: nil)], alternativeRepresentations: [])
-                                                        contentImageSpecs.append(ContentImageSpec(message: message, media:  .file(thumbnailMedia), size: fitSize))
-                                                    } else {
-                                                        let thumbnailMedia = TelegramMediaImage(imageId: EngineMedia.Id(namespace: 0, id: index), representations: [], immediateThumbnailData: immediateThumbnailData, reference: nil, partialReference: nil, flags: [])
-                                                        contentImageSpecs.append(ContentImageSpec(message: message, media:  .image(thumbnailMedia), size: fitSize))
-                                                    }
-                                                    index += 1
-                                                }
-                                            case let .full(fullMedia):
-                                                if let image = fullMedia as? TelegramMediaImage {
-                                                    if let _ = largestImageRepresentation(image.representations) {
-                                                        contentImageSpecs.append(ContentImageSpec(message: message, media:  .image(image), size: fitSize))
-                                                    }
-                                                } else if let file = fullMedia as? TelegramMediaFile {
-                                                    if file.isVideo, !file.isVideoSticker, let _ = file.dimensions {
-                                                        contentImageSpecs.append(ContentImageSpec(message: message,  media: .file(file), size: fitSize))
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        break inner
-                                    } else if let image = media as? TelegramMediaImage {
-                                        if let _ = largestImageRepresentation(image.representations) {
-                                            let fitSize = contentImageSize
-                                            contentImageSpecs.append(ContentImageSpec(message: message, media: .image(image), size: fitSize))
-                                        }
-                                        break inner
-                                    } else if let file = media as? TelegramMediaFile {
-                                        if file.isVideo, !file.isVideoSticker, let _ = file.dimensions {
-                                            let fitSize = contentImageSize
-                                            contentImageSpecs.append(ContentImageSpec(message: message,  media: .file(file), size: fitSize))
-                                        } else if contentImageIsDisplayedAsAvatar && (file.isSticker || file.isVideoSticker) {
-                                            let fitSize = contentImageSize
-                                            contentImageSpecs.append(ContentImageSpec(message: message,  media: .file(file), size: fitSize))
-                                        } else if !file.previewRepresentations.isEmpty, let _ = file.dimensions, !file.isSticker && !file.isAnimatedSticker && !file.isVideoSticker {
-                                            let fitSize = contentImageSize
-                                            contentImageSpecs.append(ContentImageSpec(message: message,  media: .file(file), size: fitSize))
-                                        }
-                                        break inner
-                                    } else if let webpage = media as? TelegramMediaWebpage, case let .Loaded(content) = webpage.content {
-                                        let imageTypes = ["photo", "video", "embed", "gif", "document", "telegram_album"]
-                                        if let image = content.image, let type = content.type, imageTypes.contains(type) {
-                                            if let _ = largestImageRepresentation(image.representations) {
-                                                let fitSize = contentImageSize
-                                                contentImageSpecs.append(ContentImageSpec(message: message, media: .image(image), size: fitSize))
-                                            }
-                                            break inner
-                                        } else if let file = content.file {
-                                            if file.isVideo, !file.isInstantVideo, let _ = file.dimensions {
-                                                let fitSize = contentImageSize
-                                                contentImageSpecs.append(ContentImageSpec(message: message, media: .file(file), size: fitSize))
-                                            }
-                                            break inner
-                                        }
-                                    } else if let action = media as? TelegramMediaAction, case let .suggestedProfilePhoto(image) = action.action, let _ = image {
-                                        let fitSize = contentImageSize
-                                        contentImageSpecs.append(ContentImageSpec(message: message, media: .action(action), size: fitSize))
-                                    } else if let storyMedia = media as? TelegramMediaStory, let story = message.associatedStories[storyMedia.storyId], !story.data.isEmpty, case let .item(storyItem) = story.get(Stories.StoredItem.self) {
-                                        if let image = storyItem.media as? TelegramMediaImage {
-                                            if let _ = largestImageRepresentation(image.representations) {
-                                                let fitSize = contentImageSize
-                                                contentImageSpecs.append(ContentImageSpec(message: message, media: .image(image), size: fitSize))
-                                            }
-                                            break inner
-                                        } else if let file = storyItem.media as? TelegramMediaFile {
-                                            if file.isVideo, !file.isInstantVideo, let _ = file.dimensions {
-                                                let fitSize = contentImageSize
-                                                contentImageSpecs.append(ContentImageSpec(message: message, media: .file(file), size: fitSize))
-                                            }
-                                            break inner
-                                        }
-                                    }
-                                }
-                            }
-                            
-                            if contentImageIsDisplayedAsAvatar {
-                                avatarContentImageSpec = contentImageSpecs.first
-                                contentImageSpecs.removeAll()
-                            }
-                        }
-                    } else {
-                        attributedText = NSAttributedString(string: messageText, font: textFont, textColor: theme.messageTextColor)
-                        
-                        var peerText: String?
-                        if case .groupReference = item.content {
-                            if let messagePeer = itemPeer.chatMainPeer {
-                                peerText = messagePeer.displayTitle(strings: item.presentationData.strings, displayOrder: item.presentationData.nameDisplayOrder)
-                            }
-                        }
-                        
-                        if let peerText = peerText {
-                            authorAttributedString = NSAttributedString(string: peerText, font: textFont, textColor: theme.authorNameColor)
-                        }
-                    }
-                case let .group(peers):
-                    let textString = NSMutableAttributedString(string: "")
-                    var isFirst = true
-                    for peer in peers {
-                        if let chatMainPeer = peer.peer.chatMainPeer {
-                            let peerTitle = chatMainPeer.compactDisplayTitle
-                            if !peerTitle.isEmpty {
-                                if isFirst {
-                                    isFirst = false
-                                } else {
-                                    textString.append(NSAttributedString(string: ", ", font: textFont, textColor: theme.messageTextColor))
-                                }
-                                textString.append(NSAttributedString(string: peerTitle, font: textFont, textColor: peer.isUnread ? theme.authorNameColor : theme.messageTextColor))
-                            }
-                        }
-                    }
-                    if textString.length == 0, case let .groupReference(data) = item.content, let storyState = data.storyState, storyState.stats.totalCount != 0 {
-                        let storyText: String = item.presentationData.strings.ChatList_ArchiveStoryCount(Int32(storyState.stats.totalCount))
-                        textString.append(NSAttributedString(string: storyText, font: textFont, textColor: theme.messageTextColor))
-                    }
-                    attributedText = textString
-            }
-            
-            switch messageTypeIcon {
-            case let .call(type, direction):
-                switch type {
-                case .voice:
-                    switch direction {
-                    case .incoming:
-                        currentMessageTypeIcon = PresentationResourcesChatList.callIncomingIcon(item.presentationData.theme)
-                    case .outgoing:
-                        currentMessageTypeIcon = PresentationResourcesChatList.callOutgoingIcon(item.presentationData.theme)
-                    }
-                case .video:
-                    switch direction {
-                    case .incoming:
-                        currentMessageTypeIcon = PresentationResourcesChatList.callVideoIncomingIcon(item.presentationData.theme)
-                    case .outgoing:
-                        currentMessageTypeIcon = PresentationResourcesChatList.callVideoOutgoingIcon(item.presentationData.theme)
-                    }
-                }
-            case .forward:
-                currentMessageTypeIcon = PresentationResourcesChatList.forwardedIcon(item.presentationData.theme)
-                currentMessageTypeIconOffset.y = 3.0
-            case .story:
-                currentMessageTypeIcon = PresentationResourcesChatList.storyReplyIcon(item.presentationData.theme)
-            case .gift:
-                currentMessageTypeIcon = PresentationResourcesChatList.giftIcon(item.presentationData.theme)
-                currentMessageTypeIconOffset.y = -2.0 - UIScreenPixel
-            case .location:
-                currentMessageTypeIcon = PresentationResourcesChatList.locationIcon(item.presentationData.theme)
-                currentMessageTypeIconOffset.y = -1.0 - UIScreenPixel
-            case .poll:
-                currentMessageTypeIcon = PresentationResourcesChatList.pollIcon(item.presentationData.theme)
-                currentMessageTypeIconOffset.y = -1.0
-            case .todo:
-                currentMessageTypeIcon = PresentationResourcesChatList.todoIcon(item.presentationData.theme)
-                currentMessageTypeIconOffset.y = -1.0
-            case .game:
-                currentMessageTypeIcon = PresentationResourcesChatList.gameIcon(item.presentationData.theme)
-                currentMessageTypeIconOffset.y = -1.0
-            case .voiceMessage:
-                currentMessageTypeIcon = PresentationResourcesChatList.voiceMessageIcon(item.presentationData.theme)
-                currentMessageTypeIconOffset.y = -1.0
-            case .audio:
-                currentMessageTypeIcon = PresentationResourcesChatList.audioIcon(item.presentationData.theme)
-                currentMessageTypeIconOffset.y = -1.0
-            default:
-                break
-            }
-            let messageTypeIconScale = min(1.0, item.presentationData.fontSize.itemListBaseFontSize / 17.0)
-            
-            if let currentMessageTypeIcon {
-                textLeftCutout += currentMessageTypeIcon.size.width * messageTypeIconScale
-                if !contentImageSpecs.isEmpty {
-                    textLeftCutout += forwardedIconSpacing
-                } else {
-                    textLeftCutout += contentImageTrailingSpace - 1.0
-                }
-            }
-            
-            for i in 0 ..< contentImageSpecs.count {
-                if i != 0 {
-                    textLeftCutout += contentImageSpacing
-                }
-                textLeftCutout += contentImageSpecs[i].size.width
-                if i == contentImageSpecs.count - 1 {
-                    textLeftCutout += contentImageTrailingSpace
-                }
-            }
-            
-            switch contentData {
-                case let .chat(itemPeer, threadInfo, _, _, _, _, _, _, _):
-                    if case let .peer(peerData) = item.content, let customMessageListData = peerData.customMessageListData {
-                        if customMessageListData.commandPrefix != nil {
-                            titleAttributedString = nil
-                        } else {
-                            if let displayTitle = itemPeer.chatOrMonoforumMainPeer?.displayTitle(strings: item.presentationData.strings, displayOrder: item.presentationData.nameDisplayOrder) {
-                                let textColor: UIColor
-                                if case let .chatList(index) = item.index, index.messageIndex.id.peerId.namespace == Namespaces.Peer.SecretChat {
-                                    textColor = theme.secretTitleColor
-                                } else {
-                                    textColor = theme.titleColor
-                                }
-                                titleAttributedString = NSAttributedString(string: displayTitle, font: titleFont, textColor: textColor)
-                                
-                                if case let .channel(channel) = itemPeer.peer, channel.flags.contains(.isMonoforum) {
-                                    titleBadgeText = item.presentationData.strings.ChatList_MonoforumLabel
-                                }
-                            }
-                        }
-                    } else if let threadInfo = threadInfo {
-                        titleAttributedString = NSAttributedString(string: threadInfo.info.title, font: titleFont, textColor: theme.titleColor)
-                    } else if let message = messages.last, case let .user(author) = message.author, displayAsMessage {
-                        titleAttributedString = NSAttributedString(string: author.id == account.peerId ? item.presentationData.strings.DialogList_You : EnginePeer.user(author).displayTitle(strings: item.presentationData.strings, displayOrder: item.presentationData.nameDisplayOrder), font: titleFont, textColor: theme.titleColor)
-                    } else if isPeerGroup {
-                        titleAttributedString = NSAttributedString(string: item.presentationData.strings.ChatList_ArchivedChatsTitle, font: titleFont, textColor: theme.titleColor)
-                    } else if itemPeer.chatMainPeer?.id == item.context.account.peerId {
-                        if case .savedMessagesChats = item.chatListLocation {
-                            titleAttributedString = NSAttributedString(string: item.presentationData.strings.DialogList_MyNotes, font: titleFont, textColor: theme.titleColor)
-                        } else {
-                            titleAttributedString = NSAttributedString(string: item.presentationData.strings.DialogList_SavedMessages, font: titleFont, textColor: theme.titleColor)
-                        }
-                    } else if let id = itemPeer.chatMainPeer?.id, id.isReplies {
-                         titleAttributedString = NSAttributedString(string: item.presentationData.strings.DialogList_Replies, font: titleFont, textColor: theme.titleColor)
-                    } else if let id = itemPeer.chatMainPeer?.id, id.isAnonymousSavedMessages {
-                        titleAttributedString = NSAttributedString(string: item.presentationData.strings.ChatList_AuthorHidden, font: titleFont, textColor: theme.titleColor)
-                    } else if let displayTitle = itemPeer.chatOrMonoforumMainPeer?.displayTitle(strings: item.presentationData.strings, displayOrder: item.presentationData.nameDisplayOrder) {
-                        let textColor: UIColor
-                        if case let .chatList(index) = item.index, index.messageIndex.id.peerId.namespace == Namespaces.Peer.SecretChat {
-                            textColor = theme.secretTitleColor
-                        } else {
-                            textColor = theme.titleColor
-                        }
-                        if case let .channel(channel) = itemPeer.peer, channel.flags.contains(.isMonoforum) {
-                            titleBadgeText = item.presentationData.strings.ChatList_MonoforumLabel
-                        }
-                        titleAttributedString = NSAttributedString(string: displayTitle, font: titleFont, textColor: textColor)
-                    }
-                case .group:
-                    titleAttributedString = NSAttributedString(string: item.presentationData.strings.ChatList_ArchivedChatsTitle, font: titleFont, textColor: theme.titleColor)
-            }
-            
-            attributedText = renderInstantPagePreviewIcons(attributedText, font: textFont, textColor: theme.messageTextColor)
-            textAttributedString = attributedText
-            
-            let dateText: String
-            var topIndex: EngineMessage.Index?
-            switch item.content {
-            case .loading:
-                break
-            case let .groupReference(groupReferenceData):
-                topIndex = groupReferenceData.message?.index
-            case let .peer(peerData):
-                topIndex = peerData.messages.first?.index
-            }
-            if case let .peer(peerData) = item.content, let customMessageListData = peerData.customMessageListData, let messageCount = customMessageListData.messageCount, customMessageListData.commandPrefix == nil {
-                dateText = "\(messageCount)"
-            } else if case let .peer(peerData) = item.content, let customMessageListData = peerData.customMessageListData, customMessageListData.hideDate {
-                dateText = " "
-            } else if let topIndex {
-                var t = Int(topIndex.timestamp)
-                var timeinfo = tm()
-                localtime_r(&t, &timeinfo)
-                
-                let timestamp = Int32(CFAbsoluteTimeGetCurrent() + NSTimeIntervalSince1970)
-                
-                dateText = stringForRelativeTimestamp(strings: item.presentationData.strings, relativeTimestamp: topIndex.timestamp, relativeTo: timestamp, dateTimeFormat: item.presentationData.dateTimeFormat)
-            } else {
-                dateText = ""
-            }
-            
-            if isPeerGroup {
-                dateAttributedString = NSAttributedString(string: "", font: dateFont, textColor: theme.dateTextColor)
-            } else if let promoInfo = promoInfo {
-                switch promoInfo {
-                case .proxy:
-                    dateAttributedString = NSAttributedString(string: item.presentationData.strings.DialogList_AdLabel, font: dateFont, textColor: theme.dateTextColor)
-                case let .psa(type, _):
-                    var text = item.presentationData.strings.ChatList_GenericPsaLabel
-                    let key = "ChatList.PsaLabel.\(type)"
-                    if let string = item.presentationData.strings.primaryComponent.dict[key] {
-                        text = string
-                    } else if let string = item.presentationData.strings.secondaryComponent?.dict[key] {
-                        text = string
-                    }
-                    dateAttributedString = NSAttributedString(string: text, font: dateFont, textColor: theme.dateTextColor)
-                }
-            } else {
-                dateAttributedString = NSAttributedString(string: dateText, font: dateFont, textColor: theme.dateTextColor)
-            }
-            
-            if !isPeerGroup, let message = messages.last, message.author?.id == account.peerId && !hasDraft {
-                if message.flags.isSending && !message._asMessage().isSentOrAcknowledged {
-                    statusState = .clock(PresentationResourcesChatList.clockFrameImage(item.presentationData.theme), PresentationResourcesChatList.clockMinImage(item.presentationData.theme))
-                } else if message.id.peerId != account.peerId {
-                    if hasFailedMessages {
-                        statusState = .failed(item.presentationData.theme.chatList.failedFillColor, item.presentationData.theme.chatList.failedForegroundColor)
-                    } else {
-                        if let forumTopicData = forumTopicData {
-                            if message.id.namespace == forumTopicData.maxOutgoingReadMessageId.namespace, message.id.id >= forumTopicData.maxOutgoingReadMessageId.id {
-                                statusState = .read(item.presentationData.theme.chatList.checkmarkColor)
-                            } else {
-                                statusState = .delivered(item.presentationData.theme.chatList.checkmarkColor)
-                            }
-                        } else {
-                            if let combinedReadState = combinedReadState, combinedReadState.isOutgoingMessageIndexRead(message.index) {
-                                statusState = .read(item.presentationData.theme.chatList.checkmarkColor)
-                            } else {
-                                statusState = .delivered(item.presentationData.theme.chatList.checkmarkColor)
-                            }
-                        }
-                    }
-                }
-            }
-            
-            if unreadCount.unread {
-                let badgeTextColor: UIColor
-                if unreadCount.muted {
-                    if unreadCount.isProvisonal, case .forum = item.chatListLocation {
-                        badgeTextColor = theme.unreadBadgeInactiveBackgroundColor
-                        currentBadgeBackgroundImage = PresentationResourcesChatList.badgeBackgroundInactiveProvisional(item.presentationData.theme, diameter: badgeDiameter)
-                        currentAvatarBadgeBackgroundImage = PresentationResourcesChatList.badgeBackgroundInactiveProvisional(item.presentationData.theme, diameter: avatarBadgeDiameter)
-                    } else {
-                        badgeTextColor = theme.unreadBadgeInactiveTextColor
-                        currentBadgeBackgroundImage = PresentationResourcesChatList.badgeBackgroundInactive(item.presentationData.theme, diameter: badgeDiameter)
-                        currentAvatarBadgeBackgroundImage = PresentationResourcesChatList.badgeBackgroundInactive(item.presentationData.theme, diameter: avatarBadgeDiameter)
-                    }
-                } else {
-                    if unreadCount.isProvisonal, case .forum = item.chatListLocation {
-                        badgeTextColor = theme.unreadBadgeActiveBackgroundColor
-                        currentBadgeBackgroundImage = PresentationResourcesChatList.badgeBackgroundActiveProvisional(item.presentationData.theme, diameter: badgeDiameter)
-                        currentAvatarBadgeBackgroundImage = PresentationResourcesChatList.badgeBackgroundActiveProvisional(item.presentationData.theme, diameter: avatarBadgeDiameter)
-                    } else {
-                        badgeTextColor = theme.unreadBadgeActiveTextColor
-                        currentBadgeBackgroundImage = PresentationResourcesChatList.badgeBackgroundActive(item.presentationData.theme, diameter: badgeDiameter)
-                        currentAvatarBadgeBackgroundImage = PresentationResourcesChatList.badgeBackgroundActive(item.presentationData.theme, diameter: avatarBadgeDiameter)
-                    }
-                }
-                let unreadCountText = compactNumericCountString(Int(unreadCount.count), decimalSeparator: item.presentationData.dateTimeFormat.decimalSeparator)
-                if unreadCount.count > 0 {
-                    badgeContent = .text(NSAttributedString(string: unreadCountText, font: badgeFont, textColor: badgeTextColor))
-                } else if isPeerGroup {
-                    badgeContent = .none
-                } else {
-                    badgeContent = .blank
-                }
-                
-                if let mutedCount = unreadCount.mutedCount, mutedCount > 0 {
-                    let mutedUnreadCountText = compactNumericCountString(Int(mutedCount), decimalSeparator: item.presentationData.dateTimeFormat.decimalSeparator)
-                    currentMentionBadgeImage = PresentationResourcesChatList.badgeBackgroundInactive(item.presentationData.theme, diameter: badgeDiameter)
-                    mentionBadgeContent = .text(NSAttributedString(string: mutedUnreadCountText, font: badgeFont, textColor: theme.unreadBadgeInactiveTextColor))
-                }
-            }
-
-            if !isPeerGroup {
-                if hasUnseenMentions {
-                    if case .chatList(.archive) = item.chatListLocation {
-                        currentMentionBadgeImage = PresentationResourcesChatList.badgeBackgroundInactiveMention(item.presentationData.theme, diameter: badgeDiameter)
-                    } else {
-                        currentMentionBadgeImage = PresentationResourcesChatList.badgeBackgroundMention(item.presentationData.theme, diameter: badgeDiameter)
-                    }
-                    mentionBadgeContent = .mention
-                } else if hasUnseenReactions {
-                    if isRemovedFromTotalUnreadCount {
-                        currentMentionBadgeImage = PresentationResourcesChatList.badgeBackgroundInactiveReactions(item.presentationData.theme, diameter: badgeDiameter)
-                    } else {
-                        currentMentionBadgeImage = PresentationResourcesChatList.badgeBackgroundReactions(item.presentationData.theme, diameter: badgeDiameter)
-                    }
-                    mentionBadgeContent = .mention
-                } else if hasUnseenPollVotes {
-                    if isRemovedFromTotalUnreadCount {
-                        currentMentionBadgeImage = PresentationResourcesChatList.badgeBackgroundInactivePollVotes(item.presentationData.theme, diameter: badgeDiameter)
-                    } else {
-                        currentMentionBadgeImage = PresentationResourcesChatList.badgeBackgroundPollVotes(item.presentationData.theme, diameter: badgeDiameter)
-                    }
-                    mentionBadgeContent = .mention
-                } else if item.isPinned, promoInfo == nil, currentBadgeBackgroundImage == nil {
-                    currentPinnedIconImage = PresentationResourcesChatList.badgeBackgroundPinned(item.presentationData.theme, diameter: badgeDiameter)
-                }
-            }
-            
-            let isMuted = isRemovedFromTotalUnreadCount
-            if isMuted {
-                currentMutedIconImage = PresentationResourcesChatList.mutedIcon(item.presentationData.theme)
-            }
-            if item.displayHiddenPeerIcon {
-                currentHiddenIconImage = PresentationResourcesChatList.hiddenIcon(item.presentationData.theme)
-            }
-            
-            var statusWidth: CGFloat
-            if case .none = statusState {
-                statusWidth = 0.0
-            } else {
-                statusWidth = 24.0
-            }
-            
-            var dateIconImage: UIImage?
-            if let threadInfo, threadInfo.isClosed {
-                dateIconImage = PresentationResourcesChatList.statusLockIcon(item.presentationData.theme)
-            }
-            
-            if let dateIconImage {
-                statusWidth += dateIconImage.size.width + 4.0
-            }
-            
-            var titleIconsWidth: CGFloat = 0.0
-            if let currentHiddenIconImage = currentHiddenIconImage {
-                if titleIconsWidth.isZero {
-                    titleIconsWidth += 4.0
-                }
-                titleIconsWidth += currentHiddenIconImage.size.width
-            }
-            if let currentMutedIconImage = currentMutedIconImage {
-                if titleIconsWidth.isZero {
-                    titleIconsWidth += 4.0
-                } else if currentHiddenIconImage != nil {
-                    titleIconsWidth += 1.0
-                }
-                titleIconsWidth += currentMutedIconImage.size.width
-            }
-    
-            var isSubscription = false
-            var isSecret = false
-            if !isPeerGroup {
-                if case let .chatList(index) = item.index, index.messageIndex.id.peerId.namespace == Namespaces.Peer.SecretChat {
-                    isSecret = true
-                }
-            }
-            if isSecret {
-                currentSecretIconImage = PresentationResourcesChatList.secretIcon(item.presentationData.theme)
-            }
-            
-            let premiumConfiguration = PremiumConfiguration.with(appConfiguration: item.context.currentAppConfiguration.with { $0 })
-            var isAccountPeer = false
-            if case let .chatList(index) = item.index, index.messageIndex.id.peerId == item.context.account.peerId {
-                isAccountPeer = true
-            }
-            
-            if !isPeerGroup && !isAccountPeer && threadInfo == nil {
-                if displayAsMessage {
-                    switch item.content {
-                    case let .peer(peerData):
-                        var iconPeer: EnginePeer?
-                        if case let .chat(itemPeer) = contentPeer, let peer = itemPeer.chatOrMonoforumMainPeer {
-                            iconPeer = peer
-                        } else {
-                            iconPeer = peerData.messages.last?.author
-                        }
-                        
-                        if let peer = iconPeer {
-                            if case let .peer(peerData) = item.content, peerData.customMessageListData != nil {
-                                currentCredibilityIconContent = nil
-                            } else if case .savedMessagesChats = item.chatListLocation, peer.id == item.context.account.peerId {
-                                currentCredibilityIconContent = nil
-                            } else if peer.isScam {
-                                currentCredibilityIconContent = .text(color: item.presentationData.theme.chat.message.incoming.scamColor, string: item.presentationData.strings.Message_ScamAccount.uppercased())
-                            } else if peer.isFake {
-                                currentCredibilityIconContent = .text(color: item.presentationData.theme.chat.message.incoming.scamColor, string: item.presentationData.strings.Message_FakeAccount.uppercased())
-                            } else if let emojiStatus = peer.emojiStatus {
-                                currentStatusIconContent = .animation(content: .customEmoji(fileId: emojiStatus.fileId), size: CGSize(width: 32.0, height: 32.0), placeholderColor: item.presentationData.theme.list.mediaPlaceholderColor, themeColor: item.presentationData.theme.list.itemAccentColor, loopMode: .count(2))
-                                if let color = emojiStatus.color {
-                                    currentStatusIconParticleColor = UIColor(rgb: UInt32(bitPattern: color))
-                                }
-                            } else if peer.isPremium && !premiumConfiguration.isPremiumDisabled {
-                                currentCredibilityIconContent = .premium(color: item.presentationData.theme.list.itemAccentColor)
-                            }
-                            
-                            if peer.isVerified {
-                                currentCredibilityIconContent = .verified(fillColor: item.presentationData.theme.list.itemCheckColors.fillColor, foregroundColor: item.presentationData.theme.list.itemCheckColors.foregroundColor, sizeType: .compact)
-                            }
-                            if let verificationIconFileId = peer.verificationIconFileId {
-                                currentVerifiedIconContent = .animation(content: .customEmoji(fileId: verificationIconFileId), size: CGSize(width: 32.0, height: 32.0), placeholderColor: item.presentationData.theme.list.mediaPlaceholderColor, themeColor: item.presentationData.theme.list.itemAccentColor, loopMode: .count(0))
-                            }
-                            // Shadow: fork badge in the verification icon slot,
-                            // placed after status/credibility (right of the name)
-                            // instead of the bot-verification icon's before-name spot.
-                            if let badgeEmojiId = ayuGramNameBadgeEmojiId(peerId: peer.id) {
-                                currentVerifiedIconContent = .animation(content: .customEmoji(fileId: badgeEmojiId), size: CGSize(width: 32.0, height: 32.0), placeholderColor: item.presentationData.theme.list.mediaPlaceholderColor, themeColor: item.presentationData.theme.list.itemAccentColor, loopMode: .count(0))
-                            } else if let exteraEmojiId = ayuExteraBadgeEmojiId(peerId: peer.id) {
-                                // Ð—Ð½Ð°Ñ‡Ð¾Ðº Ð¿Ð¾Ð´Ð´ÐµÑ€Ð¶Ð°Ð²ÑˆÐµÐ³Ð¾ exteraGram â€” ÑÐ¿Ñ€Ð°Ð²Ð° Ð¾Ñ‚ Ð¸Ð¼ÐµÐ½Ð¸.
-                                currentVerifiedIconContent = .animation(content: .customEmoji(fileId: exteraEmojiId), size: CGSize(width: 32.0, height: 32.0), placeholderColor: item.presentationData.theme.list.mediaPlaceholderColor, themeColor: item.presentationData.theme.list.itemAccentColor, loopMode: .count(0))
-                                currentVerifiedIconOnRight = true
-                            }
-                        }
-                    default:
-                        break
-                    }
-                } else if case let .chat(itemPeer) = contentPeer, let peer = itemPeer.chatOrMonoforumMainPeer {
-                    if peer.isSubscription {
-                        isSubscription = true
-                    }
-                    if case let .peer(peerData) = item.content, peerData.customMessageListData?.hidePeerStatus == true {
-                        currentCredibilityIconContent = nil
-                    } else if case let .savedMessagesChats(peerId) = item.chatListLocation, peer.id == peerId {
-                        currentCredibilityIconContent = nil
-                    } else if peer.isScam {
-                        currentCredibilityIconContent = .text(color: item.presentationData.theme.chat.message.incoming.scamColor, string: item.presentationData.strings.Message_ScamAccount.uppercased())
-                    } else if peer.isFake {
-                        currentCredibilityIconContent = .text(color: item.presentationData.theme.chat.message.incoming.scamColor, string: item.presentationData.strings.Message_FakeAccount.uppercased())
-                    } else if let emojiStatus = peer.emojiStatus {
-                        currentStatusIconContent = .animation(content: .customEmoji(fileId: emojiStatus.fileId), size: CGSize(width: 32.0, height: 32.0), placeholderColor: item.presentationData.theme.list.mediaPlaceholderColor, themeColor: item.presentationData.theme.list.itemAccentColor, loopMode: .count(2))
-                        if let color = emojiStatus.color {
-                            currentStatusIconParticleColor = UIColor(rgb: UInt32(bitPattern: color))
-                        }
-                    } else if peer.isPremium && !premiumConfiguration.isPremiumDisabled {
-                        currentCredibilityIconContent = .premium(color: item.presentationData.theme.list.itemAccentColor)
-                    }
-                    
-                    if peer.isVerified {
-                        currentCredibilityIconContent = .verified(fillColor: item.presentationData.theme.list.itemCheckColors.fillColor, foregroundColor: item.presentationData.theme.list.itemCheckColors.foregroundColor, sizeType: .compact)
-                    }
-                    if let verificationIconFileId = peer.verificationIconFileId {
-                        currentVerifiedIconContent = .animation(content: .customEmoji(fileId: verificationIconFileId), size: CGSize(width: 32.0, height: 32.0), placeholderColor: item.presentationData.theme.list.mediaPlaceholderColor, themeColor: item.presentationData.theme.list.itemAccentColor, loopMode: .count(0))
-                    }
-                    // Shadow: Ð·Ð½Ð°Ñ‡Ð¾Ðº Ñ„Ð¾Ñ€ÐºÐ° Ð² ÑÐ»Ð¾Ñ‚Ðµ Ð²ÐµÑ€Ð¸Ñ„Ð¸ÐºÐ°Ñ†Ð¸Ð¸, Ð¿ÐµÑ€ÐµÐ´ Ð¸Ð¼ÐµÐ½ÐµÐ¼ (ÑÐ¼.
-                    // ÐºÐ¾Ð¼Ð¼ÐµÐ½Ñ‚Ð°Ñ€Ð¸Ð¹ Ñƒ Ð´Ñ€ÑƒÐ³Ð¾Ð¹ Ð²ÐµÑ‚ÐºÐ¸ iconPeer Ð²Ñ‹ÑˆÐµ).
-                    if let badgeEmojiId = ayuGramNameBadgeEmojiId(peerId: peer.id) {
-                        currentVerifiedIconContent = .animation(content: .customEmoji(fileId: badgeEmojiId), size: CGSize(width: 32.0, height: 32.0), placeholderColor: item.presentationData.theme.list.mediaPlaceholderColor, themeColor: item.presentationData.theme.list.itemAccentColor, loopMode: .count(0))
-                    } else if let exteraEmojiId = ayuExteraBadgeEmojiId(peerId: peer.id) {
-                        // Ð—Ð½Ð°Ñ‡Ð¾Ðº Ð¿Ð¾Ð´Ð´ÐµÑ€Ð¶Ð°Ð²ÑˆÐµÐ³Ð¾ exteraGram â€” ÑÐ¿Ñ€Ð°Ð²Ð° Ð¾Ñ‚ Ð¸Ð¼ÐµÐ½Ð¸.
-                        currentVerifiedIconContent = .animation(content: .customEmoji(fileId: exteraEmojiId), size: CGSize(width: 32.0, height: 32.0), placeholderColor: item.presentationData.theme.list.mediaPlaceholderColor, themeColor: item.presentationData.theme.list.itemAccentColor, loopMode: .count(0))
-                        currentVerifiedIconOnRight = true
-                    }
-                }
-            }
-            if let currentSecretIconImage = currentSecretIconImage {
-                titleIconsWidth += currentSecretIconImage.size.width + 2.0
-            }
-            
-            var titleLeftOffset: CGFloat = 0.0
-            if let currentVerifiedIconContent {
-                if titleLeftOffset.isZero, case .animation = currentVerifiedIconContent, !currentVerifiedIconOnRight {
-                    titleLeftOffset += 19.0
-                }
-                
-                if titleIconsWidth.isZero {
-                    titleIconsWidth += 4.0
-                } else {
-                    titleIconsWidth += 2.0
-                }
-                switch currentVerifiedIconContent {
-                case let .text(_, string):
-                    let textString = NSAttributedString(string: string, font: Font.bold(10.0), textColor: .black, paragraphAlignment: .center)
-                    let stringRect = textString.boundingRect(with: CGSize(width: 100.0, height: 16.0), options: .usesLineFragmentOrigin, context: nil)
-                    titleIconsWidth += floor(stringRect.width) + 11.0
-                default:
-                    titleIconsWidth += 8.0
-                }
-            }
-            
-            if let currentCredibilityIconContent {
-                if titleIconsWidth.isZero {
-                    titleIconsWidth += 4.0
-                } else {
-                    titleIconsWidth += 2.0
-                }
-                switch currentCredibilityIconContent {
-                case let .text(_, string):
-                    let textString = NSAttributedString(string: string, font: Font.bold(10.0), textColor: .black, paragraphAlignment: .center)
-                    let stringRect = textString.boundingRect(with: CGSize(width: 100.0, height: 16.0), options: .usesLineFragmentOrigin, context: nil)
-                    titleIconsWidth += floor(stringRect.width) + 11.0
-                default:
-                    titleIconsWidth += 8.0
-                }
-            }
-            
-            if let currentStatusIconContent {
-                if titleIconsWidth.isZero {
-                    titleIconsWidth += 4.0
-                } else {
-                    titleIconsWidth += 2.0
-                }
-                switch currentStatusIconContent {
-                case let .text(_, string):
-                    let textString = NSAttributedString(string: string, font: Font.bold(10.0), textColor: .black, paragraphAlignment: .center)
-                    let stringRect = textString.boundingRect(with: CGSize(width: 100.0, height: 16.0), options: .usesLineFragmentOrigin, context: nil)
-                    titleIconsWidth += floor(stringRect.width) + 11.0
-                default:
-                    titleIconsWidth += 8.0
-                }
-            }
-            
-            let layoutOffset: CGFloat = 0.0
-            
-            let rawContentWidth = params.width - leftInset - params.rightInset - 18.0 - editingOffset
-            
-            let (dateLayout, dateApply) = dateLayout(TextNodeLayoutArguments(attributedString: dateAttributedString, backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: CGSize(width: rawContentWidth, height: CGFloat.greatestFiniteMagnitude), alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
-            
-            let (badgeLayout, badgeApply) = badgeLayout(CGSize(width: rawContentWidth, height: CGFloat.greatestFiniteMagnitude), badgeDiameter, badgeFont, currentBadgeBackgroundImage, badgeContent)
-            
-            let (mentionBadgeLayout, mentionBadgeApply) = mentionBadgeLayout(CGSize(width: rawContentWidth, height: CGFloat.greatestFiniteMagnitude), badgeDiameter, badgeFont, currentMentionBadgeImage, mentionBadgeContent)
-            
-            var actionButtonTitleNodeLayoutAndApply: (TextNodeLayout, () -> TextNode)?
-            if !item.editing, case .none = badgeContent, case .none = mentionBadgeContent, case let .chat(itemPeer) = contentPeer, case let .user(user) = itemPeer.chatMainPeer, let botInfo = user.botInfo, botInfo.flags.contains(.hasWebApp) {
-                actionButtonTitleNodeLayoutAndApply = makeActionButtonTitleNodeLayout(TextNodeLayoutArguments(attributedString: NSAttributedString(string: item.presentationData.strings.ChatList_InlineButtonOpenApp, font: Font.semibold(floor(item.presentationData.fontSize.itemListBaseFontSize * 15.0 / 17.0)), textColor: theme.unreadBadgeActiveTextColor), backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: CGSize(width: rawContentWidth, height: CGFloat.greatestFiniteMagnitude), alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
-            }
-            
-            var badgeSize: CGFloat = 0.0
-            if !badgeLayout.width.isZero {
-                badgeSize += badgeLayout.width + 5.0
-            }
-            if !mentionBadgeLayout.width.isZero {
-                if !badgeSize.isZero {
-                    badgeSize += mentionBadgeLayout.width + 4.0
-                } else {
-                    badgeSize += mentionBadgeLayout.width + 5.0
-                }
-            }
-            let countersSize = badgeSize
-            if let currentPinnedIconImage = currentPinnedIconImage {
-                if !badgeSize.isZero {
-                    badgeSize += 4.0
-                } else {
-                    badgeSize += 5.0
-                }
-                badgeSize += currentPinnedIconImage.size.width
-            }
-            if let (actionButtonTitleNodeLayout, _) = actionButtonTitleNodeLayoutAndApply {
-                if !badgeSize.isZero {
-                    badgeSize += 4.0
-                } else {
-                    badgeSize += 5.0
-                }
-                badgeSize += actionButtonTitleNodeLayout.size.width + 12.0 * 2.0
-            }
-            badgeSize = max(badgeSize, reorderInset)
-            
-            if !itemTags.isEmpty {
-                authorAttributedString = nil
-            }
-            
-            var effectiveAuthorTitle = (hideAuthor && !hasDraft) ? nil : authorAttributedString
-            
-            let isSearching = item.interaction.searchTextHighightState != nil
-            
-            var isFirstForumThreadSelectable = false
-            var forumThreads: [(id: Int64, threadPeer: EnginePeer?, title: NSAttributedString, iconId: Int64?, iconColor: Int32?)] = []
-            var authorTopicArrowColor: UIColor?
-            if case .savedMessagesChats = item.chatListLocation {
-            } else if case let .peer(peer) = item.content, case let .channel(channel) = peer.peer.peer, channel.flags.contains(.isMonoforum) {
-                if forumThread != nil || !topForumTopicItems.isEmpty {
-                    if let forumThread {
-                        isFirstForumThreadSelectable = false
-                        forumThreads.append((id: forumThread.id, threadPeer: forumThread.threadPeer, title: NSAttributedString(string: forumThread.threadPeer?.compactDisplayTitle ?? " ", font: textFont, textColor: forumThread.isUnread || isSearching ? theme.authorNameColor : theme.messageTextColor), iconId: nil, iconColor: nil))
-                    }
-                    for topicItem in topForumTopicItems {
-                        if forumThread?.id != topicItem.id {
-                            forumThreads.append((id: topicItem.id, threadPeer: topicItem.threadPeer, title: NSAttributedString(string: topicItem.threadPeer?.compactDisplayTitle ?? " ", font: textFont, textColor: topicItem.isUnread || isSearching ? theme.authorNameColor : theme.messageTextColor), iconId: nil, iconColor: nil))
-                        }
-                    }
-                    
-                    if let effectiveAuthorTitle, let textAttributedStringValue = textAttributedString {
-                        let mutableTextAttributedString = NSMutableAttributedString()
-                        mutableTextAttributedString.append(NSAttributedString(string: effectiveAuthorTitle.string + ": ", font: textFont, textColor: theme.authorNameColor))
-                        mutableTextAttributedString.append(textAttributedStringValue)
-                        
-                        textAttributedString = mutableTextAttributedString
-                    }
-                    
-                    effectiveAuthorTitle = nil
-                }
-            } else if forumThread != nil || !topForumTopicItems.isEmpty {
-                if let forumThread = forumThread {
-                    if case let .peer(peer) = item.content, case .user = peer.peer.chatMainPeer {
-                        isFirstForumThreadSelectable = false
-                    } else {
-                        isFirstForumThreadSelectable = forumThread.isUnread
-                    }
-                    
-                    forumThreads.append((id: forumThread.id, threadPeer: forumThread.threadPeer, title: NSAttributedString(string: forumThread.title, font: textFont, textColor: forumThread.isUnread || isSearching ? theme.authorNameColor : theme.messageTextColor), iconId: forumThread.iconId, iconColor: forumThread.iconColor))
-                }
-                for topicItem in topForumTopicItems {
-                    if case let .peer(peer) = item.content, peer.peer.peerId.id._internalGetInt64Value() == topicItem.id {
-                        
-                    } else if forumThread?.id != topicItem.id {
-                        forumThreads.append((id: topicItem.id, threadPeer: topicItem.threadPeer, title: NSAttributedString(string: topicItem.title, font: textFont, textColor: topicItem.isUnread || isSearching ? theme.authorNameColor : theme.messageTextColor), iconId: topicItem.iconFileId, iconColor: topicItem.iconColor))
-                    }
-                }
-                
-                if let effectiveAuthorTitle, let textAttributedStringValue = textAttributedString {
-                    let mutableTextAttributedString = NSMutableAttributedString()
-                    mutableTextAttributedString.append(NSAttributedString(string: effectiveAuthorTitle.string + ": ", font: textFont, textColor: theme.authorNameColor))
-                    mutableTextAttributedString.append(textAttributedStringValue)
-                    
-                    textAttributedString = mutableTextAttributedString
-                }
-                
-                effectiveAuthorTitle = nil
-            }
-            
-            if authorIsCurrentChat {
-                effectiveAuthorTitle = nil
-            }
-            
-            if case let .peer(peerData) = item.content, case .community = peerData.peer.peer, let message = messages.last, let sourcePeer = communitySourcePeer(peerData: peerData, message: message) {
-                let sourceTitle = sourcePeer.displayTitle(strings: item.presentationData.strings, displayOrder: item.presentationData.nameDisplayOrder)
-                if !sourceTitle.isEmpty {
-                    forumThreads.append((id: sourcePeer.id.toInt64(), threadPeer: nil, title: NSAttributedString(string: sourceTitle, font: textFont, textColor: theme.titleColor), iconId: nil, iconColor: nil))
-                    authorTopicArrowColor = theme.messageTextColor
-                }
-            }
-
-            let (authorLayout, authorApply) = authorLayout(item.context, rawContentWidth - badgeSize, item.presentationData.theme, effectiveAuthorTitle, forumThreads, authorTopicArrowColor)
-            
-            var textBottomRightCutout: CGFloat = 0.0
-            
-            let trailingTextBadgeInsets = UIEdgeInsets(top: 2.0 - UIScreenPixel, left: 5.0, bottom: 2.0 - UIScreenPixel, right: 5.0)
-            var trailingTextBadgeLayoutAndApply: (TextNodeLayout, () -> TextNode)?
-            if case let .peer(peerData) = item.content, let customMessageListData = peerData.customMessageListData, customMessageListData.commandPrefix != nil, let messageCount = customMessageListData.messageCount, messageCount > 1 {
-                let trailingText: String
-                trailingText = item.presentationData.strings.ChatList_ItemMoreMessagesFormat(Int32(messageCount - 1))
-                let trailingAttributedText = NSAttributedString(string: trailingText, font: Font.regular(12.0), textColor: theme.messageTextColor)
-                let (layout, apply) = makeTrailingTextBadgeLayout(TextNodeLayoutArguments(attributedString: trailingAttributedText, backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: CGSize(width: rawContentWidth, height: CGFloat.greatestFiniteMagnitude), alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
-                trailingTextBadgeLayoutAndApply = (layout, apply)
-                textBottomRightCutout += layout.size.width + 4.0 + trailingTextBadgeInsets.left + trailingTextBadgeInsets.right
-            }
-            
-            var textCutout: TextNodeCutout?
-            if !textLeftCutout.isZero || !textBottomRightCutout.isZero {
-                textCutout = TextNodeCutout(topLeft: textLeftCutout.isZero ? nil : CGSize(width: textLeftCutout, height: 10.0), topRight: nil, bottomRight: textBottomRightCutout.isZero ? nil : CGSize(width: textBottomRightCutout, height: 10.0))
-            }
-            
-            var textMaxWidth = rawContentWidth - badgeSize
-            
-            var textArrowImage: UIImage?
-            if isFirstForumThreadSelectable {
-                textArrowImage = PresentationResourcesItemList.disclosureArrowImage(item.presentationData.theme)
-                textMaxWidth -= 18.0
-            }
-            
-            let textLineSpacing: CGFloat = min(0.2, item.presentationData.fontSize.itemListBaseFontSize * 0.2 / 17.0)
-            let (textLayout, textApply) = textLayout(TextNodeLayoutArguments(
-                attributedString: textAttributedString,
-                backgroundColor: nil,
-                maximumNumberOfLines: (authorAttributedString == nil && itemTags.isEmpty && forumThread == nil && topForumTopicItems.isEmpty) ? 2 : 1,
-                truncationType: .end,
-                constrainedSize: CGSize(width: textMaxWidth, height: .greatestFiniteMagnitude),
-                alignment: .natural,
-                lineSpacing: textLineSpacing,
-                cutout: textCutout,
-                insets: UIEdgeInsets(top: 2.0, left: 1.0, bottom: 2.0, right: 1.0)
-            ))
-            
-            let maxTitleLines: Int
-            switch item.index {
-            case .forum:
-                maxTitleLines = 2
-            case .chatList:
-                maxTitleLines = 1
-            }
-            
-            var titleLeftCutout: CGFloat = 0.0
-            if item.interaction.isInlineMode {
-                titleLeftCutout = 22.0
-            }
-            
-            if let titleAttributedStringValue = titleAttributedString, titleAttributedStringValue.length == 0 {
-                titleAttributedString = NSAttributedString(string: " ", font: titleFont, textColor: theme.titleColor)
-            }
-                        
-            var titleRectWidth = rawContentWidth - dateLayout.size.width - 10.0 - statusWidth - titleIconsWidth
-            var titleCutout: TextNodeCutout?
-            if !titleLeftCutout.isZero {
-                titleCutout = TextNodeCutout(topLeft: CGSize(width: titleLeftCutout, height: 10.0), topRight: nil, bottomRight: nil)
-            }
-            
-            var titleBadgeLayoutAndApply: (TextNodeLayout, () -> TextNode)?
-            if let titleBadgeText {
-                let titleBadgeLayoutAndApplyValue = titleBadgeLayout(TextNodeLayoutArguments(attributedString: NSAttributedString(string: titleBadgeText, font: Font.semibold(11.0), textColor: theme.titleColor.withMultipliedAlpha(0.4)), backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: CGSize(width: titleRectWidth, height: CGFloat.greatestFiniteMagnitude), alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
-                titleBadgeLayoutAndApply = titleBadgeLayoutAndApplyValue
-                titleRectWidth = max(10.0, titleRectWidth - titleBadgeLayoutAndApplyValue.0.size.width - 8.0)
-            }
-            
-            let (titleLayout, titleApply) = titleLayout(TextNodeLayoutArguments(attributedString: titleAttributedString, backgroundColor: nil, maximumNumberOfLines: maxTitleLines, truncationType: .end, constrainedSize: CGSize(width: titleRectWidth, height: CGFloat.greatestFiniteMagnitude), alignment: .natural, cutout: titleCutout, insets: UIEdgeInsets()))
-        
-            var inputActivitiesSize: CGSize?
-            var inputActivitiesApply: (() -> Void)?
-            var chatPeerId: EnginePeer.Id?
-            if case let .chatList(index) = item.index {
-                chatPeerId = index.messageIndex.id.peerId
-            } else if case let .forum(peerId) = item.chatListLocation {
-                chatPeerId = peerId
-            }
-            if let inputActivities = inputActivities, !inputActivities.isEmpty, let chatPeerId {
-                let (size, apply) = inputActivitiesLayout(CGSize(width: rawContentWidth - badgeSize, height: 40.0), item.presentationData, item.presentationData.theme.chatList.messageTextColor, chatPeerId, inputActivities)
-                inputActivitiesSize = size
-                inputActivitiesApply = apply
-            } else {
-                let (size, apply) = inputActivitiesLayout(CGSize(width: rawContentWidth - badgeSize, height: 40.0), item.presentationData, item.presentationData.theme.chatList.messageTextColor, nil, [])
-                inputActivitiesSize = size
-                inputActivitiesApply = apply
-            }
-            
-            var online = false
-            var animateOnline = false
-            var onlineIsVoiceChat = false
-            
-            var isPinned = false
-            if case let .chatList(index) = item.index {
-                isPinned = index.pinningIndex != nil
-            } else if case let .forum(pinnedIndex, _, _, _, _) = item.index {
-                if case .index = pinnedIndex {
-                    isPinned = true
-                }
-            }
-
-            var peerRevealOptions: [ItemListRevealOption]
-            var peerLeftRevealOptions: [ItemListRevealOption]
-            switch item.content {
-                case .loading:
-                    peerRevealOptions = []
-                    peerLeftRevealOptions = []
-                case let .peer(peerData):
-                    let renderedPeer = peerData.peer
-                    let presence = peerData.presence
-                    let displayAsMessage = peerData.displayAsMessage
-                
-                    if !displayAsMessage {
-                        if case let .user(peer) = renderedPeer.chatMainPeer, let presence = presence, !isServicePeer(peer) && !peer.flags.contains(.isSupport) && peer.id != item.context.account.peerId {
-                            let updatedPresence = EnginePeer.Presence(status: presence.status, lastActivity: 0)
-                            let timestamp = Int32(CFAbsoluteTimeGetCurrent() + NSTimeIntervalSince1970)
-                            let relativeStatus = relativeUserPresenceStatus(updatedPresence, relativeTo: timestamp)
-                            if case .online = relativeStatus {
-                                online = true
-                            }
-                            animateOnline = true
-                        } else if case let .channel(channel) = renderedPeer.peer, case .chatList = item.index {
-                            onlineIsVoiceChat = true
-                            if channel.flags.contains(.hasActiveVoiceChat) && item.interaction.searchTextHighightState == nil {
-                                online = true
-                            }
-                            animateOnline = true
-                        } else if case let .legacyGroup(group) = renderedPeer.peer, case .chatList = item.index {
-                            onlineIsVoiceChat = true
-                            if group.flags.contains(.hasActiveVoiceChat) && item.interaction.searchTextHighightState == nil {
-                                online = true
-                            }
-                            animateOnline = true
-                        }
-                    }
-                    
-                    if let enabledContextActions = item.enabledContextActions {
-                        switch enabledContextActions {
-                        case .auto:
-                            if case .forum = item.chatListLocation {
-                                if case let .chat(itemPeer) = contentPeer, case let .channel(channel) = itemPeer.peer {
-                                    var canOpenClose = false
-                                    if channel.flags.contains(.isCreator) {
-                                        canOpenClose = true
-                                    } else if channel.hasPermission(.manageTopics) {
-                                        canOpenClose = true
-                                    } else if let threadInfo = threadInfo, threadInfo.isOwnedByMe {
-                                        canOpenClose = true
-                                    }
-                                    let canDelete = channel.hasPermission(.deleteAllMessages)
-                                    var isClosed = false
-                                    if let threadInfo {
-                                        isClosed = threadInfo.isClosed
-                                    }
-                                    if let threadInfo, threadInfo.id == 1 {
-                                        peerRevealOptions = forumGeneralRevealOptions(strings: item.presentationData.strings, theme: item.presentationData.theme, isMuted: (currentMutedIconImage != nil), isClosed: isClosed, isEditing: item.editing, canOpenClose: canOpenClose, canHide: channel.flags.contains(.isCreator) || channel.hasPermission(.manageTopics), hiddenByDefault: threadInfo.isHidden)
-                                    } else {
-                                        peerRevealOptions = forumThreadRevealOptions(strings: item.presentationData.strings, theme: item.presentationData.theme, isMuted: (currentMutedIconImage != nil), isClosed: isClosed, isEditing: item.editing, canOpenClose: canOpenClose, canDelete: canDelete)
-                                    }
-                                    peerLeftRevealOptions = []
-                                } else {
-                                    peerRevealOptions = []
-                                    peerLeftRevealOptions = []
-                                }
-                            } else if case .psa = promoInfo {
-                                peerRevealOptions = [
-                                    ItemListRevealOption(key: RevealOptionKey.hidePsa.rawValue, title: item.presentationData.strings.ChatList_HideAction, icon: deleteIcon, color: item.presentationData.theme.list.itemDisclosureActions.inactive.fillColor, iconColor: item.presentationData.theme.list.itemDisclosureActions.neutral1.foregroundColor, textColor: item.presentationData.theme.chatList.dateTextColor)
-                                ]
-                                peerLeftRevealOptions = []
-                            } else if case let .peer(peerData) = item.content, let customMessageListData = peerData.customMessageListData {
-                                peerLeftRevealOptions = []
-                                if customMessageListData.commandPrefix != nil {
-                                    peerRevealOptions = [
-                                        ItemListRevealOption(key: RevealOptionKey.edit.rawValue, title: item.presentationData.strings.ChatList_ItemMenuEdit, icon: .none, color: item.presentationData.theme.list.itemDisclosureActions.neutral2.fillColor, iconColor: item.presentationData.theme.list.itemDisclosureActions.neutral2.foregroundColor, textColor: item.presentationData.theme.chatList.dateTextColor),
-                                        ItemListRevealOption(key: RevealOptionKey.delete.rawValue, title: item.presentationData.strings.ChatList_ItemMenuDelete, icon: .none, color: item.presentationData.theme.list.itemDisclosureActions.destructive.fillColor, iconColor: item.presentationData.theme.list.itemDisclosureActions.destructive.foregroundColor, textColor: item.presentationData.theme.chatList.dateTextColor)
-                                    ]
-                                } else {
-                                    peerRevealOptions = []
-                                }
-                            } else if promoInfo == nil {
-                                if case let .peer(peerData) = item.content, case .community = peerData.peer.peer {
-                                    peerRevealOptions = [
-                                        ItemListRevealOption(key: isMuted ? RevealOptionKey.unmute.rawValue : RevealOptionKey.mute.rawValue, title: isMuted ? item.presentationData.strings.ChatList_Unmute : item.presentationData.strings.ChatList_Mute, icon: isMuted ? unmuteIcon : muteIcon, color: item.presentationData.theme.list.itemDisclosureActions.neutral2.fillColor, iconColor: item.presentationData.theme.list.itemDisclosureActions.neutral2.foregroundColor, textColor: item.presentationData.theme.chatList.dateTextColor),
-                                        ItemListRevealOption(key: RevealOptionKey.ungroup.rawValue, title: item.presentationData.strings.ChatList_Context_Ungroup, icon: ungroupCommunityIcon, color: item.presentationData.theme.list.itemDisclosureActions.destructive.fillColor, iconColor: item.presentationData.theme.list.itemDisclosureActions.destructive.foregroundColor, textColor: item.presentationData.theme.chatList.dateTextColor)
-                                    ]
-                                } else {
-                                    peerRevealOptions = revealOptions(strings: item.presentationData.strings, theme: item.presentationData.theme, isPinned: isPinned, isMuted: !isAccountPeer ? isMuted : nil, location: item.chatListLocation, peerId: renderedPeer.peerId, accountPeerId: item.context.account.peerId, canDelete: true, isEditing: item.editing, filterData: item.filterData)
-                                }
-                                if case let .chat(itemPeer) = contentPeer {
-                                    peerLeftRevealOptions = leftRevealOptions(strings: item.presentationData.strings, theme: item.presentationData.theme, isUnread: unreadCount.unread, isEditing: item.editing, isPinned: isPinned, isSavedMessages: itemPeer.peerId == item.context.account.peerId, location: item.chatListLocation, peer: itemPeer.peers[itemPeer.peerId]!, filterData: item.filterData)
-                                } else {
-                                    peerLeftRevealOptions = []
-                                }
-                            } else {
-                                peerRevealOptions = []
-                                peerLeftRevealOptions = []
-                            }
-                        case let .custom(actions):
-                            peerRevealOptions = []
-                            peerLeftRevealOptions = []
-
-                            let isCommunityPeer: Bool
-                            if case .community = peerData.peer.peer {
-                                isCommunityPeer = true
-                            } else {
-                                isCommunityPeer = false
-                            }
-
-                            if actions.contains(.toggleUnread) && !isCommunityPeer {
-                                if unreadCount.unread {
-                                    peerLeftRevealOptions.append(ItemListRevealOption(key: RevealOptionKey.toggleMarkedUnread.rawValue, title: item.presentationData.strings.DialogList_Read, icon: readIcon, color: item.presentationData.theme.list.itemDisclosureActions.inactive.fillColor, iconColor: item.presentationData.theme.list.itemDisclosureActions.neutral1.foregroundColor, textColor: item.presentationData.theme.chatList.dateTextColor))
-                                } else {
-                                    peerLeftRevealOptions.append(ItemListRevealOption(key: RevealOptionKey.toggleMarkedUnread.rawValue, title: item.presentationData.strings.DialogList_Unread, icon: unreadIcon, color: item.presentationData.theme.list.itemDisclosureActions.accent.fillColor, iconColor: item.presentationData.theme.list.itemDisclosureActions.accent.foregroundColor, textColor: item.presentationData.theme.chatList.dateTextColor))
-                                }
-                            }
-                            if actions.contains(.toggleMuted) {
-                                peerRevealOptions.append(ItemListRevealOption(key: isMuted ? RevealOptionKey.unmute.rawValue : RevealOptionKey.mute.rawValue, title: isMuted ? item.presentationData.strings.ChatList_Unmute : item.presentationData.strings.ChatList_Mute, icon: isMuted ? unmuteIcon : muteIcon, color: item.presentationData.theme.list.itemDisclosureActions.neutral2.fillColor, iconColor: item.presentationData.theme.list.itemDisclosureActions.neutral2.foregroundColor, textColor: item.presentationData.theme.chatList.dateTextColor))
-                            }
-                            if actions.contains(.delete) {
-                                peerRevealOptions.append(ItemListRevealOption(key: RevealOptionKey.delete.rawValue, title: item.presentationData.strings.Common_Delete, icon: deleteIcon, color: item.presentationData.theme.list.itemDisclosureActions.destructive.fillColor, iconColor: item.presentationData.theme.list.itemDisclosureActions.destructive.foregroundColor, textColor: item.presentationData.theme.chatList.dateTextColor))
-                            } else if actions.contains(.remove) {
-                                peerRevealOptions.append(ItemListRevealOption(key: RevealOptionKey.delete.rawValue, title: item.presentationData.strings.ChatList_Remove, icon: deleteIcon, color: item.presentationData.theme.list.itemDisclosureActions.destructive.fillColor, iconColor: item.presentationData.theme.list.itemDisclosureActions.destructive.foregroundColor, textColor: item.presentationData.theme.chatList.dateTextColor))
-                            }
-                        }
-                    } else {
-                        peerRevealOptions = []
-                        peerLeftRevealOptions = []
-                    }
-                case .groupReference:
-                    peerRevealOptions = groupReferenceRevealOptions(strings: item.presentationData.strings, theme: item.presentationData.theme, isEditing: item.editing, hiddenByDefault: groupHiddenByDefault)
-                    peerLeftRevealOptions = []
-            }
-            
-            if item.interaction.inlineNavigationLocation != nil {
-                peerRevealOptions = []
-                peerLeftRevealOptions = []
-            }
-            
-            let (onlineLayout, onlineApply) = onlineLayout(online, onlineIsVoiceChat)
-            var animateContent = false
-            if let currentItem = currentItem, currentItem.content.chatLocation == item.content.chatLocation {
-                animateContent = true
-            }
-            
-            let (measureLayout, measureApply) = makeMeasureLayout(TextNodeLayoutArguments(attributedString: NSAttributedString(string: " ", font: titleFont, textColor: .black), backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: CGSize(width: titleRectWidth, height: CGFloat.greatestFiniteMagnitude), alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
-            
-            let titleSpacing: CGFloat = -1.0
-            let authorSpacing: CGFloat = -3.0
-            var itemHeight: CGFloat = 8.0 * 2.0 + 1.0
-            itemHeight -= 21.0
-            if case let .peer(peerData) = item.content, let customMessageListData = peerData.customMessageListData, customMessageListData.commandPrefix != nil {
-                itemHeight += measureLayout.size.height * 2.0
-                itemHeight += 20.0
-            } else {
-                itemHeight += titleLayout.size.height
-                itemHeight += measureLayout.size.height * 3.0
-                itemHeight += titleSpacing
-                itemHeight += authorSpacing
-            }
-                        
-            let rawContentRect = CGRect(origin: CGPoint(x: 2.0, y: layoutOffset + floor(item.presentationData.fontSize.itemListBaseFontSize * 8.0 / 17.0)), size: CGSize(width: rawContentWidth, height: itemHeight - 12.0 - 9.0))
-            
-            let insets = ChatListItemNode.insets(first: first, last: last, firstWithHeader: firstWithHeader)
-            var heightOffset: CGFloat = 0.0
-            if item.hiddenOffset {
-                heightOffset = -itemHeight
-            }
-            let layout = ListViewItemNodeLayout(contentSize: CGSize(width: params.width, height: max(0.0, itemHeight + heightOffset)), insets: insets)
-            
-            var customActions: [ChatListItemAccessibilityCustomAction] = []
-            for option in peerLeftRevealOptions {
-                customActions.append(ChatListItemAccessibilityCustomAction(name: option.title, target: nil, selector: #selector(ChatListItemNode.performLocalAccessibilityCustomAction(_:)), key: option.key))
-            }
-            for option in peerRevealOptions {
-                customActions.append(ChatListItemAccessibilityCustomAction(name: option.title, target: nil, selector: #selector(ChatListItemNode.performLocalAccessibilityCustomAction(_:)), key: option.key))
-            }
-            
-            return (layout, { [weak self] synchronousLoads, animated in
-                if let strongSelf = self {
-                    strongSelf.layoutParams = (item, first, last, firstWithHeader, nextIsPinned, nextHasActiveRevealControls, params, countersSize)
-                    strongSelf.nextHasActiveRevealControls = nextHasActiveRevealControls
-                    strongSelf.currentItemHeight = itemHeight
-                    strongSelf.cachedChatListText = chatListText
-                    strongSelf.cachedChatListSearchResult = chatListSearchResult
-                    strongSelf.cachedChatListQuoteSearchResult = chatListQuoteSearchResult
-                    strongSelf.cachedCustomTextEntities = customTextEntities
-                    strongSelf.onlineIsVoiceChat = onlineIsVoiceChat
-                    
-                    var animateOnline = animateOnline
-                    if let currentOnline = strongSelf.currentOnline, currentOnline == online {
-                        animateOnline = false
-                    }
-                    strongSelf.currentOnline = online
-                    
-                    if item.hiddenOffset {
-                        strongSelf.layer.zPosition = -1.0
-                    }
-                                       
-                    if case .groupReference = item.content {
-                        strongSelf.layer.sublayerTransform = CATransform3DMakeTranslation(0.0, layout.contentSize.height - itemHeight, 0.0)
-                    }
-                    
-                    if let _ = updatedTheme {
-                        strongSelf.separatorNode.backgroundColor = item.presentationData.theme.chatList.itemSeparatorColor
-                    }
-                    
-                    let revealOffset = 0.0
-                    
-                    let transition: ContainedViewLayoutTransition
-                    if animated {
-                        transition = ContainedViewLayoutTransition.animated(duration: 0.4, curve: .spring)
-                    } else {
-                        transition = .immediate
-                    }
-                    
-                    transition.updateAlpha(node: strongSelf, alpha: item.hiddenOffset ? 0.0 : 1.0)
-                    ComponentTransition(transition).setBlur(layer: strongSelf.layer, radius: item.hiddenOffset ? 8.0 : 0.0)
-                    
-                    let contextContainerFrame = CGRect(origin: CGPoint(), size: CGSize(width: layout.contentSize.width, height: itemHeight))
-//                    strongSelf.contextContainer.position = contextContainerFrame.center
-                    transition.updatePosition(node: strongSelf.contextContainer, position: contextContainerFrame.center)
-                    transition.updateBounds(node: strongSelf.contextContainer, bounds: contextContainerFrame.offsetBy(dx: -strongSelf.revealOffset, dy: 0.0))
-                    
-                    var mainContentFrame: CGRect
-                    var mainContentBoundsOffset: CGFloat
-                    var mainContentAlpha: CGFloat = 1.0
-                    
-                    if useChatListLayout {
-                        mainContentFrame = CGRect(origin: CGPoint(x: leftInset - 2.0, y: 0.0), size: CGSize(width: layout.contentSize.width, height: layout.contentSize.height))
-                        mainContentBoundsOffset = mainContentFrame.origin.x
-                        
-                        if let inlineNavigationLocation = item.interaction.inlineNavigationLocation {
-                            mainContentAlpha = 1.0 - inlineNavigationLocation.progress
-                            mainContentBoundsOffset += (mainContentFrame.width - mainContentFrame.minX) * inlineNavigationLocation.progress
-                        }
-                    } else {
-                        mainContentFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: layout.contentSize.width, height: layout.contentSize.height))
-                        mainContentBoundsOffset = 0.0
-                    }
-                    
-                    transition.updatePosition(node: strongSelf.mainContentContainerNode, position: mainContentFrame.center)
-                    
-                    transition.updateBounds(node: strongSelf.mainContentContainerNode, bounds: CGRect(origin: CGPoint(x: mainContentBoundsOffset, y: 0.0), size: mainContentFrame.size))
-                    transition.updateAlpha(node: strongSelf.mainContentContainerNode, alpha: mainContentAlpha)
-                    
-                    var crossfadeContent = false
-                    if let selectableControlSizeAndApply = selectableControlSizeAndApply {
-                        let selectableControlSize = CGSize(width: selectableControlSizeAndApply.0, height: layout.contentSize.height)
-                        let selectableControlFrame = CGRect(origin: CGPoint(x: params.leftInset + revealOffset, y: layoutOffset), size: selectableControlSize)
-                        if strongSelf.selectableControlNode == nil {
-                            crossfadeContent = true
-                            let selectableControlNode = selectableControlSizeAndApply.1(selectableControlSize, false)
-                            strongSelf.selectableControlNode = selectableControlNode
-                            strongSelf.addSubnode(selectableControlNode)
-                            selectableControlNode.frame = selectableControlFrame
-                            transition.animatePosition(node: selectableControlNode, from: CGPoint(x: -selectableControlFrame.size.width / 2.0, y: layoutOffset + selectableControlFrame.midY))
-                            selectableControlNode.alpha = 0.0
-                            transition.updateAlpha(node: selectableControlNode, alpha: 1.0)
-                        } else if let selectableControlNode = strongSelf.selectableControlNode {
-                            transition.updateFrame(node: selectableControlNode, frame: selectableControlFrame)
-                            let _ = selectableControlSizeAndApply.1(selectableControlSize, transition.isAnimated)
-                        }
-                    } else if let selectableControlNode = strongSelf.selectableControlNode {
-                        crossfadeContent = true
-                        var selectableControlFrame = selectableControlNode.frame
-                        selectableControlFrame.origin.x = -selectableControlFrame.size.width
-                        strongSelf.selectableControlNode = nil
-                        transition.updateAlpha(node: selectableControlNode, alpha: 0.0)
-                        transition.updateFrame(node: selectableControlNode, frame: selectableControlFrame, completion: { [weak selectableControlNode] _ in
-                            selectableControlNode?.removeFromSupernode()
-                        })
-                    }
-                    
-                    var animateBadges = animateContent
-                    if let reorderControlSizeAndApply = reorderControlSizeAndApply {
-                        let reorderControlFrame = CGRect(origin: CGPoint(x: params.width + revealOffset - params.rightInset - reorderControlSizeAndApply.0, y: layoutOffset), size: CGSize(width: reorderControlSizeAndApply.0, height: layout.contentSize.height))
-                        if strongSelf.reorderControlNode == nil {
-                            let reorderControlNode = reorderControlSizeAndApply.1(layout.contentSize.height, false, .immediate)
-                            strongSelf.reorderControlNode = reorderControlNode
-                            strongSelf.addSubnode(reorderControlNode)
-                            reorderControlNode.frame = reorderControlFrame
-                            reorderControlNode.alpha = 0.0
-                            transition.updateAlpha(node: reorderControlNode, alpha: 1.0)
-                            
-                            transition.updateAlpha(node: strongSelf.dateNode, alpha: 0.0)
-                            if let dateStatusIconNode = strongSelf.dateStatusIconNode {
-                                transition.updateAlpha(node: dateStatusIconNode, alpha: 0.0)
-                            }
-                            transition.updateAlpha(node: strongSelf.badgeNode, alpha: 0.0)
-                            transition.updateAlpha(node: strongSelf.mentionBadgeNode, alpha: 0.0)
-                            transition.updateAlpha(node: strongSelf.pinnedIconNode, alpha: 0.0)
-                            transition.updateAlpha(node: strongSelf.statusNode, alpha: 0.0)
-                        } else if let reorderControlNode = strongSelf.reorderControlNode {
-                            let _ = reorderControlSizeAndApply.1(layout.contentSize.height, false, .immediate)
-                            transition.updateFrame(node: reorderControlNode, frame: reorderControlFrame)
-                        }
-                    } else if let reorderControlNode = strongSelf.reorderControlNode {
-                        animateBadges = false
-                        strongSelf.reorderControlNode = nil
-                        transition.updateAlpha(node: reorderControlNode, alpha: 0.0, completion: { [weak reorderControlNode] _ in
-                            reorderControlNode?.removeFromSupernode()
-                        })
-                        transition.updateAlpha(node: strongSelf.dateNode, alpha: 1.0)
-                        if let dateStatusIconNode = strongSelf.dateStatusIconNode {
-                            transition.updateAlpha(node: dateStatusIconNode, alpha: 1.0)
-                        }
-                        transition.updateAlpha(node: strongSelf.badgeNode, alpha: 1.0)
-                        transition.updateAlpha(node: strongSelf.mentionBadgeNode, alpha: 1.0)
-                        transition.updateAlpha(node: strongSelf.pinnedIconNode, alpha: 1.0)
-                        transition.updateAlpha(node: strongSelf.statusNode, alpha: 1.0)
-                    }
-                    
-                    let contentRect = rawContentRect.offsetBy(dx: editingOffset + leftInset + revealOffset, dy: 0.0)
-                    
-                    let avatarFrame = CGRect(origin: CGPoint(x: leftInset - avatarLeftInset + editingOffset + avatarLeftEdgeInset + revealOffset, y: floor((itemHeight - avatarDiameter) / 2.0)), size: CGSize(width: avatarDiameter, height: avatarDiameter))
-                    var avatarScaleOffset: CGFloat = 0.0
-                    var avatarScale: CGFloat = 1.0
-                    if let inlineNavigationLocation = item.interaction.inlineNavigationLocation {
-                        let targetAvatarScale: CGFloat = floor(item.presentationData.fontSize.itemListBaseFontSize * 54.0 / 17.0) / avatarFrame.width
-                        avatarScale = targetAvatarScale * inlineNavigationLocation.progress + 1.0 * (1.0 - inlineNavigationLocation.progress)
-                        
-                        let targetAvatarScaleOffset: CGFloat = -(avatarFrame.width - avatarFrame.width * avatarScale) * 0.5
-                        avatarScaleOffset = targetAvatarScaleOffset * inlineNavigationLocation.progress
-                    }
-                    
-                    transition.updateFrame(node: strongSelf.avatarContainerNode, frame: avatarFrame)
-
-                    if useChatListLayout && isCommunity && avatarContentImageSpec == nil, let shadowImage = UIImage(bundleImageName: "Components/CommunityShadow") {
-                        strongSelf.communityAvatarShadowNode.isHidden = false
-                        strongSelf.communityAvatarShadowNode.image = generateTintedImage(image: shadowImage, color: theme.titleColor.withAlphaComponent(0.9))
-
-                        let aspectRatio = shadowImage.size.width / shadowImage.size.height
-                        let shadowSize = CGSize(width: floor(avatarFrame.width * aspectRatio * 0.84), height: floor(avatarFrame.width * 0.97))
-                        transition.updatePosition(node: strongSelf.communityAvatarShadowNode, position: CGPoint(x: avatarFrame.width * 0.5 + avatarScaleOffset - 12.0 + UIScreenPixel, y: avatarFrame.height * 0.5))
-                        transition.updateBounds(node: strongSelf.communityAvatarShadowNode, bounds: CGRect(origin: CGPoint(), size: shadowSize))
-                        transition.updateTransformScale(node: strongSelf.communityAvatarShadowNode, scale: avatarScale)
-                    } else {
-                        strongSelf.communityAvatarShadowNode.isHidden = true
-                    }
-
-                    if useChatListLayout && displayCommunityAvatarBadge && avatarContentImageSpec == nil && !item.useCommunityViewLayout {
-                        let communityAvatarBadgeBackgroundView: GlassBackgroundView
-                        let communityAvatarBadgeIconView: GlassBackgroundView.ContentImageView
-                        if let currentBackgroundView = strongSelf.communityAvatarBadgeBackgroundView, let currentIconView = strongSelf.communityAvatarBadgeIconView {
-                            communityAvatarBadgeBackgroundView = currentBackgroundView
-                            communityAvatarBadgeIconView = currentIconView
-                        } else {
-                            communityAvatarBadgeBackgroundView = GlassBackgroundView()
-                            communityAvatarBadgeBackgroundView.isUserInteractionEnabled = false
-                            communityAvatarBadgeBackgroundView.isHidden = true
-
-                            communityAvatarBadgeIconView = GlassBackgroundView.ContentImageView()
-                            communityAvatarBadgeIconView.isUserInteractionEnabled = false
-
-                            communityAvatarBadgeBackgroundView.contentView.addSubview(communityAvatarBadgeIconView)
-                            strongSelf.avatarContainerNode.view.addSubview(communityAvatarBadgeBackgroundView)
-
-                            strongSelf.communityAvatarBadgeBackgroundView = communityAvatarBadgeBackgroundView
-                            strongSelf.communityAvatarBadgeIconView = communityAvatarBadgeIconView
-                        }
-
-                        let badgeSize = CGSize(width: 20.0, height: 20.0)
-                        let scaledAvatarSize = CGSize(width: avatarFrame.width * avatarScale, height: avatarFrame.height * avatarScale)
-                        let scaledAvatarCenter = CGPoint(x: avatarFrame.width * 0.5 + avatarScaleOffset, y: avatarFrame.height * 0.5)
-                        let scaledAvatarFrame = CGRect(origin: CGPoint(x: scaledAvatarCenter.x - scaledAvatarSize.width * 0.5, y: scaledAvatarCenter.y - scaledAvatarSize.height * 0.5), size: scaledAvatarSize)
-                        let badgeFrame = CGRect(origin: CGPoint(x: scaledAvatarFrame.maxX - badgeSize.width + 1.0, y: scaledAvatarFrame.maxY - badgeSize.height + 1.0), size: badgeSize)
-
-                        communityAvatarBadgeBackgroundView.isHidden = false
-                        communityAvatarBadgeBackgroundView.update(size: badgeSize, cornerRadius: badgeSize.height * 0.5, isDark: item.presentationData.theme.overallDarkAppearance, tintColor: .init(kind: .panel), transition: ComponentTransition(transition))
-                        transition.updateFrame(view: communityAvatarBadgeBackgroundView, frame: badgeFrame)
-
-                        if let arrowImage = UIImage(bundleImageName: "Media Editor/DownArrow")?.withRenderingMode(.alwaysTemplate) {
-                            communityAvatarBadgeIconView.image = arrowImage
-                            communityAvatarBadgeIconView.tintColor = theme.titleColor
-                            let iconFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((badgeSize.width - arrowImage.size.width) * 0.5), y: floorToScreenPixels((badgeSize.height - arrowImage.size.height) * 0.5)), size: arrowImage.size)
-                            transition.updateFrame(view: communityAvatarBadgeIconView, frame: iconFrame)
-                        }
-                    } else {
-                        strongSelf.communityAvatarBadgeBackgroundView?.isHidden = true
-                    }
-
-                    transition.updatePosition(node: strongSelf.avatarNode, position: avatarFrame.offsetBy(dx: -avatarFrame.minX, dy: -avatarFrame.minY).center.offsetBy(dx: avatarScaleOffset, dy: 0.0))
-                    transition.updateBounds(node: strongSelf.avatarNode, bounds: CGRect(origin: CGPoint(), size: avatarFrame.size))
-                    transition.updateTransformScale(node: strongSelf.avatarNode, scale: avatarScale)
-                    strongSelf.avatarNode.updateSize(size: avatarFrame.size)
-                    strongSelf.updateVideoVisibility()
-                    
-                    var itemPeerId: EnginePeer.Id?
-                    if case let .chatList(index) = item.index {
-                        itemPeerId = index.messageIndex.id.peerId
-                    }
-                    
-                    if let itemPeerId = itemPeerId, let inlineNavigationLocation = item.interaction.inlineNavigationLocation, inlineNavigationLocation.location.peerId == itemPeerId {
-                        let inlineNavigationMarkLayer: SimpleLayer
-                        var animateIn = false
-                        if let current = strongSelf.inlineNavigationMarkLayer {
-                            inlineNavigationMarkLayer = current
-                        } else {
-                            inlineNavigationMarkLayer = SimpleLayer()
-                            strongSelf.inlineNavigationMarkLayer = inlineNavigationMarkLayer
-                            inlineNavigationMarkLayer.cornerRadius = 4.0
-                            animateIn = true
-                            strongSelf.layer.addSublayer(inlineNavigationMarkLayer)
-                        }
-                        inlineNavigationMarkLayer.backgroundColor = item.presentationData.theme.list.itemAccentColor.cgColor
-                        let markHeight: CGFloat = 50.0
-                        var markFrame = CGRect(origin: CGPoint(x: -4.0, y: avatarFrame.midY - markHeight * 0.5), size: CGSize(width: 8.0, height: markHeight))
-                        markFrame.origin.x -= (1.0 - inlineNavigationLocation.progress) * markFrame.width * 0.5
-                        if animateIn {
-                            inlineNavigationMarkLayer.frame = markFrame
-                            transition.animatePositionAdditive(layer: inlineNavigationMarkLayer, offset: CGPoint(x: -markFrame.width * 0.5, y: 0.0))
-                        } else {
-                            transition.updateFrame(layer: inlineNavigationMarkLayer, frame: markFrame)
-                        }
-                    } else {
-                        if let inlineNavigationMarkLayer = strongSelf.inlineNavigationMarkLayer {
-                            strongSelf.inlineNavigationMarkLayer = nil
-                            transition.updatePosition(layer: inlineNavigationMarkLayer, position: CGPoint(x: -inlineNavigationMarkLayer.bounds.width * 0.5, y: avatarFrame.midY))
-                        }
-                    }
-                    
-                    if let inlineNavigationLocation = item.interaction.inlineNavigationLocation, badgeContent != .none {
-                        var animateIn = false
-                        
-                        let avatarBadgeBackground: ASImageNode
-                        if let current = strongSelf.avatarBadgeBackground {
-                            avatarBadgeBackground = current
-                        } else {
-                            avatarBadgeBackground = ASImageNode()
-                            strongSelf.avatarBadgeBackground = avatarBadgeBackground
-                            strongSelf.avatarNode.addSubnode(avatarBadgeBackground)
-                        }
-                        
-                        avatarBadgeBackground.image = currentAvatarBadgeCleanBackgroundImage
-                        
-                        let avatarBadgeNode: ChatListBadgeNode
-                        if let current = strongSelf.avatarBadgeNode {
-                            avatarBadgeNode = current
-                        } else {
-                            animateIn = true
-                            avatarBadgeNode = ChatListBadgeNode()
-                            avatarBadgeNode.disableBounce = true
-                            strongSelf.avatarBadgeNode = avatarBadgeNode
-                            strongSelf.avatarNode.addSubnode(avatarBadgeNode)
-                        }
-                        
-                        let makeAvatarBadgeLayout = avatarBadgeNode.asyncLayout()
-                        let (avatarBadgeLayout, avatarBadgeApply) = makeAvatarBadgeLayout(CGSize(width: rawContentWidth, height: CGFloat.greatestFiniteMagnitude), avatarBadgeDiameter, avatarBadgeFont, currentAvatarBadgeBackgroundImage, badgeContent)
-                        let _ = avatarBadgeApply(animateBadges, false)
-                        let avatarBadgeFrame = CGRect(origin: CGPoint(x: avatarFrame.width - avatarBadgeLayout.width, y: avatarFrame.height - avatarBadgeLayout.height), size: avatarBadgeLayout)
-                        avatarBadgeNode.position = avatarBadgeFrame.center
-                        avatarBadgeNode.bounds = CGRect(origin: CGPoint(), size: avatarBadgeFrame.size)
-                        
-                        let avatarBadgeBackgroundFrame = avatarBadgeFrame.insetBy(dx: -2.0, dy: -2.0)
-                        avatarBadgeBackground.position = avatarBadgeBackgroundFrame.center
-                        avatarBadgeBackground.bounds = CGRect(origin: CGPoint(), size: avatarBadgeBackgroundFrame.size)
-                        
-                        if animateIn {
-                            ContainedViewLayoutTransition.immediate.updateSublayerTransformScale(node: avatarBadgeNode, scale: 0.00001)
-                            ContainedViewLayoutTransition.immediate.updateTransformScale(layer: avatarBadgeBackground.layer, scale: 0.00001)
-                        }
-                        transition.updateSublayerTransformScale(node: avatarBadgeNode, scale: max(0.00001, inlineNavigationLocation.progress))
-                        transition.updateTransformScale(layer: avatarBadgeBackground.layer, scale: max(0.00001, inlineNavigationLocation.progress))
-                    } else if let avatarBadgeNode = strongSelf.avatarBadgeNode {
-                        strongSelf.avatarBadgeNode = nil
-                        transition.updateSublayerTransformScale(node: avatarBadgeNode, scale: 0.00001, completion: { [weak avatarBadgeNode] _ in
-                            avatarBadgeNode?.removeFromSupernode()
-                        })
-                        if let avatarBadgeBackground = strongSelf.avatarBadgeBackground {
-                            strongSelf.avatarBadgeBackground = nil
-                            transition.updateTransformScale(layer: avatarBadgeBackground.layer, scale: 0.00001, completion: { [weak avatarBadgeBackground] _ in
-                                avatarBadgeBackground?.removeFromSupernode()
-                            })
-                        }
-                    }
-                    
-                    if let threadInfo = threadInfo, !displayAsMessage {
-                        let avatarIconView: ComponentHostView<Empty>
-                        if let current = strongSelf.avatarIconView {
-                            avatarIconView = current
-                        } else {
-                            avatarIconView = ComponentHostView<Empty>()
-                            strongSelf.avatarIconView = avatarIconView
-                            strongSelf.mainContentContainerNode.view.addSubview(avatarIconView)
-                        }
-                        
-                        let avatarIconContent: EmojiStatusComponent.Content
-                        if threadInfo.id == 1 {
-                            avatarIconContent = .image(image: PresentationResourcesChatList.generalTopicIcon(item.presentationData.theme), tintColor: nil)
-                        } else if let fileId = threadInfo.info.icon, fileId != 0 {
-                            avatarIconContent = .animation(content: .customEmoji(fileId: fileId), size: CGSize(width: 48.0, height: 48.0), placeholderColor: item.presentationData.theme.list.mediaPlaceholderColor, themeColor: item.presentationData.theme.list.itemAccentColor, loopMode: .count(0))
-                        } else {
-                            avatarIconContent = .topic(title: String(threadInfo.info.title.prefix(1)), color: threadInfo.info.iconColor, size: CGSize(width: 32.0, height: 32.0))
-                        }
-                        
-                        let avatarIconComponent = EmojiStatusComponent(
-                            context: item.context,
-                            animationCache: item.interaction.animationCache,
-                            animationRenderer: item.interaction.animationRenderer,
-                            content: avatarIconContent,
-                            isVisibleForAnimations: strongSelf.visibilityStatus && item.context.sharedContext.energyUsageSettings.loopEmoji,
-                            action: nil
-                        )
-                        strongSelf.avatarIconComponent = avatarIconComponent
-                        
-                        let iconSize = avatarIconView.update(
-                            transition: .immediate,
-                            component: AnyComponent(avatarIconComponent),
-                            environment: {},
-                            containerSize: item.interaction.isInlineMode ? CGSize(width: 18.0, height: 18.0) : CGSize(width: 32.0, height: 32.0)
-                        )
-                        
-                        let avatarIconFrame: CGRect
-                        if item.interaction.isInlineMode {
-                            avatarIconFrame = CGRect(origin: CGPoint(x: contentRect.origin.x, y: contentRect.origin.y + 1.0), size: iconSize)
-                        } else {
-                            avatarIconFrame = CGRect(origin: CGPoint(x: editingOffset + params.leftInset + floor((leftInset - params.leftInset - iconSize.width) / 2.0) + revealOffset, y: contentRect.origin.y + 2.0), size: iconSize)
-                        }
-                        transition.updateFrame(view: avatarIconView, frame: avatarIconFrame)
-                    } else if let avatarIconView = strongSelf.avatarIconView {
-                        strongSelf.avatarIconView = nil
-                        avatarIconView.removeFromSuperview()
-                    }
-                    
-                    if !useChatListLayout {
-                        strongSelf.avatarContainerNode.isHidden = true
-                    } else {
-                        strongSelf.avatarContainerNode.isHidden = false
-                    }
-                    
-                    let onlineFrame: CGRect
-                    if onlineIsVoiceChat {
-                        onlineFrame = CGRect(origin: CGPoint(x: avatarFrame.width - onlineLayout.width + 1.0 - UIScreenPixel, y: avatarFrame.height - onlineLayout.height + 1.0 - UIScreenPixel), size: onlineLayout)
-                    } else {
-                        onlineFrame = CGRect(origin: CGPoint(x: avatarFrame.width - onlineLayout.width - 2.0, y: avatarFrame.height - onlineLayout.height - 2.0), size: onlineLayout)
-                    }
-                    transition.updateFrame(node: strongSelf.onlineNode, frame: onlineFrame)
-                    
-                    if let avatarLiveBadge = strongSelf.avatarLiveBadge, let iconImage = avatarLiveBadge.foreground.image, let outlineImage = avatarLiveBadge.outline.image {
-                        let outlineInset = (outlineImage.size.height - iconImage.size.height) * 0.5
-                        let liveBadgeFrame = CGRect(origin: CGPoint(x: floor((avatarFrame.width - iconImage.size.width) * 0.5), y: avatarFrame.height + 5.0 - iconImage.size.height), size: iconImage.size)
-                        transition.updateFrame(view: avatarLiveBadge.foreground, frame: liveBadgeFrame)
-                        transition.updateFrame(view: avatarLiveBadge.outline, frame: liveBadgeFrame.insetBy(dx: -outlineInset, dy: -outlineInset))
-                        
-                        let effectiveBackgroundColor: UIColor
-                        if item.isPinned {
-                            effectiveBackgroundColor = item.presentationData.theme.chatList.pinnedItemBackgroundColor
-                        } else {
-                            effectiveBackgroundColor = item.presentationData.theme.chatList.itemBackgroundColor
-                        }
-                        
-                        let highlightAlpha = strongSelf.highlightedBackgroundNode.supernode == nil ? 0.0 : strongSelf.highlightedBackgroundNode.alpha
-                        let outlineColor = item.presentationData.theme.chatList.itemHighlightedBackgroundColor.mixedWith(effectiveBackgroundColor, alpha: 1.0 - highlightAlpha)
-                        transition.updateTintColor(view: avatarLiveBadge.outline, color: outlineColor)
-                    }
-                    
-                    let onlineInlineNavigationFraction: CGFloat = item.interaction.inlineNavigationLocation?.progress ?? 0.0
-                    transition.updateAlpha(node: strongSelf.onlineNode, alpha: 1.0 - onlineInlineNavigationFraction)
-                    transition.updateSublayerTransformScale(node: strongSelf.onlineNode, scale: (1.0 - onlineInlineNavigationFraction) * 1.0 + onlineInlineNavigationFraction * 0.00001)
-                    
-                    let onlineIcon: UIImage?
-                    let effectiveBackgroundColor: UIColor
-                    if strongSelf.reallyHighlighted {
-                        onlineIcon = PresentationResourcesChatList.recentStatusOnlineIcon(item.presentationData.theme, state: .highlighted, voiceChat: onlineIsVoiceChat)
-                        effectiveBackgroundColor = item.presentationData.theme.chatList.itemHighlightedBackgroundColor
-                    } else if case let .chatList(index) = item.index, index.pinningIndex != nil {
-                        onlineIcon = PresentationResourcesChatList.recentStatusOnlineIcon(item.presentationData.theme, state: .pinned, voiceChat: onlineIsVoiceChat)
-                        effectiveBackgroundColor = item.presentationData.theme.chatList.pinnedItemBackgroundColor
-                    } else {
-                        onlineIcon = PresentationResourcesChatList.recentStatusOnlineIcon(item.presentationData.theme, state: .regular, voiceChat: onlineIsVoiceChat)
-                        effectiveBackgroundColor = item.presentationData.theme.chatList.itemBackgroundColor
-                    }
-                    strongSelf.onlineNode.setImage(onlineIcon, color: item.presentationData.theme.list.itemCheckColors.foregroundColor, transition: .immediate)
-                    
-                    if isSubscription, autoremoveTimeout == nil {
-                        let starView: StarView
-                        if let current = strongSelf.starView {
-                            starView = current
-                        } else {
-                            starView = StarView()
-                            strongSelf.starView = starView
-                            strongSelf.contextContainer.view.addSubview(starView)
-                        }
-                        starView.outlineColor = effectiveBackgroundColor
-                        
-                        let starSize = CGSize(width: 20.0, height: 20.0)
-                        let starFrame = CGRect(origin: CGPoint(x: avatarFrame.maxX - starSize.width + 1.0, y: avatarFrame.maxY - starSize.height + 1.0), size: starSize)
-                        transition.updateFrame(view: starView, frame: starFrame)
-                    } else if let starView = strongSelf.starView {
-                        strongSelf.starView = nil
-                        starView.removeFromSuperview()
-                    }
-                    
-                    let autoremoveTimeoutFraction: CGFloat
-                    if online {
-                        autoremoveTimeoutFraction = 0.0
-                    } else {
-                        autoremoveTimeoutFraction = 1.0 - onlineInlineNavigationFraction
-                    }
-                    
-                    if let autoremoveTimeout = autoremoveTimeout {
-                        let avatarTimerBadge: AvatarBadgeView
-                        var avatarTimerTransition = transition
-                        if !avatarTimerTransition.isAnimated, animateOnline {
-                            avatarTimerTransition = .animated(duration: 0.3, curve: .spring)
-                        }
-                        if let current = strongSelf.avatarTimerBadge {
-                            avatarTimerBadge = current
-                        } else {
-                            avatarTimerTransition = .immediate
-                            avatarTimerBadge = AvatarBadgeView(frame: CGRect())
-                            strongSelf.avatarTimerBadge = avatarTimerBadge
-                            strongSelf.avatarNode.view.addSubview(avatarTimerBadge)
-                        }
-                        let avatarBadgeSize = CGSize(width: avatarTimerBadgeDiameter, height: avatarTimerBadgeDiameter)
-                        avatarTimerBadge.update(size: avatarBadgeSize, text: shortTimeIntervalString(strings: item.presentationData.strings, value: autoremoveTimeout, useLargeFormat: true))
-                        let avatarBadgeFrame = CGRect(origin: CGPoint(x: avatarFrame.width - avatarBadgeSize.width, y: avatarFrame.height - avatarBadgeSize.height), size: avatarBadgeSize)
-                        avatarTimerTransition.updatePosition(layer: avatarTimerBadge.layer, position: avatarBadgeFrame.center)
-                        avatarTimerTransition.updateBounds(layer: avatarTimerBadge.layer, bounds: CGRect(origin: CGPoint(), size: avatarBadgeFrame.size))
-                        avatarTimerTransition.updateTransformScale(layer: avatarTimerBadge.layer, scale: autoremoveTimeoutFraction * 1.0 + (1.0 - autoremoveTimeoutFraction) * 0.00001)
-                        
-                        strongSelf.avatarNode.badgeView = avatarTimerBadge
-                    } else if let avatarTimerBadge = strongSelf.avatarTimerBadge {
-                        strongSelf.avatarTimerBadge = nil
-                        strongSelf.avatarNode.badgeView = nil
-                        avatarTimerBadge.removeFromSuperview()
-                    }
-                                  
-                    let _ = measureApply()
-                    let _ = dateApply()
-                    
-                    var currentTextSnapshotView: UIView?
-                    if transition.isAnimated, let currentItem, currentItem.editing != item.editing, strongSelf.textNode.textNode.cachedLayout?.linesRects() != textLayout.linesRects() {
-                        if let textSnapshotView = strongSelf.textNode.textNode.view.snapshotContentTree() {
-                            textSnapshotView.layer.anchorPoint = CGPoint()
-                            currentTextSnapshotView = textSnapshotView
-                            strongSelf.textNode.textNode.view.superview?.insertSubview(textSnapshotView, aboveSubview: strongSelf.textNode.textNode.view)
-                            textSnapshotView.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2, removeOnCompletion: false, completion: { [weak textSnapshotView] _ in
-                                textSnapshotView?.removeFromSuperview()
-                            })
-                            strongSelf.textNode.textNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.18)
-                        }
-                    }
-                    
-                    let _ = textApply(TextNodeWithEntities.Arguments(
-                        context: item.context,
-                        cache: item.interaction.animationCache,
-                        renderer: item.interaction.animationRenderer,
-                        placeholderColor: item.presentationData.theme.list.mediaPlaceholderColor,
-                        attemptSynchronous: synchronousLoads
-                    ))
-                    
-                    var topForumTopicRect = authorApply()
-                    if !isFirstForumThreadSelectable {
-                        topForumTopicRect = nil
-                    }
-                    
-                    let _ = titleApply()
-                    let _ = badgeApply(animateBadges, !isMuted)
-                    let _ = mentionBadgeApply(animateBadges, true)
-                    let _ = onlineApply(animateContent && animateOnline)
-                    
-                    var dateFrame = CGRect(origin: CGPoint(x: contentRect.maxX - dateLayout.size.width, y: contentRect.origin.y + 2.0), size: dateLayout.size)
-                    
-                    if case let .peer(peerData) = item.content, let customMessageListData = peerData.customMessageListData, customMessageListData.messageCount != nil, customMessageListData.commandPrefix == nil {
-                        dateFrame.origin.x -= 10.0
-                        
-                        let dateDisclosureIconView: UIImageView
-                        if let current = strongSelf.dateDisclosureIconView {
-                            dateDisclosureIconView = current
-                        } else {
-                            dateDisclosureIconView = UIImageView(image: UIImage(bundleImageName: "Item List/DisclosureArrow")?.withRenderingMode(.alwaysTemplate))
-                            strongSelf.dateDisclosureIconView = dateDisclosureIconView
-                            strongSelf.mainContentContainerNode.view.addSubview(dateDisclosureIconView)
-                        }
-                        dateDisclosureIconView.tintColor = item.presentationData.theme.list.disclosureArrowColor
-                        let iconScale: CGFloat = 0.7
-                        if let image = dateDisclosureIconView.image {
-                            let imageSize = CGSize(width: floor(image.size.width * iconScale), height: floor(image.size.height * iconScale))
-                            let iconFrame = CGRect(origin: CGPoint(x: contentRect.origin.x + contentRect.size.width - imageSize.width + 4.0, y: floorToScreenPixels(dateFrame.midY - imageSize.height * 0.5)), size: imageSize)
-                            dateDisclosureIconView.frame = iconFrame
-                        }
-                    } else if let dateDisclosureIconView = strongSelf.dateDisclosureIconView {
-                        strongSelf.dateDisclosureIconView = nil
-                        dateDisclosureIconView.removeFromSuperview()
-                    }
-                    
-                    transition.updateFrame(node: strongSelf.dateNode, frame: dateFrame)
-                    
-                    var statusOffset: CGFloat = 0.0
-                    if let dateIconImage {
-                        statusOffset += 2.0 + dateIconImage.size.width + 4.0
-                        
-                        let dateStatusIconNode: ASImageNode
-                        if let current = strongSelf.dateStatusIconNode {
-                            dateStatusIconNode = current
-                        } else {
-                            dateStatusIconNode = ASImageNode()
-                            strongSelf.dateStatusIconNode = dateStatusIconNode
-                            strongSelf.mainContentContainerNode.addSubnode(dateStatusIconNode)
-                        }
-                        dateStatusIconNode.image = dateIconImage
-                        
-                        var dateStatusX: CGFloat = contentRect.origin.x
-                        dateStatusX += contentRect.size.width
-                        dateStatusX += -dateLayout.size.width - 4.0 - dateIconImage.size.width
-                        
-                        var dateStatusY: CGFloat = contentRect.origin.y + 2.0 + UIScreenPixel
-                        dateStatusY += -UIScreenPixel + floor((dateLayout.size.height - dateIconImage.size.height) / 2.0)
-                        
-                        transition.updateFrame(node: dateStatusIconNode, frame: CGRect(origin: CGPoint(x: dateStatusX, y: dateStatusY), size: dateIconImage.size))
-                    } else if let dateStatusIconNode = strongSelf.dateStatusIconNode {
-                        strongSelf.dateStatusIconNode = nil
-                        dateStatusIconNode.removeFromSupernode()
-                    }
-                    
-                    let statusSize = CGSize(width: 24.0, height: 24.0)
-                    
-                    var statusX: CGFloat = contentRect.origin.x
-                    statusX += contentRect.size.width
-                    statusX += -dateLayout.size.width - statusSize.width - statusOffset
-                    
-                    strongSelf.statusNode.frame = CGRect(origin: CGPoint(x: statusX, y: contentRect.origin.y + 2.0 - UIScreenPixel + floor((dateLayout.size.height - statusSize.height) / 2.0)), size: statusSize)
-                    strongSelf.statusNode.fontSize = item.presentationData.fontSize.itemListBaseFontSize
-                    let _ = strongSelf.statusNode.transitionToState(statusState, animated: animateContent)
-                    
-                    let rightAccessoryVerticalOffset: CGFloat = floorToScreenPixels(-4.0 * min(1.0, item.presentationData.fontSize.itemListBaseFontSize / 17.0))
-                    var nextBadgeX: CGFloat = contentRect.maxX
-                    if let _ = currentBadgeBackgroundImage {
-                        let badgeFrame = CGRect(x: nextBadgeX - badgeLayout.width, y: contentRect.maxY - badgeLayout.height + rightAccessoryVerticalOffset, width: badgeLayout.width, height: badgeLayout.height)
-                        
-                        transition.updateFrame(node: strongSelf.badgeNode, frame: badgeFrame)
-                        nextBadgeX -= badgeLayout.width + 6.0
-                        
-                        if item.useCommunityViewLayout {
-                            strongSelf.badgeNode.layer.rasterizationScale = UIScreenScale
-                            strongSelf.badgeNode.layer.shouldRasterize = true
-                        }
-                    }
-                    
-                    if currentMentionBadgeImage != nil || currentBadgeBackgroundImage != nil {
-                        let badgeFrame = CGRect(x: nextBadgeX - mentionBadgeLayout.width, y: contentRect.maxY - mentionBadgeLayout.height + rightAccessoryVerticalOffset, width: mentionBadgeLayout.width, height: mentionBadgeLayout.height)
-                        
-                        transition.updateFrame(node: strongSelf.mentionBadgeNode, frame: badgeFrame)
-                        nextBadgeX -= mentionBadgeLayout.width + 6.0
-                        
-                        if item.useCommunityViewLayout {
-                            strongSelf.mentionBadgeNode.layer.rasterizationScale = UIScreenScale
-                            strongSelf.mentionBadgeNode.layer.shouldRasterize = true
-                        }
-                    }
-                    
-                    if let currentPinnedIconImage = currentPinnedIconImage {
-                        strongSelf.pinnedIconNode.image = currentPinnedIconImage
-                        strongSelf.pinnedIconNode.isHidden = false
-                        
-                        let pinnedIconSize = currentPinnedIconImage.size
-                        let pinnedIconFrame = CGRect(x: nextBadgeX - pinnedIconSize.width, y: contentRect.maxY - pinnedIconSize.height + rightAccessoryVerticalOffset, width: pinnedIconSize.width, height: pinnedIconSize.height)
-                        
-                        strongSelf.pinnedIconNode.frame = pinnedIconFrame
-                        nextBadgeX -= pinnedIconSize.width + 6.0
-                    } else {
-                        strongSelf.pinnedIconNode.image = nil
-                        strongSelf.pinnedIconNode.isHidden = true
-                    }
-                    
-                    if let (actionButtonTitleNodeLayout, apply) = actionButtonTitleNodeLayoutAndApply {
-                        let actionButtonSideInset = floor(item.presentationData.fontSize.itemListBaseFontSize * 12.0 / 17.0)
-                        let actionButtonTopInset = floor(item.presentationData.fontSize.itemListBaseFontSize * 5.0 / 17.0)
-                        let actionButtonBottomInset = floor(item.presentationData.fontSize.itemListBaseFontSize * 4.0 / 17.0)
-                        
-                        let actionButtonSize = CGSize(width: actionButtonTitleNodeLayout.size.width + actionButtonSideInset * 2.0, height: actionButtonTitleNodeLayout.size.height + actionButtonTopInset + actionButtonBottomInset)
-                        var actionButtonFrame = CGRect(x: nextBadgeX - actionButtonSize.width, y: contentRect.minY + floor((contentRect.height - actionButtonSize.height) * 0.5), width: actionButtonSize.width, height: actionButtonSize.height)
-                        actionButtonFrame.origin.y = max(actionButtonFrame.origin.y, dateFrame.maxY + floor(item.presentationData.fontSize.itemListBaseFontSize * 4.0 / 17.0))
-                        actionButtonFrame.origin.y += 4.0
-                        
-                        let actionButtonNode: HighlightableButtonNode
-                        var animateActionButtonIn = false
-                        if let current = strongSelf.actionButtonNode {
-                            actionButtonNode = current
-                        } else {
-                            animateActionButtonIn = true
-                            actionButtonNode = HighlightableButtonNode()
-                            strongSelf.actionButtonNode = actionButtonNode
-                            strongSelf.mainContentContainerNode.addSubnode(actionButtonNode)
-                            actionButtonNode.addTarget(strongSelf, action: #selector(strongSelf.actionButtonPressed), forControlEvents: .touchUpInside)
-                        }
-                        
-                        let actionButtonBackgroundView: UIImageView
-                        if let current = strongSelf.actionButtonBackgroundView {
-                            actionButtonBackgroundView = current
-                        } else {
-                            actionButtonBackgroundView = UIImageView()
-                            strongSelf.actionButtonBackgroundView = actionButtonBackgroundView
-                            actionButtonNode.view.addSubview(actionButtonBackgroundView)
-                        }
-                        
-                        if actionButtonBackgroundView.image?.size.height != actionButtonSize.height {
-                            actionButtonBackgroundView.image = generateStretchableFilledCircleImage(diameter: actionButtonSize.height, color: .white)?.withRenderingMode(.alwaysTemplate)
-                        }
-                        
-                        actionButtonBackgroundView.tintColor = theme.unreadBadgeActiveBackgroundColor
-                        
-                        let actionButtonTitleNode = apply()
-                        if strongSelf.actionButtonTitleNode !== actionButtonTitleNode {
-                            strongSelf.actionButtonTitleNode?.removeFromSupernode()
-                            strongSelf.actionButtonTitleNode = actionButtonTitleNode
-                            actionButtonNode.addSubnode(actionButtonTitleNode)
-                        }
-                        
-                        actionButtonNode.isUserInteractionEnabled = true
-                        actionButtonNode.frame = actionButtonFrame
-                        actionButtonBackgroundView.frame = CGRect(origin: CGPoint(), size: actionButtonFrame.size)
-                        actionButtonTitleNode.frame = CGRect(origin: CGPoint(x: floorToScreenPixels((actionButtonFrame.width - actionButtonTitleNodeLayout.size.width) * 0.5), y: actionButtonTopInset), size: actionButtonTitleNodeLayout.size)
-                        if animateActionButtonIn {
-                            actionButtonNode.alpha = 0.0
-                        }
-                        transition.updateAlpha(node: actionButtonNode, alpha: 1.0)
-                        
-                        nextBadgeX -= actionButtonSize.width + 6.0
-                    } else {
-                        if let actionButtonNode = strongSelf.actionButtonNode {
-                            let actionButtonTitleNode = strongSelf.actionButtonTitleNode
-                            let actionButtonBackgroundView = strongSelf.actionButtonBackgroundView
-                            actionButtonNode.isUserInteractionEnabled = false
-
-                            strongSelf.actionButtonTitleNode = nil
-                            strongSelf.actionButtonBackgroundView = nil
-                            strongSelf.actionButtonNode = nil
-
-                            transition.updateAlpha(node: actionButtonNode, alpha: 0.0, completion: { [weak actionButtonNode, weak actionButtonTitleNode, weak actionButtonBackgroundView] _ in
-                                actionButtonTitleNode?.removeFromSupernode()
-                                actionButtonBackgroundView?.removeFromSuperview()
-                                actionButtonNode?.removeFromSupernode()
-                            })
-                        } else {
-                            if let actionButtonTitleNode = strongSelf.actionButtonTitleNode {
-                                actionButtonTitleNode.removeFromSupernode()
-                                strongSelf.actionButtonTitleNode = nil
-                            }
-                            if let actionButtonBackgroundView = strongSelf.actionButtonBackgroundView {
-                                actionButtonBackgroundView.removeFromSuperview()
-                                strongSelf.actionButtonBackgroundView = nil
-                            }
-                        }
-                    }
-                    
-                    var titleOffset: CGFloat = titleLeftOffset
-                    if let currentSecretIconImage = currentSecretIconImage {
-                        let iconNode: ASImageNode
-                        if let current = strongSelf.secretIconNode {
-                            iconNode = current
-                        } else {
-                            iconNode = ASImageNode()
-                            iconNode.isLayerBacked = true
-                            iconNode.displaysAsynchronously = false
-                            iconNode.displayWithoutProcessing = true
-                            strongSelf.mainContentContainerNode.addSubnode(iconNode)
-                            strongSelf.secretIconNode = iconNode
-                        }
-                        iconNode.image = currentSecretIconImage
-                        transition.updateFrame(node: iconNode, frame: CGRect(origin: CGPoint(x: contentRect.origin.x + titleLeftOffset, y: contentRect.origin.y + floor((titleLayout.size.height - currentSecretIconImage.size.height) / 2.0)), size: currentSecretIconImage.size))
-                        titleOffset += currentSecretIconImage.size.width + 3.0
-                    } else if let secretIconNode = strongSelf.secretIconNode {
-                        strongSelf.secretIconNode = nil
-                        secretIconNode.removeFromSupernode()
-                    }
-                    
-                    let contentDelta = CGPoint(x: contentRect.origin.x - (strongSelf.titleNode.frame.minX - titleOffset), y: contentRect.origin.y - (strongSelf.titleNode.frame.minY - UIScreenPixel))
-                    let titleFrame = CGRect(origin: CGPoint(x: contentRect.origin.x + titleOffset, y: contentRect.origin.y + UIScreenPixel), size: titleLayout.size)
-                    strongSelf.titleNode.frame = titleFrame
-                    
-                    let authorNodeFrame = CGRect(origin: CGPoint(x: contentRect.origin.x - 1.0, y: contentRect.minY + titleLayout.size.height - 2.0), size: authorLayout)
-                    strongSelf.authorNode.frame = authorNodeFrame
-                    let textNodeFrame = CGRect(origin: CGPoint(x: contentRect.origin.x - 1.0, y: contentRect.minY + titleLayout.size.height - 2.0 + (authorLayout.height.isZero ? 0.0 : (authorLayout.height - 3.0))), size: textLayout.size)
-                    
-                    if let topForumTopicRect, !isSearching {
-                        let compoundHighlightingNode: LinkHighlightingNode
-                        if let current = strongSelf.compoundHighlightingNode {
-                            compoundHighlightingNode = current
-                        } else {
-                            compoundHighlightingNode = LinkHighlightingNode(color: .clear)
-                            compoundHighlightingNode.alpha = strongSelf.authorNode.alpha
-                            compoundHighlightingNode.useModernPathCalculation = true
-                            strongSelf.compoundHighlightingNode = compoundHighlightingNode
-                            strongSelf.mainContentContainerNode.insertSubnode(compoundHighlightingNode, at: 0)
-                        }
-                        
-                        let compoundTextButtonNode: HighlightTrackingButtonNode
-                        if let current = strongSelf.compoundTextButtonNode {
-                            compoundTextButtonNode = current
-                        } else {
-                            compoundTextButtonNode = HighlightTrackingButtonNode()
-                            strongSelf.compoundTextButtonNode = compoundTextButtonNode
-                            strongSelf.mainContentContainerNode.addSubnode(compoundTextButtonNode)
-                            compoundTextButtonNode.addTarget(strongSelf, action: #selector(strongSelf.compoundTextButtonPressed), forControlEvents: .touchUpInside)
-                            compoundTextButtonNode.highligthedChanged = { highlighted in
-                                guard let strongSelf = self, let compoundHighlightingNode = strongSelf.compoundHighlightingNode else {
-                                    return
-                                }
-                                if highlighted {
-                                    compoundHighlightingNode.layer.removeAnimation(forKey: "opacity")
-                                    compoundHighlightingNode.alpha = 0.65
-                                    strongSelf.textNode.textNode.alpha = strongSelf.authorNode.alpha * 0.65
-                                    strongSelf.authorNode.setFirstTopicHighlighted(true)
-                                } else {
-                                    compoundHighlightingNode.alpha = 1.0
-                                    compoundHighlightingNode.layer.animateAlpha(from: 0.65, to: 1.0, duration: 0.2)
-                                    
-                                    let prevAlpha = strongSelf.textNode.textNode.alpha
-                                    strongSelf.textNode.textNode.alpha = strongSelf.authorNode.alpha
-                                    strongSelf.textNode.textNode.layer.animateAlpha(from: prevAlpha, to: strongSelf.authorNode.alpha, duration: 0.2)
-                                    strongSelf.authorNode.setFirstTopicHighlighted(false)
-                                }
-                            }
-                        }
-                        
-                        var topRect = topForumTopicRect
-                        topRect.origin.x -= 1.0
-                        topRect.size.width += 2.0
-                        var textRect = textNodeFrame.offsetBy(dx: -authorNodeFrame.minX, dy: -authorNodeFrame.minY)
-                        textRect.origin.x = topRect.minX
-                        textRect.size.height -= 1.0
-                        textRect.size.width += 16.0
-                        
-                        compoundHighlightingNode.frame = CGRect(origin: CGPoint(x: authorNodeFrame.minX, y: authorNodeFrame.minY), size: CGSize(width: textNodeFrame.maxX - authorNodeFrame.minX, height: textNodeFrame.maxY - authorNodeFrame.minY))
-                        
-                        let midY = floor((topForumTopicRect.minY + textRect.maxY) / 2.0) + 1.0
-                        
-                        let finalTopRect = CGRect(origin: topRect.origin, size: CGSize(width: topRect.width, height: midY - topRect.minY))
-                        var finalBottomRect = CGRect(origin: CGPoint(x: textRect.minX, y: midY), size: CGSize(width: textRect.width, height: textRect.maxY - midY))
-                        if finalBottomRect.maxX < finalTopRect.maxX && abs(finalBottomRect.maxX - finalTopRect.maxX) < 5.0 {
-                            finalBottomRect.size.width = finalTopRect.maxX - finalBottomRect.minX
-                        }
-                        
-                        compoundHighlightingNode.inset = 0.0
-                        compoundHighlightingNode.outerRadius = floor(finalBottomRect.height * 0.5)
-                        compoundHighlightingNode.innerRadius = 4.0
-                        
-                        compoundHighlightingNode.updateRects([
-                            finalTopRect,
-                            finalBottomRect
-                        ], color: theme.pinnedItemBackgroundColor.mixedWith(theme.unreadBadgeInactiveBackgroundColor, alpha: 0.1))
-                        
-                        transition.updateFrame(node: compoundTextButtonNode, frame: compoundHighlightingNode.frame)
-                        
-                        if let textArrowImage = textArrowImage {
-                            let textArrowNode: ASImageNode
-                            if let current = strongSelf.textArrowNode {
-                                textArrowNode = current
-                            } else {
-                                textArrowNode = ASImageNode()
-                                strongSelf.textArrowNode = textArrowNode
-                                compoundHighlightingNode.addSubnode(textArrowNode)
-                            }
-                            textArrowNode.image = textArrowImage
-                            let arrowScale: CGFloat = 0.75
-                            let textArrowSize = CGSize(width: floor(textArrowImage.size.width * arrowScale), height: floor(textArrowImage.size.height * arrowScale))
-                            textArrowNode.frame = CGRect(origin: CGPoint(x: finalBottomRect.maxX - 0.0 - textArrowSize.width, y: finalBottomRect.minY + floorToScreenPixels((finalBottomRect.height - textArrowSize.height) / 2.0)), size: textArrowSize)
-                        } else if let textArrowNode = strongSelf.textArrowNode {
-                            strongSelf.textArrowNode = nil
-                            textArrowNode.removeFromSupernode()
-                        }
-                    } else {
-                        if let compoundHighlightingNode = strongSelf.compoundHighlightingNode {
-                            strongSelf.compoundHighlightingNode = nil
-                            compoundHighlightingNode.removeFromSupernode()
-                        }
-                        if let compoundTextButtonNode = strongSelf.compoundTextButtonNode {
-                            strongSelf.compoundTextButtonNode = nil
-                            compoundTextButtonNode.removeFromSupernode()
-                        }
-                        if let textArrowNode = strongSelf.textArrowNode {
-                            strongSelf.textArrowNode = nil
-                            textArrowNode.removeFromSupernode()
-                        }
-                    }
-                    
-                    if let compoundTextButtonNode = strongSelf.compoundTextButtonNode {
-                        if strongSelf.textNode.textNode.supernode !== compoundTextButtonNode {
-                            compoundTextButtonNode.addSubnode(strongSelf.textNode.textNode)
-                            if let dustNode = strongSelf.dustNode {
-                                compoundTextButtonNode.addSubnode(dustNode)
-                            }
-                        }
-                        strongSelf.textNode.textNode.frame = textNodeFrame.offsetBy(dx: -compoundTextButtonNode.frame.minX, dy: -compoundTextButtonNode.frame.minY)
-                        
-                        strongSelf.authorNode.assignParentNode(parentNode: compoundTextButtonNode)
-                    } else {
-                        if strongSelf.textNode.textNode.supernode !== strongSelf.mainContentContainerNode {
-                            strongSelf.mainContentContainerNode.addSubnode(strongSelf.textNode.textNode)
-                            if let dustNode = strongSelf.dustNode {
-                                strongSelf.mainContentContainerNode.addSubnode(dustNode)
-                            }
-                        }
-                        strongSelf.textNode.textNode.frame = textNodeFrame
-                        
-                        strongSelf.authorNode.assignParentNode(parentNode: nil)
-                    }
-                    
-                    if let currentTextSnapshotView {
-                        transition.updatePosition(layer: currentTextSnapshotView.layer, position: textNodeFrame.origin)
-                    }
-                    
-                    if let trailingTextBadgeLayoutAndApply {
-                        let badgeSize = CGSize(width: trailingTextBadgeLayoutAndApply.0.size.width + trailingTextBadgeInsets.left + trailingTextBadgeInsets.right, height: trailingTextBadgeLayoutAndApply.0.size.height + trailingTextBadgeInsets.top + trailingTextBadgeInsets.bottom - UIScreenPixel)
-                        
-                        var badgeFrame: CGRect
-                        if textLayout.numberOfLines > 1 {
-                            badgeFrame = CGRect(origin: CGPoint(x: textLayout.trailingLineWidth + 4.0, y: textNodeFrame.height - 3.0 - badgeSize.height), size: badgeSize)
-                        } else {
-                            let firstLineFrame = textLayout.linesRects().first ?? CGRect(origin: CGPoint(), size: textNodeFrame.size)
-                            badgeFrame = CGRect(origin: CGPoint(x: 0.0, y: firstLineFrame.height + 5.0), size: badgeSize)
-                        }
-                            
-                        if badgeFrame.origin.x + badgeFrame.width >= textNodeFrame.width - 2.0 - 10.0 {
-                            badgeFrame.origin.x = textNodeFrame.width - 2.0 - badgeFrame.width
-                        }
-                        
-                        let trailingTextBadgeBackground: UIImageView
-                        if let current = strongSelf.trailingTextBadgeBackground {
-                            trailingTextBadgeBackground = current
-                        } else {
-                            trailingTextBadgeBackground = UIImageView(image: tagBackgroundImage)
-                            strongSelf.trailingTextBadgeBackground = trailingTextBadgeBackground
-                            strongSelf.textNode.textNode.view.addSubview(trailingTextBadgeBackground)
-                        }
-                        trailingTextBadgeBackground.tintColor = theme.pinnedItemBackgroundColor.mixedWith(theme.unreadBadgeInactiveBackgroundColor, alpha: 0.1)
-                        
-                        trailingTextBadgeBackground.frame = badgeFrame
-                        
-                        let trailingTextBadgeFrame = CGRect(origin: CGPoint(x: badgeFrame.minX + trailingTextBadgeInsets.left, y: badgeFrame.minY + trailingTextBadgeInsets.top), size: trailingTextBadgeLayoutAndApply.0.size)
-                        let trailingTextBadgeNode = trailingTextBadgeLayoutAndApply.1()
-                        if strongSelf.trailingTextBadgeNode !== trailingTextBadgeNode {
-                            strongSelf.trailingTextBadgeNode?.removeFromSupernode()
-                            strongSelf.trailingTextBadgeNode = trailingTextBadgeNode
-                            
-                            strongSelf.textNode.textNode.addSubnode(trailingTextBadgeNode)
-                            
-                            trailingTextBadgeNode.layer.anchorPoint = CGPoint()
-                        }
-                        
-                        trailingTextBadgeNode.frame = trailingTextBadgeFrame
-                    } else {
-                        if let trailingTextBadgeNode = strongSelf.trailingTextBadgeNode {
-                            strongSelf.trailingTextBadgeNode = nil
-                            trailingTextBadgeNode.removeFromSupernode()
-                        }
-                        if let trailingTextBadgeBackground = strongSelf.trailingTextBadgeBackground {
-                            strongSelf.trailingTextBadgeBackground = nil
-                            trailingTextBadgeBackground.removeFromSuperview()
-                        }
-                    }
-                    
-                    if !itemTags.isEmpty {
-                        let sizeFactor = item.presentationData.fontSize.itemListBaseFontSize / 17.0
-                        
-                        let itemTagListFrame = CGRect(origin: CGPoint(x: contentRect.minX, y: contentRect.minY + measureLayout.size.height * 2.0 + floorToScreenPixels(2.0 * sizeFactor)), size: CGSize(width: contentRect.width, height: floorToScreenPixels(20.0 * sizeFactor)))
-                        
-                        var itemTagListTransition = transition
-                        let itemTagList: ComponentView<Empty>
-                        if let current = strongSelf.itemTagList {
-                            itemTagList = current
-                        } else {
-                            itemTagListTransition = .immediate
-                            itemTagList = ComponentView()
-                            strongSelf.itemTagList = itemTagList
-                        }
-                        let _ = itemTagList.update(
-                            transition: .immediate,
-                            component: AnyComponent(ChatListItemTagListComponent(
-                                context: item.context,
-                                tags: itemTags,
-                                theme: item.presentationData.theme,
-                                sizeFactor: sizeFactor
-                            )),
-                            environment: {},
-                            containerSize: itemTagListFrame.size
-                        )
-                        if let itemTagListView = itemTagList.view as? ChatListItemTagListComponent.View {
-                            if itemTagListView.superview == nil {
-                                itemTagListView.isUserInteractionEnabled = false
-                                strongSelf.mainContentContainerNode.view.addSubview(itemTagListView)
-                            }
-                            
-                            itemTagListTransition.updateFrame(view: itemTagListView, frame: itemTagListFrame)
-                            itemTagListView.isVisible = strongSelf.visibilityStatus && item.context.sharedContext.energyUsageSettings.loopEmoji
-                        }
-                    } else {
-                        if let itemTagList = strongSelf.itemTagList {
-                            strongSelf.itemTagList = nil
-                            itemTagList.view?.removeFromSuperview()
-                        }
-                    }
-                    
-                    if !textLayout.spoilers.isEmpty {
-                        let dustNode: InvisibleInkDustNode
-                        if let current = strongSelf.dustNode {
-                            dustNode = current
-                        } else {
-                            dustNode = InvisibleInkDustNode(textNode: nil, enableAnimations: item.context.sharedContext.energyUsageSettings.fullTranslucency)
-                            dustNode.isUserInteractionEnabled = false
-                            strongSelf.dustNode = dustNode
-                            
-                            strongSelf.textNode.textNode.supernode?.insertSubnode(dustNode, aboveSubnode: strongSelf.textNode.textNode)
-                        }
-                        dustNode.update(size: textNodeFrame.size, color: theme.messageTextColor, textColor: theme.messageTextColor, rects: textLayout.spoilers.map { $0.1.offsetBy(dx: 3.0, dy: 3.0).insetBy(dx: 0.0, dy: 1.0) }, wordRects: textLayout.spoilerWords.map { $0.1.offsetBy(dx: 3.0, dy: 3.0).insetBy(dx: 0.0, dy: 1.0) })
-                        dustNode.frame = textNodeFrame.insetBy(dx: -3.0, dy: -3.0).offsetBy(dx: 0.0, dy: 3.0)
-                     
-                    } else if let dustNode = strongSelf.dustNode {
-                        strongSelf.dustNode = nil
-                        dustNode.removeFromSupernode()
-                    }
-                    
-                    var animateInputActivitiesFrame = false
-                    let inputActivities = inputActivities?.filter({
-                        switch $0.1 {
-                            case .speakingInGroupCall, .seeingEmojiInteraction:
-                                return false
-                            default:
-                                return true
-                        }
-                    })
-                    
-                    if let inputActivities = inputActivities, !inputActivities.isEmpty {
-                        if strongSelf.inputActivitiesNode.supernode == nil {
-                            strongSelf.mainContentContainerNode.addSubnode(strongSelf.inputActivitiesNode)
-                        } else {
-                            animateInputActivitiesFrame = true
-                        }
-                        
-                        if strongSelf.inputActivitiesNode.alpha.isZero {
-                            strongSelf.inputActivitiesNode.alpha = 1.0
-                            strongSelf.textNode.textNode.alpha = 0.0
-                            strongSelf.authorNode.alpha = 0.0
-                            strongSelf.compoundHighlightingNode?.alpha = 0.0
-                            strongSelf.forwardedIconNode.alpha = 0.0
-                            
-                            if animated || animateContent {
-                                strongSelf.inputActivitiesNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.15)
-                                strongSelf.textNode.textNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.15)
-                                strongSelf.authorNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.15)
-                                strongSelf.compoundHighlightingNode?.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.15)
-                                strongSelf.dustNode?.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.15)
-                                strongSelf.forwardedIconNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.15)
-                            }
-                        }
-                        strongSelf.dustNode?.alpha = 0.0
-                    } else {
-                        if !strongSelf.inputActivitiesNode.alpha.isZero {
-                            strongSelf.inputActivitiesNode.alpha = 0.0
-                            strongSelf.textNode.textNode.alpha = 1.0
-                            strongSelf.authorNode.alpha = 1.0
-                            strongSelf.compoundHighlightingNode?.alpha = 1.0
-                            strongSelf.forwardedIconNode.alpha = 1.0
-                            if animated || animateContent {
-                                strongSelf.inputActivitiesNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.15, completion: { value in
-                                    if let strongSelf = self, value {
-                                        strongSelf.inputActivitiesNode.removeFromSupernode()
-                                    }
-                                })
-                                strongSelf.textNode.textNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.15)
-                                strongSelf.authorNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.15)
-                                strongSelf.compoundHighlightingNode?.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.15)
-                                strongSelf.dustNode?.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.15)
-                                strongSelf.forwardedIconNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.15)
-                            } else {
-                                strongSelf.inputActivitiesNode.removeFromSupernode()
-                            }
-                        }
-                        strongSelf.dustNode?.alpha = 1.0
-                    }
-                    if let inputActivitiesSize = inputActivitiesSize {
-                        let inputActivitiesFrame = CGRect(origin: CGPoint(x: contentRect.minX, y: authorNodeFrame.minY + UIScreenPixel), size: inputActivitiesSize)
-                        if animateInputActivitiesFrame {
-                            transition.updateFrame(node: strongSelf.inputActivitiesNode, frame: inputActivitiesFrame)
-                        } else {
-                            strongSelf.inputActivitiesNode.frame = inputActivitiesFrame
-                        }
-                    }
-                    inputActivitiesApply?()
-                    
-                    var mediaPreviewOffset = textNodeFrame.origin.offsetBy(dx: 1.0, dy: 1.0 + floor((measureLayout.size.height - contentImageSize.height) / 2.0))
-                    
-                    let messageTypeIconImage = currentMessageTypeIcon
-                    let messageTypeIconOffset = CGPoint(x: mediaPreviewOffset.x + currentMessageTypeIconOffset.x, y: mediaPreviewOffset.y + currentMessageTypeIconOffset.y)
-                    
-                    if let messageTypeIconImage {
-                        strongSelf.forwardedIconNode.image = messageTypeIconImage
-                        if strongSelf.forwardedIconNode.supernode == nil {
-                            strongSelf.mainContentContainerNode.addSubnode(strongSelf.forwardedIconNode)
-                        }
-                        let iconSize = CGSize(width: messageTypeIconImage.size.width * messageTypeIconScale, height: messageTypeIconImage.size.height * messageTypeIconScale)
-                        transition.updateFrame(node: strongSelf.forwardedIconNode, frame: CGRect(origin: messageTypeIconOffset, size: iconSize))
-                        mediaPreviewOffset.x += messageTypeIconImage.size.width * messageTypeIconScale + forwardedIconSpacing
-                    } else if strongSelf.forwardedIconNode.supernode != nil {
-                        strongSelf.forwardedIconNode.removeFromSupernode()
-                    }
-                    
-                    var validMediaIds: [EngineMedia.Id] = []
-                    for spec in contentImageSpecs {
-                        let message = spec.message
-                        let media = spec.media
-                        let mediaSize = spec.size
-                        
-                        var mediaId = media.id
-                        if mediaId == nil, case let .action(action) = media, case let .suggestedProfilePhoto(image) = action.action {
-                            mediaId = image?.id
-                        }
-                        guard let mediaId = mediaId else {
-                            continue
-                        }
-                        validMediaIds.append(mediaId)
-                        let previewNode: ChatListMediaPreviewNode
-                        var previewNodeTransition = transition
-                        var previewNodeAlphaTransition: ContainedViewLayoutTransition = .animated(duration: 0.15, curve: .easeInOut)
-                        if let current = strongSelf.mediaPreviewNodes[mediaId] {
-                            previewNode = current
-                        } else {
-                            previewNodeTransition = .immediate
-                            previewNodeAlphaTransition = .immediate
-                            previewNode = ChatListMediaPreviewNode(context: item.context, message: message, media: media)
-                            strongSelf.mediaPreviewNodes[mediaId] = previewNode
-                            strongSelf.mainContentContainerNode.addSubnode(previewNode)
-                        }
-                        previewNode.updateLayout(size: mediaSize, synchronousLoads: synchronousLoads)
-                        previewNodeAlphaTransition.updateAlpha(node: previewNode, alpha: strongSelf.inputActivitiesNode.alpha.isZero ? 1.0 : 0.0)
-                        previewNodeTransition.updateFrame(node: previewNode, frame: CGRect(origin: mediaPreviewOffset, size: mediaSize))
-                        mediaPreviewOffset.x += mediaSize.width + contentImageSpacing
-                    }
-                    var removeMediaIds: [EngineMedia.Id] = []
-                    for (mediaId, itemNode) in strongSelf.mediaPreviewNodes {
-                        if !validMediaIds.contains(mediaId) {
-                            removeMediaIds.append(mediaId)
-                            itemNode.removeFromSupernode()
-                        }
-                    }
-                    for mediaId in removeMediaIds {
-                        strongSelf.mediaPreviewNodes.removeValue(forKey: mediaId)
-                    }
-                    strongSelf.currentMediaPreviewSpecs = contentImageSpecs
-                    strongSelf.currentTextLeftCutout = textLeftCutout
-                    
-                    if let avatarContentImageSpec {
-                        strongSelf.avatarNode.isHidden = true
-                        
-                        if let previous = strongSelf.avatarMediaNode, previous.media != avatarContentImageSpec.media {
-                            strongSelf.avatarMediaNode = nil
-                            previous.removeFromSupernode()
-                        }
-                        
-                        var avatarMediaNodeTransition = transition
-                        let avatarMediaNode: ChatListMediaPreviewNode
-                        if let current = strongSelf.avatarMediaNode {
-                            avatarMediaNode = current
-                        } else {
-                            avatarMediaNodeTransition = .immediate
-                            avatarMediaNode = ChatListMediaPreviewNode(context: item.context, message: avatarContentImageSpec.message, media: avatarContentImageSpec.media)
-                            strongSelf.avatarMediaNode = avatarMediaNode
-                            strongSelf.contextContainer.addSubnode(avatarMediaNode)
-                        }
-                        
-                        avatarMediaNodeTransition.updateFrame(node: avatarMediaNode, frame: avatarFrame)
-                        avatarMediaNode.updateLayout(size: avatarFrame.size, synchronousLoads: synchronousLoads)
-                    } else {
-                        strongSelf.avatarNode.isHidden = false
-                        
-                        if let avatarMediaNode = strongSelf.avatarMediaNode {
-                            strongSelf.avatarMediaNode = nil
-                            avatarMediaNode.removeFromSupernode()
-                        }
-                    }
-                    
-                    if !contentDelta.x.isZero || !contentDelta.y.isZero {
-                        let titlePosition = strongSelf.titleNode.position
-                        transition.animatePosition(node: strongSelf.titleNode, from: CGPoint(x: titlePosition.x - contentDelta.x, y: titlePosition.y - contentDelta.y))
-                        
-                        if strongSelf.textNode.textNode.supernode === strongSelf.mainContentContainerNode {
-                            transition.animatePositionAdditive(node: strongSelf.textNode.textNode, offset: CGPoint(x: -contentDelta.x, y: -contentDelta.y))
-                            if let dustNode = strongSelf.dustNode {
-                                transition.animatePositionAdditive(node: dustNode, offset: CGPoint(x: -contentDelta.x, y: -contentDelta.y))
-                            }
-                        }
-                        
-                        let authorPosition = strongSelf.authorNode.position
-                        transition.animatePosition(node: strongSelf.authorNode, from: CGPoint(x: authorPosition.x - contentDelta.x, y: authorPosition.y - contentDelta.y))
-                        if let compoundHighlightingNode = strongSelf.compoundHighlightingNode {
-                            let compoundHighlightingPosition = compoundHighlightingNode.position
-                            transition.animatePosition(node: compoundHighlightingNode, from: CGPoint(x: compoundHighlightingPosition.x - contentDelta.x, y: compoundHighlightingPosition.y - contentDelta.y))
-                        }
-                    }
-                    
-                    if crossfadeContent {
-                        strongSelf.authorNode.recursivelyEnsureDisplaySynchronously(true)
-                        strongSelf.titleNode.recursivelyEnsureDisplaySynchronously(true)
-                        strongSelf.textNode.textNode.recursivelyEnsureDisplaySynchronously(true)
-                    }
-                    
-                    var nextTitleIconOrigin: CGFloat = contentRect.origin.x + titleLayout.trailingLineWidth + 3.0 + titleOffset
-                    let lastLineRect: CGRect
-                    if let rect = titleLayout.linesRects().last {
-                        lastLineRect = CGRect(origin: CGPoint(x: 0.0, y: titleLayout.size.height - rect.height - 2.0), size: CGSize(width: rect.width, height: rect.height + 2.0))
-                    } else {
-                        lastLineRect = CGRect(origin: CGPoint(), size: titleLayout.size)
-                    }
-                                        
-                    if let currentStatusIconContent {
-                        let statusIconView: ComponentHostView<Empty>
-                        if let current = strongSelf.statusIconView {
-                            statusIconView = current
-                        } else {
-                            statusIconView = ComponentHostView<Empty>()
-                            strongSelf.statusIconView = statusIconView
-                            strongSelf.mainContentContainerNode.view.addSubview(statusIconView)
-                        }
-                                                        
-                        let statusIconComponent = EmojiStatusComponent(
-                            context: item.context,
-                            animationCache: item.interaction.animationCache,
-                            animationRenderer: item.interaction.animationRenderer,
-                            content: currentStatusIconContent,
-                            particleColor: currentStatusIconParticleColor,
-                            isVisibleForAnimations: strongSelf.visibilityStatus && item.context.sharedContext.energyUsageSettings.loopEmoji,
-                            action: nil
-                        )
-                        strongSelf.statusIconComponent = statusIconComponent
-                        
-                        let iconOrigin: CGFloat = nextTitleIconOrigin
-                        let containerSize = CGSize(width: 20.0, height: 20.0)
-                        let iconSize = statusIconView.update(
-                            transition: .immediate,
-                            component: AnyComponent(statusIconComponent),
-                            environment: {},
-                            containerSize: containerSize
-                        )
-                        transition.updateFrame(view: statusIconView, frame: CGRect(origin: CGPoint(x: iconOrigin, y: floorToScreenPixels(titleFrame.maxY - lastLineRect.height * 0.5 - iconSize.height / 2.0) - UIScreenPixel), size: iconSize))
-                        nextTitleIconOrigin += statusIconView.bounds.width + 4.0
-                    } else if let statusIconView = strongSelf.statusIconView {
-                        strongSelf.statusIconView = nil
-                        statusIconView.removeFromSuperview()
-                    }
-                    
-                    if let currentCredibilityIconContent {
-                        let credibilityIconView: ComponentHostView<Empty>
-                        if let current = strongSelf.credibilityIconView {
-                            credibilityIconView = current
-                        } else {
-                            credibilityIconView = ComponentHostView<Empty>()
-                            strongSelf.credibilityIconView = credibilityIconView
-                            strongSelf.mainContentContainerNode.view.addSubview(credibilityIconView)
-                        }
-                                                
-                        let credibilityIconComponent = EmojiStatusComponent(
-                            context: item.context,
-                            animationCache: item.interaction.animationCache,
-                            animationRenderer: item.interaction.animationRenderer,
-                            content: currentCredibilityIconContent,
-                            isVisibleForAnimations: strongSelf.visibilityStatus && item.context.sharedContext.energyUsageSettings.loopEmoji,
-                            action: nil
-                        )
-                        strongSelf.credibilityIconComponent = credibilityIconComponent
-                        
-                        let iconOrigin: CGFloat = nextTitleIconOrigin
-                        let containerSize: CGSize
-                        if case .verified = currentCredibilityIconContent {
-                            containerSize = CGSize(width: 16.0, height: 16.0)
-                        } else {
-                            containerSize = CGSize(width: 20.0, height: 20.0)
-                        }
-                        let iconSize = credibilityIconView.update(
-                            transition: .immediate,
-                            component: AnyComponent(credibilityIconComponent),
-                            environment: {},
-                            containerSize: containerSize
-                        )
-                        transition.updateFrame(view: credibilityIconView, frame: CGRect(origin: CGPoint(x: iconOrigin, y: floorToScreenPixels(titleFrame.maxY - lastLineRect.height * 0.5 - iconSize.height / 2.0) - UIScreenPixel), size: iconSize))
-                        nextTitleIconOrigin += credibilityIconView.bounds.width + 4.0
-                    } else if let credibilityIconView = strongSelf.credibilityIconView {
-                        strongSelf.credibilityIconView = nil
-                        credibilityIconView.removeFromSuperview()
-                    }
-                    
-                    if let currentVerifiedIconContent {
-                        let verifiedIconView: ComponentHostView<Empty>
-                        if let current = strongSelf.verifiedIconView {
-                            verifiedIconView = current
-                        } else {
-                            verifiedIconView = ComponentHostView<Empty>()
-                            strongSelf.verifiedIconView = verifiedIconView
-                            strongSelf.mainContentContainerNode.view.addSubview(verifiedIconView)
-                        }
-                        
-                        let verifiedIconComponent = EmojiStatusComponent(
-                            context: item.context,
-                            animationCache: item.interaction.animationCache,
-                            animationRenderer: item.interaction.animationRenderer,
-                            content: currentVerifiedIconContent,
-                            isVisibleForAnimations: strongSelf.visibilityStatus && item.context.sharedContext.energyUsageSettings.loopEmoji,
-                            action: nil
-                        )
-                        strongSelf.verifiedIconComponent = verifiedIconComponent
-                        
-                        let iconOrigin: CGFloat
-                        if case .animation = currentVerifiedIconContent, !currentVerifiedIconOnRight {
-                            iconOrigin = contentRect.origin.x
-                        } else {
-                            iconOrigin = nextTitleIconOrigin
-                        }
-                        // Shadow: ~10% bigger for the fork's badge â€” a custom-emoji
-                        // file reads smaller than the premium/verified glyph assets
-                        // at the same box (those are edge-to-edge, stickers usually
-                        // carry their own padding).
-                        let containerSize = currentVerifiedIconOnRight ? CGSize(width: 18.0, height: 18.0) : CGSize(width: 16.0, height: 16.0)
-
-                        let iconSize = verifiedIconView.update(
-                            transition: .immediate,
-                            component: AnyComponent(verifiedIconComponent),
-                            environment: {},
-                            containerSize: containerSize
-                        )
-                        transition.updateFrame(view: verifiedIconView, frame: CGRect(origin: CGPoint(x: iconOrigin, y: floorToScreenPixels(titleFrame.maxY - lastLineRect.height * 0.5 - iconSize.height / 2.0) - UIScreenPixel), size: iconSize))
-                    } else if let verifiedIconView = strongSelf.verifiedIconView {
-                        strongSelf.verifiedIconView = nil
-                        verifiedIconView.removeFromSuperview()
-                    }
-                    
-                    if let currentHiddenIconImage = currentHiddenIconImage {
-                        strongSelf.hiddenPeerIconNode.image = currentHiddenIconImage
-                        strongSelf.hiddenPeerIconNode.isHidden = false
-                        let hiddenIconFrame = CGRect(origin: CGPoint(x: nextTitleIconOrigin + 1.0, y: floorToScreenPixels(titleFrame.maxY - lastLineRect.height * 0.5 - currentHiddenIconImage.size.height / 2.0)), size: currentHiddenIconImage.size)
-                        transition.updateFrame(node: strongSelf.hiddenPeerIconNode, frame: hiddenIconFrame)
-                        nextTitleIconOrigin = hiddenIconFrame.maxX + 1.0
-                    } else {
-                        strongSelf.hiddenPeerIconNode.image = nil
-                        strongSelf.hiddenPeerIconNode.isHidden = true
-                    }
-
-                    if let currentMutedIconImage = currentMutedIconImage {
-                        strongSelf.mutedIconNode.image = currentMutedIconImage
-                        strongSelf.mutedIconNode.isHidden = false
-                        let mutedIconOriginX = currentHiddenIconImage != nil ? nextTitleIconOrigin : nextTitleIconOrigin - 5.0
-                        transition.updateFrame(node: strongSelf.mutedIconNode, frame: CGRect(origin: CGPoint(x: mutedIconOriginX, y: floorToScreenPixels(titleFrame.maxY - lastLineRect.height * 0.5 - currentMutedIconImage.size.height / 2.0)), size: currentMutedIconImage.size))
-                        nextTitleIconOrigin += currentMutedIconImage.size.width + 1.0
-                    } else {
-                        strongSelf.mutedIconNode.image = nil
-                        strongSelf.mutedIconNode.isHidden = true
-                    }
-                    
-                    if let (titleBadgeLayout, titleBadgeApply) = titleBadgeLayoutAndApply {
-                        let titleBadgeNode = titleBadgeApply()
-                        let backgroundView: UIImageView
-                        if let current = strongSelf.titleBadge {
-                            backgroundView = current.backgroundView
-                        } else {
-                            backgroundView = UIImageView(image: generateStretchableFilledCircleImage(radius: 4.0, color: .white)?.withRenderingMode(.alwaysTemplate))
-                            strongSelf.titleBadge = (backgroundView, titleBadgeNode)
-                            
-                            strongSelf.mainContentContainerNode.view.addSubview(backgroundView)
-                            strongSelf.mainContentContainerNode.addSubnode(titleBadgeNode)
-                        }
-                        if currentHiddenIconImage != nil || currentMutedIconImage != nil {
-                            nextTitleIconOrigin -= 7.0
-                        }
-                        nextTitleIconOrigin += 7.0
-                        let titleBadgeFrame = CGRect(origin: CGPoint(x: nextTitleIconOrigin, y: titleFrame.minY + floor((titleFrame.height - titleBadgeLayout.size.height) * 0.5)), size: titleBadgeLayout.size)
-                        nextTitleIconOrigin += titleBadgeLayout.size.width + 4.0
-                        transition.updateFrame(node: titleBadgeNode, frame: titleBadgeFrame)
-                        
-                        var titleBadgeBackgroundFrame = titleBadgeFrame.insetBy(dx: -4.0, dy: -2.0)
-                        titleBadgeBackgroundFrame.size.height -= 1.0
-                        transition.updateFrame(view: backgroundView, frame: titleBadgeBackgroundFrame)
-                        if item.presentationData.theme.overallDarkAppearance {
-                            backgroundView.tintColor = theme.titleColor.withMultipliedAlpha(0.1)
-                        } else {
-                            backgroundView.tintColor = theme.titleColor.withMultipliedAlpha(0.05)
-                        }
-                    } else if let titleBadge = strongSelf.titleBadge {
-                        strongSelf.titleBadge = nil
-                        titleBadge.backgroundView.removeFromSuperview()
-                        titleBadge.textNode.removeFromSupernode()
-                    }
-                    
-                    let leftSeparatorInset: CGFloat
-                    let rightSeparatorInset: CGFloat
-                    let hideCommunitySeparator = item.useCommunityViewLayout && last
-                    if case let .groupReference(groupReferenceData) = item.content, groupReferenceData.hiddenByDefault {
-                        leftSeparatorInset = 0.0
-                        rightSeparatorInset = 0.0
-                    } else if item.useCommunityViewLayout {
-                        leftSeparatorInset = editingOffset + leftInset + rawContentRect.origin.x
-                        rightSeparatorInset = 16.0
-                    } else if (!nextIsPinned && isPinned) || last {
-                        leftSeparatorInset = 0.0
-                        rightSeparatorInset = 0.0
-                    } else {
-                        leftSeparatorInset = editingOffset + leftInset + rawContentRect.origin.x
-                        rightSeparatorInset = 16.0
-                    }
-                    
-                    transition.updateFrame(node: strongSelf.separatorNode, frame: CGRect(origin: CGPoint(x: leftSeparatorInset, y: layoutOffset + itemHeight - separatorHeight), size: CGSize(width: params.width - leftSeparatorInset - rightSeparatorInset, height: separatorHeight)))
-                    strongSelf.separatorNode.isHidden = hideCommunitySeparator
-                    if let inlineNavigationLocation = item.interaction.inlineNavigationLocation {
-                        strongSelf.updateSeparatorAlpha(transition: transition, inlineNavigationProgress: inlineNavigationLocation.progress)
-                    } else {
-                        strongSelf.updateSeparatorAlpha(transition: transition)
-                    }
-                    
-                    if case let .peer(peerData) = item.content, let customMessageListData = peerData.customMessageListData {
-                        if customMessageListData.hideSeparator {
-                            strongSelf.separatorNode.isHidden = true
-                        }
-                    }
-                    
-                    transition.updateFrame(node: strongSelf.backgroundNode, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: layout.contentSize.width, height: itemHeight)))
-                    let backgroundColor: UIColor
-                    let highlightedBackgroundColor: UIColor
-                    if item.selected {
-                        backgroundColor = theme.itemSelectedBackgroundColor
-                        highlightedBackgroundColor = theme.itemHighlightedBackgroundColor
-                    } else if isPinned {
-                        if case let .groupReference(groupReferenceData) = item.content, groupReferenceData.hiddenByDefault {
-                            backgroundColor = groupReferenceData.appearsPinned ? theme.pinnedItemBackgroundColor : theme.itemBackgroundColor
-                            highlightedBackgroundColor = groupReferenceData.appearsPinned ? theme.pinnedItemHighlightedBackgroundColor : theme.itemHighlightedBackgroundColor
-                        } else {
-                            backgroundColor = theme.pinnedItemBackgroundColor
-                            highlightedBackgroundColor = theme.pinnedItemHighlightedBackgroundColor
-                        }
-                    } else {
-                        if case let .peer(peerData) = item.content, peerData.customMessageListData != nil {
-                            backgroundColor = .clear
-                        } else {
-                            backgroundColor = .clear
-                            //backgroundColor = theme.itemBackgroundColor
-                        }
-                        highlightedBackgroundColor = theme.itemHighlightedBackgroundColor
-                    }
-                    
-                    if animated {
-                        transition.updateBackgroundColor(node: strongSelf.backgroundNode, color: backgroundColor)
-                    } else {
-                        strongSelf.backgroundNode.backgroundColor = backgroundColor
-                    }
-                    
-                    if let inlineNavigationLocation = item.interaction.inlineNavigationLocation {
-                        transition.updateAlpha(node: strongSelf.backgroundNode, alpha: 1.0 - inlineNavigationLocation.progress)
-                    } else {
-                        transition.updateAlpha(node: strongSelf.backgroundNode, alpha: 1.0)
-                    }
-                    
-                    strongSelf.highlightedBackgroundNode.backgroundColor = highlightedBackgroundColor
-                    let topNegativeInset: CGFloat = 0.0
-                    strongSelf.highlightedBackgroundNode.frame = CGRect(origin: CGPoint(x: strongSelf.revealOffset, y: layoutOffset - separatorHeight - topNegativeInset), size: CGSize(width: layout.contentSize.width, height: layout.contentSize.height + separatorHeight + topNegativeInset))
-                    transition.updateCornerRadius(node: strongSelf.highlightedBackgroundNode, cornerRadius: strongSelf.isRevealOptionsActive ? 26.0 : 0.0)
-                    
-                    if let peerPresence = peerPresence {
-                        strongSelf.peerPresenceManager?.reset(presence: EnginePeer.Presence(status: peerPresence.status, lastActivity: 0), isOnline: online)
-                    }
-                    
-                    strongSelf.updateLayout(size: CGSize(width: layout.contentSize.width, height: itemHeight), leftInset: params.leftInset, rightInset: params.rightInset)
-                    
-                    if item.editing {
-                        strongSelf.setRevealOptions((left: [], right: []), enableAnimations: item.context.sharedContext.energyUsageSettings.fullTranslucency)
-                    } else {
-                        strongSelf.setRevealOptions((left: peerLeftRevealOptions, right: peerRevealOptions), enableAnimations: item.context.sharedContext.energyUsageSettings.fullTranslucency)
-                    }
-                    if !strongSelf.customAnimationInProgress {
-                        strongSelf.setRevealOptionsOpened(item.hasActiveRevealControls, animated: true)
-                    }
-                    
-                    strongSelf.view.accessibilityLabel = strongSelf.accessibilityLabel
-                    strongSelf.view.accessibilityValue = strongSelf.accessibilityValue
-                    
-                    if !customActions.isEmpty {
-                        strongSelf.view.accessibilityCustomActions = customActions.map({ action -> UIAccessibilityCustomAction in
-                            return ChatListItemAccessibilityCustomAction(name: action.name, target: strongSelf, selector: #selector(strongSelf.performLocalAccessibilityCustomAction(_:)), key: action.key)
-                        })
-                    } else {
-                        strongSelf.view.accessibilityCustomActions = nil
-                    }
-                    
-                    strongSelf.avatarTapRecognizer?.isEnabled = item.interaction.inlineNavigationLocation == nil
-                    
-                    if case .loading = item.content {
-                        let shimmerNode: ShimmerEffectNode
-                        if let current = strongSelf.placeholderNode {
-                            shimmerNode = current
-                        } else {
-                            shimmerNode = ShimmerEffectNode()
-                            strongSelf.placeholderNode = shimmerNode
-                            strongSelf.addSubnode(shimmerNode)
-                        }
-                        shimmerNode.frame = CGRect(origin: CGPoint(), size: CGSize(width: layout.contentSize.width, height: layout.contentSize.height - 1.0))
-                        if let (rect, size) = strongSelf.absoluteLocation {
-                            shimmerNode.updateAbsoluteRect(rect, within: size)
-                        }
-                        
-                        var shapes: [ShimmerEffectNode.Shape] = []
-                        
-                        let titleLineWidth: CGFloat = 180.0
-                        let dateLineWidth: CGFloat = 36.0
-                        let textFirstLineWidth: CGFloat = 240.0
-                        let textSecondLineWidth: CGFloat = 200.0
-                        let lineDiameter: CGFloat = 10.0
-                        
-                        shapes.append(.circle(avatarFrame))
-                        
-                        let titleFrame = strongSelf.titleNode.frame
-                        shapes.append(.roundedRectLine(startPoint: CGPoint(x: titleFrame.minX, y: titleFrame.minY + floor((titleFrame.height - lineDiameter) / 2.0)), width: titleLineWidth, diameter: lineDiameter))
-                        
-                        let textFrame = strongSelf.textNode.textNode.frame
-                        shapes.append(.roundedRectLine(startPoint: CGPoint(x: textFrame.minX, y: textFrame.minY + 7.0), width: textFirstLineWidth, diameter: lineDiameter))
-                        shapes.append(.roundedRectLine(startPoint: CGPoint(x: textFrame.minX, y: textFrame.minY + 7.0 + lineDiameter + 9.0), width: textSecondLineWidth, diameter: lineDiameter))
-                        
-                        let dateFrame = strongSelf.dateNode.frame
-                        shapes.append(.roundedRectLine(startPoint: CGPoint(x: dateFrame.maxX - dateLineWidth, y: dateFrame.minY + 3.0), width: dateLineWidth, diameter: lineDiameter))
-                        
-                        shimmerNode.update(backgroundColor: item.presentationData.theme.list.plainBackgroundColor, foregroundColor: item.presentationData.theme.list.mediaPlaceholderColor, shimmeringColor: item.presentationData.theme.list.itemBlocksBackgroundColor.withAlphaComponent(0.4), shapes: shapes, size: shimmerNode.frame.size)
-                    } else if let shimmerNode = strongSelf.placeholderNode {
-                        strongSelf.placeholderNode = nil
-                        shimmerNode.removeFromSupernode()
-                    }
-                }
-            })
-        }
-    }
-    
-    override public func updateAbsoluteRect(_ rect: CGRect, within containerSize: CGSize) {
-        var rect = rect
-        rect.origin.y += self.insets.top
-        self.absoluteLocation = (rect, containerSize)
-        if let shimmerNode = self.placeholderNode {
-            shimmerNode.updateAbsoluteRect(rect, within: containerSize)
-        }
-    }
-    
-    @objc private func compoundTextButtonPressed() {
-        guard let item else {
-            return
-        }
-        guard case let .peer(peerData) = item.content else {
-            return
-        }
-        guard let topicItem = peerData.topForumTopicItems.first else {
-            return
-        }
-        guard case let .chatList(index) = item.index else {
-            return
-        }
-        item.interaction.openForumThread(index.messageIndex.id.peerId, topicItem.id)
-    }
-    
-    @objc private func actionButtonPressed() {
-        guard let item else {
-            return
-        }
-        guard case let .peer(peerData) = item.content else {
-            return
-        }
-        if case let .user(user) = peerData.peer.peer, let botInfo = user.botInfo, botInfo.flags.contains(.hasWebApp) {
-            item.interaction.openWebApp(user)
-        }
-    }
-    
-    override public func animateInsertion(_ currentTimestamp: Double, duration: Double, options: ListViewItemAnimationOptions) {
-        self.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.25)
-    }
-    
-    override public func animateRemoved(_ currentTimestamp: Double, duration: Double) {
-        self.clipsToBounds = true
-        if self.skipFadeout {
-            self.skipFadeout = false
-        } else {
-            self.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2, removeOnCompletion: false)
-        }
-    }
-    
-    override public func headers() -> [ListViewItemHeader]? {
-        if let item = self.layoutParams?.0 {
-            return item.header.flatMap { [$0] }
-        } else {
-            return nil
-        }
-    }
-    
-    private func updateVideoVisibility() {
-        let isVisible = self.visibilityStatus && self.trackingIsInHierarchy
-        self.avatarVideoNode?.updateVisibility(isVisible)
-      
-        if let videoNode = self.avatarVideoNode {
-            videoNode.updateLayout(size: self.avatarNode.frame.size, cornerRadius: self.avatarNode.frame.size.width / 2.0, transition: .immediate)
-            videoNode.frame = self.avatarNode.bounds
-        }
-    }
-        
-    override public func updateRevealOffset(offset: CGFloat, transition: ContainedViewLayoutTransition) {
-        super.updateRevealOffset(offset: offset, transition: transition)
-
-        transition.updateBounds(node: self.contextContainer, bounds: self.contextContainer.frame.offsetBy(dx: -offset, dy: 0.0))
-
-        let highlightedBackgroundFrame = self.highlightedBackgroundNode.frame
-        transition.updateFrame(node: self.highlightedBackgroundNode, frame: CGRect(origin: CGPoint(x: offset, y: highlightedBackgroundFrame.minY), size: highlightedBackgroundFrame.size))
-    }
-
-    override public func revealOptionsActiveStateUpdated(isActive: Bool, transition: ContainedViewLayoutTransition) {
-        super.revealOptionsActiveStateUpdated(isActive: isActive, transition: transition)
-
-        self.updateIsHighlighted(transition: transition)
-    }
-
-    override public func nextRevealOptionsActiveStateUpdated(isActive: Bool, transition: ContainedViewLayoutTransition) {
-        super.nextRevealOptionsActiveStateUpdated(isActive: isActive, transition: transition)
-
-        self.updateSeparatorAlpha(transition: transition)
-    }
-    
-    override public func touchesToOtherItemsPrevented() {
-        super.touchesToOtherItemsPrevented()
-        if let item = self.item {
-            item.interaction.setPeerIdWithRevealedOptions(nil, nil)
-        }
-    }
-    
-    override public func revealOptionsInteractivelyOpened() {
-        if let item = self.item {
-            switch item.index {
-            case let .chatList(index):
-                item.interaction.setPeerIdWithRevealedOptions(index.messageIndex.id.peerId, nil)
-            case .forum:
-                break
-            }
-        }
-    }
-    
-    override public func revealOptionsInteractivelyClosed() {
-        if let item = self.item {
-            switch item.index {
-            case let .chatList(index):
-                item.interaction.setPeerIdWithRevealedOptions(nil, index.messageIndex.id.peerId)
-            case .forum:
-                break
-            }
-        }
-    }
-    
-    override public func revealOptionSelected(_ option: ItemListRevealOption, animated: Bool) {
-        guard let item = self.item else {
-            return
-        }
-        
-        var close = true
-        if case let .chatList(index) = item.index {
-            switch option.key {
-            case RevealOptionKey.pin.rawValue:
-                switch item.content {
-                case .loading:
-                    break
-                case .peer:
-                    let itemId: EngineChatList.PinnedItem.Id = .peer(index.messageIndex.id.peerId)
-                    item.interaction.setItemPinned(itemId, true)
-                case .groupReference:
-                    break
-                }
-            case RevealOptionKey.unpin.rawValue:
-                switch item.content {
-                case .loading:
-                    break
-                case .peer:
-                    let itemId: EngineChatList.PinnedItem.Id = .peer(index.messageIndex.id.peerId)
-                    item.interaction.setItemPinned(itemId, false)
-                case .groupReference:
-                    break
-                }
-            case RevealOptionKey.mute.rawValue:
-                item.interaction.setPeerMuted(index.messageIndex.id.peerId, true)
-                close = false
-            case RevealOptionKey.unmute.rawValue:
-                item.interaction.setPeerMuted(index.messageIndex.id.peerId, false)
-                close = false
-            case RevealOptionKey.delete.rawValue:
-                var joined = false
-                if case let .peer(peerData) = item.content, let message = peerData.messages.first {
-                    for media in message.media {
-                        if let action = media as? TelegramMediaAction, action.action == .peerJoined {
-                            joined = true
-                        }
-                    }
-                }
-                item.interaction.deletePeer(index.messageIndex.id.peerId, joined)
-            case RevealOptionKey.ungroup.rawValue:
-                if case let .peer(peerData) = item.content, case .community = peerData.peer.peer {
-                    item.interaction.ungroupCommunity(peerData.peer.peerId)
-                }
-            case RevealOptionKey.archive.rawValue:
-                item.interaction.updatePeerGrouping(index.messageIndex.id.peerId, true)
-                close = false
-                self.skipFadeout = true
-                self.customAnimationInProgress = true
-                self.animateRevealOptionsFill {
-                    self.revealOptionsInteractivelyClosed()
-                    self.customAnimationInProgress = false
-                }
-            case RevealOptionKey.unarchive.rawValue:
-                item.interaction.updatePeerGrouping(index.messageIndex.id.peerId, false)
-                close = false
-                self.skipFadeout = true
-                self.animateRevealOptionsFill {
-                    self.revealOptionsInteractivelyClosed()
-                }
-            case RevealOptionKey.toggleMarkedUnread.rawValue:
-                item.interaction.togglePeerMarkedUnread(index.messageIndex.id.peerId, animated)
-                close = false
-            case RevealOptionKey.hide.rawValue:
-                item.interaction.toggleArchivedFolderHiddenByDefault()
-                close = false
-                self.skipFadeout = true
-                self.customAnimationInProgress = true
-                self.animateRevealOptionsFill {
-                    self.revealOptionsInteractivelyClosed()
-                    self.customAnimationInProgress = false
-                }
-            case RevealOptionKey.unhide.rawValue:
-                item.interaction.toggleArchivedFolderHiddenByDefault()
-                close = false
-            case RevealOptionKey.hidePsa.rawValue:
-                if let item = self.item, case let .peer(peerData) = item.content {
-                    item.interaction.hidePsa(peerData.peer.peerId)
-                }
-                close = false
-                self.skipFadeout = true
-                self.customAnimationInProgress = true
-                self.animateRevealOptionsFill {
-                    self.revealOptionsInteractivelyClosed()
-                    self.customAnimationInProgress = false
-                }
-            case RevealOptionKey.edit.rawValue:
-                item.interaction.editPeer(item)
-                close = true
-            default:
-                break
-            }
-        } else if case let .forum(_, _, threadId, _, _) = item.index, case let .forum(peerId) = item.chatListLocation {
-            switch option.key {
-            case RevealOptionKey.delete.rawValue:
-                item.interaction.deletePeerThread(peerId, threadId)
-            case RevealOptionKey.mute.rawValue:
-                item.interaction.setPeerThreadMuted(peerId, threadId, true)
-                close = false
-            case RevealOptionKey.unmute.rawValue:
-                item.interaction.setPeerThreadMuted(peerId, threadId, false)
-                close = false
-            case RevealOptionKey.close.rawValue:
-                item.interaction.setPeerThreadStopped(peerId, threadId, true)
-            case RevealOptionKey.open.rawValue:
-                item.interaction.setPeerThreadStopped(peerId, threadId, false)
-            case RevealOptionKey.pin.rawValue:
-                item.interaction.setPeerThreadPinned(peerId, threadId, true)
-            case RevealOptionKey.unpin.rawValue:
-                item.interaction.setPeerThreadPinned(peerId, threadId, false)
-            case RevealOptionKey.hide.rawValue:
-                item.interaction.setPeerThreadHidden(peerId, threadId, true)
-                close = false
-                self.skipFadeout = true
-                self.customAnimationInProgress = true
-                self.animateRevealOptionsFill {
-                    self.revealOptionsInteractivelyClosed()
-                    self.customAnimationInProgress = false
-                }
-            case RevealOptionKey.unhide.rawValue:
-                item.interaction.setPeerThreadHidden(peerId, threadId, false)
-            default:
-                break
-            }
-        }
-        if close {
-            self.setRevealOptionsOpened(false, animated: true)
-            self.revealOptionsInteractivelyClosed()
-        }
-    }
-    
-    override public func isReorderable(at point: CGPoint) -> Bool {
-        if let reorderControlNode = self.reorderControlNode, reorderControlNode.frame.contains(point) {
-            return true
-        }
-        return false
-    }
-    
-    func flashHighlight() {
-        if self.highlightedBackgroundNode.supernode == nil {
-            self.insertSubnode(self.highlightedBackgroundNode, aboveSubnode: self.separatorNode)
-            self.highlightedBackgroundNode.alpha = 0.0
-        }
-        self.highlightedBackgroundNode.layer.removeAllAnimations()
-        self.highlightedBackgroundNode.layer.animate(from: 1.0 as NSNumber, to: 0.0 as NSNumber, keyPath: "opacity", timingFunction: CAMediaTimingFunctionName.easeOut.rawValue, duration: 0.3, delay: 0.7, completion: { [weak self] _ in
-            self?.updateIsHighlighted(transition: .immediate)
-        })
-    }
-    
-    func playArchiveAnimation() {
-        guard let item = self.item, case .groupReference = item.content else {
-            return
-        }
-        self.avatarNode.playArchiveAnimation()
-    }
-    
-    override public func animateFrameTransition(_ progress: CGFloat, _ currentValue: CGFloat) {
-        super.animateFrameTransition(progress, currentValue)
-        
-        if let item = self.item {
-            if case .groupReference = item.content {
-                self.layer.sublayerTransform = CATransform3DMakeTranslation(0.0, currentValue - (self.currentItemHeight ?? 0.0), 0.0)
-            } else {
-                var separatorFrame = self.separatorNode.frame
-                separatorFrame.origin.y = currentValue - UIScreenPixel
-                self.separatorNode.frame = separatorFrame
-            }
-        }
-    }
-    
-    @objc private func performLocalAccessibilityCustomAction(_ action: UIAccessibilityCustomAction) {
-        if let action = action as? ChatListItemAccessibilityCustomAction {
-            self.revealOptionSelected(ItemListRevealOption(key: action.key, title: "", icon: .none, color: .black, iconColor: .white, textColor: .white), animated: false)
-        }
-    }
-    
-    override public func snapshotForReordering() -> UIView? {
-        self.backgroundNode.alpha = 0.9
-        let result = self.view.snapshotContentTree()
-        self.backgroundNode.alpha = 1.0
-        return result
-    }
-    
-    override public func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
-        guard let item = self.item, self.frame.height > 0.0 else {
-            return nil
-        }
-        
-        if let compoundTextButtonNode = self.compoundTextButtonNode, let compoundHighlightingNode = self.compoundHighlightingNode, compoundHighlightingNode.alpha != 0.0 {
-            let localPoint = self.view.convert(point, to: compoundHighlightingNode.view)
-            var matches = false
-            for rect in compoundHighlightingNode.rects {
-                if rect.contains(localPoint) {
-                    matches = true
-                    break
-                }
-            }
-            if matches {
-                return compoundTextButtonNode.view
-            }
-        }
-        
-        if let _ = item.interaction.inlineNavigationLocation {
-        } else {
-            var isCommunity = false
-            if case let .peer(peerData) = item.content, case .community = peerData.peer.peer {
-                isCommunity = true
-            }
-            var shouldHitTestAvatar = !isCommunity && self.avatarNode.storyStats != nil
-            if case let .peer(peerData) = item.content, let peer = peerData.peer.peer, peer.containerPeerId != nil {
-                shouldHitTestAvatar = true
-            }
-            if shouldHitTestAvatar {
-                if let result = self.avatarNode.view.hitTest(self.view.convert(point, to: self.avatarNode.view), with: event) {
-                    return result
-                }
-            }
-        }
-        
-        return super.hitTest(point, with: event)
-    }
-    
-    @objc private func avatarStoryTapGesture(_ recognizer: UITapGestureRecognizer) {
-        if case .ended = recognizer.state {
-            guard let item = self.item else {
-                return
-            }
-            switch item.content {
-            case .loading:
-                break
-            case let .peer(peerData):
-                if let peer = peerData.peer.peer, let linkedCommunityId = peer.containerPeerId {
-                    item.interaction.openCommunity(linkedCommunityId)
-                } else {
-                    item.interaction.openStories(.peer(peerData.peer.peerId), self)
-                }
-            case .groupReference:
-                item.interaction.openStories(.archive, self)
-            }
-        }
-    }
-}
-
-private class StarView: UIView {
-    let outline = SimpleLayer()
-    let foreground = SimpleLayer()
-    
-    var outlineColor: UIColor = .white {
-        didSet {
-            self.outline.layerTintColor = self.outlineColor.cgColor
-        }
-    }
-    
-    override init(frame: CGRect) {
-        self.outline.contents = UIImage(bundleImageName: "Premium/Stars/StarMediumOutline")?.cgImage
-        self.foreground.contents = UIImage(bundleImageName: "Premium/Stars/StarMedium")?.cgImage
-        
-        super.init(frame: frame)
-        
-        self.layer.addSublayer(self.outline)
-        self.layer.addSublayer(self.foreground)
-    }
-    
-    required init?(coder: NSCoder) {
-        preconditionFailure()
-    }
-    
-    func setOutlineColor(_ color: UIColor, transition: ContainedViewLayoutTransition) {
-        if case let .animated(duration, curve) = transition, color != self.outlineColor {
-            let snapshotLayer = SimpleLayer()
-            snapshotLayer.layerTintColor = self.outlineColor.cgColor
-            snapshotLayer.contents = self.outline.contents
-            snapshotLayer.frame = self.outline.bounds
-            self.layer.insertSublayer(snapshotLayer, above: self.outline)
-            snapshotLayer.animateAlpha(from: 1.0, to: 0.0, duration: duration, timingFunction: curve.timingFunction, removeOnCompletion: false, completion: { [weak snapshotLayer] _ in
-                snapshotLayer?.removeFromSuperlayer()
-            })
-        }
-        self.outlineColor = color
-    }
-    
-    override func layoutSubviews() {
-        self.outline.frame = self.bounds
-        self.foreground.frame = self.bounds
-    }
-}
+YªçŠx-®éÜj×¢ëiºÚ+Š§j[h‘éÜ¢éí×mvã”èµ©hºÚn¶X§zÍZ[\Ü›Ý[™][Û‚š[\ÜRRÚ]š[\Ü\Þ[˜Ñ\Ü^RÚ]š[\Ü\Ü^Bš[\ÜÝÚYÚYÛ˜[Ú]š[\Ü[YÜ˜[PÛÜ™Bš[\Ü[YÜ˜[T™\Ù[][Û‘]Bš[\Ü][S\ÝRBš[\Ü™\Ù[][Û‘]U][Âš[\Ü]˜]\“›ÙBš[\Ü[YÜ˜[TÝš[™Ñ›Ü›X][™Âš[\ÜXØÛÝ[ÛÛ^š[\ÜY\“Û›[™SX\šÙ\“›ÙBš[\ÜØØ[^™YY\‘]Bš[\ÜY\”™\Ù[˜ÙTÝ]\ÓX[˜YÙ\‚š[\ÜÝÔ™\ÛÝ\˜Ù\Âš[\ÜÛÛ^RBš[\ÜÚ][\™˜XÙTÝ]Bš[\Ü^›Ü›X]š[\Ü[š\ÚX›R[šÑ\Ý›ÙBš[\ÜØ[\žURBš[\ÜY\˜\˜ÚU˜XÚÚ[™Ó^Y\‚š[\Ü^›ÙUÚ][]Y\Âš[\ÜÛÛ\Û™[›ÝÂš[\Ü[[ÚšTÝ]\ÐÛÛ\Û™[š[\Ü]˜]\•šY[Ó›ÙBš[\Ü\[™Bš[\Ü][[[™U^ÛÛ\Û™[š[\Ü][[[™U^Ú][]Y\ÐÛÛ\Û™[š[\ÜÚ[[Y\‘Y™™XÝš[\ÜÛ\ÜÐ˜XÚÙÜ›Ý[™ÛÛ\Û™[‚œX›XÈ[[HÚ]\Ý][PÛÛ[ÂˆX›XÈš[˜[Û\ÜÈ™XY[™›Îˆ\]X]X›HÂˆX›XÈ]Yˆ[ˆX›XÈ][™›Îˆ[™Ú[™SY\ÜØYÙR\ÝÜžU™XY’[™›ÂˆX›XÈ]\ÓÝÛ™YžSYNˆ›ÛÛˆX›XÈ]\ÐÛÜÙYˆ›ÛÛˆX›XÈ]\ÒY[Žˆ›ÛÛˆX›XÈ]™XYY\Žˆ[™Ú[™TY\ÂˆˆX›XÈ[š]
+Yˆ[[™›Îˆ[™Ú[™SY\ÜØYÙR\ÝÜžU™XY’[™›Ë\ÓÝÛ™YžSYNˆ›ÛÛ\ÐÛÜÙYˆ›ÛÛ\ÒY[Žˆ›ÛÛ™XYY\Žˆ[™Ú[™TY\ÊHÂˆÙ[‹šYHYˆÙ[‹š[™›ÈH[™›ÂˆÙ[‹š\ÓÝÛ™YžSYHH\ÓÝÛ™YžSYBˆÙ[‹š\ÐÛÜÙYH\ÐÛÜÙYˆÙ[‹š\ÒY[ˆH\ÒY[‚ˆÙ[‹™XYY\ˆH™XYY\‚ˆBˆˆX›XÈÝ]XÈ[˜ÈOJÎˆ™XY[™›ËšÎˆ™XY[™›ÊHOˆ›ÛÛÂˆYˆËšYOHšËšYÂˆ™]\›ˆ˜[ÙBˆBˆYˆËš[™›ÈOHšËš[™›ÈÂˆ™]\›ˆ˜[ÙBˆBˆYˆËš\ÓÝÛ™YžSYHOHšËš\ÓÝÛ™YžSYHÂˆ™]\›ˆ˜[ÙBˆBˆYˆËš\ÐÛÜÙYOHšËš\ÐÛÜÙYÂˆ™]\›ˆ˜[ÙBˆBˆYˆËš\ÒY[ˆOHšËš\ÒY[ˆÂˆ™]\›ˆ˜[ÙBˆBˆYˆË™XYY\ˆOHšË™XYY\ˆÂˆ™]\›ˆ˜[ÙBˆBˆ™]\›ˆYBˆBˆBˆˆX›XÈš[˜[Û\ÜÈ˜YÝ]Nˆ\]X]X›HÂˆ]^ˆÝš[™Âˆ][]Y\ÎˆÓY\ÜØYÙU^[]WB‚ˆX›XÈ[š]
+˜Yˆ[™Ú[™PÚ]\Ý‘˜Y
+HÂˆÙ[‹^H˜Y^ˆÙ[‹™[]Y\ÈH˜Y™[]Y\ÂˆB‚ˆX›XÈÝ]XÈ[˜ÈOJÎˆ˜YÝ]KšÎˆ˜YÝ]JHOˆ›ÛÛÂˆYˆË^OHšË^Âˆ™]\›ˆ˜[ÙBˆBˆYˆË™[]Y\ÈOHšË™[]Y\ÈÂˆ™]\›ˆ˜[ÙBˆBˆ™]\›ˆYBˆBˆBˆˆX›XÈÝXÝÝÜžTÝ]Nˆ\]X]X›HÂˆX›XÈ˜\ˆÝ]Îˆ[™Ú[™PÚ]\Ý”ÝÜžTÝ]ÂˆX›XÈ˜\ˆ\Õ[œÙY[ÛÜÙQœšY[™Îˆ›ÛÛˆˆX›XÈ[š]
+ˆÝ]Îˆ[™Ú[™PÚ]\Ý”ÝÜžTÝ]Ëˆ\Õ[œÙY[ÛÜÙQœšY[™Îˆ›ÛÛˆ
+HÂˆÙ[‹œÝ]ÈHÝ]ÂˆÙ[‹š\Õ[œÙY[ÛÜÙQœšY[™ÈH\Õ[œÙY[ÛÜÙQœšY[™ÂˆBˆBˆˆX›XÈÝXÝYÎˆ\]X]X›HÂˆX›XÈ˜\ˆYˆ[Ì‚ˆX›XÈ˜\ˆ]NˆÚ]›Û\•]BˆX›XÈ˜\ˆÛÛÜ’Yˆ[Ì‚ˆˆX›XÈ[š]
+Yˆ[Ì‹]NˆÚ]›Û\•]KÛÛÜ’Yˆ[ÌŠHÂˆÙ[‹šYHYˆÙ[‹]HH]BˆÙ[‹˜ÛÛÜ’YHÛÛÜ’YˆBˆBˆˆX›XÈÝXÝÝ\ÝÛSY\ÜØYÙS\Ý]Nˆ\]X]X›HÂˆX›XÈ˜\ˆÛÛ[X[™™Yš^ˆÝš[™ÏÂˆX›XÈ˜\ˆÙX\˜Ú]Y\žNˆÝš[™ÏÂˆX›XÈ˜\ˆY\ÜØYÙPÛÝ[ˆ[ÂˆX›XÈ˜\ˆYTÙ\\˜]ÜŽˆ›ÛÛˆX›XÈ˜\ˆYQ]Nˆ›ÛÛˆX›XÈ˜\ˆYTY\”Ý]\Îˆ›ÛÛˆX›XÈ˜\ˆ\Ò[•˜[œÜ\™[ÛÛZ[™\Žˆ›ÛÛˆˆX›XÈ[š]
+ÛÛ[X[™™Yš^ˆÝš[™ÏËÙX\˜Ú]Y\žNˆÝš[™ÏËY\ÜØYÙPÛÝ[ˆ[ËYTÙ\\˜]ÜŽˆ›ÛÛYQ]Nˆ›ÛÛYTY\”Ý]\Îˆ›ÛÛ\Ò[•˜[œÜ\™[ÛÛZ[™\Žˆ›ÛÛH˜[ÙJHÂˆÙ[‹˜ÛÛ[X[™™Yš^HÛÛ[X[™™Yš^ˆÙ[‹œÙX\˜Ú]Y\žHHÙX\˜Ú]Y\žBˆÙ[‹›Y\ÜØYÙPÛÝ[HY\ÜØYÙPÛÝ[ˆÙ[‹šYTÙ\\˜]ÜˆHYTÙ\\˜]Ü‚ˆÙ[‹šYQ]HHYQ]BˆÙ[‹šYTY\”Ý]\ÈHYTY\”Ý]\ÂˆÙ[‹š\Ò[•˜[œÜ\™[ÛÛZ[™\ˆH\Ò[•˜[œÜ\™[ÛÛZ[™\‚ˆBˆBˆˆX›XÈÝXÝY\‘]HÂˆX›XÈ˜\ˆY\ÜØYÙ\ÎˆÑ[™Ú[™SY\ÜØYÙWBˆX›XÈ˜\ˆY\Žˆ[™Ú[™T™[™\™YY\‚ˆX›XÈ˜\ˆ]˜]\”Y\Žˆ[™Ú[™T™[™\™YY\ÂˆX›XÈ˜\ˆ™XY[™›Îˆ™XY[™›ÏÂˆX›XÈ˜\ˆÛÛXš[™Y™XYÝ]Nˆ[™Ú[™TY\”™XYÛÝ[\œÏÂˆX›XÈ˜\ˆ\Ô™[[Ý™Yœ›ÛUÝ[[œ™XYÛÝ[ˆ›ÛÛˆX›XÈ˜\ˆ™\Ù[˜ÙNˆ[™Ú[™TY\‹”™\Ù[˜ÙOÂˆX›XÈ˜\ˆ\Õ[œÙY[“Y[[ÛœÎˆ›ÛÛˆX›XÈ˜\ˆ\Õ[œÙY[”™XXÝ[ÛœÎˆ›ÛÛˆX›XÈ˜\ˆ\Õ[œÙY[”Û›Ý\Îˆ›ÛÛˆX›XÈ˜\ˆ˜YÝ]Nˆ˜YÝ]OÂˆX›XÈ˜\ˆYYXQ˜YÛÛ[\Nˆ[™Ú[™PÚ]\Ý“YYXQ˜YÛÛ[\OÂˆX›XÈ˜\ˆ[œ]XÝ]š]Y\ÎˆÊ[™Ú[™TY\‹Y\’[œ]XÝ]š]JWOÂˆX›XÈ˜\ˆ›Û[Ò[™›ÎˆÚ]\Ý›ÙQ[žT›Û[Ò[™›ÏÂˆX›XÈ˜\ˆYÛ›Ü™U[œ™XY˜YÙNˆ›ÛÛˆX›XÈ˜\ˆ\Ü^P\ÓY\ÜØYÙNˆ›ÛÛˆX›XÈ˜\ˆ\Ñ˜Z[YY\ÜØYÙ\Îˆ›ÛÛˆX›XÈ˜\ˆ›Ü[UÜXÑ]Nˆ[™Ú[™PÚ]\Ý‘›Ü[UÜXÑ]OÂˆX›XÈ˜\ˆÜ›Ü[UÜXÒ][\ÎˆÑ[™Ú[™PÚ]\Ý‘›Ü[UÜXÑ]WBˆX›XÈ˜\ˆ]]Ü™[[Ý™U[Y[Ý]ˆ[ÌÂˆX›XÈ˜\ˆÝÜžTÝ]NˆÝÜžTÝ]OÂˆX›XÈ˜\ˆ™\]Z\™\Ô™[Z][Q›Ü“Y\ÜØYÚ[™Îˆ›ÛÛˆX›XÈ˜\ˆ\Ü^P\ÕÜXÓ\Ýˆ›ÛÛˆX›XÈ˜\ˆYÜÎˆÕY×BˆX›XÈ˜\ˆÝ\ÝÛSY\ÜØYÙS\Ý]NˆÝ\ÝÛSY\ÜØYÙS\Ý]OÂˆˆX›XÈ[š]
+ˆY\ÜØYÙ\ÎˆÑ[™Ú[™SY\ÜØYÙWKˆY\Žˆ[™Ú[™T™[™\™YY\‹ˆ]˜]\”Y\Žˆ[™Ú[™T™[™\™YY\ÈHš[ˆ™XY[™›Îˆ™XY[™›ÏËˆÛÛXš[™Y™XYÝ]Nˆ[™Ú[™TY\”™XYÛÝ[\œÏËˆ\Ô™[[Ý™Yœ›ÛUÝ[[œ™XYÛÝ[ˆ›ÛÛˆ™\Ù[˜ÙNˆ[™Ú[™TY\‹”™\Ù[˜ÙOËˆ\Õ[œÙY[“Y[[ÛœÎˆ›ÛÛˆ\Õ[œÙY[”™XXÝ[ÛœÎˆ›ÛÛˆ\Õ[œÙY[”Û›Ý\Îˆ›ÛÛˆ˜YÝ]Nˆ˜YÝ]OËˆYYXQ˜YÛÛ[\Nˆ[™Ú[™PÚ]\Ý“YYXQ˜YÛÛ[\OËˆ[œ]XÝ]š]Y\ÎˆÊ[™Ú[™TY\‹Y\’[œ]XÝ]š]JWOËˆ›Û[Ò[™›ÎˆÚ]\Ý›ÙQ[žT›Û[Ò[™›ÏËˆYÛ›Ü™U[œ™XY˜YÙNˆ›ÛÛˆ\Ü^P\ÓY\ÜØYÙNˆ›ÛÛˆ\Ñ˜Z[YY\ÜØYÙ\Îˆ›ÛÛˆ›Ü[UÜXÑ]Nˆ[™Ú[™PÚ]\Ý‘›Ü[UÜXÑ]OËˆÜ›Ü[UÜXÒ][\ÎˆÑ[™Ú[™PÚ]\Ý‘›Ü[UÜXÑ]WKˆ]]Ü™[[Ý™U[Y[Ý]ˆ[ÌËˆÝÜžTÝ]NˆÝÜžTÝ]OËˆ™\]Z\™\Ô™[Z][Q›Ü“Y\ÜØYÚ[™Îˆ›ÛÛˆ\Ü^P\ÕÜXÓ\Ýˆ›ÛÛˆYÜÎˆÕY×KˆÝ\ÝÛSY\ÜØYÙS\Ý]NˆÝ\ÝÛSY\ÜØYÙS\Ý]OÈHš[ˆ
+HÂˆÙ[‹›Y\ÜØYÙ\ÈHY\ÜØYÙ\ÂˆÙ[‹œY\ˆHY\‚ˆÙ[‹˜]˜]\”Y\ˆH]˜]\”Y\‚ˆÙ[‹™XY[™›ÈH™XY[™›ÂˆÙ[‹˜ÛÛXš[™Y™XYÝ]HHÛÛXš[™Y™XYÝ]BˆÙ[‹š\Ô™[[Ý™Yœ›ÛUÝ[[œ™XYÛÝ[H\Ô™[[Ý™Yœ›ÛUÝ[[œ™XYÛÝ[ˆÙ[‹œ™\Ù[˜ÙHH™\Ù[˜ÙBˆÙ[‹š\Õ[œÙY[“Y[[ÛœÈH\Õ[œÙY[“Y[[ÛœÂˆÙ[‹š\Õ[œÙY[”™XXÝ[ÛœÈH\Õ[œÙY[”™XXÝ[ÛœÂˆÙ[‹š\Õ[œÙY[”Û›Ý\ÈH\Õ[œÙY[”Û›Ý\ÂˆÙ[‹™˜YÝ]HH˜YÝ]BˆÙ[‹›YYXQ˜YÛÛ[\HHYYXQ˜YÛÛ[\BˆÙ[‹š[œ]XÝ]š]Y\ÈH[œ]XÝ]š]Y\ÂˆÙ[‹œ›Û[Ò[™›ÈH›Û[Ò[™›ÂˆÙ[‹šYÛ›Ü™U[œ™XY˜YÙHHYÛ›Ü™U[œ™XY˜YÙBˆÙ[‹™\Ü^P\ÓY\ÜØYÙHH\Ü^P\ÓY\ÜØYÙBˆÙ[‹š\Ñ˜Z[YY\ÜØYÙ\ÈH\Ñ˜Z[YY\ÜØYÙ\ÂˆÙ[‹™›Ü[UÜXÑ]HH›Ü[UÜXÑ]BˆÙ[‹Ü›Ü[UÜXÒ][\ÈHÜ›Ü[UÜXÒ][\ÂˆÙ[‹˜]]Ü™[[Ý™U[Y[Ý]H]]Ü™[[Ý™U[Y[Ý]ˆÙ[‹œÝÜžTÝ]HHÝÜžTÝ]BˆÙ[‹œ™\]Z\™\Ô™[Z][Q›Ü“Y\ÜØYÚ[™ÈH™\]Z\™\Ô™[Z][Q›Ü“Y\ÜØYÚ[™ÂˆÙ[‹™\Ü^P\ÕÜXÓ\ÝH\Ü^P\ÕÜXÓ\ÝˆÙ[‹YÜÈHYÜÂˆÙ[‹˜Ý\ÝÛSY\ÜØYÙS\Ý]HHÝ\ÝÛSY\ÜØYÙS\Ý]BˆBˆBˆˆX›XÈÝXÝÜ›Ý\™Y™\™[˜ÙQ]HÂˆX›XÈ˜\ˆÜ›Ý\Yˆ[™Ú[™PÚ]\Ý‘Ü›Ý\ˆX›XÈ˜\ˆY\œÎˆÑ[™Ú[™PÚ]\Ý‘Ü›Ý\][K’][WBˆX›XÈ˜\ˆY\ÜØYÙNˆ[™Ú[™SY\ÜØYÙOÂˆX›XÈ˜\ˆ[œ™XYÛÝ[ˆ[ˆX›XÈ˜\ˆY[žQY˜][ˆ›ÛÛˆX›XÈ˜\ˆ\X\œÔ[›™Yˆ›ÛÛˆX›XÈ˜\ˆÝÜžTÝ]NˆÝÜžTÝ]OÂˆˆX›XÈ[š]
+ˆÜ›Ý\Yˆ[™Ú[™PÚ]\Ý‘Ü›Ý\ˆY\œÎˆÑ[™Ú[™PÚ]\Ý‘Ü›Ý\][K’][WKˆY\ÜØYÙNˆ[™Ú[™SY\ÜØYÙOËˆ[œ™XYÛÝ[ˆ[ˆY[žQY˜][ˆ›ÛÛˆ\X\œÔ[›™Yˆ›ÛÛˆÝÜžTÝ]NˆÝÜžTÝ]OÂˆ
+HÂˆÙ[‹™Ü›Ý\YHÜ›Ý\YˆÙ[‹œY\œÈHY\œÂˆÙ[‹›Y\ÜØYÙHHY\ÜØYÙBˆÙ[‹[œ™XYÛÝ[H[œ™XYÛÝ[ˆÙ[‹šY[žQY˜][HY[žQY˜][ˆÙ[‹˜\X\œÔ[›™YH\X\œÔ[›™YˆÙ[‹œÝÜžTÝ]HHÝÜžTÝ]BˆBˆB‚ˆØ\ÙHØY[™ÂˆØ\ÙHY\ŠY\‘]JBˆØ\ÙHÜ›Ý\™Y™\™[˜ÙJÜ›Ý\™Y™\™[˜ÙQ]JBˆˆX›XÈ˜\ˆÚ]ØØ][ÛŽˆÚ]ØØ][ÛÈÂˆÝÚ]ÚÙ[ˆÂˆØ\ÙH›ØY[™Î‚ˆ™]\›ˆš[ˆØ\ÙH]œY\ŠY\‘]JN‚ˆ™]\›ˆœY\ŠYˆY\‘]KœY\‹œY\’Y
+BˆØ\ÙH™Ü›Ý\™Y™\™[˜ÙN‚ˆ™]\›ˆš[ˆBˆBŸB‚œš]˜]H]YÐ˜XÚÙÜ›Ý[™[XYÙNˆRR[XYÙOÈHÂˆ™]\›ˆÙ[™\˜]TÝ™]ÚX›Qš[YÚ\˜ÛR[XYÙJX[Y]\ŽˆŒÛÛÜŽˆÚ]JOËÚ]™[™\š[™Ó[ÙJ˜[Ø^\Õ[\]JBŸJ
+B‚œš]˜]Hš[˜[Û\ÜÈÚ]\Ý][UYÓ\ÝÛÛ\Û™[ˆÛÛ\Û™[Âˆ]ÛÛ^ˆXØÛÝ[ÛÛ^ˆ]YÜÎˆÐÚ]\Ý][PÛÛ[•Y×Bˆ][YNˆ™\Ù[][Û•[YBˆ]Ú^™Q˜XÝÜŽˆÑÑ›Ø]ˆˆ[š]
+ˆÛÛ^ˆXØÛÝ[ÛÛ^ˆYÜÎˆÐÚ]\Ý][PÛÛ[•Y×Kˆ[YNˆ™\Ù[][Û•[YKˆÚ^™Q˜XÝÜŽˆÑÑ›Ø]ˆ
+HÂˆÙ[‹˜ÛÛ^HÛÛ^ˆÙ[‹YÜÈHYÜÂˆÙ[‹[YHH[YBˆÙ[‹œÚ^™Q˜XÝÜˆHÚ^™Q˜XÝÜ‚ˆBˆˆÝ]XÈ[˜ÈOJÎˆÚ]\Ý][UYÓ\ÝÛÛ\Û™[šÎˆÚ]\Ý][UYÓ\ÝÛÛ\Û™[
+HOˆ›ÛÛÂˆYˆË˜ÛÛ^OOHšË˜ÛÛ^Âˆ™]\›ˆ˜[ÙBˆBˆYˆËYÜÈOHšËYÜÈÂˆ™]\›ˆ˜[ÙBˆBˆYˆË[YHOOHšË[YHÂˆ™]\›ˆ˜[ÙBˆBˆYˆËœÚ^™Q˜XÝÜˆOHšËœÚ^™Q˜XÝÜˆÂˆ™]\›ˆ˜[ÙBˆBˆ™]\›ˆYBˆBˆˆš]˜]Hš[˜[Û\ÜÈ][UšY]ÎˆRUšY]ÈÂˆ]˜XÚÙÜ›Ý[™šY]ÎˆRR[XYÙUšY]Âˆ]]HHÛÛ\Û™[šY]Ï[\OŠ
+Bˆˆš]˜]H˜\ˆÝ\œ™[]NˆÚ]›Û\•]OÂˆˆÝ™\œšYH[š]
+œ˜[YNˆÑÔ™XÝ
+HÂˆÙ[‹˜˜XÚÙÜ›Ý[™šY]ÈHRR[XYÙUšY]Ê[XYÙNˆYÐ˜XÚÙÜ›Ý[™[XYÙJBˆˆÝ\\‹š[š]
+œ˜[YNˆœ˜[YJBˆˆÙ[‹˜YÝXšY]ÊÙ[‹˜˜XÚÙÜ›Ý[™šY]ÊBˆBˆˆ™\]Z\™Y[š]ÊÛÙ\Žˆ”ÐÛÙ\ŠHÂˆ™XÛÛ™][Û‘˜Z[\™J
+BˆBˆˆ[˜È\]JÛÛ^ˆXØÛÝ[ÛÛ^]NˆÚ]›Û\•]K˜XÚÙÜ›Ý[™ÛÛÜŽˆRPÛÛÜ‹›Ü™YÜ›Ý[™ÛÛÜŽˆRPÛÛÜ‹Ú^™Q˜XÝÜŽˆÑÑ›Ø]
+HOˆÑÔÚ^™HÂˆÙ[‹˜Ý\œ™[]HH]Bˆˆ]]U˜[YHHÚ]›Û\•]J^ˆ]K^š\Ñ[\HÈˆˆˆ]K^[]Y\Îˆ]K™[]Y\Ë[˜X›P[š[X][ÛœÎˆ]K™[˜X›P[š[X][ÛœÊBˆ]]TÚ^™HHÙ[‹]K\]Jˆ˜[œÚ][ÛŽˆš[[YYX]KˆÛÛ\Û™[ˆ[žPÛÛ\Û™[
+][[[™U^Ú][]Y\ÐÛÛ\Û™[
+ˆÛÛ^ˆÛÛ^ˆ[š[X][ÛØXÚNˆÛÛ^˜[š[X][ÛØXÚKˆ[š[X][Û”™[™\™\ŽˆÛÛ^˜[š[X][Û”™[™\™\‹ˆXÙZÛ\ÛÛÜŽˆ›Ü™YÜ›Ý[™ÛÛÜ‹Ú]][\YY[JŒJKˆ^ˆœZ[Š]U˜[YK˜]šX]YÝš[™Ê›Ûˆ›ÛœÙ[ZX›Û
+›ÛÜŠLKŒ
+ˆÚ^™Q˜XÝÜŠJK^ÛÛÜŽˆ›Ü™YÜ›Ý[™ÛÛÜŠJKˆX[X[š\ÚXš[]PÛÛ›ÛˆYKˆ™\Ù][š[X][ÛœÓÛ•š\ÚXš[]PÚ[™ÙNˆYBˆ
+JKˆ[š\›Û›Y[ˆßKˆÛÛZ[™\”Ú^™NˆÑÔÚ^™JÚYˆLŒZYÚˆLŒ
+Bˆ
+Bˆˆ]˜XÚÙÜ›Ý[™ÚYR[œÙ]ˆÑÑ›Ø]H›ÛÜ•ÔØÜ™Y[”^[ÊŒ
+ˆÚ^™Q˜XÝÜŠBˆ]˜XÚÙÜ›Ý[™™\XØ[[œÙ]ˆÑÑ›Ø]H›ÛÜ•ÔØÜ™Y[”^[Ê‹Œ
+ˆÚ^™Q˜XÝÜŠBˆ]˜XÚÙÜ›Ý[™Ú^™HHÑÔÚ^™JÚYˆ]TÚ^™KÚY
+È˜XÚÙÜ›Ý[™ÚYR[œÙ]
+ˆ‹ŒZYÚˆ]TÚ^™KšZYÚ
+È˜XÚÙÜ›Ý[™™\XØ[[œÙ]
+ˆ‹Œ
+Bˆˆ]˜XÚÙÜ›Ý[™œ˜[YHHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+
+KÚ^™Nˆ˜XÚÙÜ›Ý[™Ú^™JBˆÙ[‹˜˜XÚÙÜ›Ý[™šY]Ë™œ˜[YHH˜XÚÙÜ›Ý[™œ˜[YBˆÙ[‹˜˜XÚÙÜ›Ý[™šY]Ë[ÛÛÜˆH˜XÚÙÜ›Ý[™ÛÛÜ‚ˆˆ]]Qœ˜[YHH]TÚ^™K˜Ù[\™Y
+[Žˆ˜XÚÙÜ›Ý[™œ˜[YJBˆYˆ]]UšY]ÈHÙ[‹]KšY]ÈÂˆYˆ]UšY]ËœÝ\\šY]ÈOHš[ÂˆÙ[‹˜YÝXšY]Ê]UšY]ÊBˆBˆ]UšY]Ë™œ˜[YHH]Qœ˜[YBˆBˆˆ™]\›ˆ˜XÚÙÜ›Ý[™Ú^™BˆBˆˆ[˜È\]Uš\ÚXš[]JÈ\Õš\ÚX›Nˆ›ÛÛ
+HÂˆÝX\™]Ý\œ™[]HHÙ[‹˜Ý\œ™[]H[ÙHÂˆ™]\›‚ˆBˆYˆ]]UšY]ÈHÙ[‹]KšY]È\ÏÈ][[[™U^Ú][]Y\ÐÛÛ\Û™[•šY]ÈÂˆ]UšY]Ë\]Uš\ÚXš[]J\Õš\ÚX›H	‰ˆÝ\œ™[]K™[˜X›P[š[X][ÛœÊBˆBˆBˆBˆˆš[˜[Û\ÜÈšY]ÎˆRUšY]ÈÂˆš]˜]H˜\ˆ][UšY]ÜÎˆÒ[ÌŽˆ][UšY]×HHÎ—Bˆˆ˜\ˆ\Õš\ÚX›Nˆ›ÛÛH˜[ÙHÂˆYÙ]ÂˆYˆÙ[‹š\Õš\ÚX›HOHÛ˜[YHÂˆ›Üˆ
+Ë][UšY]ÊH[ˆÙ[‹š][UšY]ÜÈÂˆ][UšY]Ë\]Uš\ÚXš[]JÙ[‹š\Õš\ÚX›JBˆBˆBˆBˆBˆˆÝ™\œšYH[š]
+œ˜[YNˆÑÔ™XÝ
+HÂˆÝ\\‹š[š]
+œ˜[YNˆœ˜[YJBˆBˆˆ™\]Z\™Y[š]ÊÛÙ\Žˆ”ÐÛÙ\ŠHÂˆ™XÛÛ™][Û‘˜Z[\™J
+BˆBˆˆ[˜È\]JÛÛ\Û™[ˆÚ]\Ý][UYÓ\ÝÛÛ\Û™[]˜Z[X›TÚ^™NˆÑÔÚ^™KÝ]Nˆ[\PÛÛ\Û™[Ý]K[š\›Û›Y[ˆ[š\›Û›Y[[\O‹˜[œÚ][ÛŽˆÛÛ\Û™[˜[œÚ][ÛŠHOˆÑÔÚ^™HÂˆ˜\ˆ˜[YYÎˆÒ[Ì—HH×Bˆ]ÜXÚ[™ÎˆÑÑ›Ø]H›ÛÜ•ÔØÜ™Y[”^[ÊKŒ
+ˆÛÛ\Û™[œÚ^™Q˜XÝÜŠBˆ˜\ˆ™^ˆÑÑ›Ø]HŒˆ›ÜˆYÈ[ˆÛÛ\Û™[YÜÈÂˆYˆ™^OHŒÂˆ™^
+ÏHÜXÚ[™ÂˆBˆˆ]][RYˆ[Ì‚ˆ]][U]NˆÚ]›Û\•]Bˆ]][P˜XÚÙÜ›Ý[™ÛÛÜŽˆRPÛÛÜ‚ˆ]][Q›Ü™YÜ›Ý[™ÛÛÜŽˆRPÛÛÜ‚ˆˆYˆ˜[YYË˜ÛÝ[HÈÂˆ][RYH[Ì‹›X^ˆ][U]HHÚ]›Û\•]J^ˆŠ×
+ÛÛ\Û™[YÜË˜ÛÝ[H˜[YYË˜ÛÝ[
+H‹[]Y\Îˆ×K[˜X›P[š[X][ÛœÎˆYJBˆ][Q›Ü™YÜ›Ý[™ÛÛÜˆHÛÛ\Û™[[YK˜Ú]\Ý™]U^ÛÛÜ‚ˆ][P˜XÚÙÜ›Ý[™ÛÛÜˆH][Q›Ü™YÜ›Ý[™ÛÛÜ‹Ú]][\YY[JŒJBˆH[ÙHÂˆ][RYHYËšYˆˆ]YÐÛÛÜˆHY\“˜[YPÛÛÜŠ˜]Õ˜[YNˆYË˜ÛÛÜ’Y
+Bˆ]™\ÛÛ™YÛÛÜˆHÛÛ\Û™[˜ÛÛ^œY\“˜[YPÛÛÜœË™Ù]Ú]›Û\•YÊYÐÛÛÜ‹\šÎˆÛÛ\Û™[[YK›Ý™\˜[\šÐ\X\˜[˜ÙJBˆˆ][U]HHÚ]›Û\•]J^ˆYË]K^\\˜Ø\ÙY
+
+K[]Y\ÎˆYË]K™[]Y\Ë[˜X›P[š[X][ÛœÎˆYË]K™[˜X›P[š[X][ÛœÊBˆ][P˜XÚÙÜ›Ý[™ÛÛÜˆH™\ÛÛ™YÛÛÜ‹›XZ[‹Ú]][\YY[JŒJBˆ][Q›Ü™YÜ›Ý[™ÛÛÜˆH™\ÛÛ™YÛÛÜ‹›XZ[‚ˆBˆˆ]][UšY]Îˆ][UšY]ÂˆYˆ]Ý\œ™[HÙ[‹š][UšY]ÜÖÚ][RYHÂˆ][UšY]ÈHÝ\œ™[ˆH[ÙHÂˆ][UšY]ÈH][UšY]Ê
+BˆÙ[‹š][UšY]ÜÖÚ][RYHH][UšY]ÂˆÙ[‹˜YÝXšY]Ê][UšY]ÊBˆBˆˆ]][TÚ^™HH][UšY]Ë\]JÛÛ^ˆÛÛ\Û™[˜ÛÛ^]Nˆ][U]K˜XÚÙÜ›Ý[™ÛÛÜŽˆ][P˜XÚÙÜ›Ý[™ÛÛÜ‹›Ü™YÜ›Ý[™ÛÛÜŽˆ][Q›Ü™YÜ›Ý[™ÛÛÜ‹Ú^™Q˜XÝÜŽˆÛÛ\Û™[œÚ^™Q˜XÝÜŠBˆ]][Qœ˜[YHHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆ™^NˆŒ
+KÚ^™Nˆ][TÚ^™JBˆ][UšY]Ë™œ˜[YHH][Qœ˜[YBˆ][UšY]Ë\]Uš\ÚXš[]JÙ[‹š\Õš\ÚX›JBˆˆ˜[YYË˜\[™
+][RY
+Bˆ™^
+ÏH][TÚ^™KÚYˆˆYˆ˜[YYË˜ÛÝ[HÂˆœ™XZÂˆBˆBˆ˜\ˆ™[[Ý™YYÎˆÒ[Ì—HH×Bˆ›Üˆ
+Y][UšY]ÊH[ˆÙ[‹š][UšY]ÜÈÂˆYˆ]˜[YYË˜ÛÛZ[œÊY
+HÂˆ][UšY]Ëœ™[[Ý™Qœ›ÛTÝ\\šY]Ê
+Bˆ™[[Ý™YYË˜\[™
+Y
+BˆBˆBˆ›ÜˆY[ˆ™[[Ý™YYÈÂˆÙ[‹š][UšY]ÜËœ™[[Ý™U˜[YJ›Ü’Ù^NˆY
+BˆBˆˆ™]\›ˆ]˜Z[X›TÚ^™BˆBˆBˆˆ[˜ÈXZÙUšY]Ê
+HOˆšY]ÈÂˆ™]\›ˆšY]Êœ˜[YNˆÑÔ™XÝ
+
+JBˆBˆˆ[˜È\]JšY]ÎˆšY]Ë]˜Z[X›TÚ^™NˆÑÔÚ^™KÝ]Nˆ[\PÛÛ\Û™[Ý]K[š\›Û›Y[ˆ[š\›Û›Y[[\O‹˜[œÚ][ÛŽˆÛÛ\Û™[˜[œÚ][ÛŠHOˆÑÔÚ^™HÂˆ™]\›ˆšY]Ë\]JÛÛ\Û™[ˆÙ[‹]˜Z[X›TÚ^™Nˆ]˜Z[X›TÚ^™KÝ]NˆÝ]K[š\›Û›Y[ˆ[š\›Û›Y[˜[œÚ][ÛŽˆ˜[œÚ][ÛŠBˆBŸB‚œX›XÈÛ\ÜÈÚ]\Ý][Nˆ\ÝšY]Ò][HÂˆX›XÈ[[H[˜X›YÛÛ^XÝ[ÛœÈÂˆX›XÈÝXÝXÝ[ÛœÎˆÜ[Û”Ù]ÂˆX›XÈ˜\ˆ˜]Õ˜[YNˆ[Ì‚ˆˆX›XÈ[š]
+˜]Õ˜[YNˆ[ÌŠHÂˆÙ[‹œ˜]Õ˜[YHH˜]Õ˜[YBˆBˆˆX›XÈÝ]XÈ]ÙÙÛU[œ™XYHXÝ[ÛœÊ˜]Õ˜[YNˆH
+BˆX›XÈÝ]XÈ][]HHXÝ[ÛœÊ˜]Õ˜[YNˆHJBˆX›XÈÝ]XÈ]ÙÙÛT[›™YHXÝ[ÛœÊ˜]Õ˜[YNˆHŠBˆX›XÈÝ]XÈ]™[[Ý™HHXÝ[ÛœÊ˜]Õ˜[YNˆHÊBˆX›XÈÝ]XÈ]ÙÙÛS]]YHXÝ[ÛœÊ˜]Õ˜[YNˆH
+BˆBˆˆØ\ÙHÝ\ÝÛJXÝ[ÛœÊBˆØ\ÙH]]ÂˆBˆˆ]™\Ù[][Û‘]NˆÚ]\Ý™\Ù[][Û‘]Bˆ]ÛÛ^ˆXØÛÝ[ÛÛ^ˆ]Ú]\ÝØØ][ÛŽˆÚ]\ÝÛÛ›Û\“ØØ][Û‚ˆ]š[\‘]NˆÚ]\Ý][Qš[\‘]OÂˆ][™^ˆ[™Ú[™PÚ]\Ý’][K’[™^ˆX›XÈ]ÛÛ[ˆÚ]\Ý][PÛÛ[ˆ]Y][™Îˆ›ÛÛˆ]\ÐXÝ]™T™]™X[ÛÛ›ÛÎˆ›ÛÛˆ]Ù[XÝYˆ›ÛÛˆ][˜X›YÛÛ^XÝ[ÛœÎˆ[˜X›YÛÛ^XÝ[ÛœÏÂˆ]Y[“Ù™œÙ]ˆ›ÛÛˆ][\˜XÝ[ÛŽˆÚ]\Ý›ÙR[\˜XÝ[Û‚ˆ]\ÙPÛÛ[][š]UšY]Ó^[Ý]ˆ›ÛÛˆ]YPÛÛ[][š]P]˜]\˜YÙNˆ›ÛÛˆ]\Ü^RY[”Y\’XÛÛŽˆ›ÛÛˆˆX›XÈ]Ù[XÝX›Nˆ›ÛÛHYBˆˆX›XÈ˜\ˆ\›Þ[X]RZYÚˆÑÑ›Ø]Âˆ™]\›ˆÙ[‹šY[“Ù™œÙ]ÈŒˆŒˆBˆˆ]XY\Žˆ\ÝšY]Ò][RXY\ÂˆˆX›XÈ˜\ˆ\Ô[›™Yˆ›ÛÛÂˆÝÚ]ÚÙ[‹š[™^ÂˆØ\ÙH]˜Ú]\Ý
+[™^
+N‚ˆ™]\›ˆ[™^œ[›š[™Ò[™^OHš[ˆØ\ÙH]™›Ü[J[›™Y[™^ËËËÊN‚ˆYˆØ\ÙHš[™^H[›™Y[™^Âˆ™]\›ˆYBˆH[ÙHÂˆ™]\›ˆ˜[ÙBˆBˆBˆBˆˆX›XÈ[š]
+™\Ù[][Û‘]NˆÚ]\Ý™\Ù[][Û‘]KÛÛ^ˆXØÛÝ[ÛÛ^Ú]\ÝØØ][ÛŽˆÚ]\ÝÛÛ›Û\“ØØ][Û‹š[\‘]NˆÚ]\Ý][Qš[\‘]OË[™^ˆ[™Ú[™PÚ]\Ý’][K’[™^ÛÛ[ˆÚ]\Ý][PÛÛ[Y][™Îˆ›ÛÛ\ÐXÝ]™T™]™X[ÛÛ›ÛÎˆ›ÛÛÙ[XÝYˆ›ÛÛXY\Žˆ\ÝšY]Ò][RXY\Ë[˜X›YÛÛ^XÝ[ÛœÎˆ[˜X›YÛÛ^XÝ[ÛœÏËY[“Ù™œÙ]ˆ›ÛÛ[\˜XÝ[ÛŽˆÚ]\Ý›ÙR[\˜XÝ[Û‹\ÙPÛÛ[][š]UšY]Ó^[Ý]ˆ›ÛÛH˜[ÙKYPÛÛ[][š]P]˜]\˜YÙNˆ›ÛÛH˜[ÙK\Ü^RY[”Y\’XÛÛŽˆ›ÛÛH˜[ÙJHÂˆÙ[‹œ™\Ù[][Û‘]HH™\Ù[][Û‘]BˆÙ[‹˜Ú]\ÝØØ][ÛˆHÚ]\ÝØØ][Û‚ˆÙ[‹™š[\‘]HHš[\‘]BˆÙ[‹˜ÛÛ^HÛÛ^ˆÙ[‹š[™^H[™^ˆÙ[‹˜ÛÛ[HÛÛ[ˆÙ[‹™Y][™ÈHY][™ÂˆÙ[‹š\ÐXÝ]™T™]™X[ÛÛ›ÛÈH\ÐXÝ]™T™]™X[ÛÛ›ÛÂˆÙ[‹œÙ[XÝYHÙ[XÝYˆÙ[‹šXY\ˆHXY\‚ˆÙ[‹™[˜X›YÛÛ^XÝ[ÛœÈH[˜X›YÛÛ^XÝ[ÛœÂˆÙ[‹šY[“Ù™œÙ]HY[“Ù™œÙ]ˆÙ[‹š[\˜XÝ[ÛˆH[\˜XÝ[Û‚ˆÙ[‹\ÙPÛÛ[][š]UšY]Ó^[Ý]H\ÙPÛÛ[][š]UšY]Ó^[Ý]ˆÙ[‹šYPÛÛ[][š]P]˜]\˜YÙHHYPÛÛ[][š]P]˜]\˜YÙBˆÙ[‹™\Ü^RY[”Y\’XÛÛˆH\Ü^RY[”Y\’XÛÛ‚ˆBˆˆX›XÈ[˜È›ÙPÛÛ™šYÝ\™Y›Ü”\˜[\Ê\Þ[˜Îˆ\ØØ\[™È
+\ØØ\[™È
+
+HOˆ›ÚY
+HOˆ›ÚY\˜[\Îˆ\ÝšY]Ò][S^[Ý]\˜[\ËÞ[˜Ú›Û›Ý\ÓØYÎˆ›ÛÛ™]š[Ý\Ò][Nˆ\ÝšY]Ò][OË™^][Nˆ\ÝšY]Ò][OËÛÛ\][ÛŽˆ\ØØ\[™È
+\ÝšY]Ò][S›ÙK\ØØ\[™È
+
+HOˆ
+ÚYÛ˜[›ÚY›Ñ\œ›ÜË
+\ÝšY]Ò][P\JHOˆ›ÚY
+JHOˆ›ÚY
+HÂˆ\Þ[˜ÈÂˆ]›ÙHHÚ]\Ý][S›ÙJ
+Bˆ]Y\™ÙU\HHÚ]\Ý][K›Y\™ÙU\J][NˆÙ[‹™]š[Ý\Ò][Nˆ™]š[Ý\Ò][K™^][Nˆ™^][JBˆ]š\œÝHY\™ÙU\K™š\œÝˆ˜\ˆ\ÝHY\™ÙU\K›\Ýˆ]š\œÝÚ]XY\ˆHY\™ÙU\K™š\œÝÚ]XY\‚ˆ]™^\Ô[›™YHY\™ÙU\K›™^\Ô[›™Yˆ]™^\ÐXÝ]™T™]™X[ÛÛ›ÛÈHY\™ÙU\K›™^\ÐXÝ]™T™]™X[ÛÛ›ÛÂˆYˆÙ[‹\ÙPÛÛ[][š]UšY]Ó^[Ý]Âˆ\ÝHYBˆBˆ›ÙKš[œÙ]ÈHÚ]\Ý][S›ÙKš[œÙ]Êš\œÝˆš\œÝ\Ýˆ\Ýš\œÝÚ]XY\Žˆš\œÝÚ]XY\ŠBˆˆ]
+›ÙS^[Ý]\JHH›ÙK˜\Þ[˜Ó^[Ý]
+
+JÙ[‹\˜[\Ëš\œÝ\Ýš\œÝÚ]XY\‹™^\Ô[›™Y™^\ÐXÝ]™T™]™X[ÛÛ›ÛÊBˆˆ›ÙKš[œÙ]ÈH›ÙS^[Ý]š[œÙ]Âˆ›ÙK˜ÛÛ[Ú^™HH›ÙS^[Ý]˜ÛÛ[Ú^™Bˆˆ]Y]YK›XZ[”]Y]YJ
+K˜\Þ[˜ÈÂˆÛÛ\][ÛŠ›ÙKÂˆ™]\›ˆ
+š[ÈÈ[‚ˆ›ÙKœÙ]\][J][NˆÙ[‹Þ[˜Ú›Û›Ý\ÓØYÎˆÞ[˜Ú›Û›Ý\ÓØYÊBˆ\JÞ[˜Ú›Û›Ý\ÓØYË˜[ÙJBˆ›ÙK\]R\ÒYÚYÚY
+˜[œÚ][ÛŽˆš[[YYX]JBˆJBˆJBˆBˆBˆBˆˆX›XÈ[˜È\]S›ÙJ\Þ[˜Îˆ\ØØ\[™È
+\ØØ\[™È
+
+HOˆ›ÚY
+HOˆ›ÚY›ÙNˆ\ØØ\[™È
+
+HOˆ\ÝšY]Ò][S›ÙK\˜[\Îˆ\ÝšY]Ò][S^[Ý]\˜[\Ë™]š[Ý\Ò][Nˆ\ÝšY]Ò][OË™^][Nˆ\ÝšY]Ò][OË[š[X][ÛŽˆ\ÝšY]Ò][U\]P[š[X][Û‹ÛÛ\][ÛŽˆ\ØØ\[™È
+\ÝšY]Ò][S›ÙS^[Ý]\ØØ\[™È
+\ÝšY]Ò][P\JHOˆ›ÚY
+HOˆ›ÚY
+HÂˆ]Y]YK›XZ[”]Y]YJ
+K˜\Þ[˜ÈÂˆ\ÜÙ\
+›ÙJ
+H\ÈÚ]\Ý][S›ÙJBˆYˆ]›ÙU˜[YHH›ÙJ
+H\ÏÈÚ]\Ý][S›ÙHÂˆ›ÙU˜[YKœÙ]\][J][NˆÙ[‹Þ[˜Ú›Û›Ý\ÓØYÎˆ˜[ÙJBˆ]^[Ý]H›ÙU˜[YK˜\Þ[˜Ó^[Ý]
+
+Bˆ\Þ[˜ÈÂˆ]Y\™ÙU\HHÚ]\Ý][K›Y\™ÙU\J][NˆÙ[‹™]š[Ý\Ò][Nˆ™]š[Ý\Ò][K™^][Nˆ™^][JBˆ]š\œÝHY\™ÙU\K™š\œÝˆ˜\ˆ\ÝHY\™ÙU\K›\Ýˆ]š\œÝÚ]XY\ˆHY\™ÙU\K™š\œÝÚ]XY\‚ˆ]™^\Ô[›™YHY\™ÙU\K›™^\Ô[›™Yˆ]™^\ÐXÝ]™T™]™X[ÛÛ›ÛÈHY\™ÙU\K›™^\ÐXÝ]™T™]™X[ÛÛ›ÛÂˆYˆÙ[‹\ÙPÛÛ[][š]UšY]Ó^[Ý]Âˆ\ÝHYBˆBˆ˜\ˆ[š[X]YHYBˆYˆØ\ÙH“›Û™HH[š[X][ÛˆÂˆ[š[X]YH˜[ÙBˆBˆˆ]
+›ÙS^[Ý]\JHH^[Ý]
+Ù[‹\˜[\Ëš\œÝ\Ýš\œÝÚ]XY\‹™^\Ô[›™Y™^\ÐXÝ]™T™]™X[ÛÛ›ÛÊBˆ]Y]YK›XZ[”]Y]YJ
+K˜\Þ[˜ÈÂˆÛÛ\][ÛŠ›ÙS^[Ý]ÈÈ[‚ˆ\J˜[ÙK[š[X]Y
+BˆJBˆBˆBˆBˆBˆBˆˆX›XÈ[˜ÈÙ[XÝY
+\ÝšY]Îˆ\ÝšY]ÊHÂˆÝÚ]ÚÙ[‹˜ÛÛ[ÂˆØ\ÙH›ØY[™Î‚ˆœ™XZÂˆØ\ÙH]œY\ŠY\‘]JN‚ˆYˆ]Y\ÜØYÙHHY\‘]K›Y\ÜØYÙ\Ë›\Ý]Y\ˆHY\‘]KœY\‹œY\ˆÂˆYˆØ\ÙH˜ÛÛ[][š]HHY\ˆÂˆÙ[‹š[\˜XÝ[Û‹œY\”Ù[XÝY
+Y\‹š[š[Y\‘]Kœ›Û[Ò[™›Ë˜[ÙJBˆ™]\›‚ˆBˆ]ÛÛ[][š]TÙ[XÝYY\ˆHÛÛ[][š]TÛÝ\˜ÙTY\ŠY\‘]NˆY\‘]KY\ÜØYÙNˆY\ÜØYÙJBˆ]Ù[XÝYY\ˆHÛÛ[][š]TÙ[XÝYY\ˆÏÈY\‚ˆ˜\ˆ™XYYˆ[ÂˆYˆØ\ÙH]™›Ü[JËË™XYY˜[YKËÊHHÙ[‹š[™^Âˆ™XYYH™XYY˜[YBˆBˆYˆÛÛ[][š]TÙ[XÝYY\ˆOHš[Âˆ™XYYHY\ÜØYÙK™XYYˆBˆYˆ™XYYOHš[Ù[‹š[\˜XÝ[Û‹œÙX\˜Ú^YÚYÚÝ]HOHš[Ø\ÙH]˜Ú[›™[
+Ú[›™[
+HHY\‘]KœY\‹œY\‹Ú[›™[š\Ñ›Ü[SÜ“[Û›Ñ›Ü[HÂˆ™XYYHY\ÜØYÙK™XYYˆBˆYˆØ\ÙH]\Ù\Š\Ù\ŠHHY\‹]›Ý[™›ÈH\Ù\‹˜›Ý[™›Ë›Ý[™›Ë™›YÜË˜ÛÛZ[œÊš\Ñ›Ü[JK]›Ü[UÜXÑ]HHY\‘]K™›Ü[UÜXÑ]HÂˆ™XYYH›Ü[UÜXÑ]KšYˆBˆÙ[‹š[\˜XÝ[Û‹›Y\ÜØYÙTÙ[XÝY
+Ù[XÝYY\‹™XYYY\ÜØYÙKY\‘]Kœ›Û[Ò[™›ÊBˆH[ÙHYˆ]Y\ˆHY\‘]KœY\‹œY\ˆÂˆÙ[‹š[\˜XÝ[Û‹œY\”Ù[XÝY
+Y\‹š[š[Y\‘]Kœ›Û[Ò[™›Ë˜[ÙJBˆH[ÙHYˆ]Y\ˆHY\‘]KœY\‹œY\œÖÜY\‘]KœY\‹œY\’YHÂˆÙ[‹š[\˜XÝ[Û‹œY\”Ù[XÝY
+Y\‹š[š[Y\‘]Kœ›Û[Ò[™›Ë˜[ÙJBˆBˆØ\ÙH]™Ü›Ý\™Y™\™[˜ÙJÜ›Ý\™Y™\™[˜ÙQ]JN‚ˆÙ[‹š[\˜XÝ[Û‹™Ü›Ý\Ù[XÝY
+Ü›Ý\™Y™\™[˜ÙQ]K™Ü›Ý\Y
+BˆBˆBˆˆÝ]XÈ[˜ÈY\™ÙU\J][NˆÚ]\Ý][K™]š[Ý\Ò][Nˆ\ÝšY]Ò][OË™^][Nˆ\ÝšY]Ò][OÊHOˆ
+š\œÝˆ›ÛÛ\Ýˆ›ÛÛš\œÝÚ]XY\Žˆ›ÛÛ™^\Ô[›™Yˆ›ÛÛ™^\ÐXÝ]™T™]™X[ÛÛ›ÛÎˆ›ÛÛ
+HÂˆ˜\ˆš\œÝH˜[ÙBˆ˜\ˆ\ÝH˜[ÙBˆ˜\ˆš\œÝÚ]XY\ˆH˜[ÙBˆYˆ]™]š[Ý\Ò][HH™]š[Ý\Ò][HÂˆYˆ]XY\ˆH][KšXY\ˆÂˆYˆ]™]š[Ý\Ò][HH™]š[Ý\Ò][H\ÏÈÚ]\Ý][HÂˆš\œÝÚ]XY\ˆHXY\‹šYOH™]š[Ý\Ò][KšXY\ËšYˆH[ÙHÂˆš\œÝÚ]XY\ˆHYBˆBˆBˆH[ÙHÂˆš\œÝHYBˆš\œÝÚ]XY\ˆH][KšXY\ˆOHš[ˆBˆ˜\ˆ™^\Ô[›™YH˜[ÙBˆ˜\ˆ™^\ÐXÝ]™T™]™X[ÛÛ›ÛÈH˜[ÙBˆYˆ]™^][HH™^][H\ÏÈÚ]\Ý][HÂˆYˆØ\ÙH]˜Ú]\Ý
+™^[™^
+HH™^][Kš[™^™^[™^œ[›š[™Ò[™^OHš[Âˆ™^\Ô[›™YHYBˆBˆ™^\ÐXÝ]™T™]™X[ÛÛ›ÛÈH™^][Kš\ÐXÝ]™T™]™X[ÛÛ›ÛÂˆH[ÙHÂˆ\ÝHYBˆBˆ™]\›ˆ
+š\œÝ\Ýš\œÝÚ]XY\‹™^\Ô[›™Y™^\ÐXÝ]™T™]™X[ÛÛ›ÛÊBˆBŸB‚œš]˜]H][’XÛÛˆH][S\Ý™]™X[Ü[Û’XÛÛ‹˜[š[X][ÛŠ[š[X][ÛŽˆ˜[š[WÜ[ˆ‹ØØ[NˆKŒÙ™œÙ]ˆŒ™\XÙPÛÛÜœÎˆš[›\ˆ˜[ÙKÝ\œ˜[YNˆÊBœš]˜]H][œ[’XÛÛˆH][S\Ý™]™X[Ü[Û’XÛÛ‹˜[š[X][ÛŠ[š[X][ÛŽˆ˜[š[WÝ[œ[ˆ‹ØØ[NˆKŒÙ™œÙ]ˆŒ™\XÙPÛÛÜœÎˆÌNNLÙ˜WK›\ˆ˜[ÙKÝ\œ˜[YNˆJBœš]˜]H]]]RXÛÛˆH][S\Ý™]™X[Ü[Û’XÛÛ‹˜[š[X][ÛŠ[š[X][ÛŽˆ˜[š[WÛ]]H‹ØØ[NˆKŒÙ™œÙ]ˆŒ™\XÙPÛÛÜœÎˆÌ™ŽMLK›\ˆ˜[ÙKÝ\œ˜[YNˆÊBœš]˜]H][›]]RXÛÛˆH][S\Ý™]™X[Ü[Û’XÛÛ‹˜[š[X][ÛŠ[š[X][ÛŽˆ˜[š[WÝ[›]]H‹ØØ[NˆKŒÙ™œÙ]ˆŒ™\XÙPÛÛÜœÎˆš[›\ˆ˜[ÙKÝ\œ˜[YNˆÊBœš]˜]H][]RXÛÛˆH][S\Ý™]™X[Ü[Û’XÛÛ‹˜[š[X][ÛŠ[š[X][ÛŽˆ˜[š[WÙ[]H‹ØØ[NˆKŒÙ™œÙ]ˆŒ™\XÙPÛÛÜœÎˆš[›\ˆ˜[ÙKÝ\œ˜[YNˆÊBœš]˜]H]Ü›Ý\XÛÛˆH][S\Ý™]™X[Ü[Û’XÛÛ‹˜[š[X][ÛŠ[š[X][ÛŽˆ˜[š[WÙÜ›Ý\‹ØØ[NˆKŒÙ™œÙ]ˆŒ™\XÙPÛÛÜœÎˆš[›\ˆ˜[ÙKÝ\œ˜[YNˆJBœš]˜]H][™Ü›Ý\XÛÛˆH][S\Ý™]™X[Ü[Û’XÛÛ‹˜[š[X][ÛŠ[š[X][ÛŽˆ˜[š[WÝ[™Ü›Ý\‹ØØ[NˆKŒÙ™œÙ]ˆŒ™\XÙPÛÛÜœÎˆš[›\ˆ˜[ÙKÝ\œ˜[YNˆJBœš]˜]H]™XYXÛÛˆH][S\Ý™]™X[Ü[Û’XÛÛ‹˜[š[X][ÛŠ[š[X][ÛŽˆ˜[š[WÜ™XY‹ØØ[NˆKŒÙ™œÙ]ˆŒ™\XÙPÛÛÜœÎˆš[›\ˆ˜[ÙKÝ\œ˜[YNˆJBœš]˜]H][œ™XYXÛÛˆH][S\Ý™]™X[Ü[Û’XÛÛ‹˜[š[X][ÛŠ[š[X][ÛŽˆ˜[š[WÝ[œ™XY‹ØØ[NˆKŒÙ™œÙ]ˆŒ™\XÙPÛÛÜœÎˆÌŒNM˜WK›\ˆ˜[ÙKÝ\œ˜[YNˆJBœš]˜]H]\˜Ú]™RXÛÛˆH][S\Ý™]™X[Ü[Û’XÛÛ‹˜[š[X][ÛŠ[š[X][ÛŽˆ˜[š[WØ\˜Ú]™H‹ØØ[NˆKŒÙ™œÙ]ˆ‹Œ™\XÙPÛÛÜœÎˆÌNXNXYK›\ˆ˜[ÙKÝ\œ˜[YNˆJBœš]˜]H][˜\˜Ú]™RXÛÛˆH][S\Ý™]™X[Ü[Û’XÛÛ‹˜[š[X][ÛŠ[š[X][ÛŽˆ˜[š[WÝ[˜\˜Ú]™H‹ØØ[NˆL‹Ù™œÙ]ˆM‹Œ™\XÙPÛÛÜœÎˆÌNXNXYK›\ˆ˜[ÙKÝ\œ˜[YNˆJBœš]˜]H]YRXÛÛˆH][S\Ý™]™X[Ü[Û’XÛÛ‹˜[š[X][ÛŠ[š[X][ÛŽˆ˜[š[WÚYH‹ØØ[NˆKŒKÙ™œÙ]ˆ‹Œ™\XÙPÛÛÜœÎˆÌ™™Ì—K›\ˆ˜[ÙKÝ\œ˜[YNˆJBœš]˜]H][šYRXÛÛˆH][S\Ý™]™X[Ü[Û’XÛÛ‹˜[š[X][ÛŠ[š[X][ÛŽˆ˜[š[WÚYH‹ØØ[NˆKŒÙ™œÙ]ˆLMKŒ™\XÙPÛÛÜœÎˆÌ™™Ì—K›\ˆYKÝ\œ˜[YNˆJBœš]˜]H]Ý\XÛÛˆH][S\Ý™]™X[Ü[Û’XÛÛ‹˜[š[X][ÛŠ[š[X][ÛŽˆ˜[š[WÜ^H‹ØØ[NˆKŒÙ™œÙ]ˆŒ™\XÙPÛÛÜœÎˆÌ™™Ì—K›\ˆ˜[ÙKÝ\œ˜[YNˆJBœš]˜]H]ÛÜÙRXÛÛˆH][S\Ý™]™X[Ü[Û’XÛÛ‹˜[š[X][ÛŠ[š[X][ÛŽˆ˜[š[WÜ]\ÙH‹ØØ[NˆKŒÙ™œÙ]ˆŒ™\XÙPÛÛÜœÎˆÌ™™Ì—K›\ˆ˜[ÙKÝ\œ˜[YNˆJBœš]˜]H][™Ü›Ý\ÛÛ[][š]RXÛÛˆH][S\Ý™]™X[Ü[Û’XÛÛ‹˜[š[X][ÛŠ[š[X][ÛŽˆ˜[š[WÝ[™Ü›Ý\ÛÛH‹ØØ[NˆKÙ™œÙ]ˆMŒ™\XÙPÛÛÜœÎˆš[›\ˆ˜[ÙKÝ\œ˜[YNˆ
+B‚œš]˜]H[[H™]™X[Ü[Û’Ù^Nˆ[ÌˆÂˆØ\ÙH[‚ˆØ\ÙH[œ[‚ˆØ\ÙH]]BˆØ\ÙH[›]]BˆØ\ÙH[]BˆØ\ÙHÜ›Ý\ˆØ\ÙH[™Ü›Ý\ˆØ\ÙHÙÙÛSX\šÙY[œ™XYˆØ\ÙH\˜Ú]™BˆØ\ÙH[˜\˜Ú]™BˆØ\ÙHYBˆØ\ÙH[šYBˆØ\ÙHYTØBˆØ\ÙHÜ[‚ˆØ\ÙHÛÜÙBˆØ\ÙHY]ŸB‚œš]˜]H[˜ÈØ[\˜Ú]™TY\ŠYˆ[™Ú[™TY\‹’YXØÛÝ[Y\’Yˆ[™Ú[™TY\‹’Y
+HOˆ›ÛÛÂˆYˆYš\Õ[YÜ˜[S›ÝYšXØ][ÛœÈÂˆ™]\›ˆ˜[ÙBˆBˆYˆYOHXØÛÝ[Y\’YÂˆ™]\›ˆ˜[ÙBˆBˆ™]\›ˆYBŸB‚œš]˜]H[˜ÈÛÛ[][š]TÛÝ\˜ÙTY\ŠY\‘]NˆÚ]\Ý][PÛÛ[”Y\‘]KY\ÜØYÙNˆ[™Ú[™SY\ÜØYÙJHOˆ[™Ú[™TY\ÈÂˆÝX\™Ø\ÙH˜ÛÛ[][š]HHY\‘]KœY\‹œY\ˆ[ÙHÂˆ™]\›ˆš[ˆBˆÝX\™Y\ÜØYÙKšYœY\’YOHY\‘]KœY\‹œY\’Y[ÙHÂˆ™]\›ˆš[ˆBˆYˆ]ÛÝ\˜ÙTY\ˆHY\ÜØYÙK™[™Ú[™TY\œÖÛY\ÜØYÙKšYœY\’YHÂˆ™]\›ˆÛÝ\˜ÙTY\‚ˆBˆYˆ]ÛÝ\˜ÙTY\ˆHY\‘]KœY\‹œY\œÖÛY\ÜØYÙKšYœY\’YHÂˆ™]\›ˆÛÝ\˜ÙTY\‚ˆBˆ™]\›ˆš[ŸB‚œX›XÈÝXÝÚ]\Ý][Qš[\‘]Nˆ\]X]X›HÂˆX›XÈ˜\ˆ^ÛY\Ð\˜Ú]™Yˆ›ÛÛˆˆX›XÈ[š]
+^ÛY\Ð\˜Ú]™Yˆ›ÛÛ
+HÂˆÙ[‹™^ÛY\Ð\˜Ú]™YH^ÛY\Ð\˜Ú]™YˆBŸB‚œš]˜]H[˜È™]™X[Ü[ÛœÊÝš[™ÜÎˆ™\Ù[][Û”Ýš[™ÜË[YNˆ™\Ù[][Û•[YK\Ô[›™Yˆ›ÛÛ\Ó]]Yˆ›ÛÛËØØ][ÛŽˆÚ]\ÝÛÛ›Û\“ØØ][Û‹Y\’Yˆ[™Ú[™TY\‹’YXØÛÝ[Y\’Yˆ[™Ú[™TY\‹’YØ[‘[]Nˆ›ÛÛ\ÑY][™Îˆ›ÛÛš[\‘]NˆÚ]\Ý][Qš[\‘]OÊHOˆÒ][S\Ý™]™X[Ü[Û—HÂˆ˜\ˆÜ[ÛœÎˆÒ][S\Ý™]™X[Ü[Û—HH×BˆYˆZ\ÑY][™ÈÂˆYˆØ\ÙHœØ]™YY\ÜØYÙ\ÐÚ]ÈHØØ][ÛˆÂˆYˆ\Ô[›™YÂˆÜ[ÛœË˜\[™
+][S\Ý™]™X[Ü[ÛŠÙ^Nˆ™]™X[Ü[Û’Ù^K[œ[‹œ˜]Õ˜[YK]NˆÝš[™ÜË‘X[ÙÓ\ÝÕ[œ[‹XÛÛŽˆ[œ[’XÛÛ‹ÛÛÜŽˆ[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË˜ÛÛœÝXÝ]™K™š[ÛÛÜ‹XÛÛÛÛÜŽˆ[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË˜ÛÛœÝXÝ]™K™›Ü™YÜ›Ý[™ÛÛÜ‹^ÛÛÜŽˆ[YK˜Ú]\Ý™]U^ÛÛÜŠJBˆH[ÙHÂˆÜ[ÛœË˜\[™
+][S\Ý™]™X[Ü[ÛŠÙ^Nˆ™]™X[Ü[Û’Ù^Kœ[‹œ˜]Õ˜[YK]NˆÝš[™ÜË‘X[ÙÓ\ÝÔ[‹XÛÛŽˆ[’XÛÛ‹ÛÛÜŽˆ[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË˜ÛÛœÝXÝ]™K™š[ÛÛÜ‹XÛÛÛÛÜŽˆ[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË˜ÛÛœÝXÝ]™K™›Ü™YÜ›Ý[™ÛÛÜ‹^ÛÛÜŽˆ[YK˜Ú]\Ý™]U^ÛÛÜŠJBˆBˆH[ÙHYˆØ\ÙH˜Ú]\Ý
+˜\˜Ú]™JHHØØ][ÛˆÂˆYˆ\Ô[›™YÂˆÜ[ÛœË˜\[™
+][S\Ý™]™X[Ü[ÛŠÙ^Nˆ™]™X[Ü[Û’Ù^K[œ[‹œ˜]Õ˜[YK]NˆÝš[™ÜË‘X[ÙÓ\ÝÕ[œ[‹XÛÛŽˆ[œ[’XÛÛ‹ÛÛÜŽˆ[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË˜ÛÛœÝXÝ]™K™š[ÛÛÜ‹XÛÛÛÛÜŽˆ[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË˜ÛÛœÝXÝ]™K™›Ü™YÜ›Ý[™ÛÛÜ‹^ÛÛÜŽˆ[YK˜Ú]\Ý™]U^ÛÛÜŠJBˆH[ÙHÂˆÜ[ÛœË˜\[™
+][S\Ý™]™X[Ü[ÛŠÙ^Nˆ™]™X[Ü[Û’Ù^Kœ[‹œ˜]Õ˜[YK]NˆÝš[™ÜË‘X[ÙÓ\ÝÔ[‹XÛÛŽˆ[’XÛÛ‹ÛÛÜŽˆ[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË˜ÛÛœÝXÝ]™K™š[ÛÛÜ‹XÛÛÛÛÜŽˆ[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË˜ÛÛœÝXÝ]™K™›Ü™YÜ›Ý[™ÛÛÜ‹^ÛÛÜŽˆ[YK˜Ú]\Ý™]U^ÛÛÜŠJBˆBˆH[ÙHÂˆYˆ]\Ó]]YH\Ó]]YÂˆYˆ\Ó]]YÂˆÜ[ÛœË˜\[™
+][S\Ý™]™X[Ü[ÛŠÙ^Nˆ™]™X[Ü[Û’Ù^K[›]]Kœ˜]Õ˜[YK]NˆÝš[™ÜËÚ]\ÝÕ[›]]KXÛÛŽˆ[›]]RXÛÛ‹ÛÛÜŽˆ[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË›™]]˜[‹™š[ÛÛÜ‹XÛÛÛÛÜŽˆ[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË›™]]˜[‹™›Ü™YÜ›Ý[™ÛÛÜ‹^ÛÛÜŽˆ[YK˜Ú]\Ý™]U^ÛÛÜŠJBˆH[ÙHÂˆÜ[ÛœË˜\[™
+][S\Ý™]™X[Ü[ÛŠÙ^Nˆ™]™X[Ü[Û’Ù^K›]]Kœ˜]Õ˜[YK]NˆÝš[™ÜËÚ]\ÝÓ]]KXÛÛŽˆ]]RXÛÛ‹ÛÛÜŽˆ[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË›™]]˜[‹™š[ÛÛÜ‹XÛÛÛÛÜŽˆ[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË›™]]˜[‹™›Ü™YÜ›Ý[™ÛÛÜ‹^ÛÛÜŽˆ[YK˜Ú]\Ý™]U^ÛÛÜŠJBˆBˆBˆBˆBˆYˆØ[‘[]HÂˆÜ[ÛœË˜\[™
+][S\Ý™]™X[Ü[ÛŠÙ^Nˆ™]™X[Ü[Û’Ù^K™[]Kœ˜]Õ˜[YK]NˆÝš[™ÜËÛÛ[[Û—Ñ[]KXÛÛŽˆ[]RXÛÛ‹ÛÛÜŽˆ[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË™\ÝXÝ]™K™š[ÛÛÜ‹XÛÛÛÛÜŽˆ[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË™\ÝXÝ]™K™›Ü™YÜ›Ý[™ÛÛÜ‹^ÛÛÜŽˆ[YK˜Ú]\Ý™]U^ÛÛÜŠJBˆBˆYˆØ\ÙHœØ]™YY\ÜØYÙ\ÐÚ]ÈHØØ][ÛˆÂˆH[ÙHÂˆYˆZ\ÑY][™ÈÂˆ˜\ˆØ[\˜Ú]™HH˜[ÙBˆ˜\ˆØ[•[˜\˜Ú]™HH˜[ÙBˆYˆ]š[\‘]HHš[\‘]HÂˆYˆš[\‘]K™^ÛY\Ð\˜Ú]™YÂˆØ[\˜Ú]™HHYBˆBˆH[ÙHÂˆYˆØ\ÙH]˜Ú]\Ý
+Ü›Ý\Y
+HHØØ][ÛˆÂˆYˆØ\ÙHœ›ÛÝHÜ›Ý\YÂˆØ[\˜Ú]™HHYBˆH[ÙHÂˆØ[•[˜\˜Ú]™HHYBˆBˆBˆBˆYˆØ[\˜Ú]™HÂˆYˆØ[\˜Ú]™TY\ŠYˆY\’YXØÛÝ[Y\’YˆXØÛÝ[Y\’Y
+HÂˆÜ[ÛœË˜\[™
+][S\Ý™]™X[Ü[ÛŠÙ^Nˆ™]™X[Ü[Û’Ù^K˜\˜Ú]™Kœ˜]Õ˜[YK]NˆÝš[™ÜËÚ]\ÝÐ\˜Ú]™PXÝ[Û‹XÛÛŽˆ\˜Ú]™RXÛÛ‹ÛÛÜŽˆ[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœËš[˜XÝ]™K™š[ÛÛÜ‹XÛÛÛÛÜŽˆ[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœËš[˜XÝ]™K™›Ü™YÜ›Ý[™ÛÛÜ‹^ÛÛÜŽˆ[YK˜Ú]\Ý™]U^ÛÛÜŠJBˆBˆH[ÙHYˆØ[•[˜\˜Ú]™HÂˆÜ[ÛœË˜\[™
+][S\Ý™]™X[Ü[ÛŠÙ^Nˆ™]™X[Ü[Û’Ù^K[˜\˜Ú]™Kœ˜]Õ˜[YK]NˆÝš[™ÜËÚ]\ÝÕ[˜\˜Ú]™PXÝ[Û‹XÛÛŽˆ[˜\˜Ú]™RXÛÛ‹ÛÛÜŽˆ[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœËš[˜XÝ]™K™š[ÛÛÜ‹XÛÛÛÛÜŽˆ[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœËš[˜XÝ]™K™›Ü™YÜ›Ý[™ÛÛÜ‹^ÛÛÜŽˆ[YK˜Ú]\Ý™]U^ÛÛÜŠJBˆBˆBˆBˆ™]\›ˆÜ[ÛœÂŸB‚œš]˜]H[˜ÈÜ›Ý\™Y™\™[˜ÙT™]™X[Ü[ÛœÊÝš[™ÜÎˆ™\Ù[][Û”Ýš[™ÜË[YNˆ™\Ù[][Û•[YK\ÑY][™Îˆ›ÛÛY[žQY˜][ˆ›ÛÛ
+HOˆÒ][S\Ý™]™X[Ü[Û—HÂˆ˜\ˆÜ[ÛœÎˆÒ][S\Ý™]™X[Ü[Û—HH×BˆYˆZ\ÑY][™ÈÂˆYˆY[žQY˜][ÂˆÜ[ÛœË˜\[™
+][S\Ý™]™X[Ü[ÛŠÙ^Nˆ™]™X[Ü[Û’Ù^K[šYKœ˜]Õ˜[YK]NˆÝš[™ÜËÚ]\ÝÕ[šYPXÝ[Û‹XÛÛŽˆ[šYRXÛÛ‹ÛÛÜŽˆ[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË˜ÛÛœÝXÝ]™K™š[ÛÛÜ‹XÛÛÛÛÜŽˆ[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË˜ÛÛœÝXÝ]™K™›Ü™YÜ›Ý[™ÛÛÜ‹^ÛÛÜŽˆ[YK˜Ú]\Ý™]U^ÛÛÜŠJBˆH[ÙHÂˆÜ[ÛœË˜\[™
+][S\Ý™]™X[Ü[ÛŠÙ^Nˆ™]™X[Ü[Û’Ù^KšYKœ˜]Õ˜[YK]NˆÝš[™ÜËÚ]\ÝÒYPXÝ[Û‹XÛÛŽˆYRXÛÛ‹ÛÛÜŽˆ[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœËš[˜XÝ]™K™š[ÛÛÜ‹XÛÛÛÛÜŽˆ[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË›™]]˜[K™›Ü™YÜ›Ý[™ÛÛÜ‹^ÛÛÜŽˆ[YK˜Ú]\Ý™]U^ÛÛÜŠJBˆBˆBˆ™]\›ˆÜ[ÛœÂŸB‚œš]˜]H[˜È›Ü[QÙ[™\˜[™]™X[Ü[ÛœÊÝš[™ÜÎˆ™\Ù[][Û”Ýš[™ÜË[YNˆ™\Ù[][Û•[YK\Ó]]Yˆ›ÛÛË\ÐÛÜÙYˆ›ÛÛ\ÑY][™Îˆ›ÛÛØ[“Ü[ÛÜÙNˆ›ÛÛØ[’YNˆ›ÛÛY[žQY˜][ˆ›ÛÛ
+HOˆÒ][S\Ý™]™X[Ü[Û—HÂˆ˜\ˆÜ[ÛœÎˆÒ][S\Ý™]™X[Ü[Û—HH×BˆYˆZ\ÑY][™ÈÂˆYˆ]\Ó]]YH\Ó]]YÂˆYˆ\Ó]]YÂˆÜ[ÛœË˜\[™
+][S\Ý™]™X[Ü[ÛŠÙ^Nˆ™]™X[Ü[Û’Ù^K[›]]Kœ˜]Õ˜[YK]NˆÝš[™ÜËÚ]\ÝÕ[›]]KXÛÛŽˆ[›]]RXÛÛ‹ÛÛÜŽˆ[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË›™]]˜[‹™š[ÛÛÜ‹XÛÛÛÛÜŽˆ[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË›™]]˜[‹™›Ü™YÜ›Ý[™ÛÛÜ‹^ÛÛÜŽˆ[YK˜Ú]\Ý™]U^ÛÛÜŠJBˆH[ÙHÂˆÜ[ÛœË˜\[™
+][S\Ý™]™X[Ü[ÛŠÙ^Nˆ™]™X[Ü[Û’Ù^K›]]Kœ˜]Õ˜[YK]NˆÝš[™ÜËÚ]\ÝÓ]]KXÛÛŽˆ]]RXÛÛ‹ÛÛÜŽˆ[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË›™]]˜[‹™š[ÛÛÜ‹XÛÛÛÛÜŽˆ[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË›™]]˜[‹™›Ü™YÜ›Ý[™ÛÛÜ‹^ÛÛÜŽˆ[YK˜Ú]\Ý™]U^ÛÛÜŠJBˆBˆBˆBˆYˆØ[“Ü[ÛÜÙH	‰ˆZY[žQY˜][ÂˆYˆZ\ÑY][™ÈÂˆYˆZ\ÐÛÜÙYÂ‚ˆH[ÙHÂˆÜ[ÛœË˜\[™
+][S\Ý™]™X[Ü[ÛŠÙ^Nˆ™]™X[Ü[Û’Ù^K›Ü[‹œ˜]Õ˜[YK]NˆÝš[™ÜËÚ]\ÝÔÝ\XÝ[Û‹XÛÛŽˆÝ\XÛÛ‹ÛÛÜŽˆ[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË˜ÛÛœÝXÝ]™K™š[ÛÛÜ‹XÛÛÛÛÜŽˆ[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË˜ÛÛœÝXÝ]™K™›Ü™YÜ›Ý[™ÛÛÜ‹^ÛÛÜŽˆ[YK˜Ú]\Ý™]U^ÛÛÜŠJBˆBˆBˆBˆYˆØ[’YHÂˆYˆZ\ÑY][™ÈÂˆYˆY[žQY˜][ÂˆÜ[ÛœË˜\[™
+][S\Ý™]™X[Ü[ÛŠÙ^Nˆ™]™X[Ü[Û’Ù^K[šYKœ˜]Õ˜[YK]NˆÝš[™ÜËÚ]\ÝÕ™XY[šYPXÝ[Û‹XÛÛŽˆ[šYRXÛÛ‹ÛÛÜŽˆ[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË˜ÛÛœÝXÝ]™K™š[ÛÛÜ‹XÛÛÛÛÜŽˆ[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË˜ÛÛœÝXÝ]™K™›Ü™YÜ›Ý[™ÛÛÜ‹^ÛÛÜŽˆ[YK˜Ú]\Ý™]U^ÛÛÜŠJBˆH[ÙHÂˆÜ[ÛœË˜\[™
+][S\Ý™]™X[Ü[ÛŠÙ^Nˆ™]™X[Ü[Û’Ù^KšYKœ˜]Õ˜[YK]NˆÝš[™ÜËÚ]\ÝÕ™XYYPXÝ[Û‹XÛÛŽˆYRXÛÛ‹ÛÛÜŽˆ[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœËš[˜XÝ]™K™š[ÛÛÜ‹XÛÛÛÛÜŽˆ[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË›™]]˜[K™›Ü™YÜ›Ý[™ÛÛÜ‹^ÛÛÜŽˆ[YK˜Ú]\Ý™]U^ÛÛÜŠJBˆBˆBˆBˆ™]\›ˆÜ[ÛœÂŸB‚œš]˜]H[˜È›Ü[U™XY™]™X[Ü[ÛœÊÝš[™ÜÎˆ™\Ù[][Û”Ýš[™ÜË[YNˆ™\Ù[][Û•[YK\Ó]]Yˆ›ÛÛË\ÐÛÜÙYˆ›ÛÛ\ÑY][™Îˆ›ÛÛØ[“Ü[ÛÜÙNˆ›ÛÛØ[‘[]Nˆ›ÛÛ
+HOˆÒ][S\Ý™]™X[Ü[Û—HÂˆ˜\ˆÜ[ÛœÎˆÒ][S\Ý™]™X[Ü[Û—HH×BˆYˆZ\ÑY][™ÈÂˆYˆ]\Ó]]YH\Ó]]YÂˆYˆ\Ó]]YÂˆÜ[ÛœË˜\[™
+][S\Ý™]™X[Ü[ÛŠÙ^Nˆ™]™X[Ü[Û’Ù^K[›]]Kœ˜]Õ˜[YK]NˆÝš[™ÜËÚ]\ÝÕ[›]]KXÛÛŽˆ[›]]RXÛÛ‹ÛÛÜŽˆ[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË›™]]˜[‹™š[ÛÛÜ‹XÛÛÛÛÜŽˆ[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË›™]]˜[‹™›Ü™YÜ›Ý[™ÛÛÜ‹^ÛÛÜŽˆ[YK˜Ú]\Ý™]U^ÛÛÜŠJBˆH[ÙHÂˆÜ[ÛœË˜\[™
+][S\Ý™]™X[Ü[ÛŠÙ^Nˆ™]™X[Ü[Û’Ù^K›]]Kœ˜]Õ˜[YK]NˆÝš[™ÜËÚ]\ÝÓ]]KXÛÛŽˆ]]RXÛÛ‹ÛÛÜŽˆ[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË›™]]˜[‹™š[ÛÛÜ‹XÛÛÛÛÜŽˆ[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË›™]]˜[‹™›Ü™YÜ›Ý[™ÛÛÜ‹^ÛÛÜŽˆ[YK˜Ú]\Ý™]U^ÛÛÜŠJBˆBˆBˆBˆYˆØ[‘[]HÂˆÜ[ÛœË˜\[™
+][S\Ý™]™X[Ü[ÛŠÙ^Nˆ™]™X[Ü[Û’Ù^K™[]Kœ˜]Õ˜[YK]NˆÝš[™ÜËÛÛ[[Û—Ñ[]KXÛÛŽˆ[]RXÛÛ‹ÛÛÜŽˆ[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË™\ÝXÝ]™K™š[ÛÛÜ‹XÛÛÛÛÜŽˆ[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË™\ÝXÝ]™K™›Ü™YÜ›Ý[™ÛÛÜ‹^ÛÛÜŽˆ[YK˜Ú]\Ý™]U^ÛÛÜŠJBˆBˆYˆØ[“Ü[ÛÜÙHÂˆYˆZ\ÑY][™ÈÂˆYˆZ\ÐÛÜÙYÂˆÜ[ÛœË˜\[™
+][S\Ý™]™X[Ü[ÛŠÙ^Nˆ™]™X[Ü[Û’Ù^K˜ÛÜÙKœ˜]Õ˜[YK]NˆÝš[™ÜËÚ]\ÝÐÛÜÙPXÝ[Û‹XÛÛŽˆÛÜÙRXÛÛ‹ÛÛÜŽˆ[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœËš[˜XÝ]™K™š[ÛÛÜ‹XÛÛÛÛÜŽˆ[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœËš[˜XÝ]™K™›Ü™YÜ›Ý[™ÛÛÜ‹^ÛÛÜŽˆ[YK˜Ú]\Ý™]U^ÛÛÜŠJBˆH[ÙHÂˆÜ[ÛœË˜\[™
+][S\Ý™]™X[Ü[ÛŠÙ^Nˆ™]™X[Ü[Û’Ù^K›Ü[‹œ˜]Õ˜[YK]NˆÝš[™ÜËÚ]\ÝÔÝ\XÝ[Û‹XÛÛŽˆÝ\XÛÛ‹ÛÛÜŽˆ[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË˜ÛÛœÝXÝ]™K™š[ÛÛÜ‹XÛÛÛÛÜŽˆ[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË˜ÛÛœÝXÝ]™K™›Ü™YÜ›Ý[™ÛÛÜ‹^ÛÛÜŽˆ[YK˜Ú]\Ý™]U^ÛÛÜŠJBˆBˆBˆBˆ™]\›ˆÜ[ÛœÂŸB‚œš]˜]H[˜ÈY™]™X[Ü[ÛœÊÝš[™ÜÎˆ™\Ù[][Û”Ýš[™ÜË[YNˆ™\Ù[][Û•[YK\Õ[œ™XYˆ›ÛÛ\ÑY][™Îˆ›ÛÛ\Ô[›™Yˆ›ÛÛ\ÔØ]™YY\ÜØYÙ\Îˆ›ÛÛØØ][ÛŽˆÚ]\ÝÛÛ›Û\“ØØ][Û‹Y\Žˆ[™Ú[™TY\‹š[\‘]NˆÚ]\Ý][Qš[\‘]OÊHOˆÒ][S\Ý™]™X[Ü[Û—HÂˆÝÚ]ÚØØ][ÛˆÂˆØ\ÙH]˜Ú]\Ý
+Ü›Ý\Y
+N‚ˆYˆØ\ÙHœ›ÛÝHÜ›Ý\YÂˆ˜\ˆÜ[ÛœÎˆÒ][S\Ý™]™X[Ü[Û—HH×Bˆ]Ø[•ÙÙÛT™XYÝ]Nˆ›ÛÛˆYˆØ\ÙH˜ÛÛ[][š]HHY\ˆÂˆØ[•ÙÙÛT™XYÝ]HH˜[ÙBˆH[ÙHÂˆØ[•ÙÙÛT™XYÝ]HHYBˆBˆYˆØ[•ÙÙÛT™XYÝ]HÂˆYˆ\Õ[œ™XYÂˆÜ[ÛœË˜\[™
+][S\Ý™]™X[Ü[ÛŠÙ^Nˆ™]™X[Ü[Û’Ù^KÙÙÛSX\šÙY[œ™XYœ˜]Õ˜[YK]NˆÝš[™ÜË‘X[ÙÓ\ÝÔ™XYXÛÛŽˆ™XYXÛÛ‹ÛÛÜŽˆ[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœËš[˜XÝ]™K™š[ÛÛÜ‹XÛÛÛÛÜŽˆ[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË›™]]˜[K™›Ü™YÜ›Ý[™ÛÛÜ‹^ÛÛÜŽˆ[YK˜Ú]\Ý™]U^ÛÛÜŠJBˆH[ÙHÂˆ˜\ˆØ[“X\šÕ[œ™XYHYBˆYˆØ\ÙH]˜Ú[›™[
+Ú[›™[
+HHY\‹Ú[›™[š\Ñ›Ü[SÜ“[Û›Ñ›Ü[HÂˆØ[“X\šÕ[œ™XYH˜[ÙBˆB‚ˆYˆØ[“X\šÕ[œ™XYÂˆÜ[ÛœË˜\[™
+][S\Ý™]™X[Ü[ÛŠÙ^Nˆ™]™X[Ü[Û’Ù^KÙÙÛSX\šÙY[œ™XYœ˜]Õ˜[YK]NˆÝš[™ÜË‘X[ÙÓ\ÝÕ[œ™XYXÛÛŽˆ[œ™XYXÛÛ‹ÛÛÜŽˆ[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË˜XØÙ[™š[ÛÛÜ‹XÛÛÛÛÜŽˆ[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË˜XØÙ[™›Ü™YÜ›Ý[™ÛÛÜ‹^ÛÛÜŽˆ[YK˜Ú]\Ý™]U^ÛÛÜŠJBˆBˆBˆBˆYˆZ\ÑY][™ÈÂˆYˆ\Ô[›™YÂˆÜ[ÛœË˜\[™
+][S\Ý™]™X[Ü[ÛŠÙ^Nˆ™]™X[Ü[Û’Ù^K[œ[‹œ˜]Õ˜[YK]NˆÝš[™ÜË‘X[ÙÓ\ÝÕ[œ[‹XÛÛŽˆ[œ[’XÛÛ‹ÛÛÜŽˆ[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË˜ÛÛœÝXÝ]™K™š[ÛÛÜ‹XÛÛÛÛÜŽˆ[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË˜ÛÛœÝXÝ]™K™›Ü™YÜ›Ý[™ÛÛÜ‹^ÛÛÜŽˆ[YK˜Ú]\Ý™]U^ÛÛÜŠJBˆH[ÙHÂˆYˆš[\‘]HOHš[Y\‹šY›˜[Y\ÜXÙHOH˜[Y\ÜXÙ\Ë”Y\‹”ÙXÜ™]Ú]ÂˆÜ[ÛœË˜\[™
+][S\Ý™]™X[Ü[ÛŠÙ^Nˆ™]™X[Ü[Û’Ù^Kœ[‹œ˜]Õ˜[YK]NˆÝš[™ÜË‘X[ÙÓ\ÝÔ[‹XÛÛŽˆ[’XÛÛ‹ÛÛÜŽˆ[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË˜ÛÛœÝXÝ]™K™š[ÛÛÜ‹XÛÛÛÛÜŽˆ[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË˜ÛÛœÝXÝ]™K™›Ü™YÜ›Ý[™ÛÛÜ‹^ÛÛÜŽˆ[YK˜Ú]\Ý™]U^ÛÛÜŠJBˆBˆBˆBˆ™]\›ˆÜ[ÛœÂˆH[ÙHÂˆ™]\›ˆ×BˆBˆØ\ÙH™›Ü[N‚ˆ™]\›ˆ×BˆØ\ÙHœØ]™YY\ÜØYÙ\ÐÚ]Î‚ˆ™]\›ˆ×BˆBŸB‚œš]˜]Hš[˜[Û\ÜÈÚ]\Ý][PXØÙ\ÜÚXš[]PÝ\ÝÛPXÝ[ÛŽˆRPXØÙ\ÜÚXš[]PÝ\ÝÛPXÝ[ÛˆÂˆ]Ù^Nˆ[Ì‚ˆˆ[š]
+˜[YNˆÝš[™Ë\™Ù]ˆ[žOËÙ[XÝÜŽˆÙ[XÝÜ‹Ù^Nˆ[ÌŠHÂˆÙ[‹šÙ^HHÙ^BˆˆÝ\\‹š[š]
+˜[YNˆ˜[YK\™Ù]ˆ\™Ù]Ù[XÝÜŽˆÙ[XÝÜŠBˆBŸB‚œš]˜]H]Ù\\˜]Ü’ZYÚHKŒÈRTØÜ™Y[‹›XZ[‹œØØ[B‚œš]˜]Hš[˜[Û\ÜÈØXÚYÚ]\ÝÙX\˜Ú™\Ý[Âˆ]^ˆÝš[™Âˆ]ÙX\˜Ú]Y\žNˆÝš[™Âˆ]™\Ý[˜[™Ù\ÎˆÔ˜[™ÙOÝš[™Ë’[™^—Bˆˆ[š]
+^ˆÝš[™ËÙX\˜Ú]Y\žNˆÝš[™Ë™\Ý[˜[™Ù\ÎˆÔ˜[™ÙOÝš[™Ë’[™^—JHÂˆÙ[‹^H^ˆÙ[‹œÙX\˜Ú]Y\žHHÙX\˜Ú]Y\žBˆÙ[‹œ™\Ý[˜[™Ù\ÈH™\Ý[˜[™Ù\ÂˆBˆˆ[˜ÈX]Ú\Ê^ˆÝš[™ËÙX\˜Ú]Y\žNˆÝš[™ÊHOˆ›ÛÛÂˆYˆÙ[‹^OH^Âˆ™]\›ˆ˜[ÙBˆBˆYˆÙ[‹œÙX\˜Ú]Y\žHOHÙX\˜Ú]Y\žHÂˆ™]\›ˆ˜[ÙBˆBˆ™]\›ˆYBˆBŸB‚œš]˜]Hš[˜[Û\ÜÈØXÚYÝ\ÝÛU^[]Y\ÈÂˆ]^ˆÝš[™Âˆ]^[]Y\ÎˆÓY\ÜØYÙU^[]WBˆˆ[š]
+^ˆÝš[™Ë^[]Y\ÎˆÓY\ÜØYÙU^[]WJHÂˆÙ[‹^H^ˆÙ[‹^[]Y\ÈH^[]Y\ÂˆBˆˆ[˜ÈX]Ú\Ê^ˆÝš[™ÊHOˆ›ÛÛÂˆYˆÙ[‹^OH^Âˆ™]\›ˆ˜[ÙBˆBˆ™]\›ˆYBˆBŸB‚œš]˜]H]^RXÛÛ’[XYÙHHRR[XYÙJ[™R[XYÙS˜[YNˆÚ]\ÝÓZ[šU[X›˜Z[^HŠOËœ™XÛÛ\ÜÙY
+
+B‚œš]˜]Hš[˜[Û\ÜÈÚ]\ÝYYXT™]šY]Ó›ÙNˆTÑ\Ü^S›ÙHÂˆš]˜]H]ÛÛ^ˆXØÛÝ[ÛÛ^ˆ]Y\ÜØYÙNˆ[™Ú[™SY\ÜØYÙBˆ]YYXNˆ[™Ú[™SYYXBˆˆš]˜]H][XYÙS›ÙNˆ˜[œÙ›Ü›R[XYÙS›ÙBˆš]˜]H]^RXÛÛŽˆTÒ[XYÙS›ÙBˆˆš]˜]H˜\ˆ™\]Y\ÝY[XYÙNˆ›ÛÛH˜[ÙBˆš]˜]H˜\ˆ\ÜÜØX›Nˆ\ÜÜØX›OÂˆˆ[š]
+ÛÛ^ˆXØÛÝ[ÛÛ^Y\ÜØYÙNˆ[™Ú[™SY\ÜØYÙKYYXNˆ[™Ú[™SYYXJHÂˆÙ[‹˜ÛÛ^HÛÛ^ˆÙ[‹›Y\ÜØYÙHHY\ÜØYÙBˆÙ[‹›YYXHHYYXBˆˆÙ[‹š[XYÙS›ÙHH˜[œÙ›Ü›R[XYÙS›ÙJ
+BˆÙ[‹œ^RXÛÛˆHTÒ[XYÙS›ÙJ
+BˆÙ[‹œ^RXÛÛ‹š[XYÙHH^RXÛÛ’[XYÙBˆˆÝ\\‹š[š]
+
+BˆˆÙ[‹˜YÝX››ÙJÙ[‹š[XYÙS›ÙJBˆÙ[‹˜YÝX››ÙJÙ[‹œ^RXÛÛŠBˆBˆˆZ[š]ÂˆÙ[‹™\ÜÜØX›OË™\ÜÜÙJ
+BˆBˆˆ[˜È\]S^[Ý]
+Ú^™NˆÑÔÚ^™KÞ[˜Ú›Û›Ý\ÓØYÎˆ›ÛÛ
+HÂˆYˆ][XYÙHHÙ[‹œ^RXÛÛ‹š[XYÙHÂˆÙ[‹œ^RXÛÛ‹™œ˜[YHHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆ›ÛÜŠ
+Ú^™KÚYH[XYÙKœÚ^™KÚY
+HÈ‹Œ
+KNˆ›ÛÜŠ
+Ú^™KšZYÚH[XYÙKœÚ^™KšZYÚ
+HÈ‹Œ
+JKÚ^™Nˆ[XYÙKœÚ^™JBˆBˆˆ]\ÔÜÚ[\ˆHÙ[‹›Y\ÜØYÙK˜]šX]\Ë˜ÛÛZ[œÊÚ\™NˆÈ	\ÈYYXTÜÚ[\“Y\ÜØYÙP]šX]HJBˆˆ˜\ˆ\Ô›Ý[™H˜[ÙBˆ˜\ˆ[Y[œÚ[ÛœÈHÑÔÚ^™JÚYˆLŒZYÚˆLŒ
+BˆYˆØ\ÙH]š[XYÙJ[XYÙJHHÙ[‹›YYXHÂˆÙ[‹œ^RXÛÛ‹š\ÒY[ˆHYBˆYˆ]\™Ù\ÝH\™Ù\Ý[XYÙT™\™\Ù[][ÛŠ[XYÙKœ™\™\Ù[][ÛœÊHÂˆ[Y[œÚ[ÛœÈH\™Ù\Ý™[Y[œÚ[ÛœË˜ÙÔÚ^™BˆYˆ\Ù[‹œ™\]Y\ÝY[XYÙHÂˆÙ[‹œ™\]Y\ÝY[XYÙHHYBˆ]ÚYÛ˜[HYYXQÜšYY\ÜØYÙTÝÊXØÛÝ[ˆÙ[‹˜ÛÛ^˜XØÛÝ[\Ù\“ØØ][ÛŽˆœY\ŠÙ[‹›Y\ÜØYÙKšYœY\’Y
+KÝÔ™Y™\™[˜ÙNˆ›Y\ÜØYÙJY\ÜØYÙNˆY\ÜØYÙT™Y™\™[˜ÙJÙ[‹›Y\ÜØYÙK—Ø\ÓY\ÜØYÙJ
+JKYYXNˆ[XYÙJK[™\™\Ù[][Û”Ú^™NˆÑÔÚ^™JÚYˆÍ‹ŒZYÚˆÍ‹Œ
+K›\œ™Yˆ\ÔÜÚ[\‹Þ[˜Ú›Û›Ý\ÓØYˆÞ[˜Ú›Û›Ý\ÓØYÊBˆÙ[‹š[XYÙS›ÙKœÙ]ÚYÛ˜[
+ÚYÛ˜[][\Þ[˜Ú›Û›Ý\ÛNˆÞ[˜Ú›Û›Ý\ÓØYÊBˆBˆH[ÙHÂˆ]ÚYÛ˜[HÚ]ÙXÜ™]ÝÊXØÛÝ[ˆÙ[‹˜ÛÛ^˜XØÛÝ[\Ù\“ØØ][ÛŽˆœY\ŠÙ[‹›Y\ÜØYÙKšYœY\’Y
+KÝÔ™Y™\™[˜ÙNˆœÝ[™[Û™JYYXNˆ[XYÙJKYÛ›Ü™Q[Ú^™NˆYKÞ[˜Ú›Û›Ý\ÓØYˆÞ[˜Ú›Û›Ý\ÓØYÊBˆÙ[‹š[XYÙS›ÙKœÙ]ÚYÛ˜[
+ÚYÛ˜[][\Þ[˜Ú›Û›Ý\ÛNˆÞ[˜Ú›Û›Ý\ÓØYÊBˆBˆH[ÙHYˆØ\ÙH]˜XÝ[ÛŠXÝ[ÛŠHHÙ[‹›YYXKØ\ÙH]œÝYÙÙ\ÝY›Ùš[TÝÊ[XYÙJHHXÝ[Û‹˜XÝ[Û‹][XYÙHH[XYÙHÂˆ\Ô›Ý[™HYBˆÙ[‹œ^RXÛÛ‹š\ÒY[ˆHYBˆYˆ]\™Ù\ÝH\™Ù\Ý[XYÙT™\™\Ù[][ÛŠ[XYÙKœ™\™\Ù[][ÛœÊHÂˆ[Y[œÚ[ÛœÈH\™Ù\Ý™[Y[œÚ[ÛœË˜ÙÔÚ^™BˆYˆ\Ù[‹œ™\]Y\ÝY[XYÙHÂˆÙ[‹œ™\]Y\ÝY[XYÙHHYBˆ]ÚYÛ˜[HYYXQÜšYY\ÜØYÙTÝÊXØÛÝ[ˆÙ[‹˜ÛÛ^˜XØÛÝ[\Ù\“ØØ][ÛŽˆœY\ŠÙ[‹›Y\ÜØYÙKšYœY\’Y
+KÝÔ™Y™\™[˜ÙNˆ›Y\ÜØYÙJY\ÜØYÙNˆY\ÜØYÙT™Y™\™[˜ÙJÙ[‹›Y\ÜØYÙK—Ø\ÓY\ÜØYÙJ
+JKYYXNˆ[XYÙJK[™\™\Ù[][Û”Ú^™NˆÑÔÚ^™JÚYˆÍ‹ŒZYÚˆÍ‹Œ
+KÞ[˜Ú›Û›Ý\ÓØYˆÞ[˜Ú›Û›Ý\ÓØYÊBˆÙ[‹š[XYÙS›ÙKœÙ]ÚYÛ˜[
+ÚYÛ˜[][\Þ[˜Ú›Û›Ý\ÛNˆÞ[˜Ú›Û›Ý\ÓØYÊBˆBˆBˆH[ÙHYˆØ\ÙH]™š[Jš[JHHÙ[‹›YYXHÂˆYˆš[Kš\Ò[œÝ[šY[ÈÂˆ\Ô›Ý[™HYBˆBˆYˆš[Kš\ÕšY[È	‰ˆYš[Kš\Ð[š[X]YÂˆÙ[‹œ^RXÛÛ‹š\ÒY[ˆH˜[ÙBˆH[ÙHÂˆÙ[‹œ^RXÛÛ‹š\ÒY[ˆHYBˆBˆYˆ]YYXQ[Y[œÚ[ÛœÈHš[K™[Y[œÚ[ÛœÈÂˆ[Y[œÚ[ÛœÈHYYXQ[Y[œÚ[ÛœË˜ÙÔÚ^™BˆYˆ\Ù[‹œ™\]Y\ÝY[XYÙHÂˆÙ[‹œ™\]Y\ÝY[XYÙHHYBˆ]ÚYÛ˜[HYYXQÜšYY\ÜØYÙUšY[ÊÜÝ›ÞˆÙ[‹˜ÛÛ^˜XØÛÝ[œÜÝ›Þ\Ù\“ØØ][ÛŽˆœY\ŠÙ[‹›Y\ÜØYÙKšYœY\’Y
+KšY[Ô™Y™\™[˜ÙNˆ›Y\ÜØYÙJY\ÜØYÙNˆY\ÜØYÙT™Y™\™[˜ÙJÙ[‹›Y\ÜØYÙK—Ø\ÓY\ÜØYÙJ
+JKYYXNˆš[JKÞ[˜Ú›Û›Ý\ÓØYˆÞ[˜Ú›Û›Ý\ÓØYË]]Ñ™]Ú[Ú^™U[X›˜Z[ˆYK\ÙSZ[šU[X›˜Z[Y]˜Z[X›NˆYK›\œ™Yˆ\ÔÜÚ[\ŠBˆÙ[‹š[XYÙS›ÙKœÙ]ÚYÛ˜[
+ÚYÛ˜[][\Þ[˜Ú›Û›Ý\ÛNˆÞ[˜Ú›Û›Ý\ÓØYÊBˆBˆBˆBˆˆ]˜Y]\ÎˆÑÑ›Ø]ˆYˆ\Ô›Ý[™Âˆ˜Y]\ÈHÚ^™KÚYÈ‹ŒˆH[ÙHYˆÚ^™KÚYHÌŒÂˆ˜Y]\ÈHŒˆH[ÙHÂˆ˜Y]\ÈH‹ŒˆBˆˆ]XZÙS^[Ý]HÙ[‹š[XYÙS›ÙK˜\Þ[˜Ó^[Ý]
+
+BˆÙ[‹š[XYÙS›ÙK™œ˜[YHHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+
+KÚ^™NˆÚ^™JBˆ]\HHXZÙS^[Ý]
+˜[œÙ›Ü›R[XYÙP\™Ý[Y[ÊÛÜ›™\œÎˆ[XYÙPÛÜ›™\œÊ˜Y]\Îˆ˜Y]\ÊK[XYÙTÚ^™Nˆ[Y[œÚ[ÛœË˜\ÜXÝš[Y
+Ú^™JK›Ý[™[™ÔÚ^™NˆÚ^™K[š[œÚXÒ[œÙ]ÎˆRQYÙR[œÙ]Ê
+JJBˆ\J
+BˆBŸB‚œš]˜]H][YÜ˜[PÛÙT™YÙ^HžOÈ”Ô™YÝ[\‘^™\ÜÚ[ÛŠ]\›ŽˆŠÏNˆ
+W—ÍKWŠÏWŠH‹Ü[ÛœÎˆ×JBœš]˜]H]ÙÚ[ÛÙT™YÙ^HžOÈ”Ô™YÝ[\‘^™\ÜÚ[ÛŠ]\›Žˆ——ÍKWˆ‹Ü[ÛœÎˆ×JB‚œX›XÈÛ\ÜÈÚ]\Ý][S›ÙNˆ][S\Ý™]™X[Ü[ÛœÒ][S›ÙHÂˆš[˜[Û\ÜÈÜXÒ][S›ÙNˆTÑ\Ü^S›ÙHÂˆ]ÜXÕ]S›ÙNˆ^›ÙBˆ]]UÜXÒXÛÛ•šY]ÎˆÛÛ\Û™[ÜÝšY]Ï[\OÂˆ˜\ˆ]UÜXÐ]˜]\“›ÙNˆ]˜]\“›ÙOÂˆ˜\ˆ]UÜXÒXÛÛÛÛ\Û™[ˆ[[ÚšTÝ]\ÐÛÛ\Û™[Âˆˆ˜\ˆš\ÚXš[]TÝ]\Îˆ›ÛÛH˜[ÙHÂˆYÙ]ÂˆYˆÙ[‹š\ÚXš[]TÝ]\ÈOHÛ˜[YHÂˆYˆ]]UÜXÒXÛÛ•šY]ÈHÙ[‹]UÜXÒXÛÛ•šY]Ë]]UÜXÒXÛÛÛÛ\Û™[HÙ[‹]UÜXÒXÛÛÛÛ\Û™[Âˆ]ÈH]UÜXÒXÛÛ•šY]Ë\]Jˆ˜[œÚ][ÛŽˆš[[YYX]KˆÛÛ\Û™[ˆ[žPÛÛ\Û™[
+]UÜXÒXÛÛÛÛ\Û™[Ú]š\ÚX›Q›Ü[š[X][ÛœÊÙ[‹š\ÚXš[]TÝ]\ÊJKˆ[š\›Û›Y[ˆßKˆÛÛZ[™\”Ú^™Nˆ]UÜXÒXÛÛ•šY]Ë˜›Ý[™ËœÚ^™Bˆ
+BˆBˆBˆBˆBˆˆš]˜]H[š]
+ÜXÕ]S›ÙNˆ^›ÙK]UÜXÒXÛÛ•šY]ÎˆÛÛ\Û™[ÜÝšY]Ï[\OË]UÜXÐ]˜]\“›ÙNˆ]˜]\“›ÙOË]UÜXÒXÛÛÛÛ\Û™[ˆ[[ÚšTÝ]\ÐÛÛ\Û™[ÊHÂˆÙ[‹ÜXÕ]S›ÙHHÜXÕ]S›ÙBˆÙ[‹]UÜXÒXÛÛ•šY]ÈH]UÜXÒXÛÛ•šY]ÂˆÙ[‹]UÜXÐ]˜]\“›ÙHH]UÜXÐ]˜]\“›ÙBˆÙ[‹]UÜXÒXÛÛÛÛ\Û™[H]UÜXÒXÛÛÛÛ\Û™[ˆˆÝ\\‹š[š]
+
+BˆˆÙ[‹˜YÝX››ÙJÙ[‹ÜXÕ]S›ÙJBˆYˆ]]UÜXÐ]˜]\“›ÙHHÙ[‹]UÜXÐ]˜]\“›ÙHÂˆÙ[‹šY]Ë˜YÝXšY]Ê]UÜXÐ]˜]\“›ÙKšY]ÊBˆBˆYˆ]]UÜXÒXÛÛ•šY]ÈHÙ[‹]UÜXÒXÛÛ•šY]ÈÂˆÙ[‹šY]Ë˜YÝXšY]Ê]UÜXÒXÛÛ•šY]ÊBˆBˆBˆˆÝ]XÈ[˜È\Þ[˜Ó^[Ý]
+ÈÝ\œ™[›ÙNˆÜXÒ][S›ÙOÊHOˆ
+ÈÛÛœÝ˜Z[™YÚYˆÑÑ›Ø]ÈÛÛ^ˆXØÛÝ[ÛÛ^È[YNˆ™\Ù[][Û•[YKÈ™XYYˆ[È™XYY\Žˆ[™Ú[™TY\ËÈ]Nˆ”Ð]šX]YÝš[™ËÈXÛÛ’Yˆ[ËÈXÛÛÛÛÜŽˆ[ÌÊHOˆ
+ÑÔÚ^™K
+
+HOˆÜXÒ][S›ÙJHÂˆ]XZÙUÜXÕ]S^[Ý]H^›ÙK˜\Þ[˜Ó^[Ý]
+Ý\œ™[›ÙOËÜXÕ]S›ÙJBˆˆ™]\›ˆÈÛÛœÝ˜Z[™YÚYÛÛ^[YK™XYY™XYY\‹]KXÛÛ’YXÛÛÛÛÜˆ[‚ˆ]™[XZ[š[™ÕÚYHX^
+KŒÛÛœÝ˜Z[™YÚYH
+
+
+XÛÛ’YOHš[	‰ˆXÛÛÛÛÜˆOHš[	‰ˆ™XYY\ˆOHš[
+HÈKŒˆNŒ
+H
+È‹Œ
+JBˆˆ]ÜXÕ]P\™Ý[Y[ÈH^›ÙS^[Ý]\™Ý[Y[Ê]šX]YÝš[™Îˆ]K˜XÚÙÜ›Ý[™ÛÛÜŽˆš[X^[][S[X™\“Ù“[™\ÎˆK[˜Ø][Û•\Nˆ™[™ÛÛœÝ˜Z[™YÚ^™NˆÑÔÚ^™JÚYˆ™[XZ[š[™ÕÚYZYÚˆÑÑ›Ø]™Ü™X]\Ýš[š]SXYÛš]YJK[YÛ›Y[ˆ›˜]\˜[Ý]Ý]ˆš[[œÙ]ÎˆRQYÙR[œÙ]ÊÜˆ‹ŒYˆKŒ›ÝÛNˆ‹ŒšYÚˆKŒ
+JBˆˆ]ÜXÕ]S^[Ý]HXZÙUÜXÕ]S^[Ý]
+ÜXÕ]P\™Ý[Y[ÊBˆˆ™]\›ˆ
+ÑÔÚ^™JÚYˆ
+
+XÛÛ’YOHš[	‰ˆXÛÛÛÛÜˆOHš[	‰ˆ™XYY\ˆOHš[
+HÈKŒˆNŒ
+H
+È‹Œ
+ÈÜXÕ]S^[Ý]ŒœÚ^™KÚYZYÚˆÜXÕ]S^[Ý]ŒœÚ^™KšZYÚ
+KÂˆ]ÜXÕ]S›ÙHHÜXÕ]S^[Ý]ŒJ
+Bˆˆ]]UÜXÒXÛÛÛÛ[ˆ[[ÚšTÝ]\ÐÛÛ\Û™[ÛÛ[ÂˆYˆ™XYYOHHÂˆ]UÜXÒXÛÛÛÛ[Hš[XYÙJ[XYÙNˆ™\Ù[][Û”™\ÛÝ\˜Ù\ÐÚ]\Ý™Ù[™\˜[ÜXÔÛX[XÛÛŠ[YJK[ÛÛÜŽˆš[
+BˆH[ÙHYˆ]š[RYHXÛÛ’Yš[RYOHÂˆ]UÜXÒXÛÛÛÛ[H˜[š[X][ÛŠÛÛ[ˆ˜Ý\ÝÛQ[[ÚšJš[RYˆš[RY
+KÚ^™NˆÑÔÚ^™JÚYˆÍ‹ŒZYÚˆÍ‹Œ
+KXÙZÛ\ÛÛÜŽˆ[YK›\Ý›YYXTXÙZÛ\ÛÛÜ‹[YPÛÛÜŽˆ[YK›\Ýš][PXØÙ[ÛÛÜ‹ÛÜ[ÙNˆ˜ÛÝ[
+
+JBˆH[ÙHYˆ]XÛÛÛÛÜˆÂˆ]UÜXÒXÛÛÛÛ[HÜXÊ]NˆÝš[™Ê]KœÝš[™Ëœ™Yš^
+JJKÛÛÜŽˆXÛÛÛÛÜ‹Ú^™NˆÑÔÚ^™JÚYˆNŒZYÚˆNŒ
+JBˆH[ÙHÂˆ]UÜXÒXÛÛÛÛ[Hš[ˆBˆˆ˜\ˆ]UÜXÒXÛÛÛÛ\Û™[ˆ[[ÚšTÝ]\ÐÛÛ\Û™[Âˆ˜\ˆ]UÜXÒXÛÛ•šY]ÎˆÛÛ\Û™[ÜÝšY]Ï[\OÂˆˆYˆ]]UÜXÒXÛÛÛÛ[Âˆ]UÜXÒXÛÛÛÛ\Û™[H[[ÚšTÝ]\ÐÛÛ\Û™[
+ˆÛÛ^ˆÛÛ^ˆ[š[X][ÛØXÚNˆÛÛ^˜[š[X][ÛØXÚKˆ[š[X][Û”™[™\™\ŽˆÛÛ^˜[š[X][Û”™[™\™\‹ˆÛÛ[ˆ]UÜXÒXÛÛÛÛ[ˆ\Õš\ÚX›Q›Ü[š[X][ÛœÎˆ
+Ý\œ™[›ÙOËš\ÚXš[]TÝ]\ÈÏÈ˜[ÙJH	‰ˆÛÛ^œÚ\™YÛÛ^™[™\™ÞU\ØYÙTÙ][™ÜË›ÛÜ[[ÚšKˆXÝ[ÛŽˆš[ˆ
+BˆˆYˆ]Ý\œ™[HÝ\œ™[›ÙOË]UÜXÒXÛÛ•šY]ÈÂˆ]UÜXÒXÛÛ•šY]ÈHÝ\œ™[ˆH[ÙHÂˆ]UÜXÒXÛÛ•šY]ÈHÛÛ\Û™[ÜÝšY]Ï[\OŠ
+BˆBˆBˆˆ˜\ˆ]UÜXÐ]˜]\“›ÙNˆ]˜]\“›ÙOÂˆYˆ]ÈH™XYY\ˆÂˆYˆ]Ý\œ™[HÝ\œ™[›ÙOË]UÜXÐ]˜]\“›ÙHÂˆ]UÜXÐ]˜]\“›ÙHHÝ\œ™[ˆH[ÙHÂˆ]UÜXÐ]˜]\“›ÙHH]˜]\“›ÙJ›Ûˆ]˜]\”XÙZÛ\‘›Û
+Ú^™NˆŒ
+JBˆBˆBˆˆ]\™Ù]›ÙHHÝ\œ™[›ÙHÏÈÜXÒ][S›ÙJÜXÕ]S›ÙNˆÜXÕ]S›ÙK]UÜXÒXÛÛ•šY]Îˆ]UÜXÒXÛÛ•šY]Ë]UÜXÐ]˜]\“›ÙNˆ]UÜXÐ]˜]\“›ÙK]UÜXÒXÛÛÛÛ\Û™[ˆ]UÜXÒXÛÛÛÛ\Û™[
+Bˆˆ\™Ù]›ÙK]UÜXÒXÛÛÛÛ\Û™[H]UÜXÒXÛÛÛÛ\Û™[ˆˆYˆ]]UÜXÒXÛÛ•šY]Ë]]UÜXÒXÛÛÛÛ\Û™[Âˆ]XÛÛ”Ú^™HH]UÜXÒXÛÛ•šY]Ë\]Jˆ˜[œÚ][ÛŽˆš[[YYX]KˆÛÛ\Û™[ˆ[žPÛÛ\Û™[
+]UÜXÒXÛÛÛÛ\Û™[
+Kˆ[š\›Û›Y[ˆßKˆÛÛZ[™\”Ú^™NˆÑÔÚ^™JÚYˆNŒZYÚˆNŒ
+Bˆ
+Bˆ]UÜXÒXÛÛ•šY]Ë™œ˜[YHHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆŒNˆ‹Œ
+KÚ^™NˆXÛÛ”Ú^™JBˆˆÜXÕ]S›ÙK™œ˜[YHHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆNŒ
+È‹ŒNˆŒ
+KÚ^™NˆÜXÕ]S^[Ý]ŒœÚ^™JBˆH[ÙHYˆ]]UÜXÐ]˜]\“›ÙK]™XYY\ˆÂˆ]XÛÛ”Ú^™HHÑÔÚ^™JÚYˆNŒZYÚˆNŒ
+Bˆˆ]UÜXÐ]˜]\“›ÙK™œ˜[YHHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆŒNˆ‹Œ
+KÚ^™NˆXÛÛ”Ú^™JBˆ]UÜXÐ]˜]\“›ÙK\]TÚ^™JÚ^™NˆXÛÛ”Ú^™JBˆYˆ™XYY\‹œÛX[›Ùš[R[XYÙHOHš[Âˆ]UÜXÐ]˜]\“›ÙKœÙ]Y\•ŒŠÛÛ^ˆÛÛ^[YNˆ[YKY\Žˆ™XYY\‹Ý™\œšYR[XYÙNˆš[[\PÛÛÜŽˆ[YK›\Ý›YYXTXÙZÛ\ÛÛÜ‹Û\Ý[Nˆœ›Ý[™Þ[˜Ú›Û›Ý\ÓØYˆ˜[ÙK\Ü^Q[Y[œÚ[ÛœÎˆXÛÛ”Ú^™JBˆH[ÙHÂˆ]UÜXÐ]˜]\“›ÙKœÙ]Y\ŠÛÛ^ˆÛÛ^[YNˆ[YKY\Žˆ™XYY\‹Ý™\œšYR[XYÙNˆš[[\PÛÛÜŽˆ[YK›\Ý›YYXTXÙZÛ\ÛÛÜ‹Û\Ý[Nˆœ›Ý[™Þ[˜Ú›Û›Ý\ÓØYˆ˜[ÙK\Ü^Q[Y[œÚ[ÛœÎˆXÛÛ”Ú^™JBˆBˆˆÜXÕ]S›ÙK™œ˜[YHHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆNŒ
+È‹ŒNˆŒ
+KÚ^™NˆÜXÕ]S^[Ý]ŒœÚ^™JBˆH[ÙHÂˆÜXÕ]S›ÙK™œ˜[YHHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆKŒNˆŒ
+KÚ^™NˆÜXÕ]S^[Ý]ŒœÚ^™JBˆBˆˆ™]\›ˆ\™Ù]›ÙBˆJBˆBˆBˆBˆˆX›XÈš[˜[Û\ÜÈ]]Ü“›ÙNˆTÑ\Ü^S›ÙHÂˆX›XÈ]]]Ü“›ÙNˆ^›ÙBˆ˜\ˆ]UÜXÐ\œ›ÝÓ›ÙNˆTÒ[XYÙS›ÙOÂˆ˜\ˆÜXÓ›Ù\ÎˆÒ[ˆÜXÒ][S›ÙWHHÎ—Bˆ˜\ˆÜXÓ›ÙSÜ™\ŽˆÒ[HH×BˆˆX›XÈ˜\ˆš\ÚXš[]TÝ]\Îˆ›ÛÛH˜[ÙHÂˆYÙ]ÂˆYˆÙ[‹š\ÚXš[]TÝ]\ÈOHÛ˜[YHÂˆ›Üˆ
+ËÜXÓ›ÙJH[ˆÙ[‹ÜXÓ›Ù\ÈÂˆÜXÓ›ÙKš\ÚXš[]TÝ]\ÈHÙ[‹š\ÚXš[]TÝ]\ÂˆBˆBˆBˆBˆˆÝ™\œšYHX›XÈ[š]
+
+HÂˆÙ[‹˜]]Ü“›ÙHH^›ÙJ
+BˆÙ[‹˜]]Ü“›ÙK™\Ü^\Ð\Þ[˜Ú›Û›Ý\ÛHHYBˆˆÝ\\‹š[š]
+
+BˆˆÙ[‹˜YÝX››ÙJÙ[‹˜]]Ü“›ÙJBˆBˆˆ[˜ÈÙ]š\œÝÜXÒYÚYÚY
+È\ÒYÚYÚYˆ›ÛÛ
+HÂˆÝX\™]YHÙ[‹ÜXÓ›ÙSÜ™\‹™š\œÝ]][S›ÙHHÙ[‹ÜXÓ›Ù\ÖÚYH[ÙHÂˆ™]\›‚ˆBˆYˆ\ÒYÚYÚYÂˆ][S›ÙK›^Y\‹œ™[[Ý™P[š[X][ÛŠ›Ü’Ù^Nˆ›ÜXÚ]HŠBˆ][S›ÙK˜[HHBˆH[ÙHÂˆ][S›ÙK˜[HHKŒˆ][S›ÙK›^Y\‹˜[š[X]P[Jœ›ÛNˆKÎˆKŒ\˜][ÛŽˆŒŠBˆBˆBˆˆ[˜È\ÜÚYÛ”\™[›ÙJ\™[›ÙNˆTÑ\Ü^S›ÙOÊHÂˆ›Üˆ
+YÜXÓ›ÙJH[ˆÙ[‹ÜXÓ›Ù\ÈÂˆYˆYOHÙ[‹ÜXÓ›ÙSÜ™\‹™š\œÝ]\™[›ÙHÂˆYˆÜXÓ›ÙKœÝ\\››ÙHOOH\™[›ÙHÂˆ\™[›ÙK˜YÝX››ÙJÜXÓ›ÙJBˆBˆH[ÙHÂˆYˆÜXÓ›ÙKœÝ\\››ÙHOOHÙ[ˆÂˆÙ[‹˜YÝX››ÙJÜXÓ›ÙJBˆBˆBˆBˆBˆˆ[˜È\Þ[˜Ó^[Ý]
+
+HOˆ
+ÈÛÛ^ˆXØÛÝ[ÛÛ^ÈÛÛœÝ˜Z[™YÚYˆÑÑ›Ø]È[YNˆ™\Ù[][Û•[YKÈ]]Ü•]Nˆ”Ð]šX]YÝš[™ÏËÈÜXÜÎˆÊYˆ[™XYY\Žˆ[™Ú[™TY\Ë]Nˆ”Ð]šX]YÝš[™ËXÛÛ’Yˆ[ËXÛÛÛÛÜŽˆ[ÌÊWKÈ\œ›ÝÐÛÛÜŽˆRPÛÛÜÊHOˆ
+ÑÔÚ^™K
+
+HOˆÑÔ™XÝÊHÂˆ]XZÙP]]Ü“^[Ý]H^›ÙK˜\Þ[˜Ó^[Ý]
+Ù[‹˜]]Ü“›ÙJBˆ˜\ˆXZÙQ^\Ý[™ÕÜXÓ^[Ý]ÎˆÒ[ˆ
+ÈÛÛœÝ˜Z[™YÚYˆÑÑ›Ø]ÈÛÛ^ˆXØÛÝ[ÛÛ^È[YNˆ™\Ù[][Û•[YKÈ™XYYˆ[È™XYY\Žˆ[™Ú[™TY\ËÈ]Nˆ”Ð]šX]YÝš[™ËÈXÛÛ’Yˆ[ËÈXÛÛÛÛÜŽˆ[ÌÊHOˆ
+ÑÔÚ^™K
+
+HOˆÜXÒ][S›ÙJWHHÎ—Bˆ›Üˆ
+ÜXÒYÜXÓ›ÙJH[ˆÙ[‹ÜXÓ›Ù\ÈÂˆXZÙQ^\Ý[™ÕÜXÓ^[Ý]ÖÝÜXÒYHHÜXÒ][S›ÙK˜\Þ[˜Ó^[Ý]
+ÜXÓ›ÙJBˆBˆˆ™]\›ˆÈÝÙXZÈÙ[—HÛÛ^ÛÛœÝ˜Z[™YÚY[YK]]Ü•]KÜXÜË\œ›ÝÐÛÛÜˆ[‚ˆ˜\ˆX^]UÚYHÛÛœÝ˜Z[™YÚYˆYˆ]ÜXÜËš\Ñ[\HÂˆX^]UÚYH›ÛÜŠÛÛœÝ˜Z[™YÚY
+ˆÊBˆBˆˆ]]]Ü•]S^[Ý]HXZÙP]]Ü“^[Ý]
+^›ÙS^[Ý]\™Ý[Y[Ê]šX]YÝš[™Îˆ]]Ü•]K˜XÚÙÜ›Ý[™ÛÛÜŽˆš[X^[][S[X™\“Ù“[™\ÎˆK[˜Ø][Û•\Nˆ™[™ÛÛœÝ˜Z[™YÚ^™NˆÑÔÚ^™JÚYˆX^]UÚYZYÚˆÑÑ›Ø]™Ü™X]\Ýš[š]SXYÛš]YJK[YÛ›Y[ˆ›˜]\˜[Ý]Ý]ˆš[[œÙ]ÎˆRQYÙR[œÙ]ÊÜˆ‹ŒYˆKŒ›ÝÛNˆ‹ŒšYÚˆKŒ
+JJBˆˆ˜\ˆ™[XZ[š[™ÕÚYHÛÛœÝ˜Z[™YÚYH]]Ü•]S^[Ý]ŒœÚ^™KÚYˆˆ˜\ˆ\œ›ÝÒXÛÛ’[XYÙNˆRR[XYÙOÂˆYˆ]ÜXÜËš\Ñ[\HÂˆYˆ]]Ü•]HOHš[ÂˆYˆ]\œ›ÝÐÛÛÜˆÂˆ\œ›ÝÒXÛÛ’[XYÙHHÙ[™\˜]U[Y[XYÙJ[XYÙNˆRR[XYÙJ[™R[XYÙS˜[YNˆÚ]\ÝÕÜXÐ\œ›ÝÒXÛÛˆŠKÛÛÜŽˆ\œ›ÝÐÛÛÜŠBˆH[ÙHÂˆ\œ›ÝÒXÛÛ’[XYÙHH™\Ù[][Û”™\ÛÝ\˜Ù\ÐÚ]\ÝÜXÐ\œ›ÝÒXÛÛŠ[YJBˆBˆYˆ]\œ›ÝÒXÛÛ’[XYÙHH\œ›ÝÒXÛÛ’[XYÙHÂˆ™[XZ[š[™ÕÚYOH\œ›ÝÒXÛÛ’[XYÙKœÚ^™KÚY
+È‹Œ
+ˆ‹ŒˆBˆBˆBˆˆ˜\ˆÜXÜÔÚ^™P[™\NˆÊ[ÑÔÚ^™K
+
+HOˆÜXÒ][S›ÙJWHH×Bˆ›ÜˆÜXÈ[ˆÜXÜÈÂˆYˆ™[XZ[š[™ÕÚYH
+
+ÜXËšXÛÛ’YOHš[	‰ˆÜXËšXÛÛÛÛÜˆOHš[
+HÈŒˆŒ‹Œ
+H
+È‹Œ
+ÈLŒÂˆœ™XZÂˆBˆˆ]XZÙUÜXÓ^[Ý]HXZÙQ^\Ý[™ÕÜXÓ^[Ý]ÖÝÜXËšYHÏÈÜXÒ][S›ÙK˜\Þ[˜Ó^[Ý]
+š[
+Bˆ]
+ÜXÔÚ^™KÜXÐ\JHHXZÙUÜXÓ^[Ý]
+™[XZ[š[™ÕÚYÛÛ^[YKÜXËšYÜXË™XYY\‹ÜXË]KÜXËšXÛÛ’YÜXËšXÛÛÛÛÜŠBˆÜXÜÔÚ^™P[™\K˜\[™
+
+ÜXËšYÜXÔÚ^™KÜXÐ\JJBˆˆ™[XZ[š[™ÕÚYOHÜXÔÚ^™KÚY
+ÈŒˆBˆˆ˜\ˆÚ^™HH]]Ü•]S^[Ý]ŒœÚ^™BˆYˆ]ÜXÜÔÚ^™P[™\Kš\Ñ[\HÂˆ›Üˆ][H[ˆÜXÜÔÚ^™P[™\HÂˆÚ^™KšZYÚHX^
+Ú^™KšZYÚ][KŒKšZYÚ
+BˆÚ^™KÚY
+ÏHLŒ
+È][KŒKÚYˆBˆBˆˆ™]\›ˆ
+Ú^™KÂˆÝX\™]Ù[ˆ[ÙHÂˆ™]\›ˆš[ˆBˆˆ]ÈH]]Ü•]S^[Ý]ŒJ
+Bˆ]]]Ü‘œ˜[YHHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+
+KÚ^™Nˆ]]Ü•]S^[Ý]ŒœÚ^™JBˆÙ[‹˜]]Ü“›ÙK™œ˜[YHH]]Ü‘œ˜[YBˆˆ˜\ˆ™^H]]Ü‘œ˜[YK›X^HKŒˆYˆ]]Ü•]HOHš[Âˆ™^HŒˆBˆˆYˆ]\œ›ÝÒXÛÛ’[XYÙHH\œ›ÝÒXÛÛ’[XYÙHÂˆ]]UÜXÐ\œ›ÝÓ›ÙNˆTÒ[XYÙS›ÙBˆYˆ]Ý\œ™[HÙ[‹]UÜXÐ\œ›ÝÓ›ÙHÂˆ]UÜXÐ\œ›ÝÓ›ÙHHÝ\œ™[ˆH[ÙHÂˆ]UÜXÐ\œ›ÝÓ›ÙHHTÒ[XYÙS›ÙJ
+BˆÙ[‹]UÜXÐ\œ›ÝÓ›ÙHH]UÜXÐ\œ›ÝÓ›ÙBˆÙ[‹˜YÝX››ÙJ]UÜXÐ\œ›ÝÓ›ÙJBˆBˆ]UÜXÐ\œ›ÝÓ›ÙKš[XYÙHH\œ›ÝÒXÛÛ’[XYÙBˆ™^
+ÏH‹Œˆ]UÜXÐ\œ›ÝÓ›ÙK™œ˜[YHHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆ™^NˆKŒ
+KÚ^™Nˆ\œ›ÝÒXÛÛ’[XYÙKœÚ^™JBˆ™^
+ÏH\œ›ÝÒXÛÛ’[XYÙKœÚ^™KÚY
+È‹ŒˆH[ÙHÂˆYˆ]]UÜXÐ\œ›ÝÓ›ÙHHÙ[‹]UÜXÐ\œ›ÝÓ›ÙHÂˆÙ[‹]UÜXÐ\œ›ÝÓ›ÙHHš[ˆ]UÜXÐ\œ›ÝÓ›ÙKœ™[[Ý™Qœ›ÛTÝ\\››ÙJ
+BˆBˆBˆˆ˜\ˆÜÜXÔ™XÝˆÑÔ™XÝÂˆ˜\ˆÜXÓ›ÙSÜ™\ŽˆÒ[HH×Bˆ›Üˆ][H[ˆÜXÜÔÚ^™P[™\HÂˆÜXÓ›ÙSÜ™\‹˜\[™
+][KŒ
+Bˆ]][S›ÙHH][KŒŠ
+BˆYˆÙ[‹ÜXÓ›Ù\ÖÚ][KŒHOH][S›ÙHÂˆÙ[‹ÜXÓ›Ù\ÖÚ][KŒOËœ™[[Ý™Qœ›ÛTÝ\\››ÙJ
+BˆÙ[‹ÜXÓ›Ù\ÖÚ][KŒHH][S›ÙBˆBˆ]][Qœ˜[YHHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆ™^HKŒNˆŒ
+KÚ^™Nˆ][KŒJBˆ][S›ÙK™œ˜[YHH][Qœ˜[YBˆYˆÜÜXÔ™XÝOHš[ÂˆÜÜXÔ™XÝH][Qœ˜[YBˆBˆ™^
+ÏH][KŒKÚY
+ÈŒˆBˆ˜\ˆ™[[Ý™RYÎˆÒ[HH×Bˆ›Üˆ
+Y][S›ÙJH[ˆÙ[‹ÜXÓ›Ù\ÈÂˆYˆ]ÜXÜÔÚ^™P[™\K˜ÛÛZ[œÊÚ\™NˆÈ	ŒOHYJHÂˆ™[[Ý™RYË˜\[™
+Y
+Bˆ][S›ÙKœ™[[Ý™Qœ›ÛTÝ\\››ÙJ
+BˆBˆBˆ›ÜˆY[ˆ™[[Ý™RYÈÂˆÙ[‹ÜXÓ›Ù\Ëœ™[[Ý™U˜[YJ›Ü’Ù^NˆY
+BˆBˆÙ[‹ÜXÓ›ÙSÜ™\ˆHÜXÓ›ÙSÜ™\‚ˆˆ™]\›ˆÜÜXÔ™XÝˆJBˆBˆBˆBˆˆš]˜]HÝXÝÛÛ[[XYÙTÜXÈÂˆ˜\ˆY\ÜØYÙNˆ[™Ú[™SY\ÜØYÙBˆ˜\ˆYYXNˆ[™Ú[™SYYXBˆ˜\ˆÚ^™NˆÑÔÚ^™Bˆˆ[š]
+Y\ÜØYÙNˆ[™Ú[™SY\ÜØYÙKYYXNˆ[™Ú[™SYYXKÚ^™NˆÑÔÚ^™JHÂˆÙ[‹›Y\ÜØYÙHHY\ÜØYÙBˆÙ[‹›YYXHHYYXBˆÙ[‹œÚ^™HHÚ^™BˆBˆBˆˆX›XÈš]˜]JÙ]
+H˜\ˆ][NˆÚ]\Ý][OÂˆˆš]˜]H]˜XÚÙÜ›Ý[™›ÙNˆTÑ\Ü^S›ÙBˆš]˜]H]YÚYÚY˜XÚÙÜ›Ý[™›ÙNˆTÑ\Ü^S›ÙBˆˆ]ÛÛ^ÛÛZ[™\ŽˆÛÛ^ÛÛ›Û\”ÛÝ\˜ÙS›ÙBˆ]XZ[ÛÛ[ÛÛZ[™\“›ÙNˆTÑ\Ü^S›ÙBˆˆX›XÈ]]˜]\ÛÛZ[™\“›ÙNˆTÑ\Ü^S›ÙBˆš]˜]H]ÛÛ[][š]P]˜]\”ÚYÝÓ›ÙNˆTÒ[XYÙS›ÙBˆš]˜]H˜\ˆÛÛ[][š]P]˜]\˜YÙP˜XÚÙÜ›Ý[™šY]ÎˆÛ\ÜÐ˜XÚÙÜ›Ý[™šY]ÏÂˆš]˜]H˜\ˆÛÛ[][š]P]˜]\˜YÙRXÛÛ•šY]ÎˆÛ\ÜÐ˜XÚÙÜ›Ý[™šY]ËÛÛ[[XYÙUšY]ÏÂˆX›XÈ]]˜]\“›ÙNˆ]˜]\“›ÙBˆ˜\ˆ]˜]\’XÛÛ•šY]ÎˆÛÛ\Û™[ÜÝšY]Ï[\OÂˆ˜\ˆ]˜]\’XÛÛÛÛ\Û™[ˆ[[ÚšTÝ]\ÐÛÛ\Û™[Âˆ˜\ˆ]˜]\•šY[Ó›ÙNˆ]˜]\•šY[Ó›ÙOÂˆ˜\ˆ]˜]\•\™XÛÙÛš^™\ŽˆRU\Ù\Ý\™T™XÛÙÛš^™\Âˆš]˜]H˜\ˆ]˜]\“YYXS›ÙNˆÚ]\ÝYYXT™]šY]Ó›ÙOÂˆˆš]˜]H˜\ˆ[›[™S˜]šYØ][Û“X\šÓ^Y\ŽˆÚ[\S^Y\ÂˆˆX›XÈ]]S›ÙNˆ^›ÙBˆš]˜]H˜\ˆ]P˜YÙNˆ
+˜XÚÙÜ›Ý[™šY]ÎˆRR[XYÙUšY]Ë^›ÙNˆ^›ÙJOÂˆX›XÈ]]]Ü“›ÙNˆ]]Ü“›ÙBˆš]˜]H˜\ˆÛÛ\Ý[™YÚYÚ[™Ó›ÙNˆ[šÒYÚYÚ[™Ó›ÙOÂˆš]˜]H˜\ˆ^\œ›ÝÓ›ÙNˆTÒ[XYÙS›ÙOÂˆš]˜]H˜\ˆÛÛ\Ý[™^]Û“›ÙNˆYÚYÚ˜XÚÚ[™Ð]Û“›ÙOÂˆ]YX\Ý\™S›ÙNˆ^›ÙBˆš]˜]H˜\ˆÝ\œ™[][RZYÚˆÑÑ›Ø]Âˆ]›ÜØ\™YXÛÛ“›ÙNˆTÒ[XYÙS›ÙBˆX›XÈ]^›ÙNˆ^›ÙUÚ][]Y\Âˆ˜\ˆ˜Z[[™Õ^˜YÙS›ÙNˆ^›ÙOÂˆ˜\ˆ˜Z[[™Õ^˜YÙP˜XÚÙÜ›Ý[™ˆRR[XYÙUšY]ÏÂˆ˜\ˆ\Ý›ÙNˆ[š\ÚX›R[šÑ\Ý›ÙOÂˆ][œ]XÝ]š]Y\Ó›ÙNˆÚ]\Ý[œ]XÝ]š]Y\Ó›ÙBˆX›XÈ]]S›ÙNˆ^›ÙBˆ˜\ˆ]TÝ]\ÒXÛÛ“›ÙNˆTÒ[XYÙS›ÙOÂˆ˜\ˆ]Q\ØÛÜÝ\™RXÛÛ•šY]ÎˆRR[XYÙUšY]ÏÂˆX›XÈ]Ù\\˜]Ü“›ÙNˆTÑ\Ü^S›ÙBˆ]Ý]\Ó›ÙNˆÚ]\ÝÝ]\Ó›ÙBˆ]˜YÙS›ÙNˆÚ]\Ý˜YÙS›ÙBˆ]Y[[Û˜YÙS›ÙNˆÚ]\Ý˜YÙS›ÙBˆ˜\ˆ]˜]\˜YÙS›ÙNˆÚ]\Ý˜YÙS›ÙOÂˆ˜\ˆ]˜]\˜YÙP˜XÚÙÜ›Ý[™ˆTÒ[XYÙS›ÙOÂˆ]Û›[™S›ÙNˆY\“Û›[™SX\šÙ\“›ÙBˆ˜\ˆ]˜]\•[Y\˜YÙNˆ]˜]\˜YÙUšY]ÏÂˆš]˜]H˜\ˆÝ\•šY]ÎˆÝ\•šY]ÏÂˆ˜\ˆ]˜]\“]™P˜YÙNˆ
+Ý][™NˆRR[XYÙUšY]Ë›Ü™YÜ›Ý[™ˆRR[XYÙUšY]ÊOÂˆ][›™YXÛÛ“›ÙNˆTÒ[XYÙS›ÙBˆ˜\ˆÙXÜ™]XÛÛ“›ÙNˆTÒ[XYÙS›ÙOÂˆ˜\ˆ™\šYšYYXÛÛ•šY]ÎˆÛÛ\Û™[ÜÝšY]Ï[\OÂˆ˜\ˆ™\šYšYYXÛÛÛÛ\Û™[ˆ[[ÚšTÝ]\ÐÛÛ\Û™[Âˆ˜\ˆ^\˜RXÛÛ•šY]ÎˆÛÛ\Û™[ÜÝšY]Ï[\OÂˆ˜\ˆ^\˜RXÛÛÛÛ\Û™[ˆ[[ÚšTÝ]\ÐÛÛ\Û™[Âˆ˜\ˆÜ™YXš[]RXÛÛ•šY]ÎˆÛÛ\Û™[ÜÝšY]Ï[\OÂˆ˜\ˆÜ™YXš[]RXÛÛÛÛ\Û™[ˆ[[ÚšTÝ]\ÐÛÛ\Û™[Âˆ˜\ˆÝ]\ÒXÛÛ•šY]ÎˆÛÛ\Û™[ÜÝšY]Ï[\OÂˆ˜\ˆÝ]\ÒXÛÛÛÛ\Û™[ˆ[[ÚšTÝ]\ÐÛÛ\Û™[Âˆ]Y[”Y\’XÛÛ“›ÙNˆTÒ[XYÙS›ÙBˆ]]]YXÛÛ“›ÙNˆTÒ[XYÙS›ÙBˆ˜\ˆ][UYÓ\ÝˆÛÛ\Û™[šY]Ï[\OÂˆ˜\ˆXÝ[Û]Û•]S›ÙNˆ^›ÙOÂˆ˜\ˆXÝ[Û]Û˜XÚÙÜ›Ý[™šY]ÎˆRR[XYÙUšY]ÏÂˆ˜\ˆXÝ[Û]Û“›ÙNˆYÚYÚX›P]Û“›ÙOÂˆˆš]˜]H˜\ˆXÙZÛ\“›ÙNˆÚ[[Y\‘Y™™XÝ›ÙOÂˆš]˜]H˜\ˆXœÛÛ]SØØ][ÛŽˆ
+ÑÔ™XÝÑÔÚ^™JOÂˆˆš]˜]H˜\ˆY\˜\˜ÚU˜XÚÚ[™Ó^Y\ŽˆY\˜\˜ÚU˜XÚÚ[™Ó^Y\Âˆš]˜]H˜\ˆØXÚY]Q\ÜÜØX›HHY]Q\ÜÜØX›J
+Bˆˆš]˜]H˜\ˆÝ\œ™[^YÝ]Ý]ˆÑÑ›Ø]HŒˆš]˜]H˜\ˆÝ\œ™[YYXT™]šY]ÔÜXÜÎˆÐÛÛ[[XYÙTÜX×HH×Bˆš]˜]H˜\ˆYYXT™]šY]Ó›Ù\ÎˆÑ[™Ú[™SYYXK’YˆÚ]\ÝYYXT™]šY]Ó›ÙWHHÎ—Bˆˆ˜\ˆÙ[XÝX›PÛÛ›Û›ÙNˆ][S\ÝÙ[XÝX›PÛÛ›Û›ÙOÂˆ˜\ˆ™[Ü™\ÛÛ›Û›ÙNˆ][S\ÝY]X›T™[Ü™\ÛÛ›Û›ÙOÂˆˆš]˜]H˜\ˆY\”™\Ù[˜ÙSX[˜YÙ\ŽˆY\”™\Ù[˜ÙTÝ]\ÓX[˜YÙ\Âˆˆš]˜]H˜\ˆØXÚYÚ]\Ý^ˆ
+Ýš[™ËÝš[™ÊOÂˆš]˜]H˜\ˆØXÚYÚ]\ÝÙX\˜Ú™\Ý[ˆØXÚYÚ]\ÝÙX\˜Ú™\Ý[Âˆš]˜]H˜\ˆØXÚYÚ]\Ý][ÝTÙX\˜Ú™\Ý[ˆØXÚYÚ]\ÝÙX\˜Ú™\Ý[Âˆš]˜]H˜\ˆØXÚYÝ\ÝÛU^[]Y\ÎˆØXÚYÝ\ÝÛU^[]Y\ÏÂˆˆ˜\ˆ^[Ý]\˜[\Îˆ
+Ú]\Ý][Kš\œÝˆ›ÛÛ\Ýˆ›ÛÛš\œÝÚ]XY\Žˆ›ÛÛ™^\Ô[›™Yˆ›ÛÛ™^\ÐXÝ]™T™]™X[ÛÛ›ÛÎˆ›ÛÛ\ÝšY]Ò][S^[Ý]\˜[\ËÛÝ[\œÔÚ^™NˆÑÑ›Ø]
+OÂˆˆš]˜]H˜\ˆ\ÒYÚYÚYˆ›ÛÛH˜[ÙBˆš]˜]H˜\ˆ™^\ÐXÝ]™T™]™X[ÛÛ›ÛÎˆ›ÛÛH˜[ÙBˆš]˜]H˜\ˆÚÚ\˜Y[Ý]ˆ›ÛÛH˜[ÙBˆš]˜]H˜\ˆÝ\ÝÛP[š[X][Û’[”›ÙÜ™\ÜÎˆ›ÛÛH˜[ÙBˆˆš]˜]H˜\ˆÛ›[™R\Õ›ÚXÙPÚ]ˆ›ÛÛH˜[ÙBˆš]˜]H˜\ˆÝ\œ™[Û›[™Nˆ›ÛÛÂˆˆÝ™\œšYHX›XÈ˜\ˆØ[™TÙ[XÝYˆ›ÛÛÂˆYˆÙ[‹œÙ[XÝX›PÛÛ›Û›ÙHOHš[Ù[‹š][OË™Y][™ÈOHYHÂˆ™]\›ˆ˜[ÙBˆH[ÙHÂˆ™]\›ˆÝ\\‹˜Ø[™TÙ[XÝYˆBˆBˆˆÝ™\œšYHX›XÈ˜\ˆY˜][XØÙ\ÜÚXš[]SX™[ˆÝš[™ÏÈÂˆÙ]Âˆ™]\›ˆÙ[‹˜XØÙ\ÜÚXš[]SX™[ˆHÙ]
+˜[YJHÂˆBˆBˆÝ™\œšYHX›XÈ˜\ˆXØÙ\ÜÚXš[]P]šX]YX™[ˆ”Ð]šX]YÝš[™ÏÈÂˆÙ]Âˆ™]\›ˆÙ[‹˜XØÙ\ÜÚXš[]SX™[™›]X\
+”Ð]šX]YÝš[™Ëš[š]
+Ýš[™ÎŠJBˆHÙ]
+˜[YJHÂˆBˆBˆÝ™\œšYHX›XÈ˜\ˆXØÙ\ÜÚXš[]P]šX]Y˜[YNˆ”Ð]šX]YÝš[™ÏÈÂˆÙ]Âˆ™]\›ˆÙ[‹˜XØÙ\ÜÚXš[]U˜[YK™›]X\
+”Ð]šX]YÝš[™Ëš[š]
+Ýš[™ÎŠJBˆHÙ]
+˜[YJHÂˆBˆBˆˆÝ™\œšYHX›XÈ˜\ˆXØÙ\ÜÚXš[]SX™[ˆÝš[™ÏÈÂˆÙ]ÂˆÝX\™]][HHÙ[‹š][H[ÙHÂˆ™]\›ˆš[ˆBˆÝÚ]Ú][K˜ÛÛ[ÂˆØ\ÙH›ØY[™Î‚ˆ™]\›ˆš[ˆØ\ÙH]™Ü›Ý\™Y™\™[˜ÙJÜ›Ý\™Y™\™[˜ÙQ]JN‚ˆ˜\ˆ™\Ý[H][Kœ™\Ù[][Û‘]KœÝš[™ÜËÚ]\ÝÐ\˜Ú]™YÚ]Õ]Bˆ][ÛÝ[HÜ›Ý\™Y™\™[˜ÙQ]K[œ™XYÛÝ[ˆYˆ[ÛÝ[ˆÂˆ™\Ý[
+ÏH——
+][Kœ™\Ù[][Û‘]KœÝš[™ÜË•›ÚXÙSÝ™\—ÐÚ]Õ[œ™XYY\ÜØYÙ\Ê[ÌŠ[ÛÝ[
+JJH‚ˆBˆ™]\›ˆ™\Ý[ˆØ\ÙH]œY\ŠY\‘]JN‚ˆÝX\™]Ú]XZ[”Y\ˆHY\‘]KœY\‹˜Ú]Ü“[Û›Ù›Ü[SXZ[”Y\ˆ[ÙHÂˆ™]\›ˆš[ˆBˆ˜\ˆ™\Ý[Hˆ‚ˆYˆ][K˜ÛÛ^˜XØÛÝ[œY\’YOHÚ]XZ[”Y\‹šYÂˆ™\Ý[
+ÏH][Kœ™\Ù[][Û‘]KœÝš[™ÜË‘X[ÙÓ\ÝÔØ]™YY\ÜØYÙ\ÂˆH[ÙHÂˆ™\Ý[
+ÏHÚ]XZ[”Y\‹™\Ü^U]JÝš[™ÜÎˆ][Kœ™\Ù[][Û‘]KœÝš[™ÜË\Ü^SÜ™\Žˆ][Kœ™\Ù[][Û‘]K›˜[YQ\Ü^SÜ™\ŠBˆBˆYˆ]ÛÛXš[™Y™XYÝ]HHY\‘]K˜ÛÛXš[™Y™XYÝ]KÛÛXš[™Y™XYÝ]K˜ÛÝ[ˆÂˆ™\Ý[
+ÏH——
+][Kœ™\Ù[][Û‘]KœÝš[™ÜË•›ÚXÙSÝ™\—ÐÚ]Õ[œ™XYY\ÜØYÙ\ÊÛÛXš[™Y™XYÝ]K˜ÛÝ[
+JH‚ˆBˆ™]\›ˆ™\Ý[ˆBˆHÙ]
+˜[YJHÂˆBˆBˆˆÝ™\œšYHX›XÈ˜\ˆXØÙ\ÜÚXš[]U˜[YNˆÝš[™ÏÈÂˆÙ]ÂˆÝX\™]][HHÙ[‹š][H[ÙHÂˆ™]\›ˆš[ˆBˆÝÚ]Ú][K˜ÛÛ[ÂˆØ\ÙH›ØY[™Î‚ˆ™]\›ˆš[ˆØ\ÙH]™Ü›Ý\™Y™\™[˜ÙJÜ›Ý\™Y™\™[˜ÙQ]JN‚ˆ]Y\œÈHÜ›Ý\™Y™\™[˜ÙQ]KœY\œÂˆ]Y\ÜØYÙU˜[YHHÜ›Ý\™Y™\™[˜ÙQ]K›Y\ÜØYÙBˆYˆ]Y\ÜØYÙHHY\ÜØYÙU˜[YK]Y\ˆHY\œË™š\œÝËœY\ˆÂˆ]Y\ÜØYÙ\ÈHÛY\ÜØYÙWBˆ˜\ˆ™\Ý[Hˆ‚ˆYˆY\ÜØYÙK™›YÜË˜ÛÛZ[œÊ’[˜ÛÛZ[™ÊHÂˆ™\Ý[
+ÏH][Kœ™\Ù[][Û‘]KœÝš[™ÜË•›ÚXÙSÝ™\—ÐÚ]\ÝÓY\ÜØYÙBˆH[ÙHÂˆ™\Ý[
+ÏH][Kœ™\Ù[][Û‘]KœÝš[™ÜË•›ÚXÙSÝ™\—ÐÚ]\ÝÓÝ]ÛÚ[™ÓY\ÜØYÙBˆBˆ]
+Ë[š]X[YP]]Ü‹Y\ÜØYÙU^ËËËÊHHÚ]\Ý][TÝš[™ÜÊÝš[™ÜÎˆ][Kœ™\Ù[][Û‘]KœÝš[™ÜË˜[YQ\Ü^SÜ™\Žˆ][Kœ™\Ù[][Û‘]K›˜[YQ\Ü^SÜ™\‹]U[YQ›Ü›X]ˆ][Kœ™\Ù[][Û‘]K™]U[YQ›Ü›X]ÛÛ[Ù][™ÜÎˆ][K˜ÛÛ^˜Ý\œ™[ÛÛ[Ù][™ÜËÚ]È	KY\ÜØYÙ\ÎˆY\ÜØYÙ\ËÚ]Y\ŽˆY\‹XØÛÝ[Y\’Yˆ][K˜ÛÛ^˜XØÛÝ[œY\’Y\ÔY\‘Ü›Ý\ˆ˜[ÙJBˆYˆY\ÜØYÙK™›YÜË˜ÛÛZ[œÊ’[˜ÛÛZ[™ÊKZ[š]X[YP]]Ü‹]]]ÜˆHY\ÜØYÙK˜]]Ü‹Ø\ÙH\Ù\ˆH]]ÜˆÂˆ™\Ý[
+ÏH——
+][Kœ™\Ù[][Û‘]KœÝš[™ÜË•›ÚXÙSÝ™\—ÐÚ]\ÝÓY\ÜØYÙQœ›ÛJ]]Ü‹™\Ü^U]JÝš[™ÜÎˆ][Kœ™\Ù[][Û‘]KœÝš[™ÜË\Ü^SÜ™\Žˆ][Kœ™\Ù[][Û‘]K›˜[YQ\Ü^SÜ™\ŠJKœÝš[™ÊH‚ˆBˆ™\Ý[
+ÏH——
+Y\ÜØYÙU^
+H‚ˆ™]\›ˆ™\Ý[ˆH[ÙHYˆ\Y\œËš\Ñ[\HÂˆ˜\ˆ™\Ý[Hˆ‚ˆ˜\ˆ\Ñš\œÝHYBˆ›ÜˆY\ˆ[ˆY\œÈÂˆYˆ]Ú]XZ[”Y\ˆHY\‹œY\‹˜Ú]Ü“[Û›Ù›Ü[SXZ[”Y\ˆÂˆ]Y\•]HHÚ]XZ[”Y\‹˜ÛÛ\XÝ\Ü^U]BˆYˆ\Y\•]Kš\Ñ[\HÂˆYˆ\Ñš\œÝÂˆ\Ñš\œÝH˜[ÙBˆH[ÙHÂˆ™\Ý[˜\[™
+‹ŠBˆBˆ™\Ý[˜\[™
+Y\•]JBˆBˆBˆBˆ™]\›ˆ™\Ý[ˆH[ÙHÂˆ™]\›ˆ][Kœ™\Ù[][Û‘]KœÝš[™ÜË•›ÚXÙSÝ™\—ÐÚ]\ÝÓY\ÜØYÙQ[\BˆBˆØ\ÙH]œY\ŠY\‘]JN‚ˆYˆ]Y\ÜØYÙHHY\‘]K›Y\ÜØYÙ\Ë›\ÝÂˆ˜\ˆ™\Ý[Hˆ‚ˆYˆY\ÜØYÙK™›YÜË˜ÛÛZ[œÊ’[˜ÛÛZ[™ÊHÂˆ™\Ý[
+ÏH][Kœ™\Ù[][Û‘]KœÝš[™ÜË•›ÚXÙSÝ™\—ÐÚ]\ÝÓY\ÜØYÙBˆH[ÙHÂˆ™\Ý[
+ÏH][Kœ™\Ù[][Û‘]KœÝš[™ÜË•›ÚXÙSÝ™\—ÐÚ]\ÝÓÝ]ÛÚ[™ÓY\ÜØYÙBˆBˆ]
+Ë[š]X[YP]]Ü‹Y\ÜØYÙU^ËËËÊHHÚ]\Ý][TÝš[™ÜÊÝš[™ÜÎˆ][Kœ™\Ù[][Û‘]KœÝš[™ÜË˜[YQ\Ü^SÜ™\Žˆ][Kœ™\Ù[][Û‘]K›˜[YQ\Ü^SÜ™\‹]U[YQ›Ü›X]ˆ][Kœ™\Ù[][Û‘]K™]U[YQ›Ü›X]ÛÛ[Ù][™ÜÎˆ][K˜ÛÛ^˜Ý\œ™[ÛÛ[Ù][™ÜËÚ]È	KY\ÜØYÙ\ÎˆY\‘]K›Y\ÜØYÙ\ËÚ]Y\ŽˆY\‘]KœY\‹XØÛÝ[Y\’Yˆ][K˜ÛÛ^˜XØÛÝ[œY\’Y\ÔY\‘Ü›Ý\ˆ˜[ÙJBˆYˆY\ÜØYÙK™›YÜË˜ÛÛZ[œÊ’[˜ÛÛZ[™ÊKZ[š]X[YP]]Ü‹]]]ÜˆHY\ÜØYÙK˜]]Ü‹Ø\ÙH\Ù\ˆH]]ÜˆÂˆ™\Ý[
+ÏH——
+][Kœ™\Ù[][Û‘]KœÝš[™ÜË•›ÚXÙSÝ™\—ÐÚ]\ÝÓY\ÜØYÙQœ›ÛJ]]Ü‹™\Ü^U]JÝš[™ÜÎˆ][Kœ™\Ù[][Û‘]KœÝš[™ÜË\Ü^SÜ™\Žˆ][Kœ™\Ù[][Û‘]K›˜[YQ\Ü^SÜ™\ŠJKœÝš[™ÊH‚ˆBˆYˆ[Y\ÜØYÙK™›YÜË˜ÛÛZ[œÊ’[˜ÛÛZ[™ÊK]ÛÛXš[™Y™XYÝ]HHY\‘]K˜ÛÛXš[™Y™XYÝ]KÛÛXš[™Y™XYÝ]Kš\ÓÝ]ÛÚ[™ÓY\ÜØYÙR[™^™XY
+Y\ÜØYÙKš[™^
+HÂˆ™\Ý[
+ÏH——
+][Kœ™\Ù[][Û‘]KœÝš[™ÜË•›ÚXÙSÝ™\—ÐÚ]\ÝÓY\ÜØYÙT™XY
+H‚ˆBˆ™\Ý[
+ÏH——
+Y\ÜØYÙU^
+H‚ˆ™]\›ˆ™\Ý[ˆH[ÙHÂˆ™]\›ˆ][Kœ™\Ù[][Û‘]KœÝš[™ÜË•›ÚXÙSÝ™\—ÐÚ]\ÝÓY\ÜØYÙQ[\BˆBˆBˆHÙ]
+˜[YJHÂˆBˆBˆˆÝ™\œšYHX›XÈ˜\ˆš\ÚXš[]Nˆ\ÝšY]Ò][S›ÙUš\ÚXš[]HÂˆYÙ]Âˆ]Ø\Õš\ÚX›HHÙ[‹š\ÚXš[]TÝ]\Âˆ]\Õš\ÚX›Nˆ›ÛÛˆÝÚ]ÚÙ[‹š\ÚXš[]HÂˆØ\ÙH]š\ÚX›Jœ˜XÝ[Û‹ÊN‚ˆ\Õš\ÚX›HHœ˜XÝ[ÛˆˆŒ‚ˆØ\ÙH››Û™N‚ˆ\Õš\ÚX›HH˜[ÙBˆBˆYˆØ\Õš\ÚX›HOH\Õš\ÚX›HÂˆÙ[‹š\ÚXš[]TÝ]\ÈH\Õš\ÚX›BˆBˆBˆBˆˆš]˜]H˜\ˆš\ÚXš[]TÝ]\Îˆ›ÛÛH˜[ÙHÂˆYÙ]ÂˆYˆÙ[‹š\ÚXš[]TÝ]\ÈOHÛ˜[YHÂˆYˆÙ[‹š\ÚXš[]TÝ]\ÈÂˆÙ[‹˜]˜]\•šY[Ó›ÙOËœ™\Ù]^X˜XÚÊ
+BˆBˆÙ[‹\]UšY[Õš\ÚXš[]J
+BˆˆÙ[‹^›ÙKš\ÚXš[]T™XÝHÙ[‹š\ÚXš[]TÝ]\ÈÈÑÔ™XÝš[™š[š]Hˆš[ˆˆYˆ]™\šYšYYXÛÛ•šY]ÈHÙ[‹™\šYšYYXÛÛ•šY]Ë]™\šYšYYXÛÛÛÛ\Û™[HÙ[‹™\šYšYYXÛÛÛÛ\Û™[Âˆ]ÈH™\šYšYYXÛÛ•šY]Ë\]Jˆ˜[œÚ][ÛŽˆš[[YYX]KˆÛÛ\Û™[ˆ[žPÛÛ\Û™[
+™\šYšYYXÛÛÛÛ\Û™[Ú]š\ÚX›Q›Ü[š[X][ÛœÊÙ[‹š\ÚXš[]TÝ]\ÊJKˆ[š\›Û›Y[ˆßKˆÛÛZ[™\”Ú^™Nˆ™\šYšYYXÛÛ•šY]Ë˜›Ý[™ËœÚ^™Bˆ
+BˆBˆYˆ]^\˜RXÛÛ•šY]ÈHÙ[‹™^\˜RXÛÛ•šY]Ë]^\˜RXÛÛÛÛ\Û™[HÙ[‹™^\˜RXÛÛÛÛ\Û™[Âˆ]ÈH^\˜RXÛÛ•šY]Ë\]Jˆ˜[œÚ][ÛŽˆš[[YYX]KˆÛÛ\Û™[ˆ[žPÛÛ\Û™[
+^\˜RXÛÛÛÛ\Û™[Ú]š\ÚX›Q›Ü[š[X][ÛœÊÙ[‹š\ÚXš[]TÝ]\ÊJKˆ[š\›Û›Y[ˆßKˆÛÛZ[™\”Ú^™Nˆ^\˜RXÛÛ•šY]Ë˜›Ý[™ËœÚ^™Bˆ
+BˆBˆYˆ]Ü™YXš[]RXÛÛ•šY]ÈHÙ[‹˜Ü™YXš[]RXÛÛ•šY]Ë]Ü™YXš[]RXÛÛÛÛ\Û™[HÙ[‹˜Ü™YXš[]RXÛÛÛÛ\Û™[Âˆ]ÈHÜ™YXš[]RXÛÛ•šY]Ë\]Jˆ˜[œÚ][ÛŽˆš[[YYX]KˆÛÛ\Û™[ˆ[žPÛÛ\Û™[
+Ü™YXš[]RXÛÛÛÛ\Û™[Ú]š\ÚX›Q›Ü[š[X][ÛœÊÙ[‹š\ÚXš[]TÝ]\ÊJKˆ[š\›Û›Y[ˆßKˆÛÛZ[™\”Ú^™NˆÜ™YXš[]RXÛÛ•šY]Ë˜›Ý[™ËœÚ^™Bˆ
+BˆBˆYˆ]]˜]\’XÛÛ•šY]ÈHÙ[‹˜]˜]\’XÛÛ•šY]Ë]]˜]\’XÛÛÛÛ\Û™[HÙ[‹˜]˜]\’XÛÛÛÛ\Û™[Âˆ]ÈH]˜]\’XÛÛ•šY]Ë\]Jˆ˜[œÚ][ÛŽˆš[[YYX]KˆÛÛ\Û™[ˆ[žPÛÛ\Û™[
+]˜]\’XÛÛÛÛ\Û™[Ú]š\ÚX›Q›Ü[š[X][ÛœÊÙ[‹š\ÚXš[]TÝ]\ÊJKˆ[š\›Û›Y[ˆßKˆÛÛZ[™\”Ú^™Nˆ]˜]\’XÛÛ•šY]Ë˜›Ý[™ËœÚ^™Bˆ
+BˆBˆÙ[‹˜]]Ü“›ÙKš\ÚXš[]TÝ]\ÈHÙ[‹š\ÚXš[]TÝ]\ÂˆˆYˆ]][UYÓ\ÝšY]ÈHÙ[‹š][UYÓ\ÝËšY]È\ÏÈÚ]\Ý][UYÓ\ÝÛÛ\Û™[•šY]ÈÂˆ][UYÓ\ÝšY]Ëš\Õš\ÚX›HHÙ[‹š\ÚXš[]TÝ]\ÂˆBˆBˆBˆBˆˆš]˜]H˜\ˆ˜XÚÚ[™Ò\Ò[’Y\˜\˜ÚNˆ›ÛÛH˜[ÙHÂˆYÙ]ÂˆYˆÙ[‹˜XÚÚ[™Ò\Ò[’Y\˜\˜ÚHOHÛ˜[YHÂˆ]Y]YK›XZ[”]Y]YJ
+Kš\Ý\Ü]ÚÂˆYˆÙ[‹˜XÚÚ[™Ò\Ò[’Y\˜\˜ÚHÂˆÙ[‹˜]˜]\•šY[Ó›ÙOËœ™\Ù]^X˜XÚÊ
+BˆBˆÙ[‹\]UšY[Õš\ÚXš[]J
+BˆBˆBˆBˆBˆˆ™\]Z\™Y[š]
+
+HÂˆÙ[‹˜˜XÚÙÜ›Ý[™›ÙHHTÑ\Ü^S›ÙJ
+BˆÙ[‹˜˜XÚÙÜ›Ý[™›ÙKš\Ó^Y\˜XÚÙYHYBˆÙ[‹˜˜XÚÙÜ›Ý[™›ÙK™\Ü^\Ð\Þ[˜Ú›Û›Ý\ÛHH˜[ÙBˆˆÙ[‹˜]˜]\ÛÛZ[™\“›ÙHHTÑ\Ü^S›ÙJ
+BˆÙ[‹˜ÛÛ[][š]P]˜]\”ÚYÝÓ›ÙHHTÒ[XYÙS›ÙJ
+BˆÙ[‹˜ÛÛ[][š]P]˜]\”ÚYÝÓ›ÙK™\Ü^\Ð\Þ[˜Ú›Û›Ý\ÛHH˜[ÙBˆÙ[‹˜ÛÛ[][š]P]˜]\”ÚYÝÓ›ÙK™\Ü^UÚ]Ý]›ØÙ\ÜÚ[™ÈHYBˆÙ[‹˜ÛÛ[][š]P]˜]\”ÚYÝÓ›ÙKš\ÒY[ˆHYBˆÙ[‹˜ÛÛ[][š]P]˜]\˜YÙP˜XÚÙÜ›Ý[™šY]ÈHš[ˆÙ[‹˜ÛÛ[][š]P]˜]\˜YÙRXÛÛ•šY]ÈHš[ˆÙ[‹˜]˜]\“›ÙHH]˜]\“›ÙJ›Ûˆ]˜]\”XÙZÛ\‘›Û
+Ú^™Nˆ‹Œ
+JBˆˆÙ[‹šYÚYÚY˜XÚÙÜ›Ý[™›ÙHHTÑ\Ü^S›ÙJ
+BˆÙ[‹šYÚYÚY˜XÚÙÜ›Ý[™›ÙKš\Ó^Y\˜XÚÙYHYBˆˆÙ[‹˜ÛÛ^ÛÛZ[™\ˆHÛÛ^ÛÛ›Û\”ÛÝ\˜ÙS›ÙJ
+BˆˆÙ[‹›XZ[ÛÛ[ÛÛZ[™\“›ÙHHTÑ\Ü^S›ÙJ
+BˆÙ[‹›XZ[ÛÛ[ÛÛZ[™\“›ÙK˜Û\ÕÐ›Ý[™ÈHYBˆˆÙ[‹›YX\Ý\™S›ÙHH^›ÙJ
+BˆˆÙ[‹]S›ÙHH^›ÙJ
+BˆÙ[‹]S›ÙKš\Õ\Ù\’[\˜XÝ[Û‘[˜X›YH˜[ÙBˆÙ[‹]S›ÙK™\Ü^\Ð\Þ[˜Ú›Û›Ý\ÛHHYBˆˆÙ[‹˜]]Ü“›ÙHH]]Ü“›ÙJ
+BˆÙ[‹˜]]Ü“›ÙKš\Õ\Ù\’[\˜XÝ[Û‘[˜X›YH˜[ÙBˆˆÙ[‹^›ÙHH^›ÙUÚ][]Y\Ê
+BˆÙ[‹^›ÙK^›ÙKš\Õ\Ù\’[\˜XÝ[Û‘[˜X›YH˜[ÙBˆÙ[‹^›ÙK^›ÙK™\Ü^\Ð\Þ[˜Ú›Û›Ý\ÛHHYBˆÙ[‹^›ÙK^›ÙK˜[˜ÚÜ”Ú[HÑÔÚ[
+
+BˆˆÙ[‹š[œ]XÝ]š]Y\Ó›ÙHHÚ]\Ý[œ]XÝ]š]Y\Ó›ÙJ
+BˆÙ[‹š[œ]XÝ]š]Y\Ó›ÙKš\Õ\Ù\’[\˜XÝ[Û‘[˜X›YH˜[ÙBˆÙ[‹š[œ]XÝ]š]Y\Ó›ÙK˜[HHŒˆˆÙ[‹™]S›ÙHH^›ÙJ
+BˆÙ[‹™]S›ÙKš\Õ\Ù\’[\˜XÝ[Û‘[˜X›YH˜[ÙBˆÙ[‹™]S›ÙK™\Ü^\Ð\Þ[˜Ú›Û›Ý\ÛHHYBˆˆÙ[‹œÝ]\Ó›ÙHHÚ]\ÝÝ]\Ó›ÙJ
+BˆÙ[‹˜˜YÙS›ÙHHÚ]\Ý˜YÙS›ÙJ
+BˆÙ[‹›Y[[Û˜YÙS›ÙHHÚ]\Ý˜YÙS›ÙJ
+BˆÙ[‹›Û›[™S›ÙHHY\“Û›[™SX\šÙ\“›ÙJ
+BˆˆÙ[‹™›ÜØ\™YXÛÛ“›ÙHHTÒ[XYÙS›ÙJ
+BˆÙ[‹™›ÜØ\™YXÛÛ“›ÙKš\Ó^Y\˜XÚÙYHYBˆÙ[‹™›ÜØ\™YXÛÛ“›ÙK™\Ü^\Ð\Þ[˜Ú›Û›Ý\ÛHH˜[ÙBˆÙ[‹™›ÜØ\™YXÛÛ“›ÙK™\Ü^UÚ]Ý]›ØÙ\ÜÚ[™ÈHYBˆˆÙ[‹œ[›™YXÛÛ“›ÙHHTÒ[XYÙS›ÙJ
+BˆÙ[‹œ[›™YXÛÛ“›ÙKš\Ó^Y\˜XÚÙYHYBˆÙ[‹œ[›™YXÛÛ“›ÙK™\Ü^\Ð\Þ[˜Ú›Û›Ý\ÛHH˜[ÙBˆÙ[‹œ[›™YXÛÛ“›ÙK™\Ü^UÚ]Ý]›ØÙ\ÜÚ[™ÈHYBˆˆÙ[‹šY[”Y\’XÛÛ“›ÙHHTÒ[XYÙS›ÙJ
+BˆÙ[‹šY[”Y\’XÛÛ“›ÙKš\Ó^Y\˜XÚÙYHYBˆÙ[‹šY[”Y\’XÛÛ“›ÙK™\Ü^\Ð\Þ[˜Ú›Û›Ý\ÛHH˜[ÙBˆÙ[‹šY[”Y\’XÛÛ“›ÙK™\Ü^UÚ]Ý]›ØÙ\ÜÚ[™ÈHYB‚ˆÙ[‹›]]YXÛÛ“›ÙHHTÒ[XYÙS›ÙJ
+BˆÙ[‹›]]YXÛÛ“›ÙKš\Ó^Y\˜XÚÙYHYBˆÙ[‹›]]YXÛÛ“›ÙK™\Ü^\Ð\Þ[˜Ú›Û›Ý\ÛHH˜[ÙBˆÙ[‹›]]YXÛÛ“›ÙK™\Ü^UÚ]Ý]›ØÙ\ÜÚ[™ÈHYBˆˆÙ[‹œÙ\\˜]Ü“›ÙHHTÑ\Ü^S›ÙJ
+BˆÙ[‹œÙ\\˜]Ü“›ÙKš\Ó^Y\˜XÚÙYHYBˆˆÝ\\‹š[š]
+^Y\˜XÚÙYˆ˜[ÙK›Ý]Yˆ˜[ÙKÙYU›ÝYÚˆ˜[ÙJBˆˆÙ[‹š\ÐXØÙ\ÜÚXš[]Q[[Y[HYBˆˆÙ[‹˜YÝX››ÙJÙ[‹˜˜XÚÙÜ›Ý[™›ÙJBˆÙ[‹˜YÝX››ÙJÙ[‹œÙ\\˜]Ü“›ÙJBˆˆÙ[‹˜YÝX››ÙJÙ[‹˜ÛÛ^ÛÛZ[™\ŠBˆÙ[‹˜ÛÛ^ÛÛZ[™\‹˜YÝX››ÙJÙ[‹›XZ[ÛÛ[ÛÛZ[™\“›ÙJBˆˆÙ[‹˜]˜]\ÛÛZ[™\“›ÙK˜YÝX››ÙJÙ[‹˜ÛÛ[][š]P]˜]\”ÚYÝÓ›ÙJBˆÙ[‹˜]˜]\ÛÛZ[™\“›ÙK˜YÝX››ÙJÙ[‹˜]˜]\“›ÙJB‚ˆÙ[‹˜ÛÛ^ÛÛZ[™\‹˜YÝX››ÙJÙ[‹˜]˜]\ÛÛZ[™\“›ÙJBˆÙ[‹˜]˜]\“›ÙK˜YÝX››ÙJÙ[‹›Û›[™S›ÙJBˆˆÙ[‹›XZ[ÛÛ[ÛÛZ[™\“›ÙK˜YÝX››ÙJÙ[‹]S›ÙJBˆÙ[‹›XZ[ÛÛ[ÛÛZ[™\“›ÙK˜YÝX››ÙJÙ[‹˜]]Ü“›ÙJBˆÙ[‹›XZ[ÛÛ[ÛÛZ[™\“›ÙK˜YÝX››ÙJÙ[‹^›ÙK^›ÙJBˆÙ[‹›XZ[ÛÛ[ÛÛZ[™\“›ÙK˜YÝX››ÙJÙ[‹™]S›ÙJBˆÙ[‹›XZ[ÛÛ[ÛÛZ[™\“›ÙK˜YÝX››ÙJÙ[‹œÝ]\Ó›ÙJBˆÙ[‹›XZ[ÛÛ[ÛÛZ[™\“›ÙK˜YÝX››ÙJÙ[‹œ[›™YXÛÛ“›ÙJBˆÙ[‹›XZ[ÛÛ[ÛÛZ[™\“›ÙK˜YÝX››ÙJÙ[‹˜˜YÙS›ÙJBˆÙ[‹›XZ[ÛÛ[ÛÛZ[™\“›ÙK˜YÝX››ÙJÙ[‹›Y[[Û˜YÙS›ÙJBˆÙ[‹›XZ[ÛÛ[ÛÛZ[™\“›ÙK˜YÝX››ÙJÙ[‹šY[”Y\’XÛÛ“›ÙJBˆÙ[‹›XZ[ÛÛ[ÛÛZ[™\“›ÙK˜YÝX››ÙJÙ[‹›]]YXÛÛ“›ÙJBˆˆÙ[‹œY\”™\Ù[˜ÙSX[˜YÙ\ˆHY\”™\Ù[˜ÙTÝ]\ÓX[˜YÙ\Š\]NˆÈÝÙXZÈÙ[—H[‚ˆYˆ]Ý›Û™ÔÙ[ˆHÙ[‹]^[Ý]\˜[\ÈHÝ›Û™ÔÙ[‹›^[Ý]\˜[\ÈÂˆ]
+Ë\JHHÝ›Û™ÔÙ[‹˜\Þ[˜Ó^[Ý]
+
+J^[Ý]\˜[\ËŒ^[Ý]\˜[\Ë‹^[Ý]\˜[\ËŒK^[Ý]\˜[\ËŒ‹^[Ý]\˜[\ËŒË^[Ý]\˜[\Ë^[Ý]\˜[\ËJBˆ]ÈH\J˜[ÙK˜[ÙJBˆBˆJBˆˆÙ[‹˜ÛÛ^ÛÛZ[™\‹œÚÝ[™YÚ[ˆHÈÝÙXZÈÙ[—HØØ][Ûˆ[‚ˆÝX\™]Ý›Û™ÔÙ[ˆHÙ[‹]][HHÝ›Û™ÔÙ[‹š][H[ÙHÂˆ™]\›ˆ˜[ÙBˆBˆˆÝ›Û™ÔÙ[‹˜ÛÛ^ÛÛZ[™\‹˜Y][Û˜[XÝ]˜][Û”›ÙÜ™\ÜÓ^Y\ˆHš[ˆYˆ][›[™S˜]šYØ][Û“ØØ][ÛˆH][Kš[\˜XÝ[Û‹š[›[™S˜]šYØ][Û“ØØ][ÛˆÂˆYˆØ\ÙH]œY\ŠY\’Y
+HH[›[™S˜]šYØ][Û“ØØ][Û‹›ØØ][ÛˆÂˆYˆØ\ÙH]˜Ú]\Ý
+[™^
+HH][Kš[™^[™^›Y\ÜØYÙR[™^šYœY\’YOHY\’YÂˆ™]\›ˆ˜[ÙBˆBˆBˆÝ›Û™ÔÙ[‹˜ÛÛ^ÛÛZ[™\‹\™Ù]›ÙQ›ÜXÝ]˜][Û”›ÙÜ™\ÜÈHÝ›Û™ÔÙ[‹˜]˜]\ÛÛZ[™\“›ÙBˆH[ÙHYˆ]˜[YHHÝ›Û™ÔÙ[‹š]\Ý
+ØØ][Û‹Ú]ˆš[
+K˜[YHOOHÝ›Û™ÔÙ[‹˜ÛÛ\Ý[™^]Û“›ÙOËšY]ÈÂˆÝ›Û™ÔÙ[‹˜ÛÛ^ÛÛZ[™\‹\™Ù]›ÙQ›ÜXÝ]˜][Û”›ÙÜ™\ÜÈHÝ›Û™ÔÙ[‹˜ÛÛ\Ý[™^]Û“›ÙBˆÝ›Û™ÔÙ[‹˜ÛÛ^ÛÛZ[™\‹˜Y][Û˜[XÝ]˜][Û”›ÙÜ™\ÜÓ^Y\ˆHÝ›Û™ÔÙ[‹˜ÛÛ\Ý[™YÚYÚ[™Ó›ÙOË›^Y\‚ˆH[ÙHÂˆÝ›Û™ÔÙ[‹˜ÛÛ^ÛÛZ[™\‹\™Ù]›ÙQ›ÜXÝ]˜][Û”›ÙÜ™\ÜÈHš[ˆBˆˆ™]\›ˆYBˆBˆˆÙ[‹˜ÛÛ^ÛÛZ[™\‹˜XÝ]˜]YHÈÝÙXZÈÙ[—HÙ\Ý\™KØØ][Ûˆ[‚ˆÝX\™]Ý›Û™ÔÙ[ˆHÙ[‹]][HHÝ›Û™ÔÙ[‹š][H[ÙHÂˆ™]\›‚ˆBˆ˜\ˆ™XYYˆ[ÂˆYˆ]˜[YHHÝ›Û™ÔÙ[‹š]\Ý
+ØØ][Û‹Ú]ˆš[
+K˜[YHOOHÝ›Û™ÔÙ[‹˜ÛÛ\Ý[™^]Û“›ÙOËšY]ÈÂˆYˆØ\ÙH]œY\ŠY\‘]JHH][K˜ÛÛ[]ÜXÒ][HHY\‘]KÜ›Ü[UÜXÒ][\Ë™š\œÝÂˆ™XYYHÜXÒ][KšYˆBˆBˆ][Kš[\˜XÝ[Û‹˜XÝ]˜]PÚ]™]šY]ÏÊ][K™XYYÝ›Û™ÔÙ[‹˜ÛÛ^ÛÛZ[™\‹Ù\Ý\™Kš[
+BˆBˆˆÙ[‹›Û‘YØYÈÝÙXZÈÙ[—HÈ[‚ˆÝX\™]Ù[ˆ[ÙHÂˆ™]\›‚ˆBˆ]]˜]\•\™XÛÙÛš^™\ˆHRU\Ù\Ý\™T™XÛÙÛš^™\Š\™Ù]ˆÙ[‹XÝ[ÛŽˆÜÙ[XÝÜŠÙ[‹˜]˜]\”ÝÜžU\Ù\Ý\™JÎŠJJBˆÙ[‹˜]˜]\•\™XÛÙÛš^™\ˆH]˜]\•\™XÛÙÛš^™\‚ˆÙ[‹˜]˜]\“›ÙKšY]Ë˜YÙ\Ý\™T™XÛÙÛš^™\Š]˜]\•\™XÛÙÛš^™\ŠBˆBˆB‚ˆZ[š]ÂˆÙ[‹˜ØXÚY]Q\ÜÜØX›K™\ÜÜÙJ
+BˆBˆˆÝ™\œšYHX›XÈ[˜ÈÙXÛÛ™\žPXÝ[ÛŠ]Ú[ˆÑÔÚ[
+HÂˆÝX\™]][HHÙ[‹š][H[ÙHÂˆ™]\›‚ˆBˆ][Kš[\˜XÝ[Û‹˜XÝ]˜]PÚ]™]šY]ÏÊ][Kš[Ù[‹˜ÛÛ^ÛÛZ[™\‹š[Ú[
+BˆBˆˆ[˜ÈÙ]\][J][NˆÚ]\Ý][KÞ[˜Ú›Û›Ý\ÓØYÎˆ›ÛÛ
+HÂˆ]™]š[Ý\Ò][HHÙ[‹š][BˆÙ[‹š][HH][Bˆˆ˜\ˆÝÜžTÝ]NˆÚ]\Ý][PÛÛ[”ÝÜžTÝ]OÂˆYˆØ\ÙH]œY\ŠY\‘]JHH][K˜ÛÛ[ÂˆÝÜžTÝ]HHY\‘]KœÝÜžTÝ]BˆH[ÙHYˆØ\ÙH]™Ü›Ý\™Y™\™[˜ÙJÜ›Ý\™Y™\™[˜ÙJHH][K˜ÛÛ[ÂˆÝÜžTÝ]HHÜ›Ý\™Y™\™[˜ÙKœÝÜžTÝ]BˆBˆˆ˜\ˆY\Žˆ[™Ú[™TY\Âˆ˜\ˆ\Ü^P\ÓY\ÜØYÙHH˜[ÙBˆ˜\ˆ[˜X›T™]šY]ÈHYBˆ˜\ˆY\’\Ó[Û›Ù›Ü[HH˜[ÙBˆ˜\ˆY\’\ÐÛÛ[][š]HH˜[ÙBˆ˜\ˆY\“[šÙYÛÛ[][š]RYˆ[™Ú[™TY\‹’YÂˆÝÚ]Ú][K˜ÛÛ[ÂˆØ\ÙH›ØY[™Î‚ˆ\Ü^P\ÓY\ÜØYÙHHYBˆ[˜X›T™]šY]ÈH˜[ÙBˆØ\ÙH]œY\ŠY\‘]JN‚ˆ\Ü^P\ÓY\ÜØYÙHHY\‘]K™\Ü^P\ÓY\ÜØYÙBˆYˆ\Ü^P\ÓY\ÜØYÙKØ\ÙH]\Ù\Š]]ÜŠHHY\‘]K›Y\ÜØYÙ\Ë›\ÝË˜]]ÜˆÂˆY\ˆH\Ù\Š]]ÜŠBˆH[ÙHYˆ]XZ[”Y\ˆHY\‘]KœY\‹œY\‹Ø\ÙH˜ÛÛ[][š]HHXZ[”Y\ˆÂˆY\’\ÐÛÛ[][š]HHYBˆY\ˆHXZ[”Y\‚ˆH[ÙHÂˆY\ˆHY\‘]KœY\‹˜Ú]Ü“[Û›Ù›Ü[SXZ[”Y\‚ˆYˆØ\ÙH]˜Ú[›™[
+Ú[›™[
+HHY\‘]KœY\‹œY\‹Ú[›™[š\Ó[Û›Ñ›Ü[HÂˆY\’\Ó[Û›Ù›Ü[HHYBˆBˆY\“[šÙYÛÛ[][š]RYHY\‘]KœY\‹œY\Ë˜ÛÛZ[™\”Y\’YˆBˆYˆY\‘]KœY\‹œY\’Y›˜[Y\ÜXÙHOH˜[Y\ÜXÙ\Ë”Y\‹”ÙXÜ™]Ú]Âˆ[˜X›T™]šY]ÈH˜[ÙBˆBˆØ\ÙH]™Ü›Ý\™Y™\™[˜ÙJÜ›Ý\™Y™\™[˜ÙQ]JN‚ˆYˆ]™]š[Ý\Ò][HH™]š[Ý\Ò][KØ\ÙH]™Ü›Ý\™Y™\™[˜ÙJ™]š[Ý\ÑÜ›Ý\™Y™\™[˜ÙQ]JHH™]š[Ý\Ò][K˜ÛÛ[Ü›Ý\™Y™\™[˜ÙQ]KšY[žQY˜][OH™]š[Ý\ÑÜ›Ý\™Y™\™[˜ÙQ]KšY[žQY˜][ÂˆRUšY]Ë˜[œÚ][ÛŠÚ]ˆÙ[‹˜]˜]\“›ÙKšY]Ë\˜][ÛŽˆŒËÜ[ÛœÎˆË˜[œÚ][ÛÜ›ÜÜÑ\ÜÛÛ™WK[š[X][ÛœÎˆÂˆKÛÛ\][ÛŽˆš[
+BˆBˆÙ[‹˜]˜]\“›ÙKœÙ]Y\ŠÛÛ^ˆ][K˜ÛÛ^[YNˆ][Kœ™\Ù[][Û‘]K[YKY\ŽˆY\‹Ý™\œšYR[XYÙNˆ˜\˜Ú]™YÚ]ÒXÛÛŠY[žQY˜][ˆÜ›Ý\™Y™\™[˜ÙQ]KšY[žQY˜][
+K[\PÛÛÜŽˆ][Kœ™\Ù[][Û‘]K[YK›\Ý›YYXTXÙZÛ\ÛÛÜ‹Þ[˜Ú›Û›Ý\ÓØYˆÞ[˜Ú›Û›Ý\ÓØYÊBˆBˆˆYˆ][Kš[\˜XÝ[Û‹˜XÝ]˜]PÚ]™]šY]ÈOHš[Âˆ[˜X›T™]šY]ÈH˜[ÙBˆBˆˆÙ[‹˜]˜]\“›ÙKœÙ]ÝÜžTÝ]ÊÝÜžTÝ]ÎˆÝÜžTÝ]K™›]X\ÈÝÜžTÝ]H[‚ˆ™]\›ˆ]˜]\“›ÙK”ÝÜžTÝ]ÊˆÝ[ÛÝ[ˆÝÜžTÝ]KœÝ]ËÝ[ÛÝ[ˆ[œÙY[ÛÝ[ˆÝÜžTÝ]KœÝ]Ë[œÙY[ÛÝ[ˆ\Õ[œÙY[ÛÜÙQœšY[™Ò][\ÎˆÝÜžTÝ]Kš\Õ[œÙY[ÛÜÙQœšY[™Ëˆ\Ó]™R][\ÎˆÝÜžTÝ]KœÝ]Ëš\Ó]™R][\Âˆ
+BˆK™\Ù[][Û”\˜[\Îˆ]˜]\“›ÙK”ÝÜžT™\Ù[][Û”\˜[\ÊˆÛÛÜœÎˆ]˜]\“›ÙKÛÛÜœÊ[YNˆ][Kœ™\Ù[][Û‘]K[YJKˆ[™UÚYˆ‹ŒÌËˆ[˜XÝ]™S[™UÚYˆKŒÌÂˆ
+K˜[œÚ][ÛŽˆš[[YYX]JBˆÙ[‹˜]˜]\“›ÙKš\Õ\Ù\’[\˜XÝ[Û‘[˜X›YHZ][K\ÙPÛÛ[][š]UšY]Ó^[Ý]	‰ˆ
+
+ÝÜžTÝ]HOHš[	‰ˆ\Y\’\ÐÛÛ[][š]JHY\“[šÙYÛÛ[][š]RYOHš[
+BˆˆYˆ]Ý]ÈHÝÜžTÝ]OËœÝ]ËÝ]Ëš\Ó]™R][\ÈÂˆYˆÙ[‹˜]˜]\“]™P˜YÙHOHš[Âˆ]]˜]\“]™P˜YÙNˆ
+Ý][™NˆRR[XYÙUšY]Ë›Ü™YÜ›Ý[™ˆRR[XYÙUšY]ÊHH
+RR[XYÙUšY]Ê
+KRR[XYÙUšY]Ê
+JBˆÙ[‹˜]˜]\“]™P˜YÙHH]˜]\“]™P˜YÙBˆÙ[‹˜]˜]\“›ÙKšY]Ë˜YÝXšY]Ê]˜]\“]™P˜YÙK›Ý][™JBˆÙ[‹˜]˜]\“›ÙKšY]Ë˜YÝXšY]Ê]˜]\“]™P˜YÙK™›Ü™YÜ›Ý[™
+Bˆˆ]]™TÝš[™ÈH”Ð]šX]YÝš[™ÊÝš[™Îˆ][Kœ™\Ù[][Û‘]KœÝš[™ÜË”ÝÜžWÓ]™P˜YÙK›Ûˆ›ÛœÙ[ZX›Û
+LŒ
+K^ÛÛÜŽˆÚ]JBˆ]]™TÝš[™Ð›Ý[™ÈH]™TÝš[™Ë˜›Ý[™[™Ô™XÝ
+Ú]ˆÑÔÚ^™JÚYˆLŒZYÚˆLŒ
+KÜ[ÛœÎˆ\Ù\Ó[™Qœ˜YÛY[ÜšYÚ[‹ÛÛ^ˆš[
+Bˆ]]™P˜YÙTÚ^™HHÑÔÚ^™JÚYˆÙZ[
+]™TÝš[™Ð›Ý[™ËÚY
+H
+ÈŒ
+ˆ‹ŒZYÚˆÙZ[
+]™TÝš[™Ð›Ý[™ËšZYÚ
+H
+È‹Œ
+ˆ‹Œ
+Bˆ]˜]\“]™P˜YÙK™›Ü™YÜ›Ý[™š[XYÙHHÙ[™\˜]R[XYÙJ]™P˜YÙTÚ^™K›Ý]YÛÛ^ˆÈÚ^™KÛÛ^[‚ˆRQÜ˜\XÜÔ\ÚÛÛ^
+ÛÛ^
+BˆY™\ˆÂˆRQÜ˜\XÜÔÜÛÛ^
+
+BˆBˆˆÛÛ^˜ÛX\ŠÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+
+KÚ^™NˆÚ^™JJBˆÛÛ^œÙ]š[ÛÛÜŠRPÛÛÜŠ™ØŽˆ‘Œ‘MJK˜ÙÐÛÛÜŠBˆˆ[˜È›Ý[™Y™XÝÙÔ]
+›Ý[™™XÝ™XÝˆÑÔ™XÝÜY˜Y]\ÎˆÑÑ›Ø]ÜšYÚ˜Y]\ÎˆÑÑ›Ø]›ÝÛSY˜Y]\ÎˆÑÑ›Ø]›ÝÛTšYÚ˜Y]\ÎˆÑÑ›Ø]
+HOˆÑÔ]Âˆ]]HÑÓ]]X›T]
+
+B‚ˆ]ÜYH™XÝ›ÜšYÚ[‚ˆ]ÜšYÚHÑÔÚ[
+ˆ™XÝ›X^Nˆ™XÝ›Z[–JBˆ]›ÝÛTšYÚHÑÔÚ[
+ˆ™XÝ›X^Nˆ™XÝ›X^JBˆ]›ÝÛSYHÑÔÚ[
+ˆ™XÝ›Z[–Nˆ™XÝ›X^JB‚ˆYˆÜY˜Y]\ÈOHž™\›ÈÂˆ]›[Ý™JÎˆÑÔÚ[
+ˆÜYž
+ÝÜY˜Y]\ËNˆÜYžJJBˆH[ÙHÂˆ]›[Ý™JÎˆÑÔÚ[
+ˆÜYžNˆÜYžJJBˆB‚ˆYˆÜšYÚ˜Y]\ÈOHž™\›ÈÂˆ]˜Y[™JÎˆÑÔÚ[
+ˆÜšYÚž]ÜšYÚ˜Y]\ËNˆÜšYÚžJJBˆ]˜YÝ\™JÎˆÑÔÚ[
+ˆÜšYÚžNˆÜšYÚžJÝÜšYÚ˜Y]\ÊKÛÛ›ÛNˆÑÔÚ[
+ˆÜšYÚžNˆÜšYÚžJKÛÛ›ÛŽÑÔÚ[
+ˆÜšYÚžNˆÜšYÚžH
+ÈÜšYÚ˜Y]\ÊJBˆH[ÙHÂˆ]˜Y[™JÎˆÑÔÚ[
+ˆÜšYÚžNˆÜšYÚžJJBˆB‚ˆYˆ›ÝÛTšYÚ˜Y]\ÈOHž™\›ÈÂˆ]˜Y[™JÎˆÑÔÚ[
+ˆ›ÝÛTšYÚžNˆ›ÝÛTšYÚžKX›ÝÛTšYÚ˜Y]\ÊJBˆ]˜YÝ\™JÎˆÑÔÚ[
+ˆ›ÝÛTšYÚžX›ÝÛTšYÚ˜Y]\ËNˆ›ÝÛTšYÚžJKÛÛ›ÛNˆÑÔÚ[
+ˆ›ÝÛTšYÚžNˆ›ÝÛTšYÚžJKÛÛ›ÛŽˆÑÔÚ[
+ˆ›ÝÛTšYÚžX›ÝÛTšYÚ˜Y]\ËNˆ›ÝÛTšYÚžJJBˆH[ÙHÂˆ]˜Y[™JÎˆÑÔÚ[
+ˆ›ÝÛTšYÚžNˆ›ÝÛTšYÚžJJBˆB‚ˆYˆ›ÝÛSY˜Y]\ÈOHž™\›ÈÂˆ]˜Y[™JÎˆÑÔÚ[
+ˆ›ÝÛSYž
+Ø›ÝÛSY˜Y]\ËNˆ›ÝÛSYžJJBˆ]˜YÝ\™JÎˆÑÔÚ[
+ˆ›ÝÛSYžNˆ›ÝÛSYžKX›ÝÛSY˜Y]\ÊKÛÛ›ÛNˆÑÔÚ[
+ˆ›ÝÛSYžNˆ›ÝÛSYžJKÛÛ›ÛŽˆÑÔÚ[
+ˆ›ÝÛSYžNˆ›ÝÛSYžKX›ÝÛSY˜Y]\ÊJBˆH[ÙHÂˆ]˜Y[™JÎˆÑÔÚ[
+ˆ›ÝÛSYžNˆ›ÝÛSYžJJBˆB‚ˆYˆÜY˜Y]\ÈOHž™\›ÈÂˆ]˜Y[™JÎˆÑÔÚ[
+ˆÜYžNˆÜYžJÝÜY˜Y]\ÊJBˆ]˜YÝ\™JÎˆÑÔÚ[
+ˆÜYž
+ÝÜY˜Y]\ËNˆÜYžJHÛÛ›ÛNˆÑÔÚ[
+ˆÜYžNˆÜYžJHÛÛ›ÛŽˆÑÔÚ[
+ˆÜYž
+ÝÜY˜Y]\ËNˆÜYžJJBˆH[ÙHÂˆ]˜Y[™JÎˆÑÔÚ[
+ˆÜYžNˆÜYžJJBˆB‚ˆ]˜ÛÜÙTÝXœ]
+
+Bˆˆ™]\›ˆ]ˆBˆˆ]˜Y]\ÈHÚ^™KšZYÚ
+ˆBˆÛÛ^˜Y]
+›Ý[™Y™XÝÙÔ]
+›Ý[™™XÝˆÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+
+KÚ^™NˆÚ^™JKÜY˜Y]\Îˆ˜Y]\ËÜšYÚ˜Y]\Îˆ˜Y]\Ë›ÝÛSY˜Y]\Îˆ˜Y]\Ë›ÝÛTšYÚ˜Y]\Îˆ˜Y]\ÊJBˆÛÛ^™š[]
+
+Bˆˆ]™TÝš[™Ë™˜]Ê]ˆÑÔÚ[
+ˆ›ÛÜ•ÔØÜ™Y[”^[Ê
+Ú^™KÚYH]™TÝš[™Ð›Ý[™ËÚY
+H
+ˆJKNˆ›ÛÜ•ÔØÜ™Y[”^[Ê
+Ú^™KšZYÚH]™TÝš[™Ð›Ý[™ËšZYÚ
+H
+ˆJJJBˆJBˆˆYˆ][XYÙHH]˜]\“]™P˜YÙK™›Ü™YÜ›Ý[™š[XYÙHÂˆ]˜]\“]™P˜YÙK›Ý][™Kš[XYÙHHÙ[™\˜]TÝ™]ÚX›Qš[YÚ\˜ÛR[XYÙJX[Y]\Žˆ[XYÙKœÚ^™KšZYÚ
+È‹Œ
+ˆ‹ŒÛÛÜŽˆÚ]JOËÚ]™[™\š[™Ó[ÙJ˜[Ø^\Õ[\]JBˆBˆBˆH[ÙHÂˆYˆ]]˜]\“]™P˜YÙHHÙ[‹˜]˜]\“]™P˜YÙHÂˆÙ[‹˜]˜]\“]™P˜YÙHHš[ˆ]˜]\“]™P˜YÙK›Ý][™Kœ™[[Ý™Qœ›ÛTÝ\\šY]Ê
+Bˆ]˜]\“]™P˜YÙK™›Ü™YÜ›Ý[™œ™[[Ý™Qœ›ÛTÝ\\šY]Ê
+BˆBˆBˆˆYˆ]Y\ˆHY\ˆÂˆ]]˜]\”Y\Žˆ[™Ú[™TY\‚ˆYˆØ\ÙH]œY\ŠY\‘]JHH][K˜ÛÛ[]]˜]\“XZ[”Y\ˆHY\‘]K˜]˜]\”Y\Ë˜Ú]Ü“[Û›Ù›Ü[SXZ[”Y\ˆÂˆ]˜]\”Y\ˆH]˜]\“XZ[”Y\‚ˆH[ÙHÂˆ]˜]\”Y\ˆHY\‚ˆBˆ˜\ˆÝ™\œšYR[XYÙNˆ]˜]\“›ÙR[XYÙSÝ™\œšYOÂˆYˆØ\ÙH]œY\ŠY\‘]JHH][K˜ÛÛ[Y\‘]K˜Ý\ÝÛSY\ÜØYÙS\Ý]HOHš[ÂˆH[ÙHYˆY\‹šYš\Ô™\Y\ÈÂˆÝ™\œšYR[XYÙHHœ™\Y\ÒXÛÛ‚ˆH[ÙHYˆY\‹šYš\Ð[›Ûž[[Ý\ÔØ]™YY\ÜØYÙ\ÈÂˆÝ™\œšYR[XYÙHH˜[›Ûž[[Ý\ÔØ]™YY\ÜØYÙ\ÒXÛÛŠ\ÐÛÛÜ™YˆYJBˆH[ÙHYˆY\‹šYOH][K˜ÛÛ^˜XØÛÝ[œY\’Y	‰ˆY\Ü^P\ÓY\ÜØYÙHÂˆYˆØ\ÙHœØ]™YY\ÜØYÙ\ÐÚ]ÈH][K˜Ú]\ÝØØ][ÛˆÂˆÝ™\œšYR[XYÙHH›^S›Ý\ÒXÛÛ‚ˆH[ÙHÂˆÝ™\œšYR[XYÙHHœØ]™YY\ÜØYÙ\ÒXÛÛ‚ˆBˆH[ÙHYˆY\‹š\Ñ[]YÂˆÝ™\œšYR[XYÙHH™[]YXÛÛ‚ˆBˆ˜\ˆ\Ñ›Ü[P]˜]\ˆH˜[ÙBˆYˆY\’\Ó[Û›Ù›Ü[HÂˆ\Ñ›Ü[P]˜]\ˆHYBˆBˆYˆY\’\ÐÛÛ[][š]HÂˆ\Ñ›Ü[P]˜]\ˆHYBˆBˆYˆØ\ÙH]˜Ú[›™[
+Ú[›™[
+HHY\‹Ú[›™[š\Ñ›Ü[SÜ“[Û›Ñ›Ü[HÂˆ\Ñ›Ü[P]˜]\ˆHYBˆBˆYˆØ\ÙH]œY\Š]JHH][K˜ÛÛ[ÂˆYˆ]K™\Ü^P\ÕÜXÓ\ÝÂˆ\Ñ›Ü[P]˜]\ˆHYBˆBˆBˆˆ˜\ˆ]˜]\‘X[Y]\ˆHZ[ŠŒŒ›ÛÜŠ][Kœ™\Ù[][Û‘]K™›ÛÚ^™K˜˜\ÙQ\Ü^TÚ^™H
+ˆŒŒÈMËŒ
+JBˆˆYˆØ\ÙH]œY\ŠY\‘]JHH][K˜ÛÛ[]Ý\ÝÛSY\ÜØYÙS\Ý]HHY\‘]K˜Ý\ÝÛSY\ÜØYÙS\Ý]KÝ\ÝÛSY\ÜØYÙS\Ý]K˜ÛÛ[X[™™Yš^OHš[Âˆ]˜]\‘X[Y]\ˆHŒˆBˆˆYˆ]˜]\‘X[Y]\ˆOHŒŒÂˆ]]˜]\‘›ÛÚ^™HH›ÛÜŠ]˜]\‘X[Y]\ˆ
+ˆ‹ŒÈŒŒ
+BˆYˆÙ[‹˜]˜]\“›ÙK™›ÛœÚ[Ú^™HOH]˜]\‘›ÛÚ^™HÂˆÙ[‹˜]˜]\“›ÙK™›ÛH]˜]\”XÙZÛ\‘›Û
+Ú^™Nˆ]˜]\‘›ÛÚ^™JBˆBˆBˆ]]˜]\Û\Ý[Nˆ]˜]\“›ÙPÛ\Ý[BˆYˆY\’\Ó[Û›Ù›Ü[HÂˆ]˜]\Û\Ý[HH˜X˜›BˆH[ÙHYˆ\Ñ›Ü[P]˜]\ˆÂˆ]˜]\Û\Ý[HHœ›Ý[™Y™XÝˆH[ÙHÂˆ]˜]\Û\Ý[HHœ›Ý[™ˆB‚ˆYˆ][K\ÙPÛÛ[][š]UšY]Ó^[Ý]ÂˆÙ[‹˜]˜]\“›ÙKœÙ]Y\ŠÛÛ^ˆ][K˜ÛÛ^[YNˆ][Kœ™\Ù[][Û‘]K[YKY\Žˆ]˜]\”Y\‹Ý™\œšYR[XYÙNˆÝ™\œšYR[XYÙK[\PÛÛÜŽˆ][Kœ™\Ù[][Û‘]K[YK›\Ý›YYXTXÙZÛ\ÛÛÜ‹Û\Ý[Nˆ]˜]\Û\Ý[KÞ[˜Ú›Û›Ý\ÓØYˆÞ[˜Ú›Û›Ý\ÓØYË\Ü^Q[Y[œÚ[ÛœÎˆÑÔÚ^™JÚYˆ]˜]\‘X[Y]\‹ZYÚˆ]˜]\‘X[Y]\ŠKÝ]Ý]™XÝˆš[
+BˆH[ÙHYˆ]˜]\”Y\‹œÛX[›Ùš[R[XYÙHOHš[	‰ˆÝ™\œšYR[XYÙHOHš[ÂˆÙ[‹˜]˜]\“›ÙKœÙ]Y\•ŒŠÛÛ^ˆ][K˜ÛÛ^[YNˆ][Kœ™\Ù[][Û‘]K[YKY\Žˆ]˜]\”Y\‹Ý™\œšYR[XYÙNˆÝ™\œšYR[XYÙK[\PÛÛÜŽˆ][Kœ™\Ù[][Û‘]K[YK›\Ý›YYXTXÙZÛ\ÛÛÜ‹Û\Ý[Nˆ]˜]\Û\Ý[KÞ[˜Ú›Û›Ý\ÓØYˆÞ[˜Ú›Û›Ý\ÓØYË\Ü^Q[Y[œÚ[ÛœÎˆÑÔÚ^™JÚYˆ]˜]\‘X[Y]\‹ZYÚˆ]˜]\‘X[Y]\ŠJBˆH[ÙHÂˆÙ[‹˜]˜]\“›ÙKœÙ]Y\ŠÛÛ^ˆ][K˜ÛÛ^[YNˆ][Kœ™\Ù[][Û‘]K[YKY\Žˆ]˜]\”Y\‹Ý™\œšYR[XYÙNˆÝ™\œšYR[XYÙK[\PÛÛÜŽˆ][Kœ™\Ù[][Û‘]K[YK›\Ý›YYXTXÙZÛ\ÛÛÜ‹Û\Ý[Nˆ]˜]\Û\Ý[KÞ[˜Ú›Û›Ý\ÓØYˆÞ[˜Ú›Û›Ý\ÓØYË\Ü^Q[Y[œÚ[ÛœÎˆÑÔÚ^™JÚYˆŒŒZYÚˆŒŒ
+JBˆBˆˆYˆY\‹š\Ô™[Z][H	‰ˆY\‹šYOH][K˜ÛÛ^˜XØÛÝ[œY\’YÂˆ]ÛÛ^H][K˜ÛÛ^ˆÙ[‹˜ØXÚY]Q\ÜÜØX›KœÙ]
+
+ÛÛ^˜XØÛÝ[œÜÝ›ÞœY\•šY]ÊYˆY\‹šY
+Bˆˆ[]™\“Û“XZ[”]Y]YJKœÝ\ÝšXÝ
+™^ˆÈÝÙXZÈÙ[—HY\•šY]È[‚ˆÝX\™]Ý›Û™ÔÙ[ˆHÙ[ˆ[ÙHÂˆ™]\›‚ˆBˆ]ØXÚYY\‘]HHY\•šY]Ë˜ØXÚY]H\ÏÈØXÚY\Ù\‘]Bˆ˜\ˆ\œÛÛ˜[ÝÎˆ[YÜ˜[SYYXR[XYÙOÂˆ˜\ˆ›Ùš[TÝÎˆ[YÜ˜[SYYXR[XYÙOÂˆ˜\ˆ\ÒÛ›ÝÛˆH˜[ÙBˆˆYˆ]ØXÚYY\‘]HHØXÚYY\‘]HÂˆYˆØ\ÙH]šÛ›ÝÛŠX^X™T\œÛÛ˜[ÝÊHHØXÚYY\‘]Kœ\œÛÛ˜[ÝÈÂˆ\œÛÛ˜[ÝÈHX^X™T\œÛÛ˜[ÝÂˆ\ÒÛ›ÝÛˆHYBˆBˆYˆØ\ÙH]šÛ›ÝÛŠX^X™TÝÊHHØXÚYY\‘]KœÝÈÂˆ›Ùš[TÝÈHX^X™TÝÂˆ\ÒÛ›ÝÛˆHYBˆBˆYˆ›Ùš[TÝÈOHš[Ø\ÙH]šÛ›ÝÛŠX^X™TÝÊHHØXÚYY\‘]K™˜[˜XÚÔÝÈÂˆ›Ùš[TÝÈHX^X™TÝÂˆ\ÒÛ›ÝÛˆHYBˆBˆBˆˆYˆ\ÒÛ›ÝÛˆÂˆ]ÝÈH\œÛÛ˜[ÝÈÏÈ›Ùš[TÝÂˆYˆ]ÝÈHÝË][K˜ÛÛ^œÚ\™YÛÛ^™[™\™ÞU\ØYÙTÙ][™ÜË›ÛÜ[[ÚšK
+\ÝËšY[Ô™\™\Ù[][ÛœËš\Ñ[\HÝË™[[ÚšSX\šÝ\OHš[
+HÂˆ]šY[Ó›ÙNˆ]˜]\•šY[Ó›ÙBˆYˆ]Ý\œ™[HÝ›Û™ÔÙ[‹˜]˜]\•šY[Ó›ÙHÂˆšY[Ó›ÙHHÝ\œ™[ˆH[ÙHÂˆšY[Ó›ÙHH]˜]\•šY[Ó›ÙJÛÛ^ˆ][K˜ÛÛ^
+BˆÝ›Û™ÔÙ[‹˜]˜]\“›ÙK˜ÛÛ[›ÙK˜YÝX››ÙJšY[Ó›ÙJBˆÝ›Û™ÔÙ[‹˜]˜]\•šY[Ó›ÙHHšY[Ó›ÙBˆBˆšY[Ó›ÙK\]JY\ŽˆY\‹ÝÎˆÝËÚ^™NˆÑÔÚ^™JÚYˆŒŒZYÚˆŒŒ
+JBˆˆYˆÝ›Û™ÔÙ[‹šY\˜\˜ÚU˜XÚÚ[™Ó^Y\ˆOHš[Âˆ]Y\˜\˜ÚU˜XÚÚ[™Ó^Y\ˆHY\˜\˜ÚU˜XÚÚ[™Ó^Y\Š
+BˆY\˜\˜ÚU˜XÚÚ[™Ó^Y\‹™Y[\’Y\˜\˜ÚHHÈÝÙXZÈÙ[—H[‚ˆÝX\™]Ý›Û™ÔÙ[ˆHÙ[ˆ[ÙHÂˆ™]\›‚ˆBˆÝ›Û™ÔÙ[‹˜XÚÚ[™Ò\Ò[’Y\˜\˜ÚHHYBˆBˆˆY\˜\˜ÚU˜XÚÚ[™Ó^Y\‹™Y^]Y\˜\˜ÚHHÈÝÙXZÈÙ[—H[‚ˆÝX\™]Ý›Û™ÔÙ[ˆHÙ[ˆ[ÙHÂˆ™]\›‚ˆBˆÝ›Û™ÔÙ[‹˜XÚÚ[™Ò\Ò[’Y\˜\˜ÚHH˜[ÙBˆBˆÝ›Û™ÔÙ[‹šY\˜\˜ÚU˜XÚÚ[™Ó^Y\ˆHY\˜\˜ÚU˜XÚÚ[™Ó^Y\‚ˆÝ›Û™ÔÙ[‹›^Y\‹˜YÝX›^Y\ŠY\˜\˜ÚU˜XÚÚ[™Ó^Y\ŠBˆBˆH[ÙHÂˆYˆ]]˜]\•šY[Ó›ÙHHÝ›Û™ÔÙ[‹˜]˜]\•šY[Ó›ÙHÂˆ]˜]\•šY[Ó›ÙKœ™[[Ý™Qœ›ÛTÝ\\››ÙJ
+BˆÝ›Û™ÔÙ[‹˜]˜]\•šY[Ó›ÙHHš[ˆBˆÝ›Û™ÔÙ[‹šY\˜\˜ÚU˜XÚÚ[™Ó^Y\Ëœ™[[Ý™Qœ›ÛTÝ\\›^Y\Š
+BˆÝ›Û™ÔÙ[‹šY\˜\˜ÚU˜XÚÚ[™Ó^Y\ˆHš[ˆHˆÝ›Û™ÔÙ[‹\]UšY[Õš\ÚXš[]J
+BˆH[ÙHÂˆYˆ]ÝÈHY\‹›\™ÙT›Ùš[R[XYÙKÝËš\ÕšY[ÈÂˆ]ÈHÛÛ^™[™Ú[™KœY\œË™™]Ú[™\]PØXÚYY\‘]JY\’YˆY\‹šY
+KœÝ\Ý[™[Û™J
+BˆBˆBˆJJBˆH[ÙHÂˆÙ[‹˜ØXÚY]Q\ÜÜØX›KœÙ]
+š[
+BˆˆÙ[‹˜]˜]\•šY[Ó›ÙOËœ™[[Ý™Qœ›ÛTÝ\\››ÙJ
+BˆÙ[‹˜]˜]\•šY[Ó›ÙHHš[ˆˆÙ[‹šY\˜\˜ÚU˜XÚÚ[™Ó^Y\Ëœ™[[Ý™Qœ›ÛTÝ\\›^Y\Š
+BˆÙ[‹šY\˜\˜ÚU˜XÚÚ[™Ó^Y\ˆHš[ˆBˆBˆˆÙ[‹˜ÛÛ^ÛÛZ[™\‹š\ÑÙ\Ý\™Q[˜X›YH[˜X›T™]šY]È	‰ˆZ][K™Y][™ÂˆBˆˆÝ™\œšYHX›XÈ[˜È^[Ý]›Ü”\˜[\ÊÈ\˜[\Îˆ\ÝšY]Ò][S^[Ý]\˜[\Ë][Nˆ\ÝšY]Ò][K™]š[Ý\Ò][Nˆ\ÝšY]Ò][OË™^][Nˆ\ÝšY]Ò][OÊHÂˆ]^[Ý]HÙ[‹˜\Þ[˜Ó^[Ý]
+
+Bˆ]
+š\œÝ\Ýš\œÝÚ]XY\‹™^\Ô[›™Y™^\ÐXÝ]™T™]™X[ÛÛ›ÛÊHHÚ]\Ý][K›Y\™ÙU\J][Nˆ][H\ÈHÚ]\Ý][K™]š[Ý\Ò][Nˆ™]š[Ý\Ò][K™^][Nˆ™^][JBˆ]
+›ÙS^[Ý]\JHH^[Ý]
+][H\ÈHÚ]\Ý][K\˜[\Ëš\œÝ\Ýš\œÝÚ]XY\‹™^\Ô[›™Y™^\ÐXÝ]™T™]™X[ÛÛ›ÛÊBˆ\J˜[ÙK˜[ÙJBˆÙ[‹˜ÛÛ[Ú^™HH›ÙS^[Ý]˜ÛÛ[Ú^™BˆÙ[‹š[œÙ]ÈH›ÙS^[Ý]š[œÙ]ÂˆBˆˆÛ\ÜÈ[˜È[œÙ]Êš\œÝˆ›ÛÛ\Ýˆ›ÛÛš\œÝÚ]XY\Žˆ›ÛÛ
+HOˆRQYÙR[œÙ]ÈÂˆ™]\›ˆRQYÙR[œÙ]ÊÜˆš\œÝÚ]XY\ˆÈŽKŒˆŒYˆŒ›ÝÛNˆŒšYÚˆŒ
+BˆBˆˆÝ™\œšYHX›XÈ[˜ÈÙ]YÚYÚY
+ÈYÚYÚYˆ›ÛÛ]Ú[ˆÑÔÚ[[š[X]Yˆ›ÛÛ
+HÂˆÝ\\‹œÙ]YÚYÚY
+YÚYÚY]ˆÚ[[š[X]Yˆ[š[X]Y
+BˆˆÙ[‹š\ÒYÚYÚYHYÚYÚYˆˆÙ[‹\]R\ÒYÚYÚY
+˜[œÚ][ÛŽˆ
+[š[X]Y	‰ˆZYÚYÚY
+HÈ˜[š[X]Y
+\˜][ÛŽˆŒËÝ\™Nˆ™X\ÙR[“Ý]
+Hˆš[[YYX]JBˆBˆˆ˜\ˆ™X[RYÚYÚYˆ›ÛÛÂˆ˜\ˆ™X[RYÚYÚYHÙ[‹š\ÒYÚYÚYÙ[‹š\Ô™]™X[Ü[ÛœÐXÝ]™BˆYˆ]][HHÙ[‹š][HÂˆYˆ]][PÚ]ØØ][ÛˆH][K˜ÛÛ[˜Ú]ØØ][ÛˆÂˆYˆ][PÚ]ØØ][ÛˆOH][Kš[\˜XÝ[Û‹šYÚYÚYÚ]ØØ][ÛË›ØØ][ÛˆÂˆ™X[RYÚYÚYHYBˆBˆBˆYˆØ\ÙH]œY\ŠY\‘]JHH][K˜ÛÛ[]Ý\ÝÛSY\ÜØYÙS\Ý]HHY\‘]K˜Ý\ÝÛSY\ÜØYÙS\Ý]HÂˆYˆÝ\ÝÛSY\ÜØYÙS\Ý]Kš\Ò[•˜[œÜ\™[ÛÛZ[™\ˆÂˆ™X[RYÚYÚYH˜[ÙBˆBˆBˆBˆ™]\›ˆ™X[RYÚYÚYˆBˆˆ[˜È\]R\ÒYÚYÚY
+˜[œÚ][ÛŽˆÛÛZ[™YšY]Ó^[Ý]˜[œÚ][ÛŠHÂˆ]YÚYÚ›ÙÜ™\ÜÎˆÑÑ›Ø]HÙ[‹š][OËš[\˜XÝ[Û‹šYÚYÚYÚ]ØØ][ÛËœ›ÙÜ™\ÜÈÏÈKŒˆ˜[œÚ][Û‹\]PÛÜ›™\”˜Y]\Ê›ÙNˆÙ[‹šYÚYÚY˜XÚÙÜ›Ý[™›ÙKÛÜ›™\”˜Y]\ÎˆÙ[‹š\Ô™]™X[Ü[ÛœÐXÝ]™HÈ‹ŒˆŒ
+BˆÙ[‹\]TÙ\\˜]Ü[J˜[œÚ][ÛŽˆ˜[œÚ][ÛŠBˆˆYˆÙ[‹œ™X[RYÚYÚYÂˆYˆÙ[‹šYÚYÚY˜XÚÙÜ›Ý[™›ÙKœÝ\\››ÙHOHš[ÂˆÙ[‹š[œÙ\ÝX››ÙJÙ[‹šYÚYÚY˜XÚÙÜ›Ý[™›ÙKX›Ý™TÝX››ÙNˆÙ[‹œÙ\\˜]Ü“›ÙJBˆÙ[‹šYÚYÚY˜XÚÙÜ›Ý[™›ÙK˜[HHŒˆBˆÙ[‹šYÚYÚY˜XÚÙÜ›Ý[™›ÙK›^Y\‹œ™[[Ý™P[[š[X][ÛœÊ
+Bˆ˜[œÚ][Û‹\]P[J^Y\ŽˆÙ[‹šYÚYÚY˜XÚÙÜ›Ý[™›ÙK›^Y\‹[NˆYÚYÚ›ÙÜ™\ÜÊBˆˆYˆ]ÛÛ\Ý[™YÚYÚ[™Ó›ÙHHÙ[‹˜ÛÛ\Ý[™YÚYÚ[™Ó›ÙHÂˆ˜[œÚ][Û‹\]P[J^Y\ŽˆÛÛ\Ý[™YÚYÚ[™Ó›ÙK›^Y\‹[NˆŒ
+BˆBˆˆYˆ]][HHÙ[‹š][KØ\ÙH˜Ú]\ÝH][Kš[™^ÂˆÙ[‹›Û›[™S›ÙKœÙ][XYÙJ™\Ù[][Û”™\ÛÝ\˜Ù\ÐÚ]\Ýœ™XÙ[Ý]\ÓÛ›[™RXÛÛŠ][Kœ™\Ù[][Û‘]K[YKÝ]NˆšYÚYÚY›ÚXÙPÚ]ˆÙ[‹›Û›[™R\Õ›ÚXÙPÚ]
+KÛÛÜŽˆš[˜[œÚ][ÛŽˆ˜[œÚ][ÛŠBˆÙ[‹œÝ\•šY]ÏËœÙ]Ý][™PÛÛÜŠ][Kœ™\Ù[][Û‘]K[YK˜Ú]\Ýš][RYÚYÚY˜XÚÙÜ›Ý[™ÛÛÜ‹˜[œÚ][ÛŽˆ˜[œÚ][ÛŠBˆBˆH[ÙHÂˆYˆÙ[‹šYÚYÚY˜XÚÙÜ›Ý[™›ÙKœÝ\\››ÙHOHš[Âˆ˜[œÚ][Û‹\]P[J^Y\ŽˆÙ[‹šYÚYÚY˜XÚÙÜ›Ý[™›ÙK›^Y\‹[NˆKŒHYÚYÚ›ÙÜ™\ÜËÛÛ\][ÛŽˆÈÝÙXZÈÙ[—HÛÛ\]Y[‚ˆYˆ]Ý›Û™ÔÙ[ˆHÙ[ˆÂˆYˆÛÛ\]YÂˆÝ›Û™ÔÙ[‹šYÚYÚY˜XÚÙÜ›Ý[™›ÙKœ™[[Ý™Qœ›ÛTÝ\\››ÙJ
+BˆBˆBˆJBˆBˆˆYˆ]ÛÛ\Ý[™YÚYÚ[™Ó›ÙHHÙ[‹˜ÛÛ\Ý[™YÚYÚ[™Ó›ÙHÂˆ˜[œÚ][Û‹\]P[J^Y\ŽˆÛÛ\Ý[™YÚYÚ[™Ó›ÙK›^Y\‹[NˆÙ[‹˜]]Ü“›ÙK˜[JBˆBˆˆYˆ]][HHÙ[‹š][HÂˆ]Û›[™RXÛÛŽˆRR[XYÙOÂˆ]Y™™XÝ]™P˜XÚÙÜ›Ý[™ÛÛÜŽˆRPÛÛÜ‚ˆYˆ][Kš\Ô[›™YÂˆÛ›[™RXÛÛˆH™\Ù[][Û”™\ÛÝ\˜Ù\ÐÚ]\Ýœ™XÙ[Ý]\ÓÛ›[™RXÛÛŠ][Kœ™\Ù[][Û‘]K[YKÝ]Nˆœ[›™Y›ÚXÙPÚ]ˆÙ[‹›Û›[™R\Õ›ÚXÙPÚ]
+BˆY™™XÝ]™P˜XÚÙÜ›Ý[™ÛÛÜˆH][Kœ™\Ù[][Û‘]K[YK˜Ú]\Ýœ[›™Y][P˜XÚÙÜ›Ý[™ÛÛÜ‚ˆH[ÙHÂˆÛ›[™RXÛÛˆH™\Ù[][Û”™\ÛÝ\˜Ù\ÐÚ]\Ýœ™XÙ[Ý]\ÓÛ›[™RXÛÛŠ][Kœ™\Ù[][Û‘]K[YKÝ]Nˆœ™YÝ[\‹›ÚXÙPÚ]ˆÙ[‹›Û›[™R\Õ›ÚXÙPÚ]
+BˆY™™XÝ]™P˜XÚÙÜ›Ý[™ÛÛÜˆH][Kœ™\Ù[][Û‘]K[YK˜Ú]\Ýš][P˜XÚÙÜ›Ý[™ÛÛÜ‚ˆBˆÙ[‹›Û›[™S›ÙKœÙ][XYÙJÛ›[™RXÛÛ‹ÛÛÜŽˆš[˜[œÚ][ÛŽˆ˜[œÚ][ÛŠBˆÙ[‹œÝ\•šY]ÏËœÙ]Ý][™PÛÛÜŠY™™XÝ]™P˜XÚÙÜ›Ý[™ÛÛÜ‹˜[œÚ][ÛŽˆ˜[œÚ][ÛŠBˆBˆBˆˆYˆ]][HHÙ[‹š][HÂˆYˆ]]˜]\“]™P˜YÙHHÙ[‹˜]˜]\“]™P˜YÙHÂˆ]Y™™XÝ]™P˜XÚÙÜ›Ý[™ÛÛÜŽˆRPÛÛÜ‚ˆYˆ][Kš\Ô[›™YÂˆY™™XÝ]™P˜XÚÙÜ›Ý[™ÛÛÜˆH][Kœ™\Ù[][Û‘]K[YK˜Ú]\Ýœ[›™Y][P˜XÚÙÜ›Ý[™ÛÛÜ‚ˆH[ÙHÂˆY™™XÝ]™P˜XÚÙÜ›Ý[™ÛÛÜˆH][Kœ™\Ù[][Û‘]K[YK˜Ú]\Ýš][P˜XÚÙÜ›Ý[™ÛÛÜ‚ˆBˆˆ]YÚYÚ[HHÙ[‹šYÚYÚY˜XÚÙÜ›Ý[™›ÙKœÝ\\››ÙHOHš[ÈŒˆÙ[‹šYÚYÚY˜XÚÙÜ›Ý[™›ÙK˜[Bˆ]Ý][™PÛÛÜˆH][Kœ™\Ù[][Û‘]K[YK˜Ú]\Ýš][RYÚYÚY˜XÚÙÜ›Ý[™ÛÛÜ‹›Z^YÚ]
+Y™™XÝ]™P˜XÚÙÜ›Ý[™ÛÛÜ‹[NˆKŒHYÚYÚ[JBˆ˜[œÚ][Û‹\]U[ÛÛÜŠšY]Îˆ]˜]\“]™P˜YÙK›Ý][™KÛÛÜŽˆÝ][™PÛÛÜŠBˆBˆBˆB‚ˆš]˜]H[˜È\]TÙ\\˜]Ü[J˜[œÚ][ÛŽˆÛÛZ[™YšY]Ó^[Ý]˜[œÚ][Û‹[›[™S˜]šYØ][Û”›ÙÜ™\ÜÎˆÑÑ›Ø]ÈHš[
+HÂˆ]™]™X[Ù\\˜]Ü[NˆÑÑ›Ø]H
+Ù[‹š\Ô™]™X[Ü[ÛœÐXÝ]™HÙ[‹š\Ó™^™]™X[Ü[ÛœÐXÝ]™HÙ[‹›™^\ÐXÝ]™T™]™X[ÛÛ›ÛÊHÈŒˆKŒˆYˆ][›[™S˜]šYØ][Û”›ÙÜ™\ÜÈH[›[™S˜]šYØ][Û”›ÙÜ™\ÜÈÏÈÙ[‹š][OËš[\˜XÝ[Û‹š[›[™S˜]šYØ][Û“ØØ][ÛËœ›ÙÜ™\ÜÈÂˆ˜[œÚ][Û‹\]P[J›ÙNˆÙ[‹œÙ\\˜]Ü“›ÙK[Nˆ
+KŒH[›[™S˜]šYØ][Û”›ÙÜ™\ÜÊH
+ˆ™]™X[Ù\\˜]Ü[JBˆH[ÙHÂˆ˜[œÚ][Û‹\]P[J›ÙNˆÙ[‹œÙ\\˜]Ü“›ÙK[Nˆ™]™X[Ù\\˜]Ü[JBˆBˆBˆˆÝ™\œšYHX›XÈ[˜È\Y
+
+HÂˆÝX\™]][HHÙ[‹š][K][K™Y][™È[ÙHÂˆ™]\›‚ˆBˆYˆØ\ÙH]œY\ŠY\‘]JHH][K˜ÛÛ[ÂˆYˆY\‘]Kœ›Û[Ò[™›ÈOHš[]XZ[”Y\ˆHY\‘]KœY\‹œY\ˆÂˆÝÚ]Ú][Kš[™^ÂˆØ\ÙH]™›Ü[JËË™XYY˜[YKËÊN‚ˆ][Kš[\˜XÝ[Û‹ÙÙÛU™XYÔÙ[XÝ[ÛŠÝ™XYY˜[YWKZ][KœÙ[XÝY
+BˆØ\ÙH˜Ú]\Ý‚ˆ][Kš[\˜XÝ[Û‹ÙÙÛTY\”Ù[XÝY
+XZ[”Y\‹š[
+BˆBˆBˆBˆBˆˆ[˜È\Þ[˜Ó^[Ý]
+
+HOˆ
+È][NˆÚ]\Ý][KÈ\˜[\Îˆ\ÝšY]Ò][S^[Ý]\˜[\ËÈš\œÝˆ›ÛÛÈ\Ýˆ›ÛÛÈš\œÝÚ]XY\Žˆ›ÛÛÈ™^\Ô[›™Yˆ›ÛÛÈ™^\ÐXÝ]™T™]™X[ÛÛ›ÛÎˆ›ÛÛ
+HOˆ
+\ÝšY]Ò][S›ÙS^[Ý]
+›ÛÛ›ÛÛ
+HOˆ›ÚY
+HÂˆ]]S^[Ý]H^›ÙK˜\Þ[˜Ó^[Ý]
+Ù[‹™]S›ÙJBˆ]^^[Ý]H^›ÙUÚ][]Y\Ë˜\Þ[˜Ó^[Ý]
+Ù[‹^›ÙJBˆ]XZÙU˜Z[[™Õ^˜YÙS^[Ý]H^›ÙK˜\Þ[˜Ó^[Ý]
+Ù[‹˜Z[[™Õ^˜YÙS›ÙJBˆ]]S^[Ý]H^›ÙK˜\Þ[˜Ó^[Ý]
+Ù[‹]S›ÙJBˆ]]P˜YÙS^[Ý]H^›ÙK˜\Þ[˜Ó^[Ý]
+Ù[‹]P˜YÙOË^›ÙJBˆ]]]Ü“^[Ý]HÙ[‹˜]]Ü“›ÙK˜\Þ[˜Ó^[Ý]
+
+Bˆ]XZÙSYX\Ý\™S^[Ý]H^›ÙK˜\Þ[˜Ó^[Ý]
+Ù[‹›YX\Ý\™S›ÙJBˆ][œ]XÝ]š]Y\Ó^[Ý]HÙ[‹š[œ]XÝ]š]Y\Ó›ÙK˜\Þ[˜Ó^[Ý]
+
+Bˆ]˜YÙS^[Ý]HÙ[‹˜˜YÙS›ÙK˜\Þ[˜Ó^[Ý]
+
+Bˆ]Y[[Û˜YÙS^[Ý]HÙ[‹›Y[[Û˜YÙS›ÙK˜\Þ[˜Ó^[Ý]
+
+Bˆ]Û›[™S^[Ý]HÙ[‹›Û›[™S›ÙK˜\Þ[˜Ó^[Ý]
+
+Bˆ]Ù[XÝX›PÛÛ›Û^[Ý]H][S\ÝÙ[XÝX›PÛÛ›Û›ÙK˜\Þ[˜Ó^[Ý]
+Ù[‹œÙ[XÝX›PÛÛ›Û›ÙJBˆ]™[Ü™\ÛÛ›Û^[Ý]H][S\ÝY]X›T™[Ü™\ÛÛ›Û›ÙK˜\Þ[˜Ó^[Ý]
+Ù[‹œ™[Ü™\ÛÛ›Û›ÙJBˆ]XZÙPXÝ[Û]Û•]S›ÙS^[Ý]H^›ÙK˜\Þ[˜Ó^[Ý]
+Ù[‹˜XÝ[Û]Û•]S›ÙJBˆˆ]Ý\œ™[][HHÙ[‹›^[Ý]\˜[\ÏËŒˆ]Ý\œ™[Ú]\Ý^HÙ[‹˜ØXÚYÚ]\Ý^ˆ]Ý\œ™[Ú]\ÝÙX\˜Ú™\Ý[HÙ[‹˜ØXÚYÚ]\ÝÙX\˜Ú™\Ý[ˆ]Ý\œ™[Ú]\Ý][ÝTÙX\˜Ú™\Ý[HÙ[‹˜ØXÚYÚ]\Ý][ÝTÙX\˜Ú™\Ý[ˆ]Ý\œ™[Ý\ÝÛU^[]Y\ÈHÙ[‹˜ØXÚYÝ\ÝÛU^[]Y\Âˆˆ™]\›ˆÈ][K\˜[\Ëš\œÝ\Ýš\œÝÚ]XY\‹™^\Ô[›™Y™^\ÐXÝ]™T™]™X[ÛÛ›ÛÈ[‚ˆ]]Q›ÛH›ÛœÙ[ZX›Û
+›ÛÜŠ][Kœ™\Ù[][Û‘]K™›ÛÚ^™Kš][S\Ý˜\ÙQ›ÛÚ^™H
+ˆM‹ŒÈMËŒ
+JBˆ]^›ÛH›Ûœ™YÝ[\Š›ÛÜŠ][Kœ™\Ù[][Û‘]K™›ÛÚ^™Kš][S\Ý˜\ÙQ›ÛÚ^™H
+ˆMKŒÈMËŒ
+JBˆ]][XÕ^›ÛH›Ûš][XÊ›ÛÜŠ][Kœ™\Ù[][Û‘]K™›ÛÚ^™Kš][S\Ý˜\ÙQ›ÛÚ^™H
+ˆMKŒÈMËŒ
+JBˆ]]Q›ÛH›Ûœ™YÝ[\Š›ÛÜŠ][Kœ™\Ù[][Û‘]K™›ÛÚ^™Kš][S\Ý˜\ÙQ›ÛÚ^™H
+ˆMŒÈMËŒ
+JBˆ]˜YÙQ›ÛH›ÛÚ]
+Ú^™Nˆ›ÛÜŠ][Kœ™\Ù[][Û‘]K™›ÛÚ^™Kš][S\Ý˜\ÙQ›ÛÚ^™H
+ˆL‹ŒÈMËŒ
+K\ÚYÛŽˆœ™YÝ[\‹ÙZYÚˆœÙ[ZX›Û˜Z]ÎˆË›[Û›ÜÜXÙY[X™\œ×JBˆ]]˜]\˜YÙQ›ÛH›ÛÚ]
+Ú^™Nˆ›ÛÜŠ][Kœ™\Ù[][Û‘]K™›ÛÚ^™Kš][S\Ý˜\ÙQ›ÛÚ^™H
+ˆM‹ŒÈMËŒ
+K\ÚYÛŽˆœ™YÝ[\‹ÙZYÚˆœ™YÝ[\‹˜Z]ÎˆË›[Û›ÜÜXÙY[X™\œ×JBˆˆ]XØÛÝ[H][K˜ÛÛ^˜XØÛÝ[ˆ˜\ˆY\ÜØYÙ\ÎˆÑ[™Ú[™SY\ÜØYÙWBˆ[[HÛÛ[Y\ˆÂˆØ\ÙHÚ]
+[™Ú[™T™[™\™YY\ŠBˆØ\ÙHÜ›Ý\
+Ñ[™Ú[™PÚ]\Ý‘Ü›Ý\][K’][WJBˆBˆ]ÛÛ[Y\ŽˆÛÛ[Y\‚ˆ]ÛÛXš[™Y™XYÝ]Nˆ[™Ú[™TY\”™XYÛÝ[\œÏÂˆ][œ™XYÛÝ[ˆ
+ÛÝ[ˆ[Ì‹[œ™XYˆ›ÛÛ]]Yˆ›ÛÛ]]YÛÝ[ˆ[ÌË\Ô›Ýš\ÛÛ˜[ˆ›ÛÛ
+Bˆ]\Ô™[[Ý™Yœ›ÛUÝ[[œ™XYÛÝ[ˆ›ÛÛˆ]Y\”™\Ù[˜ÙNˆ[™Ú[™TY\‹”™\Ù[˜ÙOÂˆ]˜YÝ]NˆÚ]\Ý][PÛÛ[‘˜YÝ]OÂˆ]YYXQ˜YÛÛ[\Nˆ[™Ú[™PÚ]\Ý“YYXQ˜YÛÛ[\OÂˆ]\Õ[œÙY[“Y[[ÛœÎˆ›ÛÛˆ]\Õ[œÙY[”™XXÝ[ÛœÎˆ›ÛÛˆ]\Õ[œÙY[”Û›Ý\Îˆ›ÛÛˆ][œ]XÝ]š]Y\ÎˆÊ[™Ú[™TY\‹Y\’[œ]XÝ]š]JWOÂˆ]\ÔY\‘Ü›Ý\ˆ›ÛÛˆ]›Û[Ò[™›ÎˆÚ]\Ý›ÙQ[žT›Û[Ò[™›ÏÂˆ]\Ü^P\ÓY\ÜØYÙNˆ›ÛÛˆ]\Ñ˜Z[YY\ÜØYÙ\Îˆ›ÛÛˆ˜\ˆ™XY[™›ÎˆÚ]\Ý][PÛÛ[•™XY[™›ÏÂˆ˜\ˆ›Ü[UÜXÑ]Nˆ[™Ú[™PÚ]\Ý‘›Ü[UÜXÑ]OÂˆ˜\ˆÜ›Ü[UÜXÒ][\ÎˆÑ[™Ú[™PÚ]\Ý‘›Ü[UÜXÑ]WHH×Bˆ˜\ˆ]]Ü™[[Ý™U[Y[Ý]ˆ[ÌÂˆ˜\ˆ][UYÜÎˆÐÚ]\Ý][PÛÛ[•Y×HH×Bˆ˜\ˆ\ÐÛÛ[][š]HH˜[ÙBˆ˜\ˆ\Ü^PÛÛ[][š]P]˜]\˜YÙHH˜[ÙBˆˆ˜\ˆÜ›Ý\Y[žQY˜][H˜[ÙBˆˆÝÚ]Ú][K˜ÛÛ[ÂˆØ\ÙH›ØY[™Î‚ˆY\ÜØYÙ\ÈH×BˆÛÛ[Y\ˆH™Ü›Ý\
+×JBˆÛÛXš[™Y™XYÝ]HHš[ˆ[œ™XYÛÝ[H
+˜[ÙK˜[ÙKš[˜[ÙJBˆ\Ô™[[Ý™Yœ›ÛUÝ[[œ™XYÛÝ[H˜[ÙBˆY\”™\Ù[˜ÙHHš[ˆ˜YÝ]HHš[ˆYYXQ˜YÛÛ[\HHš[ˆ\Õ[œÙY[“Y[[ÛœÈH˜[ÙBˆ\Õ[œÙY[”™XXÝ[ÛœÈH˜[ÙBˆ\Õ[œÙY[”Û›Ý\ÈH˜[ÙBˆ[œ]XÝ]š]Y\ÈHš[ˆ\ÔY\‘Ü›Ý\H˜[ÙBˆ›Û[Ò[™›ÈHš[ˆ\Ü^P\ÓY\ÜØYÙHHYBˆ\Ñ˜Z[YY\ÜØYÙ\ÈH˜[ÙBˆØ\ÙH]œY\ŠY\‘]JN‚ˆ]Y\ÜØYÙ\Õ˜[YHHY\‘]K›Y\ÜØYÙ\Âˆ]Y\•˜[YHHY\‘]KœY\‚ˆYˆØ\ÙH˜ÛÛ[][š]HHY\•˜[YKœY\ˆÂˆ\ÐÛÛ[][š]HHYBˆH[ÙHYˆZ][KšYPÛÛ[][š]P]˜]\˜YÙKY\•˜[YKœY\Ë˜ÛÛZ[™\”Y\’YOHš[Âˆ\Ü^PÛÛ[][š]P]˜]\˜YÙHHYBˆBˆ]™XY[™›Õ˜[YHHY\‘]K™XY[™›Âˆ]ÛÛXš[™Y™XYÝ]U˜[YHHY\‘]K˜ÛÛXš[™Y™XYÝ]Bˆ]\Ô™[[Ý™Yœ›ÛUÝ[[œ™XYÛÝ[˜[YHHY\‘]Kš\Ô™[[Ý™Yœ›ÛUÝ[[œ™XYÛÝ[ˆ]Y\”™\Ù[˜ÙU˜[YHHY\‘]Kœ™\Ù[˜ÙBˆ]\Õ[œÙY[“Y[[ÛœÕ˜[YHHY\‘]Kš\Õ[œÙY[“Y[[ÛœÂˆ]\Õ[œÙY[”™XXÝ[ÛœÕ˜[YHHY\‘]Kš\Õ[œÙY[”™XXÝ[ÛœÂˆ]\Õ[œÙY[”Û›Ý\Õ˜[YHHY\‘]Kš\Õ[œÙY[”Û›Ý\Âˆ]˜YÝ]U˜[YHHY\‘]K™˜YÝ]Bˆ][œ]XÝ]š]Y\Õ˜[YHHY\‘]Kš[œ]XÝ]š]Y\Âˆ]›Û[Ò[™›Õ˜[YHHY\‘]Kœ›Û[Ò[™›Âˆ]YÛ›Ü™U[œ™XY˜YÙHHY\‘]KšYÛ›Ü™U[œ™XY˜YÙBˆ]\Ü^P\ÓY\ÜØYÙU˜[YHHY\‘]K™\Ü^P\ÓY\ÜØYÙBˆ]›Ü[UÜXÑ]U˜[YHHY\‘]K™›Ü[UÜXÑ]Bˆ]Ü›Ü[UÜXÒ][\Õ˜[YHHY\‘]KÜ›Ü[UÜXÒ][\Âˆˆ][UYÜÈHY\‘]KYÜÂˆˆ]]Ü™[[Ý™U[Y[Ý]HY\‘]K˜]]Ü™[[Ý™U[Y[Ý]ˆˆY\ÜØYÙ\ÈHY\ÜØYÙ\Õ˜[YBˆÛÛ[Y\ˆH˜Ú]
+Y\•˜[YJBˆÛÛXš[™Y™XYÝ]HHÛÛXš[™Y™XYÝ]U˜[YBˆYˆ]ÛÛXš[™Y™XYÝ]HHÛÛXš[™Y™XYÝ]K›Û[Ò[™›Õ˜[YHOHš[	‰ˆZYÛ›Ü™U[œ™XY˜YÙHÂˆ[œ™XYÛÝ[H
+ÛÛXš[™Y™XYÝ]K˜ÛÝ[ÛÛXš[™Y™XYÝ]Kš\Õ[œ™XY\Ô™[[Ý™Yœ›ÛUÝ[[œ™XYÛÝ[˜[YHÛÛXš[™Y™XYÝ]Kš\Ó]]Yš[XÛÛXš[™Y™XYÝ]Kš\Ñ]™\”™XY
+BˆH[ÙHÂˆ[œ™XYÛÝ[H
+˜[ÙK˜[ÙKš[˜[ÙJBˆBˆYˆ]ÈH›Û[Ò[™›Õ˜[YHÂˆ\Ô™[[Ý™Yœ›ÛUÝ[[œ™XYÛÝ[H˜[ÙBˆH[ÙHÂˆ\Ô™[[Ý™Yœ›ÛUÝ[[œ™XYÛÝ[H\Ô™[[Ý™Yœ›ÛUÝ[[œ™XYÛÝ[˜[YBˆBˆY\”™\Ù[˜ÙHHY\”™\Ù[˜ÙU˜[YK™›]X\È™\Ù[˜ÙHOˆ[™Ú[™TY\‹”™\Ù[˜ÙH[‚ˆ™]\›ˆ[™Ú[™TY\‹”™\Ù[˜ÙJÝ]\Îˆ™\Ù[˜ÙKœÝ]\Ë\ÝXÝ]š]Nˆ
+BˆBˆ˜YÝ]HH˜YÝ]U˜[YBˆYYXQ˜YÛÛ[\HHY\‘]K›YYXQ˜YÛÛ[\Bˆ™XY[™›ÈH™XY[™›Õ˜[YBˆ\Õ[œÙY[“Y[[ÛœÈH\Õ[œÙY[“Y[[ÛœÕ˜[YBˆ\Õ[œÙY[”™XXÝ[ÛœÈH\Õ[œÙY[”™XXÝ[ÛœÕ˜[YBˆ\Õ[œÙY[”Û›Ý\ÈH\Õ[œÙY[”Û›Ý\Õ˜[YBˆ›Ü[UÜXÑ]HH›Ü[UÜXÑ]U˜[YBˆÜ›Ü[UÜXÒ][\ÈHÜ›Ü[UÜXÒ][\Õ˜[YBˆˆYˆ][Kš[\˜XÝ[Û‹œÙX\˜Ú^YÚYÚÝ]HOHš[™XY[™›ÈOHš[Ü›Ü[UÜXÒ][\Ëš\Ñ[\K]Y\ÜØYÙHHY\ÜØYÙ\Õ˜[YK™š\œÝ]™XYYHY\ÜØYÙK™XYY]\ÜÛØÚX]Y™XY[™›ÈHY\ÜØYÙK˜\ÜÛØÚX]Y™XY[™›ÈÂˆ˜\ˆ™XYY\Žˆ[™Ú[™TY\ÂˆYˆØ\ÙH]˜Ú[›™[
+Ú[›™[
+HHY\•˜[YKœY\‹Ú[›™[š\Ó[Û›Ñ›Ü[HÂˆ™XYY\ˆHY\ÜØYÙKœY\œÖÑ[™Ú[™TY\‹’Y
+™XYY
+WK™›]X\
+[™Ú[™TY\‹š[š]
+BˆBˆÜ›Ü[UÜXÒ][\ÈHÑ[™Ú[™PÚ]\Ý‘›Ü[UÜXÑ]JYˆ™XYY]Nˆ\ÜÛØÚX]Y™XY[™›Ë]KXÛÛ‘š[RYˆ\ÜÛØÚX]Y™XY[™›ËšXÛÛ‹XÛÛÛÛÜŽˆ\ÜÛØÚX]Y™XY[™›ËšXÛÛÛÛÜ‹X^Ý]ÛÚ[™Ô™XYY\ÜØYÙRYˆY\ÜØYÙKšY\Õ[œ™XYˆ˜[ÙK™XYY\Žˆ™XYY\ŠWBˆBˆˆÝÚ]ÚY\•˜[YKœY\ˆÂˆØ\ÙH\Ù\‹œÙXÜ™]Ú]‚ˆYˆ]Y\”™\Ù[˜ÙHHY\”™\Ù[˜ÙHÂˆYˆØ\ÙHœ™\Ù[HY\”™\Ù[˜ÙKœÝ]\ÈÂˆ[œ]XÝ]š]Y\ÈH[œ]XÝ]š]Y\Õ˜[YBˆH[ÙHYˆ][K˜ÛÛ^œÚ\™YÛÛ^š[[YYX]Q^\š[Y[[RTÙ][™ÜË˜[Ø^\Ñ\Ü^U\[™ÈÂˆ[œ]XÝ]š]Y\ÈH[œ]XÝ]š]Y\Õ˜[YBˆH[ÙHÂˆ[œ]XÝ]š]Y\ÈHš[ˆBˆH[ÙHÂˆ[œ]XÝ]š]Y\ÈHš[ˆBˆY˜][‚ˆ[œ]XÝ]š]Y\ÈH[œ]XÝ]š]Y\Õ˜[YBˆBˆˆ\ÔY\‘Ü›Ý\H˜[ÙBˆ›Û[Ò[™›ÈH›Û[Ò[™›Õ˜[YBˆ\Ü^P\ÓY\ÜØYÙHH\Ü^P\ÓY\ÜØYÙU˜[YBˆ\Ñ˜Z[YY\ÜØYÙ\ÈHY\ÜØYÙ\Õ˜[YK›\ÝË™›YÜË˜ÛÛZ[œÊ‘˜Z[Y
+HÏÈ˜[ÙHËÈ\Ñ˜Z[YY\ÜØYÙ\Õ˜[YBˆØ\ÙH]™Ü›Ý\™Y™\™[˜ÙJÜ›Ý\™Y™\™[˜ÙQ]JN‚ˆ]Y\œÈHÜ›Ý\™Y™\™[˜ÙQ]KœY\œÂˆ]Y\ÜØYÙU˜[YHHÜ›Ý\™Y™\™[˜ÙQ]K›Y\ÜØYÙBˆ][œ™XYÛÝ[˜[YHHÜ›Ý\™Y™\™[˜ÙQ]K[œ™XYÛÝ[ˆ]Y[žQY˜][HÜ›Ý\™Y™\™[˜ÙQ]KšY[žQY˜][ˆˆYˆ]ÈHY\ÜØYÙU˜[YK\Y\œËš\Ñ[\HÂˆÛÛ[Y\ˆH˜Ú]
+Y\œÖÌKœY\ŠBˆH[ÙHÂˆÛÛ[Y\ˆH™Ü›Ý\
+Y\œÊBˆBˆYˆ]Y\ÜØYÙHHY\ÜØYÙU˜[YHÂˆY\ÜØYÙ\ÈHÛY\ÜØYÙWBˆH[ÙHÂˆY\ÜØYÙ\ÈH×BˆBˆÛÛXš[™Y™XYÝ]HHš[ˆ\Ô™[[Ý™Yœ›ÛUÝ[[œ™XYÛÝ[H˜[ÙBˆ˜YÝ]HHš[ˆYYXQ˜YÛÛ[\HHš[ˆ\Õ[œÙY[“Y[[ÛœÈH˜[ÙBˆ\Õ[œÙY[”™XXÝ[ÛœÈH˜[ÙBˆ\Õ[œÙY[”Û›Ý\ÈH˜[ÙBˆ[œ]XÝ]š]Y\ÈHš[ˆ\ÔY\‘Ü›Ý\HYBˆÜ›Ý\Y[žQY˜][HY[žQY˜][ˆ[œ™XYÛÝ[H
+[ÌŠ[œ™XYÛÝ[˜[YJK[œ™XYÛÝ[˜[YHOHYKš[˜[ÙJBˆY\”™\Ù[˜ÙHHš[ˆ›Û[Ò[™›ÈHš[ˆ\Ü^P\ÓY\ÜØYÙHH˜[ÙBˆ\Ñ˜Z[YY\ÜØYÙ\ÈH˜[ÙBˆBˆˆYˆ]Y\ÜØYÙU˜[YHHY\ÜØYÙ\Ë›\ÝÂˆ›ÜˆYYXH[ˆY\ÜØYÙU˜[YK›YYXHÂˆYˆ]YYXHHYYXH\ÏÈ[YÜ˜[SYYXPXÝ[Û‹Ø\ÙHš\ÝÜžPÛX\™YHYYXK˜XÝ[ÛˆÂˆY\ÜØYÙ\ÈH×BˆBˆBˆBˆˆ]\ÙPÚ]\Ý^[Ý]ˆ›ÛÛˆYˆØ\ÙH˜Ú]\ÝH][K˜Ú]\ÝØØ][ÛˆÂˆ\ÙPÚ]\Ý^[Ý]HYBˆH[ÙHYˆØ\ÙHœØ]™YY\ÜØYÙ\ÐÚ]ÈH][K˜Ú]\ÝØØ][ÛˆÂˆ\ÙPÚ]\Ý^[Ý]HYBˆH[ÙHYˆ\Ü^P\ÓY\ÜØYÙHÂˆ\ÙPÚ]\Ý^[Ý]HYBˆH[ÙHÂˆ\ÙPÚ]\Ý^[Ý]H˜[ÙBˆBˆˆ][YHH][Kœ™\Ù[][Û‘]K[YK˜Ú]\Ýˆˆ˜\ˆ\]Y[YNˆ™\Ù[][Û•[YOÂˆˆYˆÝ\œ™[][OËœ™\Ù[][Û‘]K[YHOOH][Kœ™\Ù[][Û‘]K[YHÂˆ\]Y[YHH][Kœ™\Ù[][Û‘]K[YBˆBˆˆ˜\ˆ]]Ü]šX]YÝš[™Îˆ”Ð]šX]YÝš[™ÏÂˆ˜\ˆ]]Ü’\ÐÝ\œ™[Ú]ˆ›ÛÛH˜[ÙBˆ˜\ˆ^]šX]YÝš[™Îˆ”Ð]šX]YÝš[™ÏÂˆ˜\ˆ^YÝ]Ý]ˆÑÑ›Ø]HŒˆ˜\ˆ]P]šX]YÝš[™Îˆ”Ð]šX]YÝš[™ÏÂˆ˜\ˆ]P]šX]YÝš[™Îˆ”Ð]šX]YÝš[™ÏÂˆ˜\ˆ]P˜YÙU^ˆÝš[™ÏÂˆ˜\ˆ˜YÙPÛÛ[HÚ]\Ý˜YÙPÛÛ[››Û™Bˆ˜\ˆY[[Û˜YÙPÛÛ[HÚ]\Ý˜YÙPÛÛ[››Û™Bˆ˜\ˆÝ]\ÔÝ]HHÚ]\ÝÝ]\Ó›ÙTÝ]K››Û™Bˆˆ˜\ˆÝ\œ™[˜YÙP˜XÚÙÜ›Ý[™[XYÙNˆRR[XYÙOÂˆ˜\ˆÝ\œ™[]˜]\˜YÙP˜XÚÙÜ›Ý[™[XYÙNˆRR[XYÙOÂˆ˜\ˆÝ\œ™[Y[[Û˜YÙR[XYÙNˆRR[XYÙOÂˆ˜\ˆÝ\œ™[[›™YXÛÛ’[XYÙNˆRR[XYÙOÂˆ˜\ˆÝ\œ™[Y[’XÛÛ’[XYÙNˆRR[XYÙOÂˆ˜\ˆÝ\œ™[]]YXÛÛ’[XYÙNˆRR[XYÙOÂˆ˜\ˆÝ\œ™[Ü™YXš[]RXÛÛÛÛ[ˆ[[ÚšTÝ]\ÐÛÛ\Û™[ÛÛ[Âˆ˜\ˆÝ\œ™[™\šYšYYXÛÛÛÛ[ˆ[[ÚšTÝ]\ÐÛÛ\Û™[ÛÛ[Âˆ˜\ˆÝ\œ™[^\˜RXÛÛÛÛ[ˆ[[ÚšTÝ]\ÐÛÛ\Û™[ÛÛ[Âˆ]^\˜RXÛÛÛÛZ[™\”Ú^™HHÑÔÚ^™JÚYˆNŒZYÚˆNŒ
+Bˆ˜\ˆÝ\œ™[Ý]\ÒXÛÛÛÛ[ˆ[[ÚšTÝ]\ÐÛÛ\Û™[ÛÛ[Âˆ˜\ˆÝ\œ™[Ý]\ÒXÛÛ”\XÛPÛÛÜŽˆRPÛÛÜÂˆ˜\ˆÝ\œ™[ÙXÜ™]XÛÛ’[XYÙNˆRR[XYÙOÂˆ˜\ˆÝ\œ™[Y\ÜØYÙU\RXÛÛŽˆRR[XYÙOÂˆ˜\ˆÝ\œ™[Y\ÜØYÙU\RXÛÛ“Ù™œÙ]ˆÑÔÚ[Hž™\›Âˆˆ˜\ˆÙ[XÝX›PÛÛ›ÛÚ^™P[™\Nˆ
+ÑÑ›Ø]
+ÑÔÚ^™K›ÛÛ
+HOˆ][S\ÝÙ[XÝX›PÛÛ›Û›ÙJOÂˆ˜\ˆ™[Ü™\ÛÛ›ÛÚ^™P[™\Nˆ
+ÑÑ›Ø]
+ÑÑ›Ø]›ÛÛÛÛZ[™YšY]Ó^[Ý]˜[œÚ][ÛŠHOˆ][S\ÝY]X›T™[Ü™\ÛÛ›Û›ÙJOÂˆˆ]Y][™ÓÙ™œÙ]ˆÑÑ›Ø]ˆ˜\ˆ™[Ü™\’[œÙ]ˆÑÑ›Ø]HŒˆYˆ][K™Y][™ÈÂˆ]Ù[XÝ[ÛÛÛ›ÛÝ[Nˆ][S\ÝÙ[XÝX›PÛÛ›Û›ÙK”Ý[BˆYˆØ\ÙH]œY\ŠY\‘]JHH][K˜ÛÛ[]Ý\ÝÛSY\ÜØYÙS\Ý]HHY\‘]K˜Ý\ÝÛSY\ÜØYÙS\Ý]KÝ\ÝÛSY\ÜØYÙS\Ý]K˜ÛÛ[X[™™Yš^OHš[ÂˆÙ[XÝ[ÛÛÛ›ÛÝ[HHœÛX[ˆH[ÙHÂˆÙ[XÝ[ÛÛÛ›ÛÝ[HH˜ÛÛ\XÝˆBˆˆ]Ú^™P[™\HHÙ[XÝX›PÛÛ›Û^[Ý]
+][Kœ™\Ù[][Û‘]K[YK›\Ýš][PÚXÚÐÛÛÜœËœÝ›ÚÙPÛÛÜ‹][Kœ™\Ù[][Û‘]K[YK›\Ýš][PÚXÚÐÛÛÜœË™š[ÛÛÜ‹][Kœ™\Ù[][Û‘]K[YK›\Ýš][PÚXÚÐÛÛÜœË™›Ü™YÜ›Ý[™ÛÛÜ‹][KœÙ[XÝYÙ[XÝ[ÛÛÛ›ÛÝ[Kš[
+BˆYˆ›Û[Ò[™›ÈOHš[	‰ˆZ\ÔY\‘Ü›Ý\ÂˆÙ[XÝX›PÛÛ›ÛÚ^™P[™\HHÚ^™P[™\BˆBˆY][™ÓÙ™œÙ]HÚ^™P[™\KŒˆˆ˜\ˆØ[”™[Ü™\ˆH˜[ÙBˆˆYˆØ\ÙH]˜Ú]\Ý
+[™^
+HH][Kš[™^[™^œ[›š[™Ò[™^OHš[›Û[Ò[™›ÈOHš[Z\ÔY\‘Ü›Ý\ÂˆØ[”™[Ü™\ˆHYBˆH[ÙHYˆØ\ÙH]™›Ü[J[›™Y[™^ËËËÊHH][Kš[™^Ø\ÙHš[™^H[›™Y[™^ÂˆYˆØ\ÙH]˜Ú]
+][TY\ŠHHÛÛ[Y\‹Ø\ÙH]˜Ú[›™[
+Ú[›™[
+HH][TY\‹œY\ˆÂˆ]Ø[”[ˆHÚ[›™[™›YÜË˜ÛÛZ[œÊš\ÐÜ™X]ÜŠHÚ[›™[š\Ô\›Z\ÜÚ[ÛŠœ[“Y\ÜØYÙ\ÊBˆYˆØ[”[ˆÂˆØ[”™[Ü™\ˆHYBˆBˆBˆBˆˆYˆØ\ÙH]œY\ŠY\‘]JHH][K˜ÛÛ[]Ý\ÝÛSY\ÜØYÙS\Ý]HHY\‘]K˜Ý\ÝÛSY\ÜØYÙS\Ý]KÝ\ÝÛSY\ÜØYÙS\Ý]K˜ÛÛ[X[™™Yš^OHš[ÂˆØ[”™[Ü™\ˆHYBˆBˆˆYˆØ[”™[Ü™\ˆÂˆ]Ú^™P[™\HH™[Ü™\ÛÛ›Û^[Ý]
+][Kœ™\Ù[][Û‘]K[YJBˆ™[Ü™\ÛÛ›ÛÚ^™P[™\HHÚ^™P[™\Bˆ™[Ü™\’[œÙ]HÚ^™P[™\KŒˆBˆH[ÙHÂˆY][™ÓÙ™œÙ]HŒˆBˆˆ][˜X›PÚ]\ÝÝÜÈHYBˆˆËÈYˆÚ[™ÙYY\ÝÙ]\][HXØÛÜ™[™ÛBˆ˜\ˆ]˜]\‘X[Y]\ˆHZ[ŠŒŒ›ÛÜŠ][Kœ™\Ù[][Û‘]K™›ÛÚ^™K˜˜\ÙQ\Ü^TÚ^™H
+ˆŒŒÈMËŒ
+JBˆ]]˜]\“YYÙR[œÙ]ˆÑÑ›Ø]H][K\ÙPÛÛ[][š]UšY]Ó^[Ý]ÈLŒˆM‹Œˆ]]˜]\“Y[œÙ]ˆÑÑ›Ø]ˆˆYˆØ\ÙH]œY\ŠY\‘]JHH][K˜ÛÛ[]Ý\ÝÛSY\ÜØYÙS\Ý]HHY\‘]K˜Ý\ÝÛSY\ÜØYÙS\Ý]KÝ\ÝÛSY\ÜØYÙS\Ý]K˜ÛÛ[X[™™Yš^OHš[Âˆ]˜]\‘X[Y]\ˆHŒˆ]˜]\“Y[œÙ]HMËŒ
+È]˜]\‘X[Y]\‚ˆH[ÙHYˆ][K\ÙPÛÛ[][š]UšY]Ó^[Ý]Âˆ]˜]\“Y[œÙ]H]˜]\“YYÙR[œÙ]
+ÈŒ
+È]˜]\‘X[Y]\‚ˆH[ÙHÂˆYˆ][Kš[\˜XÝ[Û‹š\Ò[›[™S[ÙHÂˆ]˜]\“Y[œÙ]HL‹ŒˆH[ÙHYˆ]\ÙPÚ]\Ý^[Ý]Âˆ]˜]\“Y[œÙ]HLŒˆH[ÙHÂˆ]˜]\“Y[œÙ]HŒ
+È]˜]\‘X[Y]\‚ˆBˆBˆˆ]˜YÙQX[Y]\ˆH›ÛÜŠ][Kœ™\Ù[][Û‘]K™›ÛÚ^™K˜˜\ÙQ\Ü^TÚ^™H
+ˆŒŒÈMËŒ
+Bˆ]]˜]\˜YÙQX[Y]\ŽˆÑÑ›Ø]H›ÛÜŠ›ÛÜŠ][Kœ™\Ù[][Û‘]K™›ÛÚ^™Kš][S\Ý˜\ÙQ›ÛÚ^™H
+ˆŒ‹ŒÈMËŒ
+JBˆ]]˜]\•[Y\˜YÙQX[Y]\ŽˆÑÑ›Ø]H›ÛÜŠ›ÛÜŠ][Kœ™\Ù[][Û‘]K™›ÛÚ^™Kš][S\Ý˜\ÙQ›ÛÚ^™H
+ˆŒÈMËŒ
+JBˆˆ]Ý\œ™[]˜]\˜YÙPÛX[˜XÚÙÜ›Ý[™[XYÙNˆRR[XYÙOÈH™\Ù[][Û”™\ÛÝ\˜Ù\ÐÚ]\Ý˜˜YÙP˜XÚÙÜ›Ý[™›Ü™\Š][Kœ™\Ù[][Û‘]K[YKX[Y]\Žˆ]˜]\˜YÙQX[Y]\ˆ
+ÈŒ
+Bˆˆ]Y[œÙ]ˆÑÑ›Ø]H\˜[\Ë›Y[œÙ]
+È]˜]\“Y[œÙ]ˆˆ[[HÛÛ[]HÂˆØ\ÙHÚ]
+][TY\Žˆ[™Ú[™T™[™\™YY\‹™XY[™›ÎˆÚ]\Ý][PÛÛ[•™XY[™›ÏËY\Žˆ[™Ú[™TY\ËYP]]ÜŽˆ›ÛÛY\ÜØYÙU^ˆÝš[™ËY\ÜØYÙQ[]Y\ÎˆÓY\ÜØYÙU^[]WKÜÚ[\œÎˆÓ”Ô˜[™ÙWOËÝ\ÝÛQ[[ÚšT˜[™Ù\ÎˆÊ”Ô˜[™ÙKÚ]^[œ]^Ý\ÝÛQ[[ÚšP]šX]JWOËšXÚ^™]šY]Îˆ”Ð]šX]YÝš[™ÏÊBˆØ\ÙHÜ›Ý\
+Y\œÎˆÑ[™Ú[™PÚ]\Ý‘Ü›Ý\][K’][WJBˆBˆˆ]ÛÛ[]NˆÛÛ[]Bˆˆ˜\ˆYP]]ÜˆH˜[ÙBˆÝÚ]ÚÛÛ[Y\ˆÂˆØ\ÙH]˜Ú]
+][TY\ŠN‚ˆ˜\ˆ
+Y\‹[š]X[YP]]Ü‹Y\ÜØYÙU^Y\ÜØYÙQ[]Y\ËÜÚ[\œËÝ\ÝÛQ[[ÚšT˜[™Ù\ËšXÚ^™]šY]ÊHHÚ]\Ý][TÝš[™ÜÊÝš[™ÜÎˆ][Kœ™\Ù[][Û‘]KœÝš[™ÜË˜[YQ\Ü^SÜ™\Žˆ][Kœ™\Ù[][Û‘]K›˜[YQ\Ü^SÜ™\‹]U[YQ›Ü›X]ˆ][Kœ™\Ù[][Û‘]K™]U[YQ›Ü›X]ÛÛ[Ù][™ÜÎˆ][K˜ÛÛ^˜Ý\œ™[ÛÛ[Ù][™ÜËÚ]È	KY\ÜØYÙ\ÎˆY\ÜØYÙ\ËÚ]Y\Žˆ][TY\‹XØÛÝ[Y\’Yˆ][K˜ÛÛ^˜XØÛÝ[œY\’Y[˜X›SYYXQ[[ÚšNˆY[˜X›PÚ]\ÝÝÜË\ÔY\‘Ü›Ý\ˆ\ÔY\‘Ü›Ý\
+BˆˆYˆØ\ÙH]œØJËX^X™TØU^
+HH›Û[Ò[™›Ë]ØU^HX^X™TØU^Âˆ[š]X[YP]]ÜˆHYBˆY\ÜØYÙU^HØU^ˆšXÚ^™]šY]ÈHš[ˆBˆˆÝÚ]Ú][TY\‹œY\ˆÂˆØ\ÙH\Ù\Ž‚ˆYˆ]]šX]HHY\ÜØYÙ\Ë™š\œÝË—Ø\ÓY\ÜØYÙJ
+Kœ™XXÝ[ÛœÐ]šX]HÂˆÛÜˆ›Üˆ™XÙ[Y\ˆ[ˆ]šX]Kœ™XÙ[Y\œÈÂˆYˆ™XÙ[Y\‹š\Õ[œÙY[ˆÂˆÝÚ]Ú™XÙ[Y\‹˜[YHÂˆØ\ÙH]˜Z[[Š˜[YJN‚ˆY\ÜØYÙU^H][Kœ™\Ù[][Û‘]KœÝš[™ÜËÚ]\ÝÕ\Ù\”™XXÝY
+˜[YJKœÝš[™ÂˆšXÚ^™]šY]ÈHš[ˆØ\ÙH˜Ý\ÝÛN‚ˆœ™XZÂˆØ\ÙHœÝ\œÎ‚ˆœ™XZÂˆBˆœ™XZÈÛÜˆBˆBˆBˆY˜][‚ˆœ™XZÂˆBˆˆÛÛ[]HH˜Ú]
+][TY\Žˆ][TY\‹™XY[™›Îˆ™XY[™›ËY\ŽˆY\‹YP]]ÜŽˆYP]]Ü‹Y\ÜØYÙU^ˆY\ÜØYÙU^Y\ÜØYÙQ[]Y\ÎˆY\ÜØYÙQ[]Y\ËÜÚ[\œÎˆÜÚ[\œËÝ\ÝÛQ[[ÚšT˜[™Ù\ÎˆÝ\ÝÛQ[[ÚšT˜[™Ù\ËšXÚ^™]šY]ÎˆšXÚ^™]šY]ÊBˆYP]]ÜˆH[š]X[YP]]Ü‚ˆØ\ÙH]™Ü›Ý\
+Ü›Ý\Y\œÊN‚ˆÛÛ[]HH™Ü›Ý\
+Y\œÎˆÜ›Ý\Y\œÊBˆYP]]ÜˆHYBˆBˆˆ˜\ˆ]šX]Y^ˆ”Ð]šX]YÝš[™Âˆ˜\ˆ\Ñ˜YH˜[ÙBˆˆ˜\ˆ[›[™P]]Ü”™Yš^ˆÝš[™ÏÂˆ˜\ˆ\ÙR[›[™P]]Ü”™Yš^H˜[ÙBˆYˆØ\ÙH™Ü›Ý\™Y™\™[˜ÙHH][K˜ÛÛ[Âˆ\ÙR[›[™P]]Ü”™Yš^HYBˆBˆYˆZ][UYÜËš\Ñ[\HÂˆ›Ü[UÜXÑ]HHš[ˆÜ›Ü[UÜXÒ][\ÈH×BˆˆYˆØ\ÙH]˜Ú]
+][TY\‹ËËËËËËËÊHHÛÛ[]HÂˆYˆ]Y\ÜØYÙTY\ˆH][TY\‹˜Ú]XZ[”Y\ˆÂˆÝÚ]ÚY\ÜØYÙTY\ˆÂˆØ\ÙH]˜Ú[›™[
+Ú[›™[
+N‚ˆYˆØ\ÙH™Ü›Ý\HÚ[›™[š[™›ÈÂˆ\ÙR[›[™P]]Ü”™Yš^HYBˆBˆØ\ÙH›YØXÞQÜ›Ý\‚ˆ\ÙR[›[™P]]Ü”™Yš^HYBˆY˜][‚ˆœ™XZÂˆBˆBˆBˆBˆˆYˆ\ÙR[›[™P]]Ü”™Yš^ÂˆYˆØ\ÙH]\Ù\Š]]ÜŠHHY\ÜØYÙ\Ë›\ÝË˜]]ÜˆÂˆYˆ]]Ü‹šYOH][K˜ÛÛ^˜XØÛÝ[œY\’YÂˆ[›[™P]]Ü”™Yš^H][Kœ™\Ù[][Û‘]KœÝš[™ÜË‘X[ÙÓ\ÝÖ[ÝBˆH[ÙHYˆY\ÜØYÙ\Ë›\ÝËšYœY\’Y›˜[Y\ÜXÙHOH˜[Y\ÜXÙ\Ë”Y\‹ÛÝY\Ù\ˆ	‰ˆY\ÜØYÙ\Ë›\ÝËšYœY\’Y›˜[Y\ÜXÙHOH˜[Y\ÜXÙ\Ë”Y\‹”ÙXÜ™]Ú]Âˆ[›[™P]]Ü”™Yš^H[™Ú[™TY\‹\Ù\Š]]ÜŠK˜ÛÛ\XÝ\Ü^U]BˆBˆBˆBˆˆ˜\ˆÚ]\Ý^ˆ
+Ýš[™ËÝš[™ÊOÂˆ˜\ˆÚ]\ÝÙX\˜Ú™\Ý[ˆØXÚYÚ]\ÝÙX\˜Ú™\Ý[Âˆ˜\ˆÚ]\Ý][ÝTÙX\˜Ú™\Ý[ˆØXÚYÚ]\ÝÙX\˜Ú™\Ý[Âˆ˜\ˆÝ\ÝÛU^[]Y\ÎˆØXÚYÝ\ÝÛU^[]Y\ÏÂˆˆ]ÛÛ[[XYÙTÚYNˆÑÑ›Ø]HX^
+LŒZ[ŠŒŒ›ÛÜŠ][Kœ™\Ù[][Û‘]K™›ÛÚ^™K˜˜\ÙQ\Ü^TÚ^™H
+ˆNŒÈMËŒ
+JJBˆ]ÛÛ[[XYÙTÚ^™HHÑÔÚ^™JÚYˆÛÛ[[XYÙTÚYKZYÚˆÛÛ[[XYÙTÚYJBˆ]ÛÛ[[XYÙTÜXÚ[™ÎˆÑÑ›Ø]H‹Œˆ]›ÜØ\™YXÛÛ”ÜXÚ[™ÎˆÑÑ›Ø]H‹Œˆ]ÛÛ[[XYÙU˜Z[[™ÔÜXÙNˆÑÑ›Ø]HKŒˆˆ˜\ˆÛÛ[[XYÙTÜXÜÎˆÐÛÛ[[XYÙTÜX×HH×Bˆ˜\ˆ]˜]\ÛÛ[[XYÙTÜXÎˆÛÛ[[XYÙTÜXÏÂˆ˜\ˆ›Ü[U™XYˆ
+Yˆ[]NˆÝš[™ËXÛÛ’Yˆ[ËXÛÛÛÛÜŽˆ[Ì‹™XYY\Žˆ[™Ú[™TY\Ë\Õ[œ™XYˆ›ÛÛ
+OÂ‚ˆ[[HY\ÜØYÙU\RXÛÛˆÂˆ[[HØ[\HÂˆØ\ÙH›ÚXÙBˆØ\ÙHšY[ÂˆBˆ[[HØ[\™XÝ[ÛˆÂˆØ\ÙH[˜ÛÛZ[™ÂˆØ\ÙHÝ]ÛÚ[™ÂˆBˆØ\ÙHØ[
+Ø[\KØ[\™XÝ[ÛŠBˆØ\ÙH›ÜØ\™ˆØ\ÙHÝÜžBˆØ\ÙHÚYˆØ\ÙHØØ][Û‚ˆØ\ÙHÛˆØ\ÙHÙÂˆØ\ÙHØ[YBˆØ\ÙH›ÚXÙSY\ÜØYÙBˆØ\ÙH]Y[ÂˆBˆ˜\ˆY\ÜØYÙU\RXÛÛŽˆY\ÜØYÙU\RXÛÛÂˆ˜\ˆYÛ›Ü™Q›ÜØ\™YXÛÛˆH˜[ÙBˆˆÝÚ]ÚÛÛ[]HÂˆØ\ÙH]˜Ú]
+][TY\‹ËËË^[]Y\ËÜÚ[\œËÝ\ÝÛQ[[ÚšT˜[™Ù\ËšXÚ^™]šY]ÊN‚ˆ˜\ˆ\Õ\Ù\ˆH˜[ÙBˆYˆØ\ÙH\Ù\ˆH][TY\‹˜Ú]XZ[”Y\ˆÂˆ\Õ\Ù\ˆHYBˆBˆ˜\ˆ\ÑÝY\ÝÚ]]]ÜˆH˜[ÙBˆYˆ]Y\ÜØYÙHHY\ÜØYÙ\Ë›\ÝØ\ÙH]\Ù\Š\Ù\ŠHHY\ÜØYÙK˜]]Ü‹\Ù\‹šYOHY\ÜØYÙKšYœY\’Y]›Ý[™›ÈH\Ù\‹˜›Ý[™›Ë›Ý[™›Ë™›YÜË˜ÛÛZ[œÊš\ÑÝY\ÝÚ]
+HÂˆ\ÑÝY\ÝÚ]]]ÜˆHYBˆB‚ˆ˜\ˆY\•^ˆÝš[™ÏÂˆYˆØ\ÙHœØ]™YY\ÜØYÙ\ÐÚ]ÈH][K˜Ú]\ÝØØ][ÛˆÂˆYˆ]Y\ÜØYÙHHY\ÜØYÙ\Ë›\Ý]›ÜØ\™[™›ÈHY\ÜØYÙK™›ÜØ\™[™›Ë]]]ÜˆH›ÜØ\™[™›Ë˜]]ÜˆÂˆYˆ]]Ü‹šYOH][TY\‹˜Ú]XZ[”Y\ËšYÂˆY\•^H[™Ú[™TY\Š]]ÜŠK™\Ü^U]JÝš[™ÜÎˆ][Kœ™\Ù[][Û‘]KœÝš[™ÜË\Ü^SÜ™\Žˆ][Kœ™\Ù[][Û‘]K›˜[YQ\Ü^SÜ™\ŠBˆBˆBˆH[ÙHYˆØ\ÙH™Ü›Ý\™Y™\™[˜ÙHH][K˜ÛÛ[ÂˆYˆ]Y\ÜØYÙTY\ˆH][TY\‹˜Ú]XZ[”Y\ˆÂˆY\•^HY\ÜØYÙTY\‹™\Ü^U]JÝš[™ÜÎˆ][Kœ™\Ù[][Û‘]KœÝš[™ÜË\Ü^SÜ™\Žˆ][Kœ™\Ù[][Û‘]K›˜[YQ\Ü^SÜ™\ŠBˆBˆH[ÙHYˆ]Y\ÜØYÙHHY\ÜØYÙ\Ë›\Ý]]]ÜˆHY\ÜØYÙK˜]]ÜË—Ø\ÔY\Š
+K]Y\ˆH][TY\‹˜Ú]XZ[”Y\ˆÂˆYˆY\‹šYš\Õ™\šYšXØ][ÛÛÙ\ÈÂˆYˆ]Y\ÜØYÙHHY\ÜØYÙ\Ë›\Ý]›ÜØ\™[™›ÈHY\ÜØYÙK™›ÜØ\™[™›Ë]]]ÜˆH›ÜØ\™[™›Ë˜]]ÜˆÂˆY\•^H[™Ú[™TY\Š]]ÜŠK˜ÛÛ\XÝ\Ü^U]BˆBˆH[ÙHYˆZ\Õ\Ù\ˆ\ÑÝY\ÝÚ]]]ÜˆÂˆYˆØ\ÙH]˜Ú[›™[
+Y\ŠHHY\‹Ø\ÙH˜œ›ØYØ\ÝHY\‹š[™›ÈÂˆH[ÙHYˆY\Ü^P\ÓY\ÜØYÙHÂˆYˆ]›ÜØ\™[™›ÈHY\ÜØYÙK™›ÜØ\™[™›Ë›ÜØ\™[™›Ë™›YÜË˜ÛÛZ[œÊš\Ò[\ÜY
+K]]]Ü”ÚYÛ˜]\™HH›ÜØ\™[™›Ë˜]]Ü”ÚYÛ˜]\™HÂˆY\•^H]]Ü”ÚYÛ˜]\™BˆH[ÙHÂˆY\•^H]]Ü‹šYOHXØÛÝ[œY\’YÈ][Kœ™\Ù[][Û‘]KœÝš[™ÜË‘X[ÙÓ\ÝÖ[ÝHˆ[™Ú[™TY\Š]]ÜŠK™\Ü^U]JÝš[™ÜÎˆ][Kœ™\Ù[][Û‘]KœÝš[™ÜË\Ü^SÜ™\Žˆ][Kœ™\Ù[][Û‘]K›˜[YQ\Ü^SÜ™\ŠBˆ]]Ü’\ÐÝ\œ™[Ú]HZ\ÑÝY\ÝÚ]]]Üˆ	‰ˆ]]Ü‹šYOHY\‹šYˆBˆBˆBˆBˆˆYˆØ\ÙH˜Ú]\ÝH][K˜Ú]\ÝØØ][Û‹][TY\‹œY\’YOH][K˜ÛÛ^˜XØÛÝ[œY\’Y]Y\ÜØYÙHHY\ÜØYÙ\Ë™š\œÝÂˆ˜\ˆY™™XÝ]™P]]ÜŽˆ[™Ú[™T˜]ÔY\ÈHY\ÜØYÙK˜]]ÜË—Ø\ÔY\Š
+BˆYˆ]›ÜØ\™[™›ÈHY\ÜØYÙK™›ÜØ\™[™›ÈÂˆY™™XÝ]™P]]ÜˆH›ÜØ\™[™›Ë˜]]Ü‚ˆYˆY™™XÝ]™P]]ÜˆOHš[]]]Ü”ÚYÛ˜]\™HH›ÜØ\™[™›Ë˜]]Ü”ÚYÛ˜]\™HÂˆY™™XÝ]™P]]ÜˆH[YÜ˜[U\Ù\ŠYˆ[™Ú[™TY\‹’Y
+˜[Y\ÜXÙNˆ˜[Y\ÜXÙ\Ë”Y\‹‘[\KYˆ[™Ú[™TY\‹’Y’Y—Ú[\›˜[œ›ÛR[˜[YJ[
+]]Ü”ÚYÛ˜]\™Kœ\œÚ\Ý[\Ú˜[YH	HÌŠJJKXØÙ\ÜÒ\Úˆš[š\œÝ˜[YNˆ]]Ü”ÚYÛ˜]\™K\Ý˜[YNˆš[\Ù\›˜[YNˆš[Û™Nˆš[ÝÎˆ×K›Ý[™›Îˆš[™\ÝšXÝ[Û’[™›Îˆš[›YÜÎˆ×K[[ÚšTÝ]\Îˆš[\Ù\›˜[Y\Îˆ×KÝÜšY\ÒY[Žˆš[˜[YPÛÛÜŽˆš[˜XÚÙÜ›Ý[™[[ÚšRYˆš[›Ùš[PÛÛÜŽˆš[›Ùš[P˜XÚÙÜ›Ý[™[[ÚšRYˆš[ÝXœØÜšX™\ÛÝ[ˆš[™\šYšXØ][Û’XÛÛ‘š[RYˆš[
+BˆBˆBˆYˆ]ÛÝ\˜ÙP]]Ü’[™›ÈHY\ÜØYÙK—Ø\ÓY\ÜØYÙJ
+KœÛÝ\˜ÙP]]Ü’[™›ÈÂˆYˆ]ÜšYÚ[˜[]]ÜˆHÛÝ\˜ÙP]]Ü’[™›Ë›ÜšYÚ[˜[]]Ü‹]Y\ˆHY\ÜØYÙKœY\œÖÛÜšYÚ[˜[]]Ü—HÂˆY™™XÝ]™P]]ÜˆHY\‚ˆH[ÙHYˆ]]]Ü”ÚYÛ˜]\™HHÛÝ\˜ÙP]]Ü’[™›Ë›ÜšYÚ[˜[]]Ü“˜[YHÂˆY™™XÝ]™P]]ÜˆH[YÜ˜[U\Ù\ŠYˆ[™Ú[™TY\‹’Y
+˜[Y\ÜXÙNˆ˜[Y\ÜXÙ\Ë”Y\‹‘[\KYˆ[™Ú[™TY\‹’Y’Y—Ú[\›˜[œ›ÛR[˜[YJ[
+]]Ü”ÚYÛ˜]\™Kœ\œÚ\Ý[\Ú˜[YH	HÌŠJJKXØÙ\ÜÒ\Úˆš[š\œÝ˜[YNˆ]]Ü”ÚYÛ˜]\™K\Ý˜[YNˆš[\Ù\›˜[YNˆš[Û™Nˆš[ÝÎˆ×K›Ý[™›Îˆš[™\ÝšXÝ[Û’[™›Îˆš[›YÜÎˆ×K[[ÚšTÝ]\Îˆš[\Ù\›˜[Y\Îˆ×KÝÜšY\ÒY[Žˆš[˜[YPÛÛÜŽˆš[˜XÚÙÜ›Ý[™[[ÚšRYˆš[›Ùš[PÛÛÜŽˆš[›Ùš[P˜XÚÙÜ›Ý[™[[ÚšRYˆš[ÝXœØÜšX™\ÛÝ[ˆš[™\šYšXØ][Û’XÛÛ‘š[RYˆš[
+BˆBˆBˆˆYˆ]Y™™XÝ]™P]]Ü‹Y™™XÝ]™P]]Ü‹šYOH][TY\‹˜Ú]XZ[”Y\ËšYÂˆ]]Ü’\ÐÝ\œ™[Ú]H˜[ÙBˆY\•^H[™Ú[™TY\ŠY™™XÝ]™P]]ÜŠK™\Ü^U]JÝš[™ÜÎˆ][Kœ™\Ù[][Û‘]KœÝš[™ÜË\Ü^SÜ™\Žˆ][Kœ™\Ù[][Û‘]K›˜[YQ\Ü^SÜ™\ŠBˆYÛ›Ü™Q›ÜØ\™YXÛÛˆHYBˆBˆBˆˆYˆ]ÈHY\•^Ø\ÙH]˜Ú[›™[
+Ú[›™[
+HH][TY\‹˜Ú]XZ[”Y\‹Ú[›™[š\Ñ›Ü[SÜ“[Û›Ñ›Ü[K™XY[™›ÈOHš[ÂˆYˆ]›Ü[UÜXÑ]HÂˆ›Ü[U™XYH
+›Ü[UÜXÑ]KšY›Ü[UÜXÑ]K]K›Ü[UÜXÑ]KšXÛÛ‘š[RY›Ü[UÜXÑ]KšXÛÛÛÛÜ‹›Ü[UÜXÑ]K™XYY\‹›Ü[UÜXÑ]Kš\Õ[œ™XY
+BˆH[ÙHYˆ]™XY[™›ÈÂˆ›Ü[U™XYH
+™XY[™›ËšY™XY[™›Ëš[™›Ë]K™XY[™›Ëš[™›ËšXÛÛ‹™XY[™›Ëš[™›ËšXÛÛÛÛÜ‹š[˜[ÙJBˆBˆBˆYˆ]›Ü[UÜXÑ]K›Ü[U™XYOHš[Ø\ÙH]\Ù\Š\Ù\ŠHH][TY\‹˜Ú]XZ[”Y\‹]›Ý[™›ÈH\Ù\‹˜›Ý[™›Ë›Ý[™›Ë™›YÜË˜ÛÛZ[œÊš\Ñ›Ü[JHÂˆ›Ü[U™XYH
+›Ü[UÜXÑ]KšY›Ü[UÜXÑ]K]K›Ü[UÜXÑ]KšXÛÛ‘š[RY›Ü[UÜXÑ]KšXÛÛÛÛÜ‹›Ü[UÜXÑ]K™XYY\‹›Ü[UÜXÑ]Kš\Õ[œ™XY
+BˆBˆˆ]Y\ÜØYÙU^ˆÝš[™Âˆ]›ÛYšXÚ^™]šY]Îˆ”Ð]šX]YÝš[™ÏÂˆYˆ]Ý\œ™[Ú]\Ý^HÝ\œ™[Ú]\Ý^Ý\œ™[Ú]\Ý^ŒOH^ÂˆY\ÜØYÙU^HÝ\œ™[Ú]\Ý^ŒBˆÚ]\Ý^HÝ\œ™[Ú]\Ý^ˆH[ÙHÂˆYˆ]ÜÚ[\œÈHÜÚ[\œË\ÜÚ[\œËš\Ñ[\HÂˆY\ÜØYÙU^H^ˆH[ÙHYˆ]Ý\ÝÛQ[[ÚšT˜[™Ù\ÈHÝ\ÝÛQ[[ÚšT˜[™Ù\ËXÝ\ÝÛQ[[ÚšT˜[™Ù\Ëš\Ñ[\HÂˆY\ÜØYÙU^H^ˆH[ÙHÂˆY\ÜØYÙU^H›Û[™Pœ™XZÜÊ^
+BˆBˆÚ]\Ý^H
+^Y\ÜØYÙU^
+BˆBˆYˆ]šXÚ^™]šY]ÈÂˆ]›ÛY™]šY]ÈH›Û[™Pœ™XZÜÊšXÚ^™]šY]ÊBˆ›ÛYšXÚ^™]šY]ÈH›ÛY™]šY]ËœÝš[™ÈOHY\ÜØYÙU^È›ÛY™]šY]Èˆš[ˆH[ÙHÂˆ›ÛYšXÚ^™]šY]ÈHš[ˆBˆˆYˆ[›[™P]]Ü”™Yš^OHš[]YYXQ˜YÛÛ[\HÂˆ\Ñ˜YHYBˆ]]Ü]šX]YÝš[™ÈH”Ð]šX]YÝš[™ÊÝš[™Îˆ][Kœ™\Ù[][Û‘]KœÝš[™ÜË‘X[ÙÓ\ÝÑ˜Y›Ûˆ^›Û^ÛÛÜŽˆ[YK›Y\ÜØYÙQ˜Y^ÛÛÜŠBˆˆÝÚ]ÚYYXQ˜YÛÛ[\HÂˆØ\ÙH˜]Y[Î‚ˆ]šX]Y^H”Ð]šX]YÝš[™ÊÝš[™Îˆ][Kœ™\Ù[][Û‘]KœÝš[™ÜË“Y\ÜØYÙWÐ]Y[Ë›Ûˆ^›Û^ÛÛÜŽˆ[YK›Y\ÜØYÙU^ÛÛÜŠBˆØ\ÙHšY[Î‚ˆ]šX]Y^H”Ð]šX]YÝš[™ÊÝš[™Îˆ][Kœ™\Ù[][Û‘]KœÝš[™ÜË“Y\ÜØYÙWÕšY[ÓY\ÜØYÙK›Ûˆ^›Û^ÛÛÜŽˆ[YK›Y\ÜØYÙU^ÛÛÜŠBˆBˆH[ÙHYˆ[›[™P]]Ü”™Yš^OHš[]˜YÝ]HH˜YÝ]HÂˆ\Ñ˜YHYBˆ]˜Y^HÝš[™ÕÚ]\YY[]Y\Ê˜YÝ]K^[]Y\Îˆ˜YÝ]K™[]Y\Ë˜\ÙPÛÛÜŽˆ[YK›Y\ÜØYÙU^ÛÛÜ‹[šÐÛÛÜŽˆ[YK›Y\ÜØYÙU^ÛÛÜ‹˜\ÙQ›Ûˆ^›Û[šÑ›Ûˆ^›Û›Û›Ûˆ^›Û][XÑ›Ûˆ^›Û›Û][XÑ›Ûˆ^›Ûš^Y›Ûˆ^›Û›ØÚÔ][ÝQ›Ûˆ^›ÛY\ÜØYÙNˆš[
+BˆˆYˆZ][UYÜËš\Ñ[\HÂˆ][\]šX]Y^H›Û[™Pœ™XZÜÊ˜Y^
+Bˆ]]šX]Y^Ú]˜YH”Ó]]X›P]šX]YÝš[™Ê
+Bˆ]šX]Y^Ú]˜Y˜\[™
+”Ð]šX]YÝš[™ÊÝš[™Îˆ][Kœ™\Ù[][Û‘]KœÝš[™ÜË‘X[ÙÓ\ÝÑ˜Y
+ÈŽˆ‹›Ûˆ^›Û^ÛÛÜŽˆ[YK›Y\ÜØYÙQ˜Y^ÛÛÜŠJBˆ]šX]Y^Ú]˜Y˜\[™
+[\]šX]Y^
+Bˆ]šX]Y^H]šX]Y^Ú]˜YˆH[ÙHÂˆ]]Ü]šX]YÝš[™ÈH”Ð]šX]YÝš[™ÊÝš[™Îˆ][Kœ™\Ù[][Û‘]KœÝš[™ÜË‘X[ÙÓ\ÝÑ˜Y›Ûˆ^›Û^ÛÛÜŽˆ[YK›Y\ÜØYÙQ˜Y^ÛÛÜŠBˆˆ]šX]Y^H›Û[™Pœ™XZÜÊ˜Y^
+BˆBˆH[ÙHYˆ]Y\ÜØYÙHHY\ÜØYÙ\Ë›\ÝÂˆ˜\ˆÛÛ\ÜÙYÝš[™Îˆ”Ó]]X›P]šX]YÝš[™ÂˆˆYˆ]Y\•^HY\•^Âˆ]]Ü]šX]YÝš[™ÈH”Ð]šX]YÝš[™ÊÝš[™ÎˆY\•^›Ûˆ^›Û^ÛÛÜŽˆ[YK˜]]Ü“˜[YPÛÛÜŠBˆBˆˆ˜\ˆ[]Y\ÈH[]Y\Ë™š[\ˆÈ[]H[‚ˆÝÚ]Ú[]K\HÂˆØ\ÙH”ÜÚ[\‹Ý\ÝÛQ[[ÚšK‘›Ü›X]Y]N‚ˆ™]\›ˆYBˆØ\ÙH”ÝšZÙ]›ÝYÚ•[™\›[™K’][XË›Û‚ˆ™]\›ˆYBˆY˜][‚ˆ™]\›ˆ˜[ÙBˆBˆBˆYˆ]ÈHY\ÜØYÙK›YYXK™š\œÝ
+Ú\™NˆÈ	\È[YÜ˜[SYYXTÛJHÂˆ[]Y\ÈH×BˆBˆˆYˆY\ÜØYÙKšYœY\’Yš\Õ[YÜ˜[S›ÝYšXØ][ÛœÈY\ÜØYÙKšYœY\’Yš\Õ™\šYšXØ][ÛÛÙ\ÈÂˆ]™YÙ^ˆ”Ô™YÝ[\‘^™\ÜÚ[ÛÂˆYˆY\ÜØYÙKšYœY\’Yš\Õ[YÜ˜[S›ÝYšXØ][ÛœÈÂˆ™YÙ^H[YÜ˜[PÛÙT™YÙ^ˆH[ÙHÂˆ™YÙ^HÙÚ[ÛÙT™YÙ^ˆBˆYˆ]ØXÚYHÝ\œ™[Ý\ÝÛU^[]Y\ËØXÚY›X]Ú\Ê^ˆY\ÜØYÙU^
+HÂˆÝ\ÝÛU^[]Y\ÈHØXÚYˆ6×n9¶‰žËkºwµçY›YÜË˜ÛÛZ[œÊš\Ó[Û›Ù›Ü[JHÂˆYˆ›Ü[U™XYOHš[]Ü›Ü[UÜXÒ][\Ëš\Ñ[\HÂˆYˆ]›Ü[U™XYÂˆ\Ñš\œÝ›Ü[U™XYÙ[XÝX›HH˜[ÙBˆ›Ü[U™XYË˜\[™
+
+Yˆ›Ü[U™XYšY™XYY\Žˆ›Ü[U™XY™XYY\‹]Nˆ”Ð]šX]YÝš[™ÊÝš[™Îˆ›Ü[U™XY™XYY\Ë˜ÛÛ\XÝ\Ü^U]HÏÈˆ‹›Ûˆ^›Û^ÛÛÜŽˆ›Ü[U™XYš\Õ[œ™XY\ÔÙX\˜Ú[™ÈÈ[YK˜]]Ü“˜[YPÛÛÜˆˆ[YK›Y\ÜØYÙU^ÛÛÜŠKXÛÛ’Yˆš[XÛÛÛÛÜŽˆš[
+JBˆBˆ›ÜˆÜXÒ][H[ˆÜ›Ü[UÜXÒ][\ÈÂˆYˆ›Ü[U™XYËšYOHÜXÒ][KšYÂˆ›Ü[U™XYË˜\[™
+
+YˆÜXÒ][KšY™XYY\ŽˆÜXÒ][K™XYY\‹]Nˆ”Ð]šX]YÝš[™ÊÝš[™ÎˆÜXÒ][K™XYY\Ë˜ÛÛ\XÝ\Ü^U]HÏÈˆ‹›Ûˆ^›Û^ÛÛÜŽˆÜXÒ][Kš\Õ[œ™XY\ÔÙX\˜Ú[™ÈÈ[YK˜]]Ü“˜[YPÛÛÜˆˆ[YK›Y\ÜØYÙU^ÛÛÜŠKXÛÛ’Yˆš[XÛÛÛÛÜŽˆš[
+JBˆBˆBˆˆYˆ]Y™™XÝ]™P]]Ü•]K]^]šX]YÝš[™Õ˜[YHH^]šX]YÝš[™ÈÂˆ]]]X›U^]šX]YÝš[™ÈH”Ó]]X›P]šX]YÝš[™Ê
+Bˆ]]X›U^]šX]YÝš[™Ë˜\[™
+”Ð]šX]YÝš[™ÊÝš[™ÎˆY™™XÝ]™P]]Ü•]KœÝš[™È
+ÈŽˆ‹›Ûˆ^›Û^ÛÛÜŽˆ[YK˜]]Ü“˜[YPÛÛÜŠJBˆ]]X›U^]šX]YÝš[™Ë˜\[™
+^]šX]YÝš[™Õ˜[YJBˆˆ^]šX]YÝš[™ÈH]]X›U^]šX]YÝš[™ÂˆBˆˆY™™XÝ]™P]]Ü•]HHš[ˆBˆH[ÙHYˆ›Ü[U™XYOHš[]Ü›Ü[UÜXÒ][\Ëš\Ñ[\HÂˆYˆ]›Ü[U™XYH›Ü[U™XYÂˆYˆØ\ÙH]œY\ŠY\ŠHH][K˜ÛÛ[Ø\ÙH\Ù\ˆHY\‹œY\‹˜Ú]XZ[”Y\ˆÂˆ\Ñš\œÝ›Ü[U™XYÙ[XÝX›HH˜[ÙBˆH[ÙHÂˆ\Ñš\œÝ›Ü[U™XYÙ[XÝX›HH›Ü[U™XYš\Õ[œ™XYˆBˆˆ›Ü[U™XYË˜\[™
+
+Yˆ›Ü[U™XYšY™XYY\Žˆ›Ü[U™XY™XYY\‹]Nˆ”Ð]šX]YÝš[™ÊÝš[™Îˆ›Ü[U™XY]K›Ûˆ^›Û^ÛÛÜŽˆ›Ü[U™XYš\Õ[œ™XY\ÔÙX\˜Ú[™ÈÈ[YK˜]]Ü“˜[YPÛÛÜˆˆ[YK›Y\ÜØYÙU^ÛÛÜŠKXÛÛ’Yˆ›Ü[U™XYšXÛÛ’YXÛÛÛÛÜŽˆ›Ü[U™XYšXÛÛÛÛÜŠJBˆBˆ›ÜˆÜXÒ][H[ˆÜ›Ü[UÜXÒ][\ÈÂˆYˆØ\ÙH]œY\ŠY\ŠHH][K˜ÛÛ[Y\‹œY\‹œY\’YšY—Ú[\›˜[Ù][˜[YJ
+HOHÜXÒ][KšYÂˆˆH[ÙHYˆ›Ü[U™XYËšYOHÜXÒ][KšYÂˆ›Ü[U™XYË˜\[™
+
+YˆÜXÒ][KšY™XYY\ŽˆÜXÒ][K™XYY\‹]Nˆ”Ð]šX]YÝš[™ÊÝš[™ÎˆÜXÒ][K]K›Ûˆ^›Û^ÛÛÜŽˆÜXÒ][Kš\Õ[œ™XY\ÔÙX\˜Ú[™ÈÈ[YK˜]]Ü“˜[YPÛÛÜˆˆ[YK›Y\ÜØYÙU^ÛÛÜŠKXÛÛ’YˆÜXÒ][KšXÛÛ‘š[RYXÛÛÛÛÜŽˆÜXÒ][KšXÛÛÛÛÜŠJBˆBˆBˆˆYˆ]Y™™XÝ]™P]]Ü•]K]^]šX]YÝš[™Õ˜[YHH^]šX]YÝš[™ÈÂˆ]]]X›U^]šX]YÝš[™ÈH”Ó]]X›P]šX]YÝš[™Ê
+Bˆ]]X›U^]šX]YÝš[™Ë˜\[™
+”Ð]šX]YÝš[™ÊÝš[™ÎˆY™™XÝ]™P]]Ü•]KœÝš[™È
+ÈŽˆ‹›Ûˆ^›Û^ÛÛÜŽˆ[YK˜]]Ü“˜[YPÛÛÜŠJBˆ]]X›U^]šX]YÝš[™Ë˜\[™
+^]šX]YÝš[™Õ˜[YJBˆˆ^]šX]YÝš[™ÈH]]X›U^]šX]YÝš[™ÂˆBˆˆY™™XÝ]™P]]Ü•]HHš[ˆBˆˆYˆ]]Ü’\ÐÝ\œ™[Ú]ÂˆY™™XÝ]™P]]Ü•]HHš[ˆBˆˆYˆØ\ÙH]œY\ŠY\‘]JHH][K˜ÛÛ[Ø\ÙH˜ÛÛ[][š]HHY\‘]KœY\‹œY\‹]Y\ÜØYÙHHY\ÜØYÙ\Ë›\Ý]ÛÝ\˜ÙTY\ˆHÛÛ[][š]TÛÝ\˜ÙTY\ŠY\‘]NˆY\‘]KY\ÜØYÙNˆY\ÜØYÙJHÂˆ]ÛÝ\˜ÙU]HHÛÝ\˜ÙTY\‹™\Ü^U]JÝš[™ÜÎˆ][Kœ™\Ù[][Û‘]KœÝš[™ÜË\Ü^SÜ™\Žˆ][Kœ™\Ù[][Û‘]K›˜[YQ\Ü^SÜ™\ŠBˆYˆ\ÛÝ\˜ÙU]Kš\Ñ[\HÂˆ›Ü[U™XYË˜\[™
+
+YˆÛÝ\˜ÙTY\‹šYÒ[
+
+K™XYY\Žˆš[]Nˆ”Ð]šX]YÝš[™ÊÝš[™ÎˆÛÝ\˜ÙU]K›Ûˆ^›Û^ÛÛÜŽˆ[YK]PÛÛÜŠKXÛÛ’Yˆš[XÛÛÛÛÜŽˆš[
+JBˆ]]Ü•ÜXÐ\œ›ÝÐÛÛÜˆH[YK›Y\ÜØYÙU^ÛÛÜ‚ˆBˆB‚ˆ]
+]]Ü“^[Ý]]]Ü\JHH]]Ü“^[Ý]
+][K˜ÛÛ^˜]ÐÛÛ[ÚYH˜YÙTÚ^™K][Kœ™\Ù[][Û‘]K[YKY™™XÝ]™P]]Ü•]K›Ü[U™XYË]]Ü•ÜXÐ\œ›ÝÐÛÛÜŠBˆˆ˜\ˆ^›ÝÛTšYÚÝ]Ý]ˆÑÑ›Ø]HŒˆˆ]˜Z[[™Õ^˜YÙR[œÙ]ÈHRQYÙR[œÙ]ÊÜˆ‹ŒHRTØÜ™Y[”^[YˆKŒ›ÝÛNˆ‹ŒHRTØÜ™Y[”^[šYÚˆKŒ
+Bˆ˜\ˆ˜Z[[™Õ^˜YÙS^[Ý][™\Nˆ
+^›ÙS^[Ý]
+
+HOˆ^›ÙJOÂˆYˆØ\ÙH]œY\ŠY\‘]JHH][K˜ÛÛ[]Ý\ÝÛSY\ÜØYÙS\Ý]HHY\‘]K˜Ý\ÝÛSY\ÜØYÙS\Ý]KÝ\ÝÛSY\ÜØYÙS\Ý]K˜ÛÛ[X[™™Yš^OHš[]Y\ÜØYÙPÛÝ[HÝ\ÝÛSY\ÜØYÙS\Ý]K›Y\ÜØYÙPÛÝ[Y\ÜØYÙPÛÝ[ˆHÂˆ]˜Z[[™Õ^ˆÝš[™Âˆ˜Z[[™Õ^H][Kœ™\Ù[][Û‘]KœÝš[™ÜËÚ]\ÝÒ][S[Ü™SY\ÜØYÙ\Ñ›Ü›X]
+[ÌŠY\ÜØYÙPÛÝ[HJJBˆ]˜Z[[™Ð]šX]Y^H”Ð]šX]YÝš[™ÊÝš[™Îˆ˜Z[[™Õ^›Ûˆ›Ûœ™YÝ[\ŠL‹Œ
+K^ÛÛÜŽˆ[YK›Y\ÜØYÙU^ÛÛÜŠBˆ]
+^[Ý]\JHHXZÙU˜Z[[™Õ^˜YÙS^[Ý]
+^›ÙS^[Ý]\™Ý[Y[Ê]šX]YÝš[™Îˆ˜Z[[™Ð]šX]Y^˜XÚÙÜ›Ý[™ÛÛÜŽˆš[X^[][S[X™\“Ù“[™\ÎˆK[˜Ø][Û•\Nˆ™[™ÛÛœÝ˜Z[™YÚ^™NˆÑÔÚ^™JÚYˆ˜]ÐÛÛ[ÚYZYÚˆÑÑ›Ø]™Ü™X]\Ýš[š]SXYÛš]YJK[YÛ›Y[ˆ›˜]\˜[Ý]Ý]ˆš[[œÙ]ÎˆRQYÙR[œÙ]Ê
+JJBˆ˜Z[[™Õ^˜YÙS^[Ý][™\HH
+^[Ý]\JBˆ^›ÝÛTšYÚÝ]Ý]
+ÏH^[Ý]œÚ^™KÚY
+ÈŒ
+È˜Z[[™Õ^˜YÙR[œÙ]Ë›Y
+È˜Z[[™Õ^˜YÙR[œÙ]ËœšYÚˆBˆˆ˜\ˆ^Ý]Ý]ˆ^›ÙPÝ]Ý]ÂˆYˆ]^YÝ]Ý]š\Ö™\›È]^›ÝÛTšYÚÝ]Ý]š\Ö™\›ÈÂˆ^Ý]Ý]H^›ÙPÝ]Ý]
+ÜYˆ^YÝ]Ý]š\Ö™\›ÈÈš[ˆÑÔÚ^™JÚYˆ^YÝ]Ý]ZYÚˆLŒ
+KÜšYÚˆš[›ÝÛTšYÚˆ^›ÝÛTšYÚÝ]Ý]š\Ö™\›ÈÈš[ˆÑÔÚ^™JÚYˆ^›ÝÛTšYÚÝ]Ý]ZYÚˆLŒ
+JBˆBˆˆ˜\ˆ^X^ÚYH˜]ÐÛÛ[ÚYH˜YÙTÚ^™Bˆˆ˜\ˆ^\œ›ÝÒ[XYÙNˆRR[XYÙOÂˆYˆ\Ñš\œÝ›Ü[U™XYÙ[XÝX›HÂˆ^\œ›ÝÒ[XYÙHH™\Ù[][Û”™\ÛÝ\˜Ù\Ò][S\Ý™\ØÛÜÝ\™P\œ›ÝÒ[XYÙJ][Kœ™\Ù[][Û‘]K[YJBˆ^X^ÚYOHNŒˆBˆˆ]^[™TÜXÚ[™ÎˆÑÑ›Ø]HZ[ŠŒ‹][Kœ™\Ù[][Û‘]K™›ÛÚ^™Kš][S\Ý˜\ÙQ›ÛÚ^™H
+ˆŒˆÈMËŒ
+Bˆ]
+^^[Ý]^\JHH^^[Ý]
+^›ÙS^[Ý]\™Ý[Y[Êˆ]šX]YÝš[™Îˆ^]šX]YÝš[™Ëˆ˜XÚÙÜ›Ý[™ÛÛÜŽˆš[ˆX^[][S[X™\“Ù“[™\Îˆ
+]]Ü]šX]YÝš[™ÈOHš[	‰ˆ][UYÜËš\Ñ[\H	‰ˆ›Ü[U™XYOHš[	‰ˆÜ›Ü[UÜXÒ][\Ëš\Ñ[\JHÈˆˆKˆ[˜Ø][Û•\Nˆ™[™ˆÛÛœÝ˜Z[™YÚ^™NˆÑÔÚ^™JÚYˆ^X^ÚYZYÚˆ™Ü™X]\Ýš[š]SXYÛš]YJKˆ[YÛ›Y[ˆ›˜]\˜[ˆ[™TÜXÚ[™Îˆ^[™TÜXÚ[™ËˆÝ]Ý]ˆ^Ý]Ý]ˆ[œÙ]ÎˆRQYÙR[œÙ]ÊÜˆ‹ŒYˆKŒ›ÝÛNˆ‹ŒšYÚˆKŒ
+Bˆ
+JBˆˆ]X^]S[™\Îˆ[ˆÝÚ]Ú][Kš[™^ÂˆØ\ÙH™›Ü[N‚ˆX^]S[™\ÈH‚ˆØ\ÙH˜Ú]\Ý‚ˆX^]S[™\ÈHBˆBˆˆ˜\ˆ]SYÝ]Ý]ˆÑÑ›Ø]HŒˆYˆ][Kš[\˜XÝ[Û‹š\Ò[›[™S[ÙHÂˆ]SYÝ]Ý]HŒ‹ŒˆBˆˆYˆ]]P]šX]YÝš[™Õ˜[YHH]P]šX]YÝš[™Ë]P]šX]YÝš[™Õ˜[YK›[™ÝOHÂˆ]P]šX]YÝš[™ÈH”Ð]šX]YÝš[™ÊÝš[™Îˆˆ‹›Ûˆ]Q›Û^ÛÛÜŽˆ[YK]PÛÛÜŠBˆBˆˆ˜\ˆ]T™XÝÚYH˜]ÐÛÛ[ÚYH]S^[Ý]œÚ^™KÚYHLŒHÝ]\ÕÚYH]RXÛÛœÕÚYˆ˜\ˆ]PÝ]Ý]ˆ^›ÙPÝ]Ý]ÂˆYˆ]]SYÝ]Ý]š\Ö™\›ÈÂˆ]PÝ]Ý]H^›ÙPÝ]Ý]
+ÜYˆÑÔÚ^™JÚYˆ]SYÝ]Ý]ZYÚˆLŒ
+KÜšYÚˆš[›ÝÛTšYÚˆš[
+BˆBˆˆ˜\ˆ]P˜YÙS^[Ý][™\Nˆ
+^›ÙS^[Ý]
+
+HOˆ^›ÙJOÂˆYˆ]]P˜YÙU^Âˆ]]P˜YÙS^[Ý][™\U˜[YHH]P˜YÙS^[Ý]
+^›ÙS^[Ý]\™Ý[Y[Ê]šX]YÝš[™Îˆ”Ð]šX]YÝš[™ÊÝš[™Îˆ]P˜YÙU^›Ûˆ›ÛœÙ[ZX›Û
+LKŒ
+K^ÛÛÜŽˆ[YK]PÛÛÜ‹Ú]][\YY[J
+JK˜XÚÙÜ›Ý[™ÛÛÜŽˆš[X^[][S[X™\“Ù“[™\ÎˆK[˜Ø][Û•\Nˆ™[™ÛÛœÝ˜Z[™YÚ^™NˆÑÔÚ^™JÚYˆ]T™XÝÚYZYÚˆÑÑ›Ø]™Ü™X]\Ýš[š]SXYÛš]YJK[YÛ›Y[ˆ›˜]\˜[Ý]Ý]ˆš[[œÙ]ÎˆRQYÙR[œÙ]Ê
+JJBˆ]P˜YÙS^[Ý][™\HH]P˜YÙS^[Ý][™\U˜[YBˆ]T™XÝÚYHX^
+LŒ]T™XÝÚYH]P˜YÙS^[Ý][™\U˜[YKŒœÚ^™KÚYHŒ
+BˆBˆˆ]
+]S^[Ý]]P\JHH]S^[Ý]
+^›ÙS^[Ý]\™Ý[Y[Ê]šX]YÝš[™Îˆ]P]šX]YÝš[™Ë˜XÚÙÜ›Ý[™ÛÛÜŽˆš[X^[][S[X™\“Ù“[™\ÎˆX^]S[™\Ë[˜Ø][Û•\Nˆ™[™ÛÛœÝ˜Z[™YÚ^™NˆÑÔÚ^™JÚYˆ]T™XÝÚYZYÚˆÑÑ›Ø]™Ü™X]\Ýš[š]SXYÛš]YJK[YÛ›Y[ˆ›˜]\˜[Ý]Ý]ˆ]PÝ]Ý][œÙ]ÎˆRQYÙR[œÙ]Ê
+JJBˆˆ˜\ˆ[œ]XÝ]š]Y\ÔÚ^™NˆÑÔÚ^™OÂˆ˜\ˆ[œ]XÝ]š]Y\Ð\Nˆ
+
+
+HOˆ›ÚY
+OÂˆ˜\ˆÚ]Y\’Yˆ[™Ú[™TY\‹’YÂˆYˆØ\ÙH]˜Ú]\Ý
+[™^
+HH][Kš[™^ÂˆÚ]Y\’YH[™^›Y\ÜØYÙR[™^šYœY\’YˆH[ÙHYˆØ\ÙH]™›Ü[JY\’Y
+HH][K˜Ú]\ÝØØ][ÛˆÂˆÚ]Y\’YHY\’YˆBˆYˆ][œ]XÝ]š]Y\ÈH[œ]XÝ]š]Y\ËZ[œ]XÝ]š]Y\Ëš\Ñ[\K]Ú]Y\’YÂˆ]
+Ú^™K\JHH[œ]XÝ]š]Y\Ó^[Ý]
+ÑÔÚ^™JÚYˆ˜]ÐÛÛ[ÚYH˜YÙTÚ^™KZYÚˆŒ
+K][Kœ™\Ù[][Û‘]K][Kœ™\Ù[][Û‘]K[YK˜Ú]\Ý›Y\ÜØYÙU^ÛÛÜ‹Ú]Y\’Y[œ]XÝ]š]Y\ÊBˆ[œ]XÝ]š]Y\ÔÚ^™HHÚ^™Bˆ[œ]XÝ]š]Y\Ð\HH\BˆH[ÙHÂˆ]
+Ú^™K\JHH[œ]XÝ]š]Y\Ó^[Ý]
+ÑÔÚ^™JÚYˆ˜]ÐÛÛ[ÚYH˜YÙTÚ^™KZYÚˆŒ
+K][Kœ™\Ù[][Û‘]K][Kœ™\Ù[][Û‘]K[YK˜Ú]\Ý›Y\ÜØYÙU^ÛÛÜ‹š[×JBˆ[œ]XÝ]š]Y\ÔÚ^™HHÚ^™Bˆ[œ]XÝ]š]Y\Ð\HH\BˆBˆˆ˜\ˆÛ›[™HH˜[ÙBˆ˜\ˆ[š[X]SÛ›[™HH˜[ÙBˆ˜\ˆÛ›[™R\Õ›ÚXÙPÚ]H˜[ÙBˆˆ˜\ˆ\Ô[›™YH˜[ÙBˆYˆØ\ÙH]˜Ú]\Ý
+[™^
+HH][Kš[™^Âˆ\Ô[›™YH[™^œ[›š[™Ò[™^OHš[ˆH[ÙHYˆØ\ÙH]™›Ü[J[›™Y[™^ËËËÊHH][Kš[™^ÂˆYˆØ\ÙHš[™^H[›™Y[™^Âˆ\Ô[›™YHYBˆBˆB‚ˆ˜\ˆY\”™]™X[Ü[ÛœÎˆÒ][S\Ý™]™X[Ü[Û—Bˆ˜\ˆY\“Y™]™X[Ü[ÛœÎˆÒ][S\Ý™]™X[Ü[Û—BˆÝÚ]Ú][K˜ÛÛ[ÂˆØ\ÙH›ØY[™Î‚ˆY\”™]™X[Ü[ÛœÈH×BˆY\“Y™]™X[Ü[ÛœÈH×BˆØ\ÙH]œY\ŠY\‘]JN‚ˆ]™[™\™YY\ˆHY\‘]KœY\‚ˆ]™\Ù[˜ÙHHY\‘]Kœ™\Ù[˜ÙBˆ]\Ü^P\ÓY\ÜØYÙHHY\‘]K™\Ü^P\ÓY\ÜØYÙBˆˆYˆY\Ü^P\ÓY\ÜØYÙHÂˆYˆØ\ÙH]\Ù\ŠY\ŠHH™[™\™YY\‹˜Ú]XZ[”Y\‹]™\Ù[˜ÙHH™\Ù[˜ÙKZ\ÔÙ\šXÙTY\ŠY\ŠH	‰ˆ\Y\‹™›YÜË˜ÛÛZ[œÊš\ÔÝ\Ü
+H	‰ˆY\‹šYOH][K˜ÛÛ^˜XØÛÝ[œY\’YÂˆ]\]Y™\Ù[˜ÙHH[™Ú[™TY\‹”™\Ù[˜ÙJÝ]\Îˆ™\Ù[˜ÙKœÝ]\Ë\ÝXÝ]š]Nˆ
+Bˆ][Y\Ý[\H[ÌŠÑXœÛÛ]U[YQÙ]Ý\œ™[
+
+H
+È”Õ[YR[\˜[Ú[˜ÙLNMÌ
+Bˆ]™[]]™TÝ]\ÈH™[]]™U\Ù\”™\Ù[˜ÙTÝ]\Ê\]Y™\Ù[˜ÙK™[]]™UÎˆ[Y\Ý[\
+BˆYˆØ\ÙH›Û›[™HH™[]]™TÝ]\ÈÂˆÛ›[™HHYBˆBˆ[š[X]SÛ›[™HHYBˆH[ÙHYˆØ\ÙH]˜Ú[›™[
+Ú[›™[
+HH™[™\™YY\‹œY\‹Ø\ÙH˜Ú]\ÝH][Kš[™^ÂˆÛ›[™R\Õ›ÚXÙPÚ]HYBˆYˆÚ[›™[™›YÜË˜ÛÛZ[œÊš\ÐXÝ]™U›ÚXÙPÚ]
+H	‰ˆ][Kš[\˜XÝ[Û‹œÙX\˜Ú^YÚYÚÝ]HOHš[ÂˆÛ›[™HHYBˆBˆ[š[X]SÛ›[™HHYBˆH[ÙHYˆØ\ÙH]›YØXÞQÜ›Ý\
+Ü›Ý\
+HH™[™\™YY\‹œY\‹Ø\ÙH˜Ú]\ÝH][Kš[™^ÂˆÛ›[™R\Õ›ÚXÙPÚ]HYBˆYˆÜ›Ý\™›YÜË˜ÛÛZ[œÊš\ÐXÝ]™U›ÚXÙPÚ]
+H	‰ˆ][Kš[\˜XÝ[Û‹œÙX\˜Ú^YÚYÚÝ]HOHš[ÂˆÛ›[™HHYBˆBˆ[š[X]SÛ›[™HHYBˆBˆBˆˆYˆ][˜X›YÛÛ^XÝ[ÛœÈH][K™[˜X›YÛÛ^XÝ[ÛœÈÂˆÝÚ]Ú[˜X›YÛÛ^XÝ[ÛœÈÂˆØ\ÙH˜]]Î‚ˆYˆØ\ÙH™›Ü[HH][K˜Ú]\ÝØØ][ÛˆÂˆYˆØ\ÙH]˜Ú]
+][TY\ŠHHÛÛ[Y\‹Ø\ÙH]˜Ú[›™[
+Ú[›™[
+HH][TY\‹œY\ˆÂˆ˜\ˆØ[“Ü[ÛÜÙHH˜[ÙBˆYˆÚ[›™[™›YÜË˜ÛÛZ[œÊš\ÐÜ™X]ÜŠHÂˆØ[“Ü[ÛÜÙHHYBˆH[ÙHYˆÚ[›™[š\Ô\›Z\ÜÚ[ÛŠ›X[˜YÙUÜXÜÊHÂˆØ[“Ü[ÛÜÙHHYBˆH[ÙHYˆ]™XY[™›ÈH™XY[™›Ë™XY[™›Ëš\ÓÝÛ™YžSYHÂˆØ[“Ü[ÛÜÙHHYBˆBˆ]Ø[‘[]HHÚ[›™[š\Ô\›Z\ÜÚ[ÛŠ™[]P[Y\ÜØYÙ\ÊBˆ˜\ˆ\ÐÛÜÙYH˜[ÙBˆYˆ]™XY[™›ÈÂˆ\ÐÛÜÙYH™XY[™›Ëš\ÐÛÜÙYˆBˆYˆ]™XY[™›Ë™XY[™›ËšYOHHÂˆY\”™]™X[Ü[ÛœÈH›Ü[QÙ[™\˜[™]™X[Ü[ÛœÊÝš[™ÜÎˆ][Kœ™\Ù[][Û‘]KœÝš[™ÜË[YNˆ][Kœ™\Ù[][Û‘]K[YK\Ó]]Yˆ
+Ý\œ™[]]YXÛÛ’[XYÙHOHš[
+K\ÐÛÜÙYˆ\ÐÛÜÙY\ÑY][™Îˆ][K™Y][™ËØ[“Ü[ÛÜÙNˆØ[“Ü[ÛÜÙKØ[’YNˆÚ[›™[™›YÜË˜ÛÛZ[œÊš\ÐÜ™X]ÜŠHÚ[›™[š\Ô\›Z\ÜÚ[ÛŠ›X[˜YÙUÜXÜÊKY[žQY˜][ˆ™XY[™›Ëš\ÒY[ŠBˆH[ÙHÂˆY\”™]™X[Ü[ÛœÈH›Ü[U™XY™]™X[Ü[ÛœÊÝš[™ÜÎˆ][Kœ™\Ù[][Û‘]KœÝš[™ÜË[YNˆ][Kœ™\Ù[][Û‘]K[YK\Ó]]Yˆ
+Ý\œ™[]]YXÛÛ’[XYÙHOHš[
+K\ÐÛÜÙYˆ\ÐÛÜÙY\ÑY][™Îˆ][K™Y][™ËØ[“Ü[ÛÜÙNˆØ[“Ü[ÛÜÙKØ[‘[]NˆØ[‘[]JBˆBˆY\“Y™]™X[Ü[ÛœÈH×BˆH[ÙHÂˆY\”™]™X[Ü[ÛœÈH×BˆY\“Y™]™X[Ü[ÛœÈH×BˆBˆH[ÙHYˆØ\ÙHœØHH›Û[Ò[™›ÈÂˆY\”™]™X[Ü[ÛœÈHÂˆ][S\Ý™]™X[Ü[ÛŠÙ^Nˆ™]™X[Ü[Û’Ù^KšYTØKœ˜]Õ˜[YK]Nˆ][Kœ™\Ù[][Û‘]KœÝš[™ÜËÚ]\ÝÒYPXÝ[Û‹XÛÛŽˆ[]RXÛÛ‹ÛÛÜŽˆ][Kœ™\Ù[][Û‘]K[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœËš[˜XÝ]™K™š[ÛÛÜ‹XÛÛÛÛÜŽˆ][Kœ™\Ù[][Û‘]K[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË›™]]˜[K™›Ü™YÜ›Ý[™ÛÛÜ‹^ÛÛÜŽˆ][Kœ™\Ù[][Û‘]K[YK˜Ú]\Ý™]U^ÛÛÜŠBˆBˆY\“Y™]™X[Ü[ÛœÈH×BˆH[ÙHYˆØ\ÙH]œY\ŠY\‘]JHH][K˜ÛÛ[]Ý\ÝÛSY\ÜØYÙS\Ý]HHY\‘]K˜Ý\ÝÛSY\ÜØYÙS\Ý]HÂˆY\“Y™]™X[Ü[ÛœÈH×BˆYˆÝ\ÝÛSY\ÜØYÙS\Ý]K˜ÛÛ[X[™™Yš^OHš[ÂˆY\”™]™X[Ü[ÛœÈHÂˆ][S\Ý™]™X[Ü[ÛŠÙ^Nˆ™]™X[Ü[Û’Ù^K™Y]œ˜]Õ˜[YK]Nˆ][Kœ™\Ù[][Û‘]KœÝš[™ÜËÚ]\ÝÒ][SY[QY]XÛÛŽˆ››Û™KÛÛÜŽˆ][Kœ™\Ù[][Û‘]K[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË›™]]˜[‹™š[ÛÛÜ‹XÛÛÛÛÜŽˆ][Kœ™\Ù[][Û‘]K[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË›™]]˜[‹™›Ü™YÜ›Ý[™ÛÛÜ‹^ÛÛÜŽˆ][Kœ™\Ù[][Û‘]K[YK˜Ú]\Ý™]U^ÛÛÜŠKˆ][S\Ý™]™X[Ü[ÛŠÙ^Nˆ™]™X[Ü[Û’Ù^K™[]Kœ˜]Õ˜[YK]Nˆ][Kœ™\Ù[][Û‘]KœÝš[™ÜËÚ]\ÝÒ][SY[Q[]KXÛÛŽˆ››Û™KÛÛÜŽˆ][Kœ™\Ù[][Û‘]K[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË™\ÝXÝ]™K™š[ÛÛÜ‹XÛÛÛÛÜŽˆ][Kœ™\Ù[][Û‘]K[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË™\ÝXÝ]™K™›Ü™YÜ›Ý[™ÛÛÜ‹^ÛÛÜŽˆ][Kœ™\Ù[][Û‘]K[YK˜Ú]\Ý™]U^ÛÛÜŠBˆBˆH[ÙHÂˆY\”™]™X[Ü[ÛœÈH×BˆBˆH[ÙHYˆ›Û[Ò[™›ÈOHš[ÂˆYˆØ\ÙH]œY\ŠY\‘]JHH][K˜ÛÛ[Ø\ÙH˜ÛÛ[][š]HHY\‘]KœY\‹œY\ˆÂˆY\”™]™X[Ü[ÛœÈHÂˆ][S\Ý™]™X[Ü[ÛŠÙ^Nˆ\Ó]]YÈ™]™X[Ü[Û’Ù^K[›]]Kœ˜]Õ˜[YHˆ™]™X[Ü[Û’Ù^K›]]Kœ˜]Õ˜[YK]Nˆ\Ó]]YÈ][Kœ™\Ù[][Û‘]KœÝš[™ÜËÚ]\ÝÕ[›]]Hˆ][Kœ™\Ù[][Û‘]KœÝš[™ÜËÚ]\ÝÓ]]KXÛÛŽˆ\Ó]]YÈ[›]]RXÛÛˆˆ]]RXÛÛ‹ÛÛÜŽˆ][Kœ™\Ù[][Û‘]K[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË›™]]˜[‹™š[ÛÛÜ‹XÛÛÛÛÜŽˆ][Kœ™\Ù[][Û‘]K[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË›™]]˜[‹™›Ü™YÜ›Ý[™ÛÛÜ‹^ÛÛÜŽˆ][Kœ™\Ù[][Û‘]K[YK˜Ú]\Ý™]U^ÛÛÜŠKˆ][S\Ý™]™X[Ü[ÛŠÙ^Nˆ™]™X[Ü[Û’Ù^K[™Ü›Ý\œ˜]Õ˜[YK]Nˆ][Kœ™\Ù[][Û‘]KœÝš[™ÜËÚ]\ÝÐÛÛ^Õ[™Ü›Ý\XÛÛŽˆ[™Ü›Ý\ÛÛ[][š]RXÛÛ‹ÛÛÜŽˆ][Kœ™\Ù[][Û‘]K[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË™\ÝXÝ]™K™š[ÛÛÜ‹XÛÛÛÛÜŽˆ][Kœ™\Ù[][Û‘]K[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË™\ÝXÝ]™K™›Ü™YÜ›Ý[™ÛÛÜ‹^ÛÛÜŽˆ][Kœ™\Ù[][Û‘]K[YK˜Ú]\Ý™]U^ÛÛÜŠBˆBˆH[ÙHÂˆY\”™]™X[Ü[ÛœÈH™]™X[Ü[ÛœÊÝš[™ÜÎˆ][Kœ™\Ù[][Û‘]KœÝš[™ÜË[YNˆ][Kœ™\Ù[][Û‘]K[YK\Ô[›™Yˆ\Ô[›™Y\Ó]]YˆZ\ÐXØÛÝ[Y\ˆÈ\Ó]]Yˆš[ØØ][ÛŽˆ][K˜Ú]\ÝØØ][Û‹Y\’Yˆ™[™\™YY\‹œY\’YXØÛÝ[Y\’Yˆ][K˜ÛÛ^˜XØÛÝ[œY\’YØ[‘[]NˆYK\ÑY][™Îˆ][K™Y][™Ëš[\‘]Nˆ][K™š[\‘]JBˆBˆYˆØ\ÙH]˜Ú]
+][TY\ŠHHÛÛ[Y\ˆÂˆY\“Y™]™X[Ü[ÛœÈHY™]™X[Ü[ÛœÊÝš[™ÜÎˆ][Kœ™\Ù[][Û‘]KœÝš[™ÜË[YNˆ][Kœ™\Ù[][Û‘]K[YK\Õ[œ™XYˆ[œ™XYÛÝ[[œ™XY\ÑY][™Îˆ][K™Y][™Ë\Ô[›™Yˆ\Ô[›™Y\ÔØ]™YY\ÜØYÙ\Îˆ][TY\‹œY\’YOH][K˜ÛÛ^˜XØÛÝ[œY\’YØØ][ÛŽˆ][K˜Ú]\ÝØØ][Û‹Y\Žˆ][TY\‹œY\œÖÚ][TY\‹œY\’YHKš[\‘]Nˆ][K™š[\‘]JBˆH[ÙHÂˆY\“Y™]™X[Ü[ÛœÈH×BˆBˆH[ÙHÂˆY\”™]™X[Ü[ÛœÈH×BˆY\“Y™]™X[Ü[ÛœÈH×BˆBˆØ\ÙH]˜Ý\ÝÛJXÝ[ÛœÊN‚ˆY\”™]™X[Ü[ÛœÈH×BˆY\“Y™]™X[Ü[ÛœÈH×B‚ˆ]\ÐÛÛ[][š]TY\Žˆ›ÛÛˆYˆØ\ÙH˜ÛÛ[][š]HHY\‘]KœY\‹œY\ˆÂˆ\ÐÛÛ[][š]TY\ˆHYBˆH[ÙHÂˆ\ÐÛÛ[][š]TY\ˆH˜[ÙBˆB‚ˆYˆXÝ[ÛœË˜ÛÛZ[œÊÙÙÛU[œ™XY
+H	‰ˆZ\ÐÛÛ[][š]TY\ˆÂˆYˆ[œ™XYÛÝ[[œ™XYÂˆY\“Y™]™X[Ü[ÛœË˜\[™
+][S\Ý™]™X[Ü[ÛŠÙ^Nˆ™]™X[Ü[Û’Ù^KÙÙÛSX\šÙY[œ™XYœ˜]Õ˜[YK]Nˆ][Kœ™\Ù[][Û‘]KœÝš[™ÜË‘X[ÙÓ\ÝÔ™XYXÛÛŽˆ™XYXÛÛ‹ÛÛÜŽˆ][Kœ™\Ù[][Û‘]K[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœËš[˜XÝ]™K™š[ÛÛÜ‹XÛÛÛÛÜŽˆ][Kœ™\Ù[][Û‘]K[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË›™]]˜[K™›Ü™YÜ›Ý[™ÛÛÜ‹^ÛÛÜŽˆ][Kœ™\Ù[][Û‘]K[YK˜Ú]\Ý™]U^ÛÛÜŠJBˆH[ÙHÂˆY\“Y™]™X[Ü[ÛœË˜\[™
+][S\Ý™]™X[Ü[ÛŠÙ^Nˆ™]™X[Ü[Û’Ù^KÙÙÛSX\šÙY[œ™XYœ˜]Õ˜[YK]Nˆ][Kœ™\Ù[][Û‘]KœÝš[™ÜË‘X[ÙÓ\ÝÕ[œ™XYXÛÛŽˆ[œ™XYXÛÛ‹ÛÛÜŽˆ][Kœ™\Ù[][Û‘]K[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË˜XØÙ[™š[ÛÛÜ‹XÛÛÛÛÜŽˆ][Kœ™\Ù[][Û‘]K[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË˜XØÙ[™›Ü™YÜ›Ý[™ÛÛÜ‹^ÛÛÜŽˆ][Kœ™\Ù[][Û‘]K[YK˜Ú]\Ý™]U^ÛÛÜŠJBˆBˆBˆYˆXÝ[ÛœË˜ÛÛZ[œÊÙÙÛS]]Y
+HÂˆY\”™]™X[Ü[ÛœË˜\[™
+][S\Ý™]™X[Ü[ÛŠÙ^Nˆ\Ó]]YÈ™]™X[Ü[Û’Ù^K[›]]Kœ˜]Õ˜[YHˆ™]™X[Ü[Û’Ù^K›]]Kœ˜]Õ˜[YK]Nˆ\Ó]]YÈ][Kœ™\Ù[][Û‘]KœÝš[™ÜËÚ]\ÝÕ[›]]Hˆ][Kœ™\Ù[][Û‘]KœÝš[™ÜËÚ]\ÝÓ]]KXÛÛŽˆ\Ó]]YÈ[›]]RXÛÛˆˆ]]RXÛÛ‹ÛÛÜŽˆ][Kœ™\Ù[][Û‘]K[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË›™]]˜[‹™š[ÛÛÜ‹XÛÛÛÛÜŽˆ][Kœ™\Ù[][Û‘]K[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË›™]]˜[‹™›Ü™YÜ›Ý[™ÛÛÜ‹^ÛÛÜŽˆ][Kœ™\Ù[][Û‘]K[YK˜Ú]\Ý™]U^ÛÛÜŠJBˆBˆYˆXÝ[ÛœË˜ÛÛZ[œÊ™[]JHÂˆY\”™]™X[Ü[ÛœË˜\[™
+][S\Ý™]™X[Ü[ÛŠÙ^Nˆ™]™X[Ü[Û’Ù^K™[]Kœ˜]Õ˜[YK]Nˆ][Kœ™\Ù[][Û‘]KœÝš[™ÜËÛÛ[[Û—Ñ[]KXÛÛŽˆ[]RXÛÛ‹ÛÛÜŽˆ][Kœ™\Ù[][Û‘]K[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË™\ÝXÝ]™K™š[ÛÛÜ‹XÛÛÛÛÜŽˆ][Kœ™\Ù[][Û‘]K[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË™\ÝXÝ]™K™›Ü™YÜ›Ý[™ÛÛÜ‹^ÛÛÜŽˆ][Kœ™\Ù[][Û‘]K[YK˜Ú]\Ý™]U^ÛÛÜŠJBˆH[ÙHYˆXÝ[ÛœË˜ÛÛZ[œÊœ™[[Ý™JHÂˆY\”™]™X[Ü[ÛœË˜\[™
+][S\Ý™]™X[Ü[ÛŠÙ^Nˆ™]™X[Ü[Û’Ù^K™[]Kœ˜]Õ˜[YK]Nˆ][Kœ™\Ù[][Û‘]KœÝš[™ÜËÚ]\ÝÔ™[[Ý™KXÛÛŽˆ[]RXÛÛ‹ÛÛÜŽˆ][Kœ™\Ù[][Û‘]K[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË™\ÝXÝ]™K™š[ÛÛÜ‹XÛÛÛÛÜŽˆ][Kœ™\Ù[][Û‘]K[YK›\Ýš][Q\ØÛÜÝ\™PXÝ[ÛœË™\ÝXÝ]™K™›Ü™YÜ›Ý[™ÛÛÜ‹^ÛÛÜŽˆ][Kœ™\Ù[][Û‘]K[YK˜Ú]\Ý™]U^ÛÛÜŠJBˆBˆBˆH[ÙHÂˆY\”™]™X[Ü[ÛœÈH×BˆY\“Y™]™X[Ü[ÛœÈH×BˆBˆØ\ÙH™Ü›Ý\™Y™\™[˜ÙN‚ˆY\”™]™X[Ü[ÛœÈHÜ›Ý\™Y™\™[˜ÙT™]™X[Ü[ÛœÊÝš[™ÜÎˆ][Kœ™\Ù[][Û‘]KœÝš[™ÜË[YNˆ][Kœ™\Ù[][Û‘]K[YK\ÑY][™Îˆ][K™Y][™ËY[žQY˜][ˆÜ›Ý\Y[žQY˜][
+BˆY\“Y™]™X[Ü[ÛœÈH×BˆBˆˆYˆ][Kš[\˜XÝ[Û‹š[›[™S˜]šYØ][Û“ØØ][ÛˆOHš[ÂˆY\”™]™X[Ü[ÛœÈH×BˆY\“Y™]™X[Ü[ÛœÈH×BˆBˆˆ]
+Û›[™S^[Ý]Û›[™P\JHHÛ›[™S^[Ý]
+Û›[™KÛ›[™R\Õ›ÚXÙPÚ]
+Bˆ˜\ˆ[š[X]PÛÛ[H˜[ÙBˆYˆ]Ý\œ™[][HHÝ\œ™[][KÝ\œ™[][K˜ÛÛ[˜Ú]ØØ][ÛˆOH][K˜ÛÛ[˜Ú]ØØ][ÛˆÂˆ[š[X]PÛÛ[HYBˆBˆˆ]
+YX\Ý\™S^[Ý]YX\Ý\™P\JHHXZÙSYX\Ý\™S^[Ý]
+^›ÙS^[Ý]\™Ý[Y[Ê]šX]YÝš[™Îˆ”Ð]šX]YÝš[™ÊÝš[™Îˆˆ‹›Ûˆ]Q›Û^ÛÛÜŽˆ˜›XÚÊK˜XÚÙÜ›Ý[™ÛÛÜŽˆš[X^[][S[X™\“Ù“[™\ÎˆK[˜Ø][Û•\Nˆ™[™ÛÛœÝ˜Z[™YÚ^™NˆÑÔÚ^™JÚYˆ]T™XÝÚYZYÚˆÑÑ›Ø]™Ü™X]\Ýš[š]SXYÛš]YJK[YÛ›Y[ˆ›˜]\˜[Ý]Ý]ˆš[[œÙ]ÎˆRQYÙR[œÙ]Ê
+JJBˆˆ]]TÜXÚ[™ÎˆÑÑ›Ø]HLKŒˆ]]]Ü”ÜXÚ[™ÎˆÑÑ›Ø]HLËŒˆ˜\ˆ][RZYÚˆÑÑ›Ø]HŒ
+ˆ‹Œ
+ÈKŒˆ][RZYÚOHŒKŒˆYˆØ\ÙH]œY\ŠY\‘]JHH][K˜ÛÛ[]Ý\ÝÛSY\ÜØYÙS\Ý]HHY\‘]K˜Ý\ÝÛSY\ÜØYÙS\Ý]KÝ\ÝÛSY\ÜØYÙS\Ý]K˜ÛÛ[X[™™Yš^OHš[Âˆ][RZYÚ
+ÏHYX\Ý\™S^[Ý]œÚ^™KšZYÚ
+ˆ‹Œˆ][RZYÚ
+ÏHŒŒˆH[ÙHÂˆ][RZYÚ
+ÏH]S^[Ý]œÚ^™KšZYÚˆ][RZYÚ
+ÏHYX\Ý\™S^[Ý]œÚ^™KšZYÚ
+ˆËŒˆ][RZYÚ
+ÏH]TÜXÚ[™Âˆ][RZYÚ
+ÏH]]Ü”ÜXÚ[™ÂˆBˆˆ]˜]ÐÛÛ[™XÝHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆ‹ŒNˆ^[Ý]Ù™œÙ]
+È›ÛÜŠ][Kœ™\Ù[][Û‘]K™›ÛÚ^™Kš][S\Ý˜\ÙQ›ÛÚ^™H
+ˆŒÈMËŒ
+JKÚ^™NˆÑÔÚ^™JÚYˆ˜]ÐÛÛ[ÚYZYÚˆ][RZYÚHL‹ŒHKŒ
+JBˆˆ][œÙ]ÈHÚ]\Ý][S›ÙKš[œÙ]Êš\œÝˆš\œÝ\Ýˆ\Ýš\œÝÚ]XY\Žˆš\œÝÚ]XY\ŠBˆ˜\ˆZYÚÙ™œÙ]ˆÑÑ›Ø]HŒˆYˆ][KšY[“Ù™œÙ]ÂˆZYÚÙ™œÙ]HZ][RZYÚˆBˆ]^[Ý]H\ÝšY]Ò][S›ÙS^[Ý]
+ÛÛ[Ú^™NˆÑÔÚ^™JÚYˆ\˜[\ËÚYZYÚˆX^
+Œ][RZYÚ
+ÈZYÚÙ™œÙ]
+JK[œÙ]Îˆ[œÙ]ÊBˆˆ˜\ˆÝ\ÝÛPXÝ[ÛœÎˆÐÚ]\Ý][PXØÙ\ÜÚXš[]PÝ\ÝÛPXÝ[Û—HH×Bˆ›ÜˆÜ[Ûˆ[ˆY\“Y™]™X[Ü[ÛœÈÂˆÝ\ÝÛPXÝ[ÛœË˜\[™
+Ú]\Ý][PXØÙ\ÜÚXš[]PÝ\ÝÛPXÝ[ÛŠ˜[YNˆÜ[Û‹]K\™Ù]ˆš[Ù[XÝÜŽˆÜÙ[XÝÜŠÚ]\Ý][S›ÙKœ\™›Ü›SØØ[XØÙ\ÜÚXš[]PÝ\ÝÛPXÝ[ÛŠÎŠJKÙ^NˆÜ[Û‹šÙ^JJBˆBˆ›ÜˆÜ[Ûˆ[ˆY\”™]™X[Ü[ÛœÈÂˆÝ\ÝÛPXÝ[ÛœË˜\[™
+Ú]\Ý][PXØÙ\ÜÚXš[]PÝ\ÝÛPXÝ[ÛŠ˜[YNˆÜ[Û‹]K\™Ù]ˆš[Ù[XÝÜŽˆÜÙ[XÝÜŠÚ]\Ý][S›ÙKœ\™›Ü›SØØ[XØÙ\ÜÚXš[]PÝ\ÝÛPXÝ[ÛŠÎŠJKÙ^NˆÜ[Û‹šÙ^JJBˆBˆˆ™]\›ˆ
+^[Ý]ÈÝÙXZÈÙ[—HÞ[˜Ú›Û›Ý\ÓØYË[š[X]Y[‚ˆYˆ]Ý›Û™ÔÙ[ˆHÙ[ˆÂˆÝ›Û™ÔÙ[‹›^[Ý]\˜[\ÈH
+][Kš\œÝ\Ýš\œÝÚ]XY\‹™^\Ô[›™Y™^\ÐXÝ]™T™]™X[ÛÛ›ÛË\˜[\ËÛÝ[\œÔÚ^™JBˆÝ›Û™ÔÙ[‹›™^\ÐXÝ]™T™]™X[ÛÛ›ÛÈH™^\ÐXÝ]™T™]™X[ÛÛ›ÛÂˆÝ›Û™ÔÙ[‹˜Ý\œ™[][RZYÚH][RZYÚˆÝ›Û™ÔÙ[‹˜ØXÚYÚ]\Ý^HÚ]\Ý^ˆÝ›Û™ÔÙ[‹˜ØXÚYÚ]\ÝÙX\˜Ú™\Ý[HÚ]\ÝÙX\˜Ú™\Ý[ˆÝ›Û™ÔÙ[‹˜ØXÚYÚ]\Ý][ÝTÙX\˜Ú™\Ý[HÚ]\Ý][ÝTÙX\˜Ú™\Ý[ˆÝ›Û™ÔÙ[‹˜ØXÚYÝ\ÝÛU^[]Y\ÈHÝ\ÝÛU^[]Y\ÂˆÝ›Û™ÔÙ[‹›Û›[™R\Õ›ÚXÙPÚ]HÛ›[™R\Õ›ÚXÙPÚ]ˆˆ˜\ˆ[š[X]SÛ›[™HH[š[X]SÛ›[™BˆYˆ]Ý\œ™[Û›[™HHÝ›Û™ÔÙ[‹˜Ý\œ™[Û›[™KÝ\œ™[Û›[™HOHÛ›[™HÂˆ[š[X]SÛ›[™HH˜[ÙBˆBˆÝ›Û™ÔÙ[‹˜Ý\œ™[Û›[™HHÛ›[™BˆˆYˆ][KšY[“Ù™œÙ]ÂˆÝ›Û™ÔÙ[‹›^Y\‹ž”ÜÚ][ÛˆHLKŒˆBˆˆYˆØ\ÙH™Ü›Ý\™Y™\™[˜ÙHH][K˜ÛÛ[ÂˆÝ›Û™ÔÙ[‹›^Y\‹œÝX›^Y\•˜[œÙ›Ü›HHÐU˜[œÙ›Ü›LÑXZÙU˜[œÛ][ÛŠŒ^[Ý]˜ÛÛ[Ú^™KšZYÚH][RZYÚŒ
+BˆBˆˆYˆ]ÈH\]Y[YHÂˆÝ›Û™ÔÙ[‹œÙ\\˜]Ü“›ÙK˜˜XÚÙÜ›Ý[™ÛÛÜˆH][Kœ™\Ù[][Û‘]K[YK˜Ú]\Ýš][TÙ\\˜]ÜÛÛÜ‚ˆBˆˆ]™]™X[Ù™œÙ]HŒˆˆ]˜[œÚ][ÛŽˆÛÛZ[™YšY]Ó^[Ý]˜[œÚ][Û‚ˆYˆ[š[X]YÂˆ˜[œÚ][ÛˆHÛÛZ[™YšY]Ó^[Ý]˜[œÚ][Û‹˜[š[X]Y
+\˜][ÛŽˆÝ\™NˆœÜš[™ÊBˆH[ÙHÂˆ˜[œÚ][ÛˆHš[[YYX]BˆBˆˆ˜[œÚ][Û‹\]P[J›ÙNˆÝ›Û™ÔÙ[‹[Nˆ][KšY[“Ù™œÙ]ÈŒˆKŒ
+BˆÛÛ\Û™[˜[œÚ][ÛŠ˜[œÚ][ÛŠKœÙ]›\Š^Y\ŽˆÝ›Û™ÔÙ[‹›^Y\‹˜Y]\Îˆ][KšY[“Ù™œÙ]ÈŒˆŒ
+Bˆˆ]ÛÛ^ÛÛZ[™\‘œ˜[YHHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+
+KÚ^™NˆÑÔÚ^™JÚYˆ^[Ý]˜ÛÛ[Ú^™KÚYZYÚˆ][RZYÚ
+JB‹ËÈÝ›Û™ÔÙ[‹˜ÛÛ^ÛÛZ[™\‹œÜÚ][ÛˆHÛÛ^ÛÛZ[™\‘œ˜[YK˜Ù[\‚ˆ˜[œÚ][Û‹\]TÜÚ][ÛŠ›ÙNˆÝ›Û™ÔÙ[‹˜ÛÛ^ÛÛZ[™\‹ÜÚ][ÛŽˆÛÛ^ÛÛZ[™\‘œ˜[YK˜Ù[\ŠBˆ˜[œÚ][Û‹\]P›Ý[™Ê›ÙNˆÝ›Û™ÔÙ[‹˜ÛÛ^ÛÛZ[™\‹›Ý[™ÎˆÛÛ^ÛÛZ[™\‘œ˜[YK›Ù™œÙ]žJˆ\Ý›Û™ÔÙ[‹œ™]™X[Ù™œÙ]NˆŒ
+JBˆˆ˜\ˆXZ[ÛÛ[œ˜[YNˆÑÔ™XÝˆ˜\ˆXZ[ÛÛ[›Ý[™ÓÙ™œÙ]ˆÑÑ›Ø]ˆ˜\ˆXZ[ÛÛ[[NˆÑÑ›Ø]HKŒˆˆYˆ\ÙPÚ]\Ý^[Ý]ÂˆXZ[ÛÛ[œ˜[YHHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆY[œÙ]H‹ŒNˆŒ
+KÚ^™NˆÑÔÚ^™JÚYˆ^[Ý]˜ÛÛ[Ú^™KÚYZYÚˆ^[Ý]˜ÛÛ[Ú^™KšZYÚ
+JBˆXZ[ÛÛ[›Ý[™ÓÙ™œÙ]HXZ[ÛÛ[œ˜[YK›ÜšYÚ[‹žˆˆYˆ][›[™S˜]šYØ][Û“ØØ][ÛˆH][Kš[\˜XÝ[Û‹š[›[™S˜]šYØ][Û“ØØ][ÛˆÂˆXZ[ÛÛ[[HHKŒH[›[™S˜]šYØ][Û“ØØ][Û‹œ›ÙÜ™\ÜÂˆXZ[ÛÛ[›Ý[™ÓÙ™œÙ]
+ÏH
+XZ[ÛÛ[œ˜[YKÚYHXZ[ÛÛ[œ˜[YK›Z[–
+H
+ˆ[›[™S˜]šYØ][Û“ØØ][Û‹œ›ÙÜ™\ÜÂˆBˆH[ÙHÂˆXZ[ÛÛ[œ˜[YHHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆŒNˆŒ
+KÚ^™NˆÑÔÚ^™JÚYˆ^[Ý]˜ÛÛ[Ú^™KÚYZYÚˆ^[Ý]˜ÛÛ[Ú^™KšZYÚ
+JBˆXZ[ÛÛ[›Ý[™ÓÙ™œÙ]HŒˆBˆˆ˜[œÚ][Û‹\]TÜÚ][ÛŠ›ÙNˆÝ›Û™ÔÙ[‹›XZ[ÛÛ[ÛÛZ[™\“›ÙKÜÚ][ÛŽˆXZ[ÛÛ[œ˜[YK˜Ù[\ŠBˆˆ˜[œÚ][Û‹\]P›Ý[™Ê›ÙNˆÝ›Û™ÔÙ[‹›XZ[ÛÛ[ÛÛZ[™\“›ÙK›Ý[™ÎˆÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆXZ[ÛÛ[›Ý[™ÓÙ™œÙ]NˆŒ
+KÚ^™NˆXZ[ÛÛ[œ˜[YKœÚ^™JJBˆ˜[œÚ][Û‹\]P[J›ÙNˆÝ›Û™ÔÙ[‹›XZ[ÛÛ[ÛÛZ[™\“›ÙK[NˆXZ[ÛÛ[[JBˆˆ˜\ˆÜ›ÜÜÙ˜YPÛÛ[H˜[ÙBˆYˆ]Ù[XÝX›PÛÛ›ÛÚ^™P[™\HHÙ[XÝX›PÛÛ›ÛÚ^™P[™\HÂˆ]Ù[XÝX›PÛÛ›ÛÚ^™HHÑÔÚ^™JÚYˆÙ[XÝX›PÛÛ›ÛÚ^™P[™\KŒZYÚˆ^[Ý]˜ÛÛ[Ú^™KšZYÚ
+Bˆ]Ù[XÝX›PÛÛ›Ûœ˜[YHHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆ\˜[\Ë›Y[œÙ]
+È™]™X[Ù™œÙ]Nˆ^[Ý]Ù™œÙ]
+KÚ^™NˆÙ[XÝX›PÛÛ›ÛÚ^™JBˆYˆÝ›Û™ÔÙ[‹œÙ[XÝX›PÛÛ›Û›ÙHOHš[ÂˆÜ›ÜÜÙ˜YPÛÛ[HYBˆ]Ù[XÝX›PÛÛ›Û›ÙHHÙ[XÝX›PÛÛ›ÛÚ^™P[™\KŒJÙ[XÝX›PÛÛ›ÛÚ^™K˜[ÙJBˆÝ›Û™ÔÙ[‹œÙ[XÝX›PÛÛ›Û›ÙHHÙ[XÝX›PÛÛ›Û›ÙBˆÝ›Û™ÔÙ[‹˜YÝX››ÙJÙ[XÝX›PÛÛ›Û›ÙJBˆÙ[XÝX›PÛÛ›Û›ÙK™œ˜[YHHÙ[XÝX›PÛÛ›Ûœ˜[YBˆ˜[œÚ][Û‹˜[š[X]TÜÚ][ÛŠ›ÙNˆÙ[XÝX›PÛÛ›Û›ÙKœ›ÛNˆÑÔÚ[
+ˆ\Ù[XÝX›PÛÛ›Ûœ˜[YKœÚ^™KÚYÈ‹ŒNˆ^[Ý]Ù™œÙ]
+ÈÙ[XÝX›PÛÛ›Ûœ˜[YK›ZYJJBˆÙ[XÝX›PÛÛ›Û›ÙK˜[HHŒˆ˜[œÚ][Û‹\]P[J›ÙNˆÙ[XÝX›PÛÛ›Û›ÙK[NˆKŒ
+BˆH[ÙHYˆ]Ù[XÝX›PÛÛ›Û›ÙHHÝ›Û™ÔÙ[‹œÙ[XÝX›PÛÛ›Û›ÙHÂˆ˜[œÚ][Û‹\]Qœ˜[YJ›ÙNˆÙ[XÝX›PÛÛ›Û›ÙKœ˜[YNˆÙ[XÝX›PÛÛ›Ûœ˜[YJBˆ]ÈHÙ[XÝX›PÛÛ›ÛÚ^™P[™\KŒJÙ[XÝX›PÛÛ›ÛÚ^™K˜[œÚ][Û‹š\Ð[š[X]Y
+BˆBˆH[ÙHYˆ]Ù[XÝX›PÛÛ›Û›ÙHHÝ›Û™ÔÙ[‹œÙ[XÝX›PÛÛ›Û›ÙHÂˆÜ›ÜÜÙ˜YPÛÛ[HYBˆ˜\ˆÙ[XÝX›PÛÛ›Ûœ˜[YHHÙ[XÝX›PÛÛ›Û›ÙK™œ˜[YBˆÙ[XÝX›PÛÛ›Ûœ˜[YK›ÜšYÚ[‹žH\Ù[XÝX›PÛÛ›Ûœ˜[YKœÚ^™KÚYˆÝ›Û™ÔÙ[‹œÙ[XÝX›PÛÛ›Û›ÙHHš[ˆ˜[œÚ][Û‹\]P[J›ÙNˆÙ[XÝX›PÛÛ›Û›ÙK[NˆŒ
+Bˆ˜[œÚ][Û‹\]Qœ˜[YJ›ÙNˆÙ[XÝX›PÛÛ›Û›ÙKœ˜[YNˆÙ[XÝX›PÛÛ›Ûœ˜[YKÛÛ\][ÛŽˆÈÝÙXZÈÙ[XÝX›PÛÛ›Û›ÙWHÈ[‚ˆÙ[XÝX›PÛÛ›Û›ÙOËœ™[[Ý™Qœ›ÛTÝ\\››ÙJ
+BˆJBˆBˆˆ˜\ˆ[š[X]P˜YÙ\ÈH[š[X]PÛÛ[ˆYˆ]™[Ü™\ÛÛ›ÛÚ^™P[™\HH™[Ü™\ÛÛ›ÛÚ^™P[™\HÂˆ]™[Ü™\ÛÛ›Ûœ˜[YHHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆ\˜[\ËÚY
+È™]™X[Ù™œÙ]H\˜[\ËœšYÚ[œÙ]H™[Ü™\ÛÛ›ÛÚ^™P[™\KŒNˆ^[Ý]Ù™œÙ]
+KÚ^™NˆÑÔÚ^™JÚYˆ™[Ü™\ÛÛ›ÛÚ^™P[™\KŒZYÚˆ^[Ý]˜ÛÛ[Ú^™KšZYÚ
+JBˆYˆÝ›Û™ÔÙ[‹œ™[Ü™\ÛÛ›Û›ÙHOHš[Âˆ]™[Ü™\ÛÛ›Û›ÙHH™[Ü™\ÛÛ›ÛÚ^™P[™\KŒJ^[Ý]˜ÛÛ[Ú^™KšZYÚ˜[ÙKš[[YYX]JBˆÝ›Û™ÔÙ[‹œ™[Ü™\ÛÛ›Û›ÙHH™[Ü™\ÛÛ›Û›ÙBˆÝ›Û™ÔÙ[‹˜YÝX››ÙJ™[Ü™\ÛÛ›Û›ÙJBˆ™[Ü™\ÛÛ›Û›ÙK™œ˜[YHH™[Ü™\ÛÛ›Ûœ˜[YBˆ™[Ü™\ÛÛ›Û›ÙK˜[HHŒˆ˜[œÚ][Û‹\]P[J›ÙNˆ™[Ü™\ÛÛ›Û›ÙK[NˆKŒ
+Bˆˆ˜[œÚ][Û‹\]P[J›ÙNˆÝ›Û™ÔÙ[‹™]S›ÙK[NˆŒ
+BˆYˆ]]TÝ]\ÒXÛÛ“›ÙHHÝ›Û™ÔÙ[‹™]TÝ]\ÒXÛÛ“›ÙHÂˆ˜[œÚ][Û‹\]P[J›ÙNˆ]TÝ]\ÒXÛÛ“›ÙK[NˆŒ
+BˆBˆ˜[œÚ][Û‹\]P[J›ÙNˆÝ›Û™ÔÙ[‹˜˜YÙS›ÙK[NˆŒ
+Bˆ˜[œÚ][Û‹\]P[J›ÙNˆÝ›Û™ÔÙ[‹›Y[[Û˜YÙS›ÙK[NˆŒ
+Bˆ˜[œÚ][Û‹\]P[J›ÙNˆÝ›Û™ÔÙ[‹œ[›™YXÛÛ“›ÙK[NˆŒ
+Bˆ˜[œÚ][Û‹\]P[J›ÙNˆÝ›Û™ÔÙ[‹œÝ]\Ó›ÙK[NˆŒ
+BˆH[ÙHYˆ]™[Ü™\ÛÛ›Û›ÙHHÝ›Û™ÔÙ[‹œ™[Ü™\ÛÛ›Û›ÙHÂˆ]ÈH™[Ü™\ÛÛ›ÛÚ^™P[™\KŒJ^[Ý]˜ÛÛ[Ú^™KšZYÚ˜[ÙKš[[YYX]JBˆ˜[œÚ][Û‹\]Qœ˜[YJ›ÙNˆ™[Ü™\ÛÛ›Û›ÙKœ˜[YNˆ™[Ü™\ÛÛ›Ûœ˜[YJBˆBˆH[ÙHYˆ]™[Ü™\ÛÛ›Û›ÙHHÝ›Û™ÔÙ[‹œ™[Ü™\ÛÛ›Û›ÙHÂˆ[š[X]P˜YÙ\ÈH˜[ÙBˆÝ›Û™ÔÙ[‹œ™[Ü™\ÛÛ›Û›ÙHHš[ˆ˜[œÚ][Û‹\]P[J›ÙNˆ™[Ü™\ÛÛ›Û›ÙK[NˆŒÛÛ\][ÛŽˆÈÝÙXZÈ™[Ü™\ÛÛ›Û›ÙWHÈ[‚ˆ™[Ü™\ÛÛ›Û›ÙOËœ™[[Ý™Qœ›ÛTÝ\\››ÙJ
+BˆJBˆ˜[œÚ][Û‹\]P[J›ÙNˆÝ›Û™ÔÙ[‹™]S›ÙK[NˆKŒ
+BˆYˆ]]TÝ]\ÒXÛÛ“›ÙHHÝ›Û™ÔÙ[‹™]TÝ]\ÒXÛÛ“›ÙHÂˆ˜[œÚ][Û‹\]P[J›ÙNˆ]TÝ]\ÒXÛÛ“›ÙK[NˆKŒ
+BˆBˆ˜[œÚ][Û‹\]P[J›ÙNˆÝ›Û™ÔÙ[‹˜˜YÙS›ÙK[NˆKŒ
+Bˆ˜[œÚ][Û‹\]P[J›ÙNˆÝ›Û™ÔÙ[‹›Y[[Û˜YÙS›ÙK[NˆKŒ
+Bˆ˜[œÚ][Û‹\]P[J›ÙNˆÝ›Û™ÔÙ[‹œ[›™YXÛÛ“›ÙK[NˆKŒ
+Bˆ˜[œÚ][Û‹\]P[J›ÙNˆÝ›Û™ÔÙ[‹œÝ]\Ó›ÙK[NˆKŒ
+BˆBˆˆ]ÛÛ[™XÝH˜]ÐÛÛ[™XÝ›Ù™œÙ]žJˆY][™ÓÙ™œÙ]
+ÈY[œÙ]
+È™]™X[Ù™œÙ]NˆŒ
+Bˆˆ]]˜]\‘œ˜[YHHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆY[œÙ]H]˜]\“Y[œÙ]
+ÈY][™ÓÙ™œÙ]
+È]˜]\“YYÙR[œÙ]
+È™]™X[Ù™œÙ]Nˆ›ÛÜŠ
+][RZYÚH]˜]\‘X[Y]\ŠHÈ‹Œ
+JKÚ^™NˆÑÔÚ^™JÚYˆ]˜]\‘X[Y]\‹ZYÚˆ]˜]\‘X[Y]\ŠJBˆ˜\ˆ]˜]\”ØØ[SÙ™œÙ]ˆÑÑ›Ø]HŒˆ˜\ˆ]˜]\”ØØ[NˆÑÑ›Ø]HKŒˆYˆ][›[™S˜]šYØ][Û“ØØ][ÛˆH][Kš[\˜XÝ[Û‹š[›[™S˜]šYØ][Û“ØØ][ÛˆÂˆ]\™Ù]]˜]\”ØØ[NˆÑÑ›Ø]H›ÛÜŠ][Kœ™\Ù[][Û‘]K™›ÛÚ^™Kš][S\Ý˜\ÙQ›ÛÚ^™H
+ˆMŒÈMËŒ
+HÈ]˜]\‘œ˜[YKÚYˆ]˜]\”ØØ[HH\™Ù]]˜]\”ØØ[H
+ˆ[›[™S˜]šYØ][Û“ØØ][Û‹œ›ÙÜ™\ÜÈ
+ÈKŒ
+ˆ
+KŒH[›[™S˜]šYØ][Û“ØØ][Û‹œ›ÙÜ™\ÜÊBˆˆ]\™Ù]]˜]\”ØØ[SÙ™œÙ]ˆÑÑ›Ø]HJ]˜]\‘œ˜[YKÚYH]˜]\‘œ˜[YKÚY
+ˆ]˜]\”ØØ[JH
+ˆBˆ]˜]\”ØØ[SÙ™œÙ]H\™Ù]]˜]\”ØØ[SÙ™œÙ]
+ˆ[›[™S˜]šYØ][Û“ØØ][Û‹œ›ÙÜ™\ÜÂˆBˆˆ˜[œÚ][Û‹\]Qœ˜[YJ›ÙNˆÝ›Û™ÔÙ[‹˜]˜]\ÛÛZ[™\“›ÙKœ˜[YNˆ]˜]\‘œ˜[YJB‚ˆYˆ\ÙPÚ]\Ý^[Ý]	‰ˆ\ÐÛÛ[][š]H	‰ˆ]˜]\ÛÛ[[XYÙTÜXÈOHš[]ÚYÝÒ[XYÙHHRR[XYÙJ[™R[XYÙS˜[YNˆÛÛ\Û™[ËÐÛÛ[][š]TÚYÝÈŠHÂˆÝ›Û™ÔÙ[‹˜ÛÛ[][š]P]˜]\”ÚYÝÓ›ÙKš\ÒY[ˆH˜[ÙBˆÝ›Û™ÔÙ[‹˜ÛÛ[][š]P]˜]\”ÚYÝÓ›ÙKš[XYÙHHÙ[™\˜]U[Y[XYÙJ[XYÙNˆÚYÝÒ[XYÙKÛÛÜŽˆ[YK]PÛÛÜ‹Ú][PÛÛ\Û™[
+ŽJJB‚ˆ]\ÜXÝ˜][ÈHÚYÝÒ[XYÙKœÚ^™KÚYÈÚYÝÒ[XYÙKœÚ^™KšZYÚˆ]ÚYÝÔÚ^™HHÑÔÚ^™JÚYˆ›ÛÜŠ]˜]\‘œ˜[YKÚY
+ˆ\ÜXÝ˜][È
+ˆŽ
+KZYÚˆ›ÛÜŠ]˜]\‘œ˜[YKÚY
+ˆŽMÊJBˆ˜[œÚ][Û‹\]TÜÚ][ÛŠ›ÙNˆÝ›Û™ÔÙ[‹˜ÛÛ[][š]P]˜]\”ÚYÝÓ›ÙKÜÚ][ÛŽˆÑÔÚ[
+ˆ]˜]\‘œ˜[YKÚY
+ˆH
+È]˜]\”ØØ[SÙ™œÙ]HL‹Œ
+ÈRTØÜ™Y[”^[Nˆ]˜]\‘œ˜[YKšZYÚ
+ˆJJBˆ˜[œÚ][Û‹\]P›Ý[™Ê›ÙNˆÝ›Û™ÔÙ[‹˜ÛÛ[][š]P]˜]\”ÚYÝÓ›ÙK›Ý[™ÎˆÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+
+KÚ^™NˆÚYÝÔÚ^™JJBˆ˜[œÚ][Û‹\]U˜[œÙ›Ü›TØØ[J›ÙNˆÝ›Û™ÔÙ[‹˜ÛÛ[][š]P]˜]\”ÚYÝÓ›ÙKØØ[Nˆ]˜]\”ØØ[JBˆH[ÙHÂˆÝ›Û™ÔÙ[‹˜ÛÛ[][š]P]˜]\”ÚYÝÓ›ÙKš\ÒY[ˆHYBˆB‚ˆYˆ\ÙPÚ]\Ý^[Ý]	‰ˆ\Ü^PÛÛ[][š]P]˜]\˜YÙH	‰ˆ]˜]\ÛÛ[[XYÙTÜXÈOHš[	‰ˆZ][K\ÙPÛÛ[][š]UšY]Ó^[Ý]Âˆ]ÛÛ[][š]P]˜]\˜YÙP˜XÚÙÜ›Ý[™šY]ÎˆÛ\ÜÐ˜XÚÙÜ›Ý[™šY]Âˆ]ÛÛ[][š]P]˜]\˜YÙRXÛÛ•šY]ÎˆÛ\ÜÐ˜XÚÙÜ›Ý[™šY]ËÛÛ[[XYÙUšY]ÂˆYˆ]Ý\œ™[˜XÚÙÜ›Ý[™šY]ÈHÝ›Û™ÔÙ[‹˜ÛÛ[][š]P]˜]\˜YÙP˜XÚÙÜ›Ý[™šY]Ë]Ý\œ™[XÛÛ•šY]ÈHÝ›Û™ÔÙ[‹˜ÛÛ[][š]P]˜]\˜YÙRXÛÛ•šY]ÈÂˆÛÛ[][š]P]˜]\˜YÙP˜XÚÙÜ›Ý[™šY]ÈHÝ\œ™[˜XÚÙÜ›Ý[™šY]ÂˆÛÛ[][š]P]˜]\˜YÙRXÛÛ•šY]ÈHÝ\œ™[XÛÛ•šY]ÂˆH[ÙHÂˆÛÛ[][š]P]˜]\˜YÙP˜XÚÙÜ›Ý[™šY]ÈHÛ\ÜÐ˜XÚÙÜ›Ý[™šY]Ê
+BˆÛÛ[][š]P]˜]\˜YÙP˜XÚÙÜ›Ý[™šY]Ëš\Õ\Ù\’[\˜XÝ[Û‘[˜X›YH˜[ÙBˆÛÛ[][š]P]˜]\˜YÙP˜XÚÙÜ›Ý[™šY]Ëš\ÒY[ˆHYB‚ˆÛÛ[][š]P]˜]\˜YÙRXÛÛ•šY]ÈHÛ\ÜÐ˜XÚÙÜ›Ý[™šY]ËÛÛ[[XYÙUšY]Ê
+BˆÛÛ[][š]P]˜]\˜YÙRXÛÛ•šY]Ëš\Õ\Ù\’[\˜XÝ[Û‘[˜X›YH˜[ÙB‚ˆÛÛ[][š]P]˜]\˜YÙP˜XÚÙÜ›Ý[™šY]Ë˜ÛÛ[šY]Ë˜YÝXšY]ÊÛÛ[][š]P]˜]\˜YÙRXÛÛ•šY]ÊBˆÝ›Û™ÔÙ[‹˜]˜]\ÛÛZ[™\“›ÙKšY]Ë˜YÝXšY]ÊÛÛ[][š]P]˜]\˜YÙP˜XÚÙÜ›Ý[™šY]ÊB‚ˆÝ›Û™ÔÙ[‹˜ÛÛ[][š]P]˜]\˜YÙP˜XÚÙÜ›Ý[™šY]ÈHÛÛ[][š]P]˜]\˜YÙP˜XÚÙÜ›Ý[™šY]ÂˆÝ›Û™ÔÙ[‹˜ÛÛ[][š]P]˜]\˜YÙRXÛÛ•šY]ÈHÛÛ[][š]P]˜]\˜YÙRXÛÛ•šY]ÂˆB‚ˆ]˜YÙTÚ^™HHÑÔÚ^™JÚYˆŒŒZYÚˆŒŒ
+Bˆ]ØØ[Y]˜]\”Ú^™HHÑÔÚ^™JÚYˆ]˜]\‘œ˜[YKÚY
+ˆ]˜]\”ØØ[KZYÚˆ]˜]\‘œ˜[YKšZYÚ
+ˆ]˜]\”ØØ[JBˆ]ØØ[Y]˜]\Ù[\ˆHÑÔÚ[
+ˆ]˜]\‘œ˜[YKÚY
+ˆH
+È]˜]\”ØØ[SÙ™œÙ]Nˆ]˜]\‘œ˜[YKšZYÚ
+ˆJBˆ]ØØ[Y]˜]\‘œ˜[YHHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆØØ[Y]˜]\Ù[\‹žHØØ[Y]˜]\”Ú^™KÚY
+ˆKNˆØØ[Y]˜]\Ù[\‹žHHØØ[Y]˜]\”Ú^™KšZYÚ
+ˆJKÚ^™NˆØØ[Y]˜]\”Ú^™JBˆ]˜YÙQœ˜[YHHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆØØ[Y]˜]\‘œ˜[YK›X^H˜YÙTÚ^™KÚY
+ÈKŒNˆØØ[Y]˜]\‘œ˜[YK›X^HH˜YÙTÚ^™KšZYÚ
+ÈKŒ
+KÚ^™Nˆ˜YÙTÚ^™JB‚ˆÛÛ[][š]P]˜]\˜YÙP˜XÚÙÜ›Ý[™šY]Ëš\ÒY[ˆH˜[ÙBˆÛÛ[][š]P]˜]\˜YÙP˜XÚÙÜ›Ý[™šY]Ë\]JÚ^™Nˆ˜YÙTÚ^™KÛÜ›™\”˜Y]\Îˆ˜YÙTÚ^™KšZYÚ
+ˆK\Ñ\šÎˆ][Kœ™\Ù[][Û‘]K[YK›Ý™\˜[\šÐ\X\˜[˜ÙK[ÛÛÜŽˆš[š]
+Ú[™ˆœ[™[
+K˜[œÚ][ÛŽˆÛÛ\Û™[˜[œÚ][ÛŠ˜[œÚ][ÛŠJBˆ˜[œÚ][Û‹\]Qœ˜[YJšY]ÎˆÛÛ[][š]P]˜]\˜YÙP˜XÚÙÜ›Ý[™šY]Ëœ˜[YNˆ˜YÙQœ˜[YJB‚ˆYˆ]\œ›ÝÒ[XYÙHHRR[XYÙJ[™R[XYÙS˜[YNˆ“YYXHY]Ü‹ÑÝÛ\œ›ÝÈŠOËÚ]™[™\š[™Ó[ÙJ˜[Ø^\Õ[\]JHÂˆÛÛ[][š]P]˜]\˜YÙRXÛÛ•šY]Ëš[XYÙHH\œ›ÝÒ[XYÙBˆÛÛ[][š]P]˜]\˜YÙRXÛÛ•šY]Ë[ÛÛÜˆH[YK]PÛÛÜ‚ˆ]XÛÛ‘œ˜[YHHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆ›ÛÜ•ÔØÜ™Y[”^[Ê
+˜YÙTÚ^™KÚYH\œ›ÝÒ[XYÙKœÚ^™KÚY
+H
+ˆJKNˆ›ÛÜ•ÔØÜ™Y[”^[Ê
+˜YÙTÚ^™KšZYÚH\œ›ÝÒ[XYÙKœÚ^™KšZYÚ
+H
+ˆJJKÚ^™Nˆ\œ›ÝÒ[XYÙKœÚ^™JBˆ˜[œÚ][Û‹\]Qœ˜[YJšY]ÎˆÛÛ[][š]P]˜]\˜YÙRXÛÛ•šY]Ëœ˜[YNˆXÛÛ‘œ˜[YJBˆBˆH[ÙHÂˆÝ›Û™ÔÙ[‹˜ÛÛ[][š]P]˜]\˜YÙP˜XÚÙÜ›Ý[™šY]ÏËš\ÒY[ˆHYBˆB‚ˆ˜[œÚ][Û‹\]TÜÚ][ÛŠ›ÙNˆÝ›Û™ÔÙ[‹˜]˜]\“›ÙKÜÚ][ÛŽˆ]˜]\‘œ˜[YK›Ù™œÙ]žJˆX]˜]\‘œ˜[YK›Z[–NˆX]˜]\‘œ˜[YK›Z[–JK˜Ù[\‹›Ù™œÙ]žJˆ]˜]\”ØØ[SÙ™œÙ]NˆŒ
+JBˆ˜[œÚ][Û‹\]P›Ý[™Ê›ÙNˆÝ›Û™ÔÙ[‹˜]˜]\“›ÙK›Ý[™ÎˆÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+
+KÚ^™Nˆ]˜]\‘œ˜[YKœÚ^™JJBˆ˜[œÚ][Û‹\]U˜[œÙ›Ü›TØØ[J›ÙNˆÝ›Û™ÔÙ[‹˜]˜]\“›ÙKØØ[Nˆ]˜]\”ØØ[JBˆÝ›Û™ÔÙ[‹˜]˜]\“›ÙK\]TÚ^™JÚ^™Nˆ]˜]\‘œ˜[YKœÚ^™JBˆÝ›Û™ÔÙ[‹\]UšY[Õš\ÚXš[]J
+Bˆˆ˜\ˆ][TY\’Yˆ[™Ú[™TY\‹’YÂˆYˆØ\ÙH]˜Ú]\Ý
+[™^
+HH][Kš[™^Âˆ][TY\’YH[™^›Y\ÜØYÙR[™^šYœY\’YˆBˆˆYˆ]][TY\’YH][TY\’Y][›[™S˜]šYØ][Û“ØØ][ÛˆH][Kš[\˜XÝ[Û‹š[›[™S˜]šYØ][Û“ØØ][Û‹[›[™S˜]šYØ][Û“ØØ][Û‹›ØØ][Û‹œY\’YOH][TY\’YÂˆ][›[™S˜]šYØ][Û“X\šÓ^Y\ŽˆÚ[\S^Y\‚ˆ˜\ˆ[š[X]R[ˆH˜[ÙBˆYˆ]Ý\œ™[HÝ›Û™ÔÙ[‹š[›[™S˜]šYØ][Û“X\šÓ^Y\ˆÂˆ[›[™S˜]šYØ][Û“X\šÓ^Y\ˆHÝ\œ™[ˆH[ÙHÂˆ[›[™S˜]šYØ][Û“X\šÓ^Y\ˆHÚ[\S^Y\Š
+BˆÝ›Û™ÔÙ[‹š[›[™S˜]šYØ][Û“X\šÓ^Y\ˆH[›[™S˜]šYØ][Û“X\šÓ^Y\‚ˆ[›[™S˜]šYØ][Û“X\šÓ^Y\‹˜ÛÜ›™\”˜Y]\ÈHŒˆ[š[X]R[ˆHYBˆÝ›Û™ÔÙ[‹›^Y\‹˜YÝX›^Y\Š[›[™S˜]šYØ][Û“X\šÓ^Y\ŠBˆBˆ[›[™S˜]šYØ][Û“X\šÓ^Y\‹˜˜XÚÙÜ›Ý[™ÛÛÜˆH][Kœ™\Ù[][Û‘]K[YK›\Ýš][PXØÙ[ÛÛÜ‹˜ÙÐÛÛÜ‚ˆ]X\šÒZYÚˆÑÑ›Ø]HLŒˆ˜\ˆX\šÑœ˜[YHHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆMŒNˆ]˜]\‘œ˜[YK›ZYHHX\šÒZYÚ
+ˆJKÚ^™NˆÑÔÚ^™JÚYˆŒZYÚˆX\šÒZYÚ
+JBˆX\šÑœ˜[YK›ÜšYÚ[‹žOH
+KŒH[›[™S˜]šYØ][Û“ØØ][Û‹œ›ÙÜ™\ÜÊH
+ˆX\šÑœ˜[YKÚY
+ˆBˆYˆ[š[X]R[ˆÂˆ[›[™S˜]šYØ][Û“X\šÓ^Y\‹™œ˜[YHHX\šÑœ˜[YBˆ˜[œÚ][Û‹˜[š[X]TÜÚ][ÛY]]™J^Y\Žˆ[›[™S˜]šYØ][Û“X\šÓ^Y\‹Ù™œÙ]ˆÑÔÚ[
+ˆ[X\šÑœ˜[YKÚY
+ˆKNˆŒ
+JBˆH[ÙHÂˆ˜[œÚ][Û‹\]Qœ˜[YJ^Y\Žˆ[›[™S˜]šYØ][Û“X\šÓ^Y\‹œ˜[YNˆX\šÑœ˜[YJBˆBˆH[ÙHÂˆYˆ][›[™S˜]šYØ][Û“X\šÓ^Y\ˆHÝ›Û™ÔÙ[‹š[›[™S˜]šYØ][Û“X\šÓ^Y\ˆÂˆÝ›Û™ÔÙ[‹š[›[™S˜]šYØ][Û“X\šÓ^Y\ˆHš[ˆ˜[œÚ][Û‹\]TÜÚ][ÛŠ^Y\Žˆ[›[™S˜]šYØ][Û“X\šÓ^Y\‹ÜÚ][ÛŽˆÑÔÚ[
+ˆZ[›[™S˜]šYØ][Û“X\šÓ^Y\‹˜›Ý[™ËÚY
+ˆKNˆ]˜]\‘œ˜[YK›ZYJJBˆBˆBˆˆYˆ][›[™S˜]šYØ][Û“ØØ][ÛˆH][Kš[\˜XÝ[Û‹š[›[™S˜]šYØ][Û“ØØ][Û‹˜YÙPÛÛ[OH››Û™HÂˆ˜\ˆ[š[X]R[ˆH˜[ÙBˆˆ]]˜]\˜YÙP˜XÚÙÜ›Ý[™ˆTÒ[XYÙS›ÙBˆYˆ]Ý\œ™[HÝ›Û™ÔÙ[‹˜]˜]\˜YÙP˜XÚÙÜ›Ý[™Âˆ]˜]\˜YÙP˜XÚÙÜ›Ý[™HÝ\œ™[ˆH[ÙHÂˆ]˜]\˜YÙP˜XÚÙÜ›Ý[™HTÒ[XYÙS›ÙJ
+BˆÝ›Û™ÔÙ[‹˜]˜]\˜YÙP˜XÚÙÜ›Ý[™H]˜]\˜YÙP˜XÚÙÜ›Ý[™ˆÝ›Û™ÔÙ[‹˜]˜]\“›ÙK˜YÝX››ÙJ]˜]\˜YÙP˜XÚÙÜ›Ý[™
+BˆBˆˆ]˜]\˜YÙP˜XÚÙÜ›Ý[™š[XYÙHHÝ\œ™[]˜]\˜YÙPÛX[˜XÚÙÜ›Ý[™[XYÙBˆˆ]]˜]\˜YÙS›ÙNˆÚ]\Ý˜YÙS›ÙBˆYˆ]Ý\œ™[HÝ›Û™ÔÙ[‹˜]˜]\˜YÙS›ÙHÂˆ]˜]\˜YÙS›ÙHHÝ\œ™[ˆH[ÙHÂˆ[š[X]R[ˆHYBˆ]˜]\˜YÙS›ÙHHÚ]\Ý˜YÙS›ÙJ
+Bˆ]˜]\˜YÙS›ÙK™\ØX›P›Ý[˜ÙHHYBˆÝ›Û™ÔÙ[‹˜]˜]\˜YÙS›ÙHH]˜]\˜YÙS›ÙBˆÝ›Û™ÔÙ[‹˜]˜]\“›ÙK˜YÝX››ÙJ]˜]\˜YÙS›ÙJBˆBˆˆ]XZÙP]˜]\˜YÙS^[Ý]H]˜]\˜YÙS›ÙK˜\Þ[˜Ó^[Ý]
+
+Bˆ]
+]˜]\˜YÙS^[Ý]]˜]\˜YÙP\JHHXZÙP]˜]\˜YÙS^[Ý]
+ÑÔÚ^™JÚYˆ˜]ÐÛÛ[ÚYZYÚˆÑÑ›Ø]™Ü™X]\Ýš[š]SXYÛš]YJK]˜]\˜YÙQX[Y]\‹]˜]\˜YÙQ›ÛÝ\œ™[]˜]\˜YÙP˜XÚÙÜ›Ý[™[XYÙK˜YÙPÛÛ[
+Bˆ]ÈH]˜]\˜YÙP\J[š[X]P˜YÙ\Ë˜[ÙJBˆ]]˜]\˜YÙQœ˜[YHHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆ]˜]\‘œ˜[YKÚYH]˜]\˜YÙS^[Ý]ÚYNˆ]˜]\‘œ˜[YKšZYÚH]˜]\˜YÙS^[Ý]šZYÚ
+KÚ^™Nˆ]˜]\˜YÙS^[Ý]
+Bˆ]˜]\˜YÙS›ÙKœÜÚ][ÛˆH]˜]\˜YÙQœ˜[YK˜Ù[\‚ˆ]˜]\˜YÙS›ÙK˜›Ý[™ÈHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+
+KÚ^™Nˆ]˜]\˜YÙQœ˜[YKœÚ^™JBˆˆ]]˜]\˜YÙP˜XÚÙÜ›Ý[™œ˜[YHH]˜]\˜YÙQœ˜[YKš[œÙ]žJˆL‹ŒNˆL‹Œ
+Bˆ]˜]\˜YÙP˜XÚÙÜ›Ý[™œÜÚ][ÛˆH]˜]\˜YÙP˜XÚÙÜ›Ý[™œ˜[YK˜Ù[\‚ˆ]˜]\˜YÙP˜XÚÙÜ›Ý[™˜›Ý[™ÈHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+
+KÚ^™Nˆ]˜]\˜YÙP˜XÚÙÜ›Ý[™œ˜[YKœÚ^™JBˆˆYˆ[š[X]R[ˆÂˆÛÛZ[™YšY]Ó^[Ý]˜[œÚ][Û‹š[[YYX]K\]TÝX›^Y\•˜[œÙ›Ü›TØØ[J›ÙNˆ]˜]\˜YÙS›ÙKØØ[NˆŒJBˆÛÛZ[™YšY]Ó^[Ý]˜[œÚ][Û‹š[[YYX]K\]U˜[œÙ›Ü›TØØ[J^Y\Žˆ]˜]\˜YÙP˜XÚÙÜ›Ý[™›^Y\‹ØØ[NˆŒJBˆBˆ˜[œÚ][Û‹\]TÝX›^Y\•˜[œÙ›Ü›TØØ[J›ÙNˆ]˜]\˜YÙS›ÙKØØ[NˆX^
+ŒK[›[™S˜]šYØ][Û“ØØ][Û‹œ›ÙÜ™\ÜÊJBˆ˜[œÚ][Û‹\]U˜[œÙ›Ü›TØØ[J^Y\Žˆ]˜]\˜YÙP˜XÚÙÜ›Ý[™›^Y\‹ØØ[NˆX^
+ŒK[›[™S˜]šYØ][Û“ØØ][Û‹œ›ÙÜ™\ÜÊJBˆH[ÙHYˆ]]˜]\˜YÙS›ÙHHÝ›Û™ÔÙ[‹˜]˜]\˜YÙS›ÙHÂˆÝ›Û™ÔÙ[‹˜]˜]\˜YÙS›ÙHHš[ˆ˜[œÚ][Û‹\]TÝX›^Y\•˜[œÙ›Ü›TØØ[J›ÙNˆ]˜]\˜YÙS›ÙKØØ[NˆŒKÛÛ\][ÛŽˆÈÝÙXZÈ]˜]\˜YÙS›ÙWHÈ[‚ˆ]˜]\˜YÙS›ÙOËœ™[[Ý™Qœ›ÛTÝ\\››ÙJ
+BˆJBˆYˆ]]˜]\˜YÙP˜XÚÙÜ›Ý[™HÝ›Û™ÔÙ[‹˜]˜]\˜YÙP˜XÚÙÜ›Ý[™ÂˆÝ›Û™ÔÙ[‹˜]˜]\˜YÙP˜XÚÙÜ›Ý[™Hš[ˆ˜[œÚ][Û‹\]U˜[œÙ›Ü›TØØ[J^Y\Žˆ]˜]\˜YÙP˜XÚÙÜ›Ý[™›^Y\‹ØØ[NˆŒKÛÛ\][ÛŽˆÈÝÙXZÈ]˜]\˜YÙP˜XÚÙÜ›Ý[™HÈ[‚ˆ]˜]\˜YÙP˜XÚÙÜ›Ý[™Ëœ™[[Ý™Qœ›ÛTÝ\\››ÙJ
+BˆJBˆBˆBˆˆYˆ]™XY[™›ÈH™XY[™›ËY\Ü^P\ÓY\ÜØYÙHÂˆ]]˜]\’XÛÛ•šY]ÎˆÛÛ\Û™[ÜÝšY]Ï[\O‚ˆYˆ]Ý\œ™[HÝ›Û™ÔÙ[‹˜]˜]\’XÛÛ•šY]ÈÂˆ]˜]\’XÛÛ•šY]ÈHÝ\œ™[ˆH[ÙHÂˆ]˜]\’XÛÛ•šY]ÈHÛÛ\Û™[ÜÝšY]Ï[\OŠ
+BˆÝ›Û™ÔÙ[‹˜]˜]\’XÛÛ•šY]ÈH]˜]\’XÛÛ•šY]ÂˆÝ›Û™ÔÙ[‹›XZ[ÛÛ[ÛÛZ[™\“›ÙKšY]Ë˜YÝXšY]Ê]˜]\’XÛÛ•šY]ÊBˆBˆˆ]]˜]\’XÛÛÛÛ[ˆ[[ÚšTÝ]\ÐÛÛ\Û™[ÛÛ[ˆYˆ™XY[™›ËšYOHHÂˆ]˜]\’XÛÛÛÛ[Hš[XYÙJ[XYÙNˆ™\Ù[][Û”™\ÛÝ\˜Ù\ÐÚ]\Ý™Ù[™\˜[ÜXÒXÛÛŠ][Kœ™\Ù[][Û‘]K[YJK[ÛÛÜŽˆš[
+BˆH[ÙHYˆ]š[RYH™XY[™›Ëš[™›ËšXÛÛ‹š[RYOHÂˆ]˜]\’XÛÛÛÛ[H˜[š[X][ÛŠÛÛ[ˆ˜Ý\ÝÛQ[[ÚšJš[RYˆš[RY
+KÚ^™NˆÑÔÚ^™JÚYˆŒZYÚˆŒ
+KXÙZÛ\ÛÛÜŽˆ][Kœ™\Ù[][Û‘]K[YK›\Ý›YYXTXÙZÛ\ÛÛÜ‹[YPÛÛÜŽˆ][Kœ™\Ù[][Û‘]K[YK›\Ýš][PXØÙ[ÛÛÜ‹ÛÜ[ÙNˆ˜ÛÝ[
+
+JBˆH[ÙHÂˆ]˜]\’XÛÛÛÛ[HÜXÊ]NˆÝš[™Ê™XY[™›Ëš[™›Ë]Kœ™Yš^
+JJKÛÛÜŽˆ™XY[™›Ëš[™›ËšXÛÛÛÛÜ‹Ú^™NˆÑÔÚ^™JÚYˆÌ‹ŒZYÚˆÌ‹Œ
+JBˆBˆˆ]]˜]\’XÛÛÛÛ\Û™[H[[ÚšTÝ]\ÐÛÛ\Û™[
+ˆÛÛ^ˆ][K˜ÛÛ^ˆ[š[X][ÛØXÚNˆ][Kš[\˜XÝ[Û‹˜[š[X][ÛØXÚKˆ[š[X][Û”™[™\™\Žˆ][Kš[\˜XÝ[Û‹˜[š[X][Û”™[™\™\‹ˆÛÛ[ˆ]˜]\’XÛÛÛÛ[ˆ\Õš\ÚX›Q›Ü[š[X][ÛœÎˆÝ›Û™ÔÙ[‹š\ÚXš[]TÝ]\È	‰ˆ][K˜ÛÛ^œÚ\™YÛÛ^™[™\™ÞU\ØYÙTÙ][™ÜË›ÛÜ[[ÚšKˆXÝ[ÛŽˆš[ˆ
+BˆÝ›Û™ÔÙ[‹˜]˜]\’XÛÛÛÛ\Û™[H]˜]\’XÛÛÛÛ\Û™[ˆˆ]XÛÛ”Ú^™HH]˜]\’XÛÛ•šY]Ë\]Jˆ˜[œÚ][ÛŽˆš[[YYX]KˆÛÛ\Û™[ˆ[žPÛÛ\Û™[
+]˜]\’XÛÛÛÛ\Û™[
+Kˆ[š\›Û›Y[ˆßKˆÛÛZ[™\”Ú^™Nˆ][Kš[\˜XÝ[Û‹š\Ò[›[™S[ÙHÈÑÔÚ^™JÚYˆNŒZYÚˆNŒ
+HˆÑÔÚ^™JÚYˆÌ‹ŒZYÚˆÌ‹Œ
+Bˆ
+Bˆˆ]]˜]\’XÛÛ‘œ˜[YNˆÑÔ™XÝˆYˆ][Kš[\˜XÝ[Û‹š\Ò[›[™S[ÙHÂˆ]˜]\’XÛÛ‘œ˜[YHHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆÛÛ[™XÝ›ÜšYÚ[‹žNˆÛÛ[™XÝ›ÜšYÚ[‹žH
+ÈKŒ
+KÚ^™NˆXÛÛ”Ú^™JBˆH[ÙHÂˆ]˜]\’XÛÛ‘œ˜[YHHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆY][™ÓÙ™œÙ]
+È\˜[\Ë›Y[œÙ]
+È›ÛÜŠ
+Y[œÙ]H\˜[\Ë›Y[œÙ]HXÛÛ”Ú^™KÚY
+HÈ‹Œ
+H
+È™]™X[Ù™œÙ]NˆÛÛ[™XÝ›ÜšYÚ[‹žH
+È‹Œ
+KÚ^™NˆXÛÛ”Ú^™JBˆBˆ˜[œÚ][Û‹\]Qœ˜[YJšY]Îˆ]˜]\’XÛÛ•šY]Ëœ˜[YNˆ]˜]\’XÛÛ‘œ˜[YJBˆH[ÙHYˆ]]˜]\’XÛÛ•šY]ÈHÝ›Û™ÔÙ[‹˜]˜]\’XÛÛ•šY]ÈÂˆÝ›Û™ÔÙ[‹˜]˜]\’XÛÛ•šY]ÈHš[ˆ]˜]\’XÛÛ•šY]Ëœ™[[Ý™Qœ›ÛTÝ\\šY]Ê
+BˆBˆˆYˆ]\ÙPÚ]\Ý^[Ý]ÂˆÝ›Û™ÔÙ[‹˜]˜]\ÛÛZ[™\“›ÙKš\ÒY[ˆHYBˆH[ÙHÂˆÝ›Û™ÔÙ[‹˜]˜]\ÛÛZ[™\“›ÙKš\ÒY[ˆH˜[ÙBˆBˆˆ]Û›[™Qœ˜[YNˆÑÔ™XÝˆYˆÛ›[™R\Õ›ÚXÙPÚ]ÂˆÛ›[™Qœ˜[YHHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆ]˜]\‘œ˜[YKÚYHÛ›[™S^[Ý]ÚY
+ÈKŒHRTØÜ™Y[”^[Nˆ]˜]\‘œ˜[YKšZYÚHÛ›[™S^[Ý]šZYÚ
+ÈKŒHRTØÜ™Y[”^[
+KÚ^™NˆÛ›[™S^[Ý]
+BˆH[ÙHÂˆÛ›[™Qœ˜[YHHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆ]˜]\‘œ˜[YKÚYHÛ›[™S^[Ý]ÚYH‹ŒNˆ]˜]\‘œ˜[YKšZYÚHÛ›[™S^[Ý]šZYÚH‹Œ
+KÚ^™NˆÛ›[™S^[Ý]
+BˆBˆ˜[œÚ][Û‹\]Qœ˜[YJ›ÙNˆÝ›Û™ÔÙ[‹›Û›[™S›ÙKœ˜[YNˆÛ›[™Qœ˜[YJBˆˆYˆ]]˜]\“]™P˜YÙHHÝ›Û™ÔÙ[‹˜]˜]\“]™P˜YÙK]XÛÛ’[XYÙHH]˜]\“]™P˜YÙK™›Ü™YÜ›Ý[™š[XYÙK]Ý][™R[XYÙHH]˜]\“]™P˜YÙK›Ý][™Kš[XYÙHÂˆ]Ý][™R[œÙ]H
+Ý][™R[XYÙKœÚ^™KšZYÚHXÛÛ’[XYÙKœÚ^™KšZYÚ
+H
+ˆBˆ]]™P˜YÙQœ˜[YHHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆ›ÛÜŠ
+]˜]\‘œ˜[YKÚYHXÛÛ’[XYÙKœÚ^™KÚY
+H
+ˆJKNˆ]˜]\‘œ˜[YKšZYÚ
+ÈKŒHXÛÛ’[XYÙKœÚ^™KšZYÚ
+KÚ^™NˆXÛÛ’[XYÙKœÚ^™JBˆ˜[œÚ][Û‹\]Qœ˜[YJšY]Îˆ]˜]\“]™P˜YÙK™›Ü™YÜ›Ý[™œ˜[YNˆ]™P˜YÙQœ˜[YJBˆ˜[œÚ][Û‹\]Qœ˜[YJšY]Îˆ]˜]\“]™P˜YÙK›Ý][™Kœ˜[YNˆ]™P˜YÙQœ˜[YKš[œÙ]žJˆ[Ý][™R[œÙ]Nˆ[Ý][™R[œÙ]
+JBˆˆ]Y™™XÝ]™P˜XÚÙÜ›Ý[™ÛÛÜŽˆRPÛÛÜ‚ˆYˆ][Kš\Ô[›™YÂˆY™™XÝ]™P˜XÚÙÜ›Ý[™ÛÛÜˆH][Kœ™\Ù[][Û‘]K[YK˜Ú]\Ýœ[›™Y][P˜XÚÙÜ›Ý[™ÛÛÜ‚ˆH[ÙHÂˆY™™XÝ]™P˜XÚÙÜ›Ý[™ÛÛÜˆH][Kœ™\Ù[][Û‘]K[YK˜Ú]\Ýš][P˜XÚÙÜ›Ý[™ÛÛÜ‚ˆBˆˆ]YÚYÚ[HHÝ›Û™ÔÙ[‹šYÚYÚY˜XÚÙÜ›Ý[™›ÙKœÝ\\››ÙHOHš[ÈŒˆÝ›Û™ÔÙ[‹šYÚYÚY˜XÚÙÜ›Ý[™›ÙK˜[Bˆ]Ý][™PÛÛÜˆH][Kœ™\Ù[][Û‘]K[YK˜Ú]\Ýš][RYÚYÚY˜XÚÙÜ›Ý[™ÛÛÜ‹›Z^YÚ]
+Y™™XÝ]™P˜XÚÙÜ›Ý[™ÛÛÜ‹[NˆKŒHYÚYÚ[JBˆ˜[œÚ][Û‹\]U[ÛÛÜŠšY]Îˆ]˜]\“]™P˜YÙK›Ý][™KÛÛÜŽˆÝ][™PÛÛÜŠBˆBˆˆ]Û›[™R[›[™S˜]šYØ][Û‘œ˜XÝ[ÛŽˆÑÑ›Ø]H][Kš[\˜XÝ[Û‹š[›[™S˜]šYØ][Û“ØØ][ÛËœ›ÙÜ™\ÜÈÏÈŒˆ˜[œÚ][Û‹\]P[J›ÙNˆÝ›Û™ÔÙ[‹›Û›[™S›ÙK[NˆKŒHÛ›[™R[›[™S˜]šYØ][Û‘œ˜XÝ[ÛŠBˆ˜[œÚ][Û‹\]TÝX›^Y\•˜[œÙ›Ü›TØØ[J›ÙNˆÝ›Û™ÔÙ[‹›Û›[™S›ÙKØØ[Nˆ
+KŒHÛ›[™R[›[™S˜]šYØ][Û‘œ˜XÝ[ÛŠH
+ˆKŒ
+ÈÛ›[™R[›[™S˜]šYØ][Û‘œ˜XÝ[Ûˆ
+ˆŒJBˆˆ]Û›[™RXÛÛŽˆRR[XYÙOÂˆ]Y™™XÝ]™P˜XÚÙÜ›Ý[™ÛÛÜŽˆRPÛÛÜ‚ˆYˆÝ›Û™ÔÙ[‹œ™X[RYÚYÚYÂˆÛ›[™RXÛÛˆH™\Ù[][Û”™\ÛÝ\˜Ù\ÐÚ]\Ýœ™XÙ[Ý]\ÓÛ›[™RXÛÛŠ][Kœ™\Ù[][Û‘]K[YKÝ]NˆšYÚYÚY›ÚXÙPÚ]ˆÛ›[™R\Õ›ÚXÙPÚ]
+BˆY™™XÝ]™P˜XÚÙÜ›Ý[™ÛÛÜˆH][Kœ™\Ù[][Û‘]K[YK˜Ú]\Ýš][RYÚYÚY˜XÚÙÜ›Ý[™ÛÛÜ‚ˆH[ÙHYˆØ\ÙH]˜Ú]\Ý
+[™^
+HH][Kš[™^[™^œ[›š[™Ò[™^OHš[ÂˆÛ›[™RXÛÛˆH™\Ù[][Û”™\ÛÝ\˜Ù\ÐÚ]\Ýœ™XÙ[Ý]\ÓÛ›[™RXÛÛŠ][Kœ™\Ù[][Û‘]K[YKÝ]Nˆœ[›™Y›ÚXÙPÚ]ˆÛ›[™R\Õ›ÚXÙPÚ]
+BˆY™™XÝ]™P˜XÚÙÜ›Ý[™ÛÛÜˆH][Kœ™\Ù[][Û‘]K[YK˜Ú]\Ýœ[›™Y][P˜XÚÙÜ›Ý[™ÛÛÜ‚ˆH[ÙHÂˆÛ›[™RXÛÛˆH™\Ù[][Û”™\ÛÝ\˜Ù\ÐÚ]\Ýœ™XÙ[Ý]\ÓÛ›[™RXÛÛŠ][Kœ™\Ù[][Û‘]K[YKÝ]Nˆœ™YÝ[\‹›ÚXÙPÚ]ˆÛ›[™R\Õ›ÚXÙPÚ]
+BˆY™™XÝ]™P˜XÚÙÜ›Ý[™ÛÛÜˆH][Kœ™\Ù[][Û‘]K[YK˜Ú]\Ýš][P˜XÚÙÜ›Ý[™ÛÛÜ‚ˆBˆÝ›Û™ÔÙ[‹›Û›[™S›ÙKœÙ][XYÙJÛ›[™RXÛÛ‹ÛÛÜŽˆ][Kœ™\Ù[][Û‘]K[YK›\Ýš][PÚXÚÐÛÛÜœË™›Ü™YÜ›Ý[™ÛÛÜ‹˜[œÚ][ÛŽˆš[[YYX]JBˆˆYˆ\ÔÝXœØÜš\[Û‹]]Ü™[[Ý™U[Y[Ý]OHš[Âˆ]Ý\•šY]ÎˆÝ\•šY]ÂˆYˆ]Ý\œ™[HÝ›Û™ÔÙ[‹œÝ\•šY]ÈÂˆÝ\•šY]ÈHÝ\œ™[ˆH[ÙHÂˆÝ\•šY]ÈHÝ\•šY]Ê
+BˆÝ›Û™ÔÙ[‹œÝ\•šY]ÈHÝ\•šY]ÂˆÝ›Û™ÔÙ[‹˜ÛÛ^ÛÛZ[™\‹šY]Ë˜YÝXšY]ÊÝ\•šY]ÊBˆBˆÝ\•šY]Ë›Ý][™PÛÛÜˆHY™™XÝ]™P˜XÚÙÜ›Ý[™ÛÛÜ‚ˆˆ]Ý\”Ú^™HHÑÔÚ^™JÚYˆŒŒZYÚˆŒŒ
+Bˆ]Ý\‘œ˜[YHHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆ]˜]\‘œ˜[YK›X^HÝ\”Ú^™KÚY
+ÈKŒNˆ]˜]\‘œ˜[YK›X^HHÝ\”Ú^™KšZYÚ
+ÈKŒ
+KÚ^™NˆÝ\”Ú^™JBˆ˜[œÚ][Û‹\]Qœ˜[YJšY]ÎˆÝ\•šY]Ëœ˜[YNˆÝ\‘œ˜[YJBˆH[ÙHYˆ]Ý\•šY]ÈHÝ›Û™ÔÙ[‹œÝ\•šY]ÈÂˆÝ›Û™ÔÙ[‹œÝ\•šY]ÈHš[ˆÝ\•šY]Ëœ™[[Ý™Qœ›ÛTÝ\\šY]Ê
+BˆBˆˆ]]]Ü™[[Ý™U[Y[Ý]œ˜XÝ[ÛŽˆÑÑ›Ø]ˆYˆÛ›[™HÂˆ]]Ü™[[Ý™U[Y[Ý]œ˜XÝ[ÛˆHŒˆH[ÙHÂˆ]]Ü™[[Ý™U[Y[Ý]œ˜XÝ[ÛˆHKŒHÛ›[™R[›[™S˜]šYØ][Û‘œ˜XÝ[Û‚ˆBˆˆYˆ]]]Ü™[[Ý™U[Y[Ý]H]]Ü™[[Ý™U[Y[Ý]Âˆ]]˜]\•[Y\˜YÙNˆ]˜]\˜YÙUšY]Âˆ˜\ˆ]˜]\•[Y\•˜[œÚ][ÛˆH˜[œÚ][Û‚ˆYˆX]˜]\•[Y\•˜[œÚ][Û‹š\Ð[š[X]Y[š[X]SÛ›[™HÂˆ]˜]\•[Y\•˜[œÚ][ÛˆH˜[š[X]Y
+\˜][ÛŽˆŒËÝ\™NˆœÜš[™ÊBˆBˆYˆ]Ý\œ™[HÝ›Û™ÔÙ[‹˜]˜]\•[Y\˜YÙHÂˆ]˜]\•[Y\˜YÙHHÝ\œ™[ˆH[ÙHÂˆ]˜]\•[Y\•˜[œÚ][ÛˆHš[[YYX]Bˆ]˜]\•[Y\˜YÙHH]˜]\˜YÙUšY]Êœ˜[YNˆÑÔ™XÝ
+
+JBˆÝ›Û™ÔÙ[‹˜]˜]\•[Y\˜YÙHH]˜]\•[Y\˜YÙBˆÝ›Û™ÔÙ[‹˜]˜]\“›ÙKšY]Ë˜YÝXšY]Ê]˜]\•[Y\˜YÙJBˆBˆ]]˜]\˜YÙTÚ^™HHÑÔÚ^™JÚYˆ]˜]\•[Y\˜YÙQX[Y]\‹ZYÚˆ]˜]\•[Y\˜YÙQX[Y]\ŠBˆ]˜]\•[Y\˜YÙK\]JÚ^™Nˆ]˜]\˜YÙTÚ^™K^ˆÚÜ[YR[\˜[Ýš[™ÊÝš[™ÜÎˆ][Kœ™\Ù[][Û‘]KœÝš[™ÜË˜[YNˆ]]Ü™[[Ý™U[Y[Ý]\ÙS\™ÙQ›Ü›X]ˆYJJBˆ]]˜]\˜YÙQœ˜[YHHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆ]˜]\‘œ˜[YKÚYH]˜]\˜YÙTÚ^™KÚYNˆ]˜]\‘œ˜[YKšZYÚH]˜]\˜YÙTÚ^™KšZYÚ
+KÚ^™Nˆ]˜]\˜YÙTÚ^™JBˆ]˜]\•[Y\•˜[œÚ][Û‹\]TÜÚ][ÛŠ^Y\Žˆ]˜]\•[Y\˜YÙK›^Y\‹ÜÚ][ÛŽˆ]˜]\˜YÙQœ˜[YK˜Ù[\ŠBˆ]˜]\•[Y\•˜[œÚ][Û‹\]P›Ý[™Ê^Y\Žˆ]˜]\•[Y\˜YÙK›^Y\‹›Ý[™ÎˆÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+
+KÚ^™Nˆ]˜]\˜YÙQœ˜[YKœÚ^™JJBˆ]˜]\•[Y\•˜[œÚ][Û‹\]U˜[œÙ›Ü›TØØ[J^Y\Žˆ]˜]\•[Y\˜YÙK›^Y\‹ØØ[Nˆ]]Ü™[[Ý™U[Y[Ý]œ˜XÝ[Ûˆ
+ˆKŒ
+È
+KŒH]]Ü™[[Ý™U[Y[Ý]œ˜XÝ[ÛŠH
+ˆŒJBˆˆÝ›Û™ÔÙ[‹˜]˜]\“›ÙK˜˜YÙUšY]ÈH]˜]\•[Y\˜YÙBˆH[ÙHYˆ]]˜]\•[Y\˜YÙHHÝ›Û™ÔÙ[‹˜]˜]\•[Y\˜YÙHÂˆÝ›Û™ÔÙ[‹˜]˜]\•[Y\˜YÙHHš[ˆÝ›Û™ÔÙ[‹˜]˜]\“›ÙK˜˜YÙUšY]ÈHš[ˆ]˜]\•[Y\˜YÙKœ™[[Ý™Qœ›ÛTÝ\\šY]Ê
+BˆBˆˆ]ÈHYX\Ý\™P\J
+Bˆ]ÈH]P\J
+Bˆˆ˜\ˆÝ\œ™[^Û˜\ÚÝšY]ÎˆRUšY]ÏÂˆYˆ˜[œÚ][Û‹š\Ð[š[X]Y]Ý\œ™[][KÝ\œ™[][K™Y][™ÈOH][K™Y][™ËÝ›Û™ÔÙ[‹^›ÙK^›ÙK˜ØXÚY^[Ý]Ë›[™\Ô™XÝÊ
+HOH^^[Ý]›[™\Ô™XÝÊ
+HÂˆYˆ]^Û˜\ÚÝšY]ÈHÝ›Û™ÔÙ[‹^›ÙK^›ÙKšY]ËœÛ˜\ÚÝÛÛ[™YJ
+HÂˆ^Û˜\ÚÝšY]Ë›^Y\‹˜[˜ÚÜ”Ú[HÑÔÚ[
+
+BˆÝ\œ™[^Û˜\ÚÝšY]ÈH^Û˜\ÚÝšY]ÂˆÝ›Û™ÔÙ[‹^›ÙK^›ÙKšY]ËœÝ\\šY]ÏËš[œÙ\ÝXšY]Ê^Û˜\ÚÝšY]ËX›Ý™TÝXšY]ÎˆÝ›Û™ÔÙ[‹^›ÙK^›ÙKšY]ÊBˆ^Û˜\ÚÝšY]Ë›^Y\‹˜[š[X]P[Jœ›ÛNˆKŒÎˆŒ\˜][ÛŽˆŒ‹™[[Ý™SÛÛÛ\][ÛŽˆ˜[ÙKÛÛ\][ÛŽˆÈÝÙXZÈ^Û˜\ÚÝšY]×HÈ[‚ˆ^Û˜\ÚÝšY]ÏËœ™[[Ý™Qœ›ÛTÝ\\šY]Ê
+BˆJBˆÝ›Û™ÔÙ[‹^›ÙK^›ÙK›^Y\‹˜[š[X]P[Jœ›ÛNˆŒÎˆKŒ\˜][ÛŽˆŒN
+BˆBˆBˆˆ]ÈH^\J^›ÙUÚ][]Y\Ë\™Ý[Y[ÊˆÛÛ^ˆ][K˜ÛÛ^ˆØXÚNˆ][Kš[\˜XÝ[Û‹˜[š[X][ÛØXÚKˆ™[™\™\Žˆ][Kš[\˜XÝ[Û‹˜[š[X][Û”™[™\™\‹ˆXÙZÛ\ÛÛÜŽˆ][Kœ™\Ù[][Û‘]K[YK›\Ý›YYXTXÙZÛ\ÛÛÜ‹ˆ][\Þ[˜Ú›Û›Ý\ÎˆÞ[˜Ú›Û›Ý\ÓØYÂˆ
+JBˆˆ˜\ˆÜ›Ü[UÜXÔ™XÝH]]Ü\J
+BˆYˆZ\Ñš\œÝ›Ü[U™XYÙ[XÝX›HÂˆÜ›Ü[UÜXÔ™XÝHš[ˆBˆˆ]ÈH]P\J
+Bˆ]ÈH˜YÙP\J[š[X]P˜YÙ\ËZ\Ó]]Y
+Bˆ]ÈHY[[Û˜YÙP\J[š[X]P˜YÙ\ËYJBˆ]ÈHÛ›[™P\J[š[X]PÛÛ[	‰ˆ[š[X]SÛ›[™JBˆˆ˜\ˆ]Qœ˜[YHHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆÛÛ[™XÝ›X^H]S^[Ý]œÚ^™KÚYNˆÛÛ[™XÝ›ÜšYÚ[‹žH
+È‹Œ
+KÚ^™Nˆ]S^[Ý]œÚ^™JBˆˆYˆØ\ÙH]œY\ŠY\‘]JHH][K˜ÛÛ[]Ý\ÝÛSY\ÜØYÙS\Ý]HHY\‘]K˜Ý\ÝÛSY\ÜØYÙS\Ý]KÝ\ÝÛSY\ÜØYÙS\Ý]K›Y\ÜØYÙPÛÝ[OHš[Ý\ÝÛSY\ÜØYÙS\Ý]K˜ÛÛ[X[™™Yš^OHš[Âˆ]Qœ˜[YK›ÜšYÚ[‹žOHLŒˆˆ]]Q\ØÛÜÝ\™RXÛÛ•šY]ÎˆRR[XYÙUšY]ÂˆYˆ]Ý\œ™[HÝ›Û™ÔÙ[‹™]Q\ØÛÜÝ\™RXÛÛ•šY]ÈÂˆ]Q\ØÛÜÝ\™RXÛÛ•šY]ÈHÝ\œ™[ˆH[ÙHÂˆ]Q\ØÛÜÝ\™RXÛÛ•šY]ÈHRR[XYÙUšY]Ê[XYÙNˆRR[XYÙJ[™R[XYÙS˜[YNˆ’][H\ÝÑ\ØÛÜÝ\™P\œ›ÝÈŠOËÚ]™[™\š[™Ó[ÙJ˜[Ø^\Õ[\]JJBˆÝ›Û™ÔÙ[‹™]Q\ØÛÜÝ\™RXÛÛ•šY]ÈH]Q\ØÛÜÝ\™RXÛÛ•šY]ÂˆÝ›Û™ÔÙ[‹›XZ[ÛÛ[ÛÛZ[™\“›ÙKšY]Ë˜YÝXšY]Ê]Q\ØÛÜÝ\™RXÛÛ•šY]ÊBˆBˆ]Q\ØÛÜÝ\™RXÛÛ•šY]Ë[ÛÛÜˆH][Kœ™\Ù[][Û‘]K[YK›\Ý™\ØÛÜÝ\™P\œ›ÝÐÛÛÜ‚ˆ]XÛÛ”ØØ[NˆÑÑ›Ø]HÂˆYˆ][XYÙHH]Q\ØÛÜÝ\™RXÛÛ•šY]Ëš[XYÙHÂˆ][XYÙTÚ^™HHÑÔÚ^™JÚYˆ›ÛÜŠ[XYÙKœÚ^™KÚY
+ˆXÛÛ”ØØ[JKZYÚˆ›ÛÜŠ[XYÙKœÚ^™KšZYÚ
+ˆXÛÛ”ØØ[JJBˆ]XÛÛ‘œ˜[YHHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆÛÛ[™XÝ›ÜšYÚ[‹ž
+ÈÛÛ[™XÝœÚ^™KÚYH[XYÙTÚ^™KÚY
+ÈŒNˆ›ÛÜ•ÔØÜ™Y[”^[Ê]Qœ˜[YK›ZYHH[XYÙTÚ^™KšZYÚ
+ˆJJKÚ^™Nˆ[XYÙTÚ^™JBˆ]Q\ØÛÜÝ\™RXÛÛ•šY]Ë™œ˜[YHHXÛÛ‘œ˜[YBˆBˆH[ÙHYˆ]]Q\ØÛÜÝ\™RXÛÛ•šY]ÈHÝ›Û™ÔÙ[‹™]Q\ØÛÜÝ\™RXÛÛ•šY]ÈÂˆÝ›Û™ÔÙ[‹™]Q\ØÛÜÝ\™RXÛÛ•šY]ÈHš[ˆ]Q\ØÛÜÝ\™RXÛÛ•šY]Ëœ™[[Ý™Qœ›ÛTÝ\\šY]Ê
+BˆBˆˆ˜[œÚ][Û‹\]Qœ˜[YJ›ÙNˆÝ›Û™ÔÙ[‹™]S›ÙKœ˜[YNˆ]Qœ˜[YJBˆˆ˜\ˆÝ]\ÓÙ™œÙ]ˆÑÑ›Ø]HŒˆYˆ]]RXÛÛ’[XYÙHÂˆÝ]\ÓÙ™œÙ]
+ÏH‹Œ
+È]RXÛÛ’[XYÙKœÚ^™KÚY
+ÈŒˆˆ]]TÝ]\ÒXÛÛ“›ÙNˆTÒ[XYÙS›ÙBˆYˆ]Ý\œ™[HÝ›Û™ÔÙ[‹™]TÝ]\ÒXÛÛ“›ÙHÂˆ]TÝ]\ÒXÛÛ“›ÙHHÝ\œ™[ˆH[ÙHÂˆ]TÝ]\ÒXÛÛ“›ÙHHTÒ[XYÙS›ÙJ
+BˆÝ›Û™ÔÙ[‹™]TÝ]\ÒXÛÛ“›ÙHH]TÝ]\ÒXÛÛ“›ÙBˆÝ›Û™ÔÙ[‹›XZ[ÛÛ[ÛÛZ[™\“›ÙK˜YÝX››ÙJ]TÝ]\ÒXÛÛ“›ÙJBˆBˆ]TÝ]\ÒXÛÛ“›ÙKš[XYÙHH]RXÛÛ’[XYÙBˆˆ˜\ˆ]TÝ]\ÖˆÑÑ›Ø]HÛÛ[™XÝ›ÜšYÚ[‹žˆ]TÝ]\Ö
+ÏHÛÛ[™XÝœÚ^™KÚYˆ]TÝ]\Ö
+ÏHY]S^[Ý]œÚ^™KÚYHŒH]RXÛÛ’[XYÙKœÚ^™KÚYˆˆ˜\ˆ]TÝ]\ÖNˆÑÑ›Ø]HÛÛ[™XÝ›ÜšYÚ[‹žH
+È‹Œ
+ÈRTØÜ™Y[”^[ˆ]TÝ]\ÖH
+ÏHURTØÜ™Y[”^[
+È›ÛÜŠ
+]S^[Ý]œÚ^™KšZYÚH]RXÛÛ’[XYÙKœÚ^™KšZYÚ
+HÈ‹Œ
+Bˆˆ˜[œÚ][Û‹\]Qœ˜[YJ›ÙNˆ]TÝ]\ÒXÛÛ“›ÙKœ˜[YNˆÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆ]TÝ]\ÖNˆ]TÝ]\ÖJKÚ^™Nˆ]RXÛÛ’[XYÙKœÚ^™JJBˆH[ÙHYˆ]]TÝ]\ÒXÛÛ“›ÙHHÝ›Û™ÔÙ[‹™]TÝ]\ÒXÛÛ“›ÙHÂˆÝ›Û™ÔÙ[‹™]TÝ]\ÒXÛÛ“›ÙHHš[ˆ]TÝ]\ÒXÛÛ“›ÙKœ™[[Ý™Qœ›ÛTÝ\\››ÙJ
+BˆBˆˆ]Ý]\ÔÚ^™HHÑÔÚ^™JÚYˆŒZYÚˆŒ
+Bˆˆ˜\ˆÝ]\ÖˆÑÑ›Ø]HÛÛ[™XÝ›ÜšYÚ[‹žˆÝ]\Ö
+ÏHÛÛ[™XÝœÚ^™KÚYˆÝ]\Ö
+ÏHY]S^[Ý]œÚ^™KÚYHÝ]\ÔÚ^™KÚYHÝ]\ÓÙ™œÙ]ˆˆÝ›Û™ÔÙ[‹œÝ]\Ó›ÙK™œ˜[YHHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆÝ]\ÖNˆÛÛ[™XÝ›ÜšYÚ[‹žH
+È‹ŒHRTØÜ™Y[”^[
+È›ÛÜŠ
+]S^[Ý]œÚ^™KšZYÚHÝ]\ÔÚ^™KšZYÚ
+HÈ‹Œ
+JKÚ^™NˆÝ]\ÔÚ^™JBˆÝ›Û™ÔÙ[‹œÝ]\Ó›ÙK™›ÛÚ^™HH][Kœ™\Ù[][Û‘]K™›ÛÚ^™Kš][S\Ý˜\ÙQ›ÛÚ^™Bˆ]ÈHÝ›Û™ÔÙ[‹œÝ]\Ó›ÙK˜[œÚ][Û•ÔÝ]JÝ]\ÔÝ]K[š[X]Yˆ[š[X]PÛÛ[
+Bˆˆ]šYÚXØÙ\ÜÛÜžU™\XØ[Ù™œÙ]ˆÑÑ›Ø]H›ÛÜ•ÔØÜ™Y[”^[ÊMŒ
+ˆZ[ŠKŒ][Kœ™\Ù[][Û‘]K™›ÛÚ^™Kš][S\Ý˜\ÙQ›ÛÚ^™HÈMËŒ
+JBˆ˜\ˆ™^˜YÙVˆÑÑ›Ø]HÛÛ[™XÝ›X^ˆYˆ]ÈHÝ\œ™[˜YÙP˜XÚÙÜ›Ý[™[XYÙHÂˆ]˜YÙQœ˜[YHHÑÔ™XÝ
+ˆ™^˜YÙVH˜YÙS^[Ý]ÚYNˆÛÛ[™XÝ›X^HH˜YÙS^[Ý]šZYÚ
+ÈšYÚXØÙ\ÜÛÜžU™\XØ[Ù™œÙ]ÚYˆ˜YÙS^[Ý]ÚYZYÚˆ˜YÙS^[Ý]šZYÚ
+Bˆˆ˜[œÚ][Û‹\]Qœ˜[YJ›ÙNˆÝ›Û™ÔÙ[‹˜˜YÙS›ÙKœ˜[YNˆ˜YÙQœ˜[YJBˆ™^˜YÙVOH˜YÙS^[Ý]ÚY
+È‹ŒˆˆYˆ][K\ÙPÛÛ[][š]UšY]Ó^[Ý]ÂˆÝ›Û™ÔÙ[‹˜˜YÙS›ÙK›^Y\‹œ˜\Ý\š^˜][Û”ØØ[HHRTØÜ™Y[”ØØ[BˆÝ›Û™ÔÙ[‹˜˜YÙS›ÙK›^Y\‹œÚÝ[˜\Ý\š^™HHYBˆBˆBˆˆYˆÝ\œ™[Y[[Û˜YÙR[XYÙHOHš[Ý\œ™[˜YÙP˜XÚÙÜ›Ý[™[XYÙHOHš[Âˆ]˜YÙQœ˜[YHHÑÔ™XÝ
+ˆ™^˜YÙVHY[[Û˜YÙS^[Ý]ÚYNˆÛÛ[™XÝ›X^HHY[[Û˜YÙS^[Ý]šZYÚ
+ÈšYÚXØÙ\ÜÛÜžU™\XØ[Ù™œÙ]ÚYˆY[[Û˜YÙS^[Ý]ÚYZYÚˆY[[Û˜YÙS^[Ý]šZYÚ
+Bˆˆ˜[œÚ][Û‹\]Qœ˜[YJ›ÙNˆÝ›Û™ÔÙ[‹›Y[[Û˜YÙS›ÙKœ˜[YNˆ˜YÙQœ˜[YJBˆ™^˜YÙVOHY[[Û˜YÙS^[Ý]ÚY
+È‹ŒˆˆYˆ][K\ÙPÛÛ[][š]UšY]Ó^[Ý]ÂˆÝ›Û™ÔÙ[‹›Y[[Û˜YÙS›ÙK›^Y\‹œ˜\Ý\š^˜][Û”ØØ[HHRTØÜ™Y[”ØØ[BˆÝ›Û™ÔÙ[‹›Y[[Û˜YÙS›ÙK›^Y\‹œÚÝ[˜\Ý\š^™HHYBˆBˆBˆˆYˆ]Ý\œ™[[›™YXÛÛ’[XYÙHHÝ\œ™[[›™YXÛÛ’[XYÙHÂˆÝ›Û™ÔÙ[‹œ[›™YXÛÛ“›ÙKš[XYÙHHÝ\œ™[[›™YXÛÛ’[XYÙBˆÝ›Û™ÔÙ[‹œ[›™YXÛÛ“›ÙKš\ÒY[ˆH˜[ÙBˆˆ][›™YXÛÛ”Ú^™HHÝ\œ™[[›™YXÛÛ’[XYÙKœÚ^™Bˆ][›™YXÛÛ‘œ˜[YHHÑÔ™XÝ
+ˆ™^˜YÙVH[›™YXÛÛ”Ú^™KÚYNˆÛÛ[™XÝ›X^HH[›™YXÛÛ”Ú^™KšZYÚ
+ÈšYÚXØÙ\ÜÛÜžU™\XØ[Ù™œÙ]ÚYˆ[›™YXÛÛ”Ú^™KÚYZYÚˆ[›™YXÛÛ”Ú^™KšZYÚ
+BˆˆÝ›Û™ÔÙ[‹œ[›™YXÛÛ“›ÙK™œ˜[YHH[›™YXÛÛ‘œ˜[YBˆ™^˜YÙVOH[›™YXÛÛ”Ú^™KÚY
+È‹ŒˆH[ÙHÂˆÝ›Û™ÔÙ[‹œ[›™YXÛÛ“›ÙKš[XYÙHHš[ˆÝ›Û™ÔÙ[‹œ[›™YXÛÛ“›ÙKš\ÒY[ˆHYBˆBˆˆYˆ]
+XÝ[Û]Û•]S›ÙS^[Ý]\JHHXÝ[Û]Û•]S›ÙS^[Ý][™\HÂˆ]XÝ[Û]Û”ÚYR[œÙ]H›ÛÜŠ][Kœ™\Ù[][Û‘]K™›ÛÚ^™Kš][S\Ý˜\ÙQ›ÛÚ^™H
+ˆL‹ŒÈMËŒ
+Bˆ]XÝ[Û]Û•Ü[œÙ]H›ÛÜŠ][Kœ™\Ù[][Û‘]K™›ÛÚ^™Kš][S\Ý˜\ÙQ›ÛÚ^™H
+ˆKŒÈMËŒ
+Bˆ]XÝ[Û]Û›ÝÛR[œÙ]H›ÛÜŠ][Kœ™\Ù[][Û‘]K™›ÛÚ^™Kš][S\Ý˜\ÙQ›ÛÚ^™H
+ˆŒÈMËŒ
+Bˆˆ]XÝ[Û]Û”Ú^™HHÑÔÚ^™JÚYˆXÝ[Û]Û•]S›ÙS^[Ý]œÚ^™KÚY
+ÈXÝ[Û]Û”ÚYR[œÙ]
+ˆ‹ŒZYÚˆXÝ[Û]Û•]S›ÙS^[Ý]œÚ^™KšZYÚ
+ÈXÝ[Û]Û•Ü[œÙ]
+ÈXÝ[Û]Û›ÝÛR[œÙ]
+Bˆ˜\ˆXÝ[Û]Û‘œ˜[YHHÑÔ™XÝ
+ˆ™^˜YÙVHXÝ[Û]Û”Ú^™KÚYNˆÛÛ[™XÝ›Z[–H
+È›ÛÜŠ
+ÛÛ[™XÝšZYÚHXÝ[Û]Û”Ú^™KšZYÚ
+H
+ˆJKÚYˆXÝ[Û]Û”Ú^™KÚYZYÚˆXÝ[Û]Û”Ú^™KšZYÚ
+BˆXÝ[Û]Û‘œ˜[YK›ÜšYÚ[‹žHHX^
+XÝ[Û]Û‘œ˜[YK›ÜšYÚ[‹žK]Qœ˜[YK›X^H
+È›ÛÜŠ][Kœ™\Ù[][Û‘]K™›ÛÚ^™Kš][S\Ý˜\ÙQ›ÛÚ^™H
+ˆŒÈMËŒ
+JBˆXÝ[Û]Û‘œ˜[YK›ÜšYÚ[‹žH
+ÏHŒˆˆ]XÝ[Û]Û“›ÙNˆYÚYÚX›P]Û“›ÙBˆ˜\ˆ[š[X]PXÝ[Û]Û’[ˆH˜[ÙBˆYˆ]Ý\œ™[HÝ›Û™ÔÙ[‹˜XÝ[Û]Û“›ÙHÂˆXÝ[Û]Û“›ÙHHÝ\œ™[ˆH[ÙHÂˆ[š[X]PXÝ[Û]Û’[ˆHYBˆXÝ[Û]Û“›ÙHHYÚYÚX›P]Û“›ÙJ
+BˆÝ›Û™ÔÙ[‹˜XÝ[Û]Û“›ÙHHXÝ[Û]Û“›ÙBˆÝ›Û™ÔÙ[‹›XZ[ÛÛ[ÛÛZ[™\“›ÙK˜YÝX››ÙJXÝ[Û]Û“›ÙJBˆXÝ[Û]Û“›ÙK˜Y\™Ù]
+Ý›Û™ÔÙ[‹XÝ[ÛŽˆÜÙ[XÝÜŠÝ›Û™ÔÙ[‹˜XÝ[Û]Û”™\ÜÙY
+K›ÜÛÛ›Û]™[ÎˆÝXÚ\[œÚYJBˆBˆˆ]XÝ[Û]Û˜XÚÙÜ›Ý[™šY]ÎˆRR[XYÙUšY]ÂˆYˆ]Ý\œ™[HÝ›Û™ÔÙ[‹˜XÝ[Û]Û˜XÚÙÜ›Ý[™šY]ÈÂˆXÝ[Û]Û˜XÚÙÜ›Ý[™šY]ÈHÝ\œ™[ˆH[ÙHÂˆXÝ[Û]Û˜XÚÙÜ›Ý[™šY]ÈHRR[XYÙUšY]Ê
+BˆÝ›Û™ÔÙ[‹˜XÝ[Û]Û˜XÚÙÜ›Ý[™šY]ÈHXÝ[Û]Û˜XÚÙÜ›Ý[™šY]ÂˆXÝ[Û]Û“›ÙKšY]Ë˜YÝXšY]ÊXÝ[Û]Û˜XÚÙÜ›Ý[™šY]ÊBˆBˆˆYˆXÝ[Û]Û˜XÚÙÜ›Ý[™šY]Ëš[XYÙOËœÚ^™KšZYÚOHXÝ[Û]Û”Ú^™KšZYÚÂˆXÝ[Û]Û˜XÚÙÜ›Ý[™šY]Ëš[XYÙHHÙ[™\˜]TÝ™]ÚX›Qš[YÚ\˜ÛR[XYÙJX[Y]\ŽˆXÝ[Û]Û”Ú^™KšZYÚÛÛÜŽˆÚ]JOËÚ]™[™\š[™Ó[ÙJ˜[Ø^\Õ[\]JBˆBˆˆXÝ[Û]Û˜XÚÙÜ›Ý[™šY]Ë[ÛÛÜˆH[YK[œ™XY˜YÙPXÝ]™P˜XÚÙÜ›Ý[™ÛÛÜ‚ˆˆ]XÝ[Û]Û•]S›ÙHH\J
+BˆYˆÝ›Û™ÔÙ[‹˜XÝ[Û]Û•]S›ÙHOOHXÝ[Û]Û•]S›ÙHÂˆÝ›Û™ÔÙ[‹˜XÝ[Û]Û•]S›ÙOËœ™[[Ý™Qœ›ÛTÝ\\››ÙJ
+BˆÝ›Û™ÔÙ[‹˜XÝ[Û]Û•]S›ÙHHXÝ[Û]Û•]S›ÙBˆXÝ[Û]Û“›ÙK˜YÝX››ÙJXÝ[Û]Û•]S›ÙJBˆBˆˆXÝ[Û]Û“›ÙKš\Õ\Ù\’[\˜XÝ[Û‘[˜X›YHYBˆXÝ[Û]Û“›ÙK™œ˜[YHHXÝ[Û]Û‘œ˜[YBˆXÝ[Û]Û˜XÚÙÜ›Ý[™šY]Ë™œ˜[YHHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+
+KÚ^™NˆXÝ[Û]Û‘œ˜[YKœÚ^™JBˆXÝ[Û]Û•]S›ÙK™œ˜[YHHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆ›ÛÜ•ÔØÜ™Y[”^[Ê
+XÝ[Û]Û‘œ˜[YKÚYHXÝ[Û]Û•]S›ÙS^[Ý]œÚ^™KÚY
+H
+ˆJKNˆXÝ[Û]Û•Ü[œÙ]
+KÚ^™NˆXÝ[Û]Û•]S›ÙS^[Ý]œÚ^™JBˆYˆ[š[X]PXÝ[Û]Û’[ˆÂˆXÝ[Û]Û“›ÙK˜[HHŒˆBˆ˜[œÚ][Û‹\]P[J›ÙNˆXÝ[Û]Û“›ÙK[NˆKŒ
+Bˆˆ™^˜YÙVOHXÝ[Û]Û”Ú^™KÚY
+È‹ŒˆH[ÙHÂˆYˆ]XÝ[Û]Û“›ÙHHÝ›Û™ÔÙ[‹˜XÝ[Û]Û“›ÙHÂˆ]XÝ[Û]Û•]S›ÙHHÝ›Û™ÔÙ[‹˜XÝ[Û]Û•]S›ÙBˆ]XÝ[Û]Û˜XÚÙÜ›Ý[™šY]ÈHÝ›Û™ÔÙ[‹˜XÝ[Û]Û˜XÚÙÜ›Ý[™šY]ÂˆXÝ[Û]Û“›ÙKš\Õ\Ù\’[\˜XÝ[Û‘[˜X›YH˜[ÙB‚ˆÝ›Û™ÔÙ[‹˜XÝ[Û]Û•]S›ÙHHš[ˆÝ›Û™ÔÙ[‹˜XÝ[Û]Û˜XÚÙÜ›Ý[™šY]ÈHš[ˆÝ›Û™ÔÙ[‹˜XÝ[Û]Û“›ÙHHš[‚ˆ˜[œÚ][Û‹\]P[J›ÙNˆXÝ[Û]Û“›ÙK[NˆŒÛÛ\][ÛŽˆÈÝÙXZÈXÝ[Û]Û“›ÙKÙXZÈXÝ[Û]Û•]S›ÙKÙXZÈXÝ[Û]Û˜XÚÙÜ›Ý[™šY]×HÈ[‚ˆXÝ[Û]Û•]S›ÙOËœ™[[Ý™Qœ›ÛTÝ\\››ÙJ
+BˆXÝ[Û]Û˜XÚÙÜ›Ý[™šY]ÏËœ™[[Ý™Qœ›ÛTÝ\\šY]Ê
+BˆXÝ[Û]Û“›ÙOËœ™[[Ý™Qœ›ÛTÝ\\››ÙJ
+BˆJBˆH[ÙHÂˆYˆ]XÝ[Û]Û•]S›ÙHHÝ›Û™ÔÙ[‹˜XÝ[Û]Û•]S›ÙHÂˆXÝ[Û]Û•]S›ÙKœ™[[Ý™Qœ›ÛTÝ\\››ÙJ
+BˆÝ›Û™ÔÙ[‹˜XÝ[Û]Û•]S›ÙHHš[ˆBˆYˆ]XÝ[Û]Û˜XÚÙÜ›Ý[™šY]ÈHÝ›Û™ÔÙ[‹˜XÝ[Û]Û˜XÚÙÜ›Ý[™šY]ÈÂˆXÝ[Û]Û˜XÚÙÜ›Ý[™šY]Ëœ™[[Ý™Qœ›ÛTÝ\\šY]Ê
+BˆÝ›Û™ÔÙ[‹˜XÝ[Û]Û˜XÚÙÜ›Ý[™šY]ÈHš[ˆBˆBˆBˆˆ˜\ˆ]SÙ™œÙ]ˆÑÑ›Ø]H]SYÙ™œÙ]ˆYˆ]Ý\œ™[ÙXÜ™]XÛÛ’[XYÙHHÝ\œ™[ÙXÜ™]XÛÛ’[XYÙHÂˆ]XÛÛ“›ÙNˆTÒ[XYÙS›ÙBˆYˆ]Ý\œ™[HÝ›Û™ÔÙ[‹œÙXÜ™]XÛÛ“›ÙHÂˆXÛÛ“›ÙHHÝ\œ™[ˆH[ÙHÂˆXÛÛ“›ÙHHTÒ[XYÙS›ÙJ
+BˆXÛÛ“›ÙKš\Ó^Y\˜XÚÙYHYBˆXÛÛ“›ÙK™\Ü^\Ð\Þ[˜Ú›Û›Ý\ÛHH˜[ÙBˆXÛÛ“›ÙK™\Ü^UÚ]Ý]›ØÙ\ÜÚ[™ÈHYBˆÝ›Û™ÔÙ[‹›XZ[ÛÛ[ÛÛZ[™\“›ÙK˜YÝX››ÙJXÛÛ“›ÙJBˆÝ›Û™ÔÙ[‹œÙXÜ™]XÛÛ“›ÙHHXÛÛ“›ÙBˆBˆXÛÛ“›ÙKš[XYÙHHÝ\œ™[ÙXÜ™]XÛÛ’[XYÙBˆ˜[œÚ][Û‹\]Qœ˜[YJ›ÙNˆXÛÛ“›ÙKœ˜[YNˆÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆÛÛ[™XÝ›ÜšYÚ[‹ž
+È]SYÙ™œÙ]NˆÛÛ[™XÝ›ÜšYÚ[‹žH
+È›ÛÜŠ
+]S^[Ý]œÚ^™KšZYÚHÝ\œ™[ÙXÜ™]XÛÛ’[XYÙKœÚ^™KšZYÚ
+HÈ‹Œ
+JKÚ^™NˆÝ\œ™[ÙXÜ™]XÛÛ’[XYÙKœÚ^™JJBˆ]SÙ™œÙ]
+ÏHÝ\œ™[ÙXÜ™]XÛÛ’[XYÙKœÚ^™KÚY
+ÈËŒˆH[ÙHYˆ]ÙXÜ™]XÛÛ“›ÙHHÝ›Û™ÔÙ[‹œÙXÜ™]XÛÛ“›ÙHÂˆÝ›Û™ÔÙ[‹œÙXÜ™]XÛÛ“›ÙHHš[ˆÙXÜ™]XÛÛ“›ÙKœ™[[Ý™Qœ›ÛTÝ\\››ÙJ
+BˆBˆˆ]ÛÛ[[HHÑÔÚ[
+ˆÛÛ[™XÝ›ÜšYÚ[‹žH
+Ý›Û™ÔÙ[‹]S›ÙK™œ˜[YK›Z[–H]SÙ™œÙ]
+KNˆÛÛ[™XÝ›ÜšYÚ[‹žHH
+Ý›Û™ÔÙ[‹]S›ÙK™œ˜[YK›Z[–HHRTØÜ™Y[”^[
+JBˆ]]Qœ˜[YHHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆÛÛ[™XÝ›ÜšYÚ[‹ž
+È]SÙ™œÙ]NˆÛÛ[™XÝ›ÜšYÚ[‹žH
+ÈRTØÜ™Y[”^[
+KÚ^™Nˆ]S^[Ý]œÚ^™JBˆÝ›Û™ÔÙ[‹]S›ÙK™œ˜[YHH]Qœ˜[YBˆˆ]]]Ü“›ÙQœ˜[YHHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆÛÛ[™XÝ›ÜšYÚ[‹žHKŒNˆÛÛ[™XÝ›Z[–H
+È]S^[Ý]œÚ^™KšZYÚH‹Œ
+KÚ^™Nˆ]]Ü“^[Ý]
+BˆÝ›Û™ÔÙ[‹˜]]Ü“›ÙK™œ˜[YHH]]Ü“›ÙQœ˜[YBˆ]^›ÙQœ˜[YHHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆÛÛ[™XÝ›ÜšYÚ[‹žHKŒNˆÛÛ[™XÝ›Z[–H
+È]S^[Ý]œÚ^™KšZYÚH‹Œ
+È
+]]Ü“^[Ý]šZYÚš\Ö™\›ÈÈŒˆ
+]]Ü“^[Ý]šZYÚHËŒ
+JJKÚ^™Nˆ^^[Ý]œÚ^™JBˆˆYˆ]Ü›Ü[UÜXÔ™XÝZ\ÔÙX\˜Ú[™ÈÂˆ]ÛÛ\Ý[™YÚYÚ[™Ó›ÙNˆ[šÒYÚYÚ[™Ó›ÙBˆYˆ]Ý\œ™[HÝ›Û™ÔÙ[‹˜ÛÛ\Ý[™YÚYÚ[™Ó›ÙHÂˆÛÛ\Ý[™YÚYÚ[™Ó›ÙHHÝ\œ™[ˆH[ÙHÂˆÛÛ\Ý[™YÚYÚ[™Ó›ÙHH[šÒYÚYÚ[™Ó›ÙJÛÛÜŽˆ˜ÛX\ŠBˆÛÛ\Ý[™YÚYÚ[™Ó›ÙK˜[HHÝ›Û™ÔÙ[‹˜]]Ü“›ÙK˜[BˆÛÛ\Ý[™YÚYÚ[™Ó›ÙK\ÙS[Ù\›”]Ø[Ý[][ÛˆHYBˆÝ›Û™ÔÙ[‹˜ÛÛ\Ý[™YÚYÚ[™Ó›ÙHHÛÛ\Ý[™YÚYÚ[™Ó›ÙBˆÝ›Û™ÔÙ[‹›XZ[ÛÛ[ÛÛZ[™\“›ÙKš[œÙ\ÝX››ÙJÛÛ\Ý[™YÚYÚ[™Ó›ÙK]ˆ
+BˆBˆˆ]ÛÛ\Ý[™^]Û“›ÙNˆYÚYÚ˜XÚÚ[™Ð]Û“›ÙBˆYˆ]Ý\œ™[HÝ›Û™ÔÙ[‹˜ÛÛ\Ý[™^]Û“›ÙHÂˆÛÛ\Ý[™^]Û“›ÙHHÝ\œ™[ˆH[ÙHÂˆÛÛ\Ý[™^]Û“›ÙHHYÚYÚ˜XÚÚ[™Ð]Û“›ÙJ
+BˆÝ›Û™ÔÙ[‹˜ÛÛ\Ý[™^]Û“›ÙHHÛÛ\Ý[™^]Û“›ÙBˆÝ›Û™ÔÙ[‹›XZ[ÛÛ[ÛÛZ[™\“›ÙK˜YÝX››ÙJÛÛ\Ý[™^]Û“›ÙJBˆÛÛ\Ý[™^]Û“›ÙK˜Y\™Ù]
+Ý›Û™ÔÙ[‹XÝ[ÛŽˆÜÙ[XÝÜŠÝ›Û™ÔÙ[‹˜ÛÛ\Ý[™^]Û”™\ÜÙY
+K›ÜÛÛ›Û]™[ÎˆÝXÚ\[œÚYJBˆÛÛ\Ý[™^]Û“›ÙKšYÚYÝYÚ[™ÙYHÈYÚYÚY[‚ˆÝX\™]Ý›Û™ÔÙ[ˆHÙ[‹]ÛÛ\Ý[™YÚYÚ[™Ó›ÙHHÝ›Û™ÔÙ[‹˜ÛÛ\Ý[™YÚYÚ[™Ó›ÙH[ÙHÂˆ™]\›‚ˆBˆYˆYÚYÚYÂˆÛÛ\Ý[™YÚYÚ[™Ó›ÙK›^Y\‹œ™[[Ý™P[š[X][ÛŠ›Ü’Ù^Nˆ›ÜXÚ]HŠBˆÛÛ\Ý[™YÚYÚ[™Ó›ÙK˜[HHBˆÝ›Û™ÔÙ[‹^›ÙK^›ÙK˜[HHÝ›Û™ÔÙ[‹˜]]Ü“›ÙK˜[H
+ˆBˆÝ›Û™ÔÙ[‹˜]]Ü“›ÙKœÙ]š\œÝÜXÒYÚYÚY
+YJBˆH[ÙHÂˆÛÛ\Ý[™YÚYÚ[™Ó›ÙK˜[HHKŒˆÛÛ\Ý[™YÚYÚ[™Ó›ÙK›^Y\‹˜[š[X]P[Jœ›ÛNˆKÎˆKŒ\˜][ÛŽˆŒŠBˆˆ]™][HHÝ›Û™ÔÙ[‹^›ÙK^›ÙK˜[BˆÝ›Û™ÔÙ[‹^›ÙK^›ÙK˜[HHÝ›Û™ÔÙ[‹˜]]Ü“›ÙK˜[BˆÝ›Û™ÔÙ[‹^›ÙK^›ÙK›^Y\‹˜[š[X]P[Jœ›ÛNˆ™][KÎˆÝ›Û™ÔÙ[‹˜]]Ü“›ÙK˜[K\˜][ÛŽˆŒŠBˆÝ›Û™ÔÙ[‹˜]]Ü“›ÙKœÙ]š\œÝÜXÒYÚYÚY
+˜[ÙJBˆBˆBˆBˆˆ˜\ˆÜ™XÝHÜ›Ü[UÜXÔ™XÝˆÜ™XÝ›ÜšYÚ[‹žOHKŒˆÜ™XÝœÚ^™KÚY
+ÏH‹Œˆ˜\ˆ^™XÝH^›ÙQœ˜[YK›Ù™œÙ]žJˆX]]Ü“›ÙQœ˜[YK›Z[–NˆX]]Ü“›ÙQœ˜[YK›Z[–JBˆ^™XÝ›ÜšYÚ[‹žHÜ™XÝ›Z[–ˆ^™XÝœÚ^™KšZYÚOHKŒˆ^™XÝœÚ^™KÚY
+ÏHM‹ŒˆˆÛÛ\Ý[™YÚYÚ[™Ó›ÙK™œ˜[YHHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆ]]Ü“›ÙQœ˜[YK›Z[–Nˆ]]Ü“›ÙQœ˜[YK›Z[–JKÚ^™NˆÑÔÚ^™JÚYˆ^›ÙQœ˜[YK›X^H]]Ü“›ÙQœ˜[YK›Z[–ZYÚˆ^›ÙQœ˜[YK›X^HH]]Ü“›ÙQœ˜[YK›Z[–JJBˆˆ]ZYHH›ÛÜŠ
+Ü›Ü[UÜXÔ™XÝ›Z[–H
+È^™XÝ›X^JHÈ‹Œ
+H
+ÈKŒˆˆ]š[˜[Ü™XÝHÑÔ™XÝ
+ÜšYÚ[ŽˆÜ™XÝ›ÜšYÚ[‹Ú^™NˆÑÔÚ^™JÚYˆÜ™XÝÚYZYÚˆZYHHÜ™XÝ›Z[–JJBˆ˜\ˆš[˜[›ÝÛT™XÝHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆ^™XÝ›Z[–NˆZYJKÚ^™NˆÑÔÚ^™JÚYˆ^™XÝÚYZYÚˆ^™XÝ›X^HHZYJJBˆYˆš[˜[›ÝÛT™XÝ›X^š[˜[Ü™XÝ›X^	‰ˆXœÊš[˜[›ÝÛT™XÝ›X^Hš[˜[Ü™XÝ›X^
+HKŒÂˆš[˜[›ÝÛT™XÝœÚ^™KÚYHš[˜[Ü™XÝ›X^Hš[˜[›ÝÛT™XÝ›Z[–ˆBˆˆÛÛ\Ý[™YÚYÚ[™Ó›ÙKš[œÙ]HŒˆÛÛ\Ý[™YÚYÚ[™Ó›ÙK›Ý]\”˜Y]\ÈH›ÛÜŠš[˜[›ÝÛT™XÝšZYÚ
+ˆJBˆÛÛ\Ý[™YÚYÚ[™Ó›ÙKš[›™\”˜Y]\ÈHŒˆˆÛÛ\Ý[™YÚYÚ[™Ó›ÙK\]T™XÝÊÂˆš[˜[Ü™XÝˆš[˜[›ÝÛT™XÝˆKÛÛÜŽˆ[YKœ[›™Y][P˜XÚÙÜ›Ý[™ÛÛÜ‹›Z^YÚ]
+[YK[œ™XY˜YÙR[˜XÝ]™P˜XÚÙÜ›Ý[™ÛÛÜ‹[NˆŒJJBˆˆ˜[œÚ][Û‹\]Qœ˜[YJ›ÙNˆÛÛ\Ý[™^]Û“›ÙKœ˜[YNˆÛÛ\Ý[™YÚYÚ[™Ó›ÙK™œ˜[YJBˆˆYˆ]^\œ›ÝÒ[XYÙHH^\œ›ÝÒ[XYÙHÂˆ]^\œ›ÝÓ›ÙNˆTÒ[XYÙS›ÙBˆYˆ]Ý\œ™[HÝ›Û™ÔÙ[‹^\œ›ÝÓ›ÙHÂˆ^\œ›ÝÓ›ÙHHÝ\œ™[ˆH[ÙHÂˆ^\œ›ÝÓ›ÙHHTÒ[XYÙS›ÙJ
+BˆÝ›Û™ÔÙ[‹^\œ›ÝÓ›ÙHH^\œ›ÝÓ›ÙBˆÛÛ\Ý[™YÚYÚ[™Ó›ÙK˜YÝX››ÙJ^\œ›ÝÓ›ÙJBˆBˆ^\œ›ÝÓ›ÙKš[XYÙHH^\œ›ÝÒ[XYÙBˆ]\œ›ÝÔØØ[NˆÑÑ›Ø]HÍBˆ]^\œ›ÝÔÚ^™HHÑÔÚ^™JÚYˆ›ÛÜŠ^\œ›ÝÒ[XYÙKœÚ^™KÚY
+ˆ\œ›ÝÔØØ[JKZYÚˆ›ÛÜŠ^\œ›ÝÒ[XYÙKœÚ^™KšZYÚ
+ˆ\œ›ÝÔØØ[JJBˆ^\œ›ÝÓ›ÙK™œ˜[YHHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆš[˜[›ÝÛT™XÝ›X^HŒH^\œ›ÝÔÚ^™KÚYNˆš[˜[›ÝÛT™XÝ›Z[–H
+È›ÛÜ•ÔØÜ™Y[”^[Ê
+š[˜[›ÝÛT™XÝšZYÚH^\œ›ÝÔÚ^™KšZYÚ
+HÈ‹Œ
+JKÚ^™Nˆ^\œ›ÝÔÚ^™JBˆH[ÙHYˆ]^\œ›ÝÓ›ÙHHÝ›Û™ÔÙ[‹^\œ›ÝÓ›ÙHÂˆÝ›Û™ÔÙ[‹^\œ›ÝÓ›ÙHHš[ˆ^\œ›ÝÓ›ÙKœ™[[Ý™Qœ›ÛTÝ\\››ÙJ
+BˆBˆH[ÙHÂˆYˆ]ÛÛ\Ý[™YÚYÚ[™Ó›ÙHHÝ›Û™ÔÙ[‹˜ÛÛ\Ý[™YÚYÚ[™Ó›ÙHÂˆÝ›Û™ÔÙ[‹˜ÛÛ\Ý[™YÚYÚ[™Ó›ÙHHš[ˆÛÛ\Ý[™YÚYÚ[™Ó›ÙKœ™[[Ý™Qœ›ÛTÝ\\››ÙJ
+BˆBˆYˆ]ÛÛ\Ý[™^]Û“›ÙHHÝ›Û™ÔÙ[‹˜ÛÛ\Ý[™^]Û“›ÙHÂˆÝ›Û™ÔÙ[‹˜ÛÛ\Ý[™^]Û“›ÙHHš[ˆÛÛ\Ý[™^]Û“›ÙKœ™[[Ý™Qœ›ÛTÝ\\››ÙJ
+BˆBˆYˆ]^\œ›ÝÓ›ÙHHÝ›Û™ÔÙ[‹^\œ›ÝÓ›ÙHÂˆÝ›Û™ÔÙ[‹^\œ›ÝÓ›ÙHHš[ˆ^\œ›ÝÓ›ÙKœ™[[Ý™Qœ›ÛTÝ\\››ÙJ
+BˆBˆBˆˆYˆ]ÛÛ\Ý[™^]Û“›ÙHHÝ›Û™ÔÙ[‹˜ÛÛ\Ý[™^]Û“›ÙHÂˆYˆÝ›Û™ÔÙ[‹^›ÙK^›ÙKœÝ\\››ÙHOOHÛÛ\Ý[™^]Û“›ÙHÂˆÛÛ\Ý[™^]Û“›ÙK˜YÝX››ÙJÝ›Û™ÔÙ[‹^›ÙK^›ÙJBˆYˆ]\Ý›ÙHHÝ›Û™ÔÙ[‹™\Ý›ÙHÂˆÛÛ\Ý[™^]Û“›ÙK˜YÝX››ÙJ\Ý›ÙJBˆBˆBˆÝ›Û™ÔÙ[‹^›ÙK^›ÙK™œ˜[YHH^›ÙQœ˜[YK›Ù™œÙ]žJˆXÛÛ\Ý[™^]Û“›ÙK™œ˜[YK›Z[–NˆXÛÛ\Ý[™^]Û“›ÙK™œ˜[YK›Z[–JBˆˆÝ›Û™ÔÙ[‹˜]]Ü“›ÙK˜\ÜÚYÛ”\™[›ÙJ\™[›ÙNˆÛÛ\Ý[™^]Û“›ÙJBˆH[ÙHÂˆYˆÝ›Û™ÔÙ[‹^›ÙK^›ÙKœÝ\\››ÙHOOHÝ›Û™ÔÙ[‹›XZ[ÛÛ[ÛÛZ[™\“›ÙHÂˆÝ›Û™ÔÙ[‹›XZ[ÛÛ[ÛÛZ[™\“›ÙK˜YÝX››ÙJÝ›Û™ÔÙ[‹^›ÙK^›ÙJBˆYˆ]\Ý›ÙHHÝ›Û™ÔÙ[‹™\Ý›ÙHÂˆÝ›Û™ÔÙ[‹›XZ[ÛÛ[ÛÛZ[™\“›ÙK˜YÝX››ÙJ\Ý›ÙJBˆBˆBˆÝ›Û™ÔÙ[‹^›ÙK^›ÙK™œ˜[YHH^›ÙQœ˜[YBˆˆÝ›Û™ÔÙ[‹˜]]Ü“›ÙK˜\ÜÚYÛ”\™[›ÙJ\™[›ÙNˆš[
+BˆBˆˆYˆ]Ý\œ™[^Û˜\ÚÝšY]ÈÂˆ˜[œÚ][Û‹\]TÜÚ][ÛŠ^Y\ŽˆÝ\œ™[^Û˜\ÚÝšY]Ë›^Y\‹ÜÚ][ÛŽˆ^›ÙQœ˜[YK›ÜšYÚ[ŠBˆBˆˆYˆ]˜Z[[™Õ^˜YÙS^[Ý][™\HÂˆ]˜YÙTÚ^™HHÑÔÚ^™JÚYˆ˜Z[[™Õ^˜YÙS^[Ý][™\KŒœÚ^™KÚY
+È˜Z[[™Õ^˜YÙR[œÙ]Ë›Y
+È˜Z[[™Õ^˜YÙR[œÙ]ËœšYÚZYÚˆ˜Z[[™Õ^˜YÙS^[Ý][™\KŒœÚ^™KšZYÚ
+È˜Z[[™Õ^˜YÙR[œÙ]ËÜ
+È˜Z[[™Õ^˜YÙR[œÙ]Ë˜›ÝÛHHRTØÜ™Y[”^[
+Bˆˆ˜\ˆ˜YÙQœ˜[YNˆÑÔ™XÝˆYˆ^^[Ý]›[X™\“Ù“[™\ÈˆHÂˆ˜YÙQœ˜[YHHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆ^^[Ý]˜Z[[™Ó[™UÚY
+ÈŒNˆ^›ÙQœ˜[YKšZYÚHËŒH˜YÙTÚ^™KšZYÚ
+KÚ^™Nˆ˜YÙTÚ^™JBˆH[ÙHÂˆ]š\œÝ[™Qœ˜[YHH^^[Ý]›[™\Ô™XÝÊ
+K™š\œÝÏÈÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+
+KÚ^™Nˆ^›ÙQœ˜[YKœÚ^™JBˆ˜YÙQœ˜[YHHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆŒNˆš\œÝ[™Qœ˜[YKšZYÚ
+ÈKŒ
+KÚ^™Nˆ˜YÙTÚ^™JBˆBˆˆYˆ˜YÙQœ˜[YK›ÜšYÚ[‹ž
+È˜YÙQœ˜[YKÚYH^›ÙQœ˜[YKÚYH‹ŒHLŒÂˆ˜YÙQœ˜[YK›ÜšYÚ[‹žH^›ÙQœ˜[YKÚYH‹ŒH˜YÙQœ˜[YKÚYˆBˆˆ]˜Z[[™Õ^˜YÙP˜XÚÙÜ›Ý[™ˆRR[XYÙUšY]ÂˆYˆ]Ý\œ™[HÝ›Û™ÔÙ[‹˜Z[[™Õ^˜YÙP˜XÚÙÜ›Ý[™Âˆ˜Z[[™Õ^˜YÙP˜XÚÙÜ›Ý[™HÝ\œ™[ˆH[ÙHÂˆ˜Z[[™Õ^˜YÙP˜XÚÙÜ›Ý[™HRR[XYÙUšY]Ê[XYÙNˆYÐ˜XÚÙÜ›Ý[™[XYÙJBˆÝ›Û™ÔÙ[‹˜Z[[™Õ^˜YÙP˜XÚÙÜ›Ý[™H˜Z[[™Õ^˜YÙP˜XÚÙÜ›Ý[™ˆÝ›Û™ÔÙ[‹^›ÙK^›ÙKšY]Ë˜YÝXšY]Ê˜Z[[™Õ^˜YÙP˜XÚÙÜ›Ý[™
+BˆBˆ˜Z[[™Õ^˜YÙP˜XÚÙÜ›Ý[™[ÛÛÜˆH[YKœ[›™Y][P˜XÚÙÜ›Ý[™ÛÛÜ‹›Z^YÚ]
+[YK[œ™XY˜YÙR[˜XÝ]™P˜XÚÙÜ›Ý[™ÛÛÜ‹[NˆŒJBˆˆ˜Z[[™Õ^˜YÙP˜XÚÙÜ›Ý[™™œ˜[YHH˜YÙQœ˜[YBˆˆ]˜Z[[™Õ^˜YÙQœ˜[YHHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆ˜YÙQœ˜[YK›Z[–
+È˜Z[[™Õ^˜YÙR[œÙ]Ë›YNˆ˜YÙQœ˜[YK›Z[–H
+È˜Z[[™Õ^˜YÙR[œÙ]ËÜ
+KÚ^™Nˆ˜Z[[™Õ^˜YÙS^[Ý][™\KŒœÚ^™JBˆ]˜Z[[™Õ^˜YÙS›ÙHH˜Z[[™Õ^˜YÙS^[Ý][™\KŒJ
+BˆYˆÝ›Û™ÔÙ[‹˜Z[[™Õ^˜YÙS›ÙHOOH˜Z[[™Õ^˜YÙS›ÙHÂˆÝ›Û™ÔÙ[‹˜Z[[™Õ^˜YÙS›ÙOËœ™[[Ý™Qœ›ÛTÝ\\››ÙJ
+BˆÝ›Û™ÔÙ[‹˜Z[[™Õ^˜YÙS›ÙHH˜Z[[™Õ^˜YÙS›ÙBˆˆÝ›Û™ÔÙ[‹^›ÙK^›ÙK˜YÝX››ÙJ˜Z[[™Õ^˜YÙS›ÙJBˆˆ˜Z[[™Õ^˜YÙS›ÙK›^Y\‹˜[˜ÚÜ”Ú[HÑÔÚ[
+
+BˆBˆˆ˜Z[[™Õ^˜YÙS›ÙK™œ˜[YHH˜Z[[™Õ^˜YÙQœ˜[YBˆH[ÙHÂˆYˆ]˜Z[[™Õ^˜YÙS›ÙHHÝ›Û™ÔÙ[‹˜Z[[™Õ^˜YÙS›ÙHÂˆÝ›Û™ÔÙ[‹˜Z[[™Õ^˜YÙS›ÙHHš[ˆ˜Z[[™Õ^˜YÙS›ÙKœ™[[Ý™Qœ›ÛTÝ\\››ÙJ
+BˆBˆYˆ]˜Z[[™Õ^˜YÙP˜XÚÙÜ›Ý[™HÝ›Û™ÔÙ[‹˜Z[[™Õ^˜YÙP˜XÚÙÜ›Ý[™ÂˆÝ›Û™ÔÙ[‹˜Z[[™Õ^˜YÙP˜XÚÙÜ›Ý[™Hš[ˆ˜Z[[™Õ^˜YÙP˜XÚÙÜ›Ý[™œ™[[Ý™Qœ›ÛTÝ\\šY]Ê
+BˆBˆBˆˆYˆZ][UYÜËš\Ñ[\HÂˆ]Ú^™Q˜XÝÜˆH][Kœ™\Ù[][Û‘]K™›ÛÚ^™Kš][S\Ý˜\ÙQ›ÛÚ^™HÈMËŒˆˆ]][UYÓ\Ýœ˜[YHHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆÛÛ[™XÝ›Z[–NˆÛÛ[™XÝ›Z[–H
+ÈYX\Ý\™S^[Ý]œÚ^™KšZYÚ
+ˆ‹Œ
+È›ÛÜ•ÔØÜ™Y[”^[Ê‹Œ
+ˆÚ^™Q˜XÝÜŠJKÚ^™NˆÑÔÚ^™JÚYˆÛÛ[™XÝÚYZYÚˆ›ÛÜ•ÔØÜ™Y[”^[ÊŒŒ
+ˆÚ^™Q˜XÝÜŠJJBˆˆ˜\ˆ][UYÓ\Ý˜[œÚ][ÛˆH˜[œÚ][Û‚ˆ]][UYÓ\ÝˆÛÛ\Û™[šY]Ï[\O‚ˆYˆ]Ý\œ™[HÝ›Û™ÔÙ[‹š][UYÓ\ÝÂˆ][UYÓ\ÝHÝ\œ™[ˆH[ÙHÂˆ][UYÓ\Ý˜[œÚ][ÛˆHš[[YYX]Bˆ][UYÓ\ÝHÛÛ\Û™[šY]Ê
+BˆÝ›Û™ÔÙ[‹š][UYÓ\ÝH][UYÓ\ÝˆBˆ]ÈH][UYÓ\Ý\]Jˆ˜[œÚ][ÛŽˆš[[YYX]KˆÛÛ\Û™[ˆ[žPÛÛ\Û™[
+Ú]\Ý][UYÓ\ÝÛÛ\Û™[
+ˆÛÛ^ˆ][K˜ÛÛ^ˆYÜÎˆ][UYÜËˆ[YNˆ][Kœ™\Ù[][Û‘]K[YKˆÚ^™Q˜XÝÜŽˆÚ^™Q˜XÝÜ‚ˆ
+JKˆ[š\›Û›Y[ˆßKˆÛÛZ[™\”Ú^™Nˆ][UYÓ\Ýœ˜[YKœÚ^™Bˆ
+BˆYˆ]][UYÓ\ÝšY]ÈH][UYÓ\ÝšY]È\ÏÈÚ]\Ý][UYÓ\ÝÛÛ\Û™[•šY]ÈÂˆYˆ][UYÓ\ÝšY]ËœÝ\\šY]ÈOHš[Âˆ][UYÓ\ÝšY]Ëš\Õ\Ù\’[\˜XÝ[Û‘[˜X›YH˜[ÙBˆÝ›Û™ÔÙ[‹›XZ[ÛÛ[ÛÛZ[™\“›ÙKšY]Ë˜YÝXšY]Ê][UYÓ\ÝšY]ÊBˆBˆˆ][UYÓ\Ý˜[œÚ][Û‹\]Qœ˜[YJšY]Îˆ][UYÓ\ÝšY]Ëœ˜[YNˆ][UYÓ\Ýœ˜[YJBˆ][UYÓ\ÝšY]Ëš\Õš\ÚX›HHÝ›Û™ÔÙ[‹š\ÚXš[]TÝ]\È	‰ˆ][K˜ÛÛ^œÚ\™YÛÛ^™[™\™ÞU\ØYÙTÙ][™ÜË›ÛÜ[[ÚšBˆBˆH[ÙHÂˆYˆ]][UYÓ\ÝHÝ›Û™ÔÙ[‹š][UYÓ\ÝÂˆÝ›Û™ÔÙ[‹š][UYÓ\ÝHš[ˆ][UYÓ\ÝšY]ÏËœ™[[Ý™Qœ›ÛTÝ\\šY]Ê
+BˆBˆBˆˆYˆ]^^[Ý]œÜÚ[\œËš\Ñ[\HÂˆ]\Ý›ÙNˆ[š\ÚX›R[šÑ\Ý›ÙBˆYˆ]Ý\œ™[HÝ›Û™ÔÙ[‹™\Ý›ÙHÂˆ\Ý›ÙHHÝ\œ™[ˆH[ÙHÂˆ\Ý›ÙHH[š\ÚX›R[šÑ\Ý›ÙJ^›ÙNˆš[[˜X›P[š[X][ÛœÎˆ][K˜ÛÛ^œÚ\™YÛÛ^™[™\™ÞU\ØYÙTÙ][™ÜË™[˜[œÛXÙ[˜ÞJBˆ\Ý›ÙKš\Õ\Ù\’[\˜XÝ[Û‘[˜X›YH˜[ÙBˆÝ›Û™ÔÙ[‹™\Ý›ÙHH\Ý›ÙBˆˆÝ›Û™ÔÙ[‹^›ÙK^›ÙKœÝ\\››ÙOËš[œÙ\ÝX››ÙJ\Ý›ÙKX›Ý™TÝX››ÙNˆÝ›Û™ÔÙ[‹^›ÙK^›ÙJBˆBˆ\Ý›ÙK\]JÚ^™Nˆ^›ÙQœ˜[YKœÚ^™KÛÛÜŽˆ[YK›Y\ÜØYÙU^ÛÛÜ‹^ÛÛÜŽˆ[YK›Y\ÜØYÙU^ÛÛÜ‹™XÝÎˆ^^[Ý]œÜÚ[\œË›X\È	ŒK›Ù™œÙ]žJˆËŒNˆËŒ
+Kš[œÙ]žJˆŒNˆKŒ
+HKÛÜ™™XÝÎˆ^^[Ý]œÜÚ[\•ÛÜ™Ë›X\È	ŒK›Ù™œÙ]žJˆËŒNˆËŒ
+Kš[œÙ]žJˆŒNˆKŒ
+HJBˆ\Ý›ÙK™œ˜[YHH^›ÙQœ˜[YKš[œÙ]žJˆLËŒNˆLËŒ
+K›Ù™œÙ]žJˆŒNˆËŒ
+BˆˆH[ÙHYˆ]\Ý›ÙHHÝ›Û™ÔÙ[‹™\Ý›ÙHÂˆÝ›Û™ÔÙ[‹™\Ý›ÙHHš[ˆ\Ý›ÙKœ™[[Ý™Qœ›ÛTÝ\\››ÙJ
+BˆBˆˆ˜\ˆ[š[X]R[œ]XÝ]š]Y\Ñœ˜[YHH˜[ÙBˆ][œ]XÝ]š]Y\ÈH[œ]XÝ]š]Y\ÏË™š[\ŠÂˆÝÚ]Ú	ŒHÂˆØ\ÙHœÜXZÚ[™Ò[‘Ü›Ý\Ø[œÙYZ[™Ñ[[ÚšR[\˜XÝ[ÛŽ‚ˆ™]\›ˆ˜[ÙBˆY˜][‚ˆ™]\›ˆYBˆBˆJBˆˆYˆ][œ]XÝ]š]Y\ÈH[œ]XÝ]š]Y\ËZ[œ]XÝ]š]Y\Ëš\Ñ[\HÂˆYˆÝ›Û™ÔÙ[‹š[œ]XÝ]š]Y\Ó›ÙKœÝ\\››ÙHOHš[ÂˆÝ›Û™ÔÙ[‹›XZ[ÛÛ[ÛÛZ[™\“›ÙK˜YÝX››ÙJÝ›Û™ÔÙ[‹š[œ]XÝ]š]Y\Ó›ÙJBˆH[ÙHÂˆ[š[X]R[œ]XÝ]š]Y\Ñœ˜[YHHYBˆBˆˆYˆÝ›Û™ÔÙ[‹š[œ]XÝ]š]Y\Ó›ÙK˜[Kš\Ö™\›ÈÂˆÝ›Û™ÔÙ[‹š[œ]XÝ]š]Y\Ó›ÙK˜[HHKŒˆÝ›Û™ÔÙ[‹^›ÙK^›ÙK˜[HHŒˆÝ›Û™ÔÙ[‹˜]]Ü“›ÙK˜[HHŒˆÝ›Û™ÔÙ[‹˜ÛÛ\Ý[™YÚYÚ[™Ó›ÙOË˜[HHŒˆÝ›Û™ÔÙ[‹™›ÜØ\™YXÛÛ“›ÙK˜[HHŒˆˆYˆ[š[X]Y[š[X]PÛÛ[ÂˆÝ›Û™ÔÙ[‹š[œ]XÝ]š]Y\Ó›ÙK›^Y\‹˜[š[X]P[Jœ›ÛNˆŒÎˆKŒ\˜][ÛŽˆŒMJBˆÝ›Û™ÔÙ[‹^›ÙK^›ÙK›^Y\‹˜[š[X]P[Jœ›ÛNˆKŒÎˆŒ\˜][ÛŽˆŒMJBˆÝ›Û™ÔÙ[‹˜]]Ü“›ÙK›^Y\‹˜[š[X]P[Jœ›ÛNˆKŒÎˆŒ\˜][ÛŽˆŒMJBˆÝ›Û™ÔÙ[‹˜ÛÛ\Ý[™YÚYÚ[™Ó›ÙOË›^Y\‹˜[š[X]P[Jœ›ÛNˆKŒÎˆŒ\˜][ÛŽˆŒMJBˆÝ›Û™ÔÙ[‹™\Ý›ÙOË›^Y\‹˜[š[X]P[Jœ›ÛNˆKŒÎˆŒ\˜][ÛŽˆŒMJBˆÝ›Û™ÔÙ[‹™›ÜØ\™YXÛÛ“›ÙK›^Y\‹˜[š[X]P[Jœ›ÛNˆKŒÎˆŒ\˜][ÛŽˆŒMJBˆBˆBˆÝ›Û™ÔÙ[‹™\Ý›ÙOË˜[HHŒˆH[ÙHÂˆYˆ\Ý›Û™ÔÙ[‹š[œ]XÝ]š]Y\Ó›ÙK˜[Kš\Ö™\›ÈÂˆÝ›Û™ÔÙ[‹š[œ]XÝ]š]Y\Ó›ÙK˜[HHŒˆÝ›Û™ÔÙ[‹^›ÙK^›ÙK˜[HHKŒˆÝ›Û™ÔÙ[‹˜]]Ü“›ÙK˜[HHKŒˆÝ›Û™ÔÙ[‹˜ÛÛ\Ý[™YÚYÚ[™Ó›ÙOË˜[HHKŒˆÝ›Û™ÔÙ[‹™›ÜØ\™YXÛÛ“›ÙK˜[HHKŒˆYˆ[š[X]Y[š[X]PÛÛ[ÂˆÝ›Û™ÔÙ[‹š[œ]XÝ]š]Y\Ó›ÙK›^Y\‹˜[š[X]P[Jœ›ÛNˆKŒÎˆŒ\˜][ÛŽˆŒMKÛÛ\][ÛŽˆÈ˜[YH[‚ˆYˆ]Ý›Û™ÔÙ[ˆHÙ[‹˜[YHÂˆÝ›Û™ÔÙ[‹š[œ]XÝ]š]Y\Ó›ÙKœ™[[Ý™Qœ›ÛTÝ\\››ÙJ
+BˆBˆJBˆÝ›Û™ÔÙ[‹^›ÙK^›ÙK›^Y\‹˜[š[X]P[Jœ›ÛNˆŒÎˆKŒ\˜][ÛŽˆŒMJBˆÝ›Û™ÔÙ[‹˜]]Ü“›ÙK›^Y\‹˜[š[X]P[Jœ›ÛNˆŒÎˆKŒ\˜][ÛŽˆŒMJBˆÝ›Û™ÔÙ[‹˜ÛÛ\Ý[™YÚYÚ[™Ó›ÙOË›^Y\‹˜[š[X]P[Jœ›ÛNˆŒÎˆKŒ\˜][ÛŽˆŒMJBˆÝ›Û™ÔÙ[‹™\Ý›ÙOË›^Y\‹˜[š[X]P[Jœ›ÛNˆŒÎˆKŒ\˜][ÛŽˆŒMJBˆÝ›Û™ÔÙ[‹™›ÜØ\™YXÛÛ“›ÙK›^Y\‹˜[š[X]P[Jœ›ÛNˆŒÎˆKŒ\˜][ÛŽˆŒMJBˆH[ÙHÂˆÝ›Û™ÔÙ[‹š[œ]XÝ]š]Y\Ó›ÙKœ™[[Ý™Qœ›ÛTÝ\\››ÙJ
+BˆBˆBˆÝ›Û™ÔÙ[‹™\Ý›ÙOË˜[HHKŒˆBˆYˆ][œ]XÝ]š]Y\ÔÚ^™HH[œ]XÝ]š]Y\ÔÚ^™HÂˆ][œ]XÝ]š]Y\Ñœ˜[YHHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆÛÛ[™XÝ›Z[–Nˆ]]Ü“›ÙQœ˜[YK›Z[–H
+ÈRTØÜ™Y[”^[
+KÚ^™Nˆ[œ]XÝ]š]Y\ÔÚ^™JBˆYˆ[š[X]R[œ]XÝ]š]Y\Ñœ˜[YHÂˆ˜[œÚ][Û‹\]Qœ˜[YJ›ÙNˆÝ›Û™ÔÙ[‹š[œ]XÝ]š]Y\Ó›ÙKœ˜[YNˆ[œ]XÝ]š]Y\Ñœ˜[YJBˆH[ÙHÂˆÝ›Û™ÔÙ[‹š[œ]XÝ]š]Y\Ó›ÙK™œ˜[YHH[œ]XÝ]š]Y\Ñœ˜[YBˆBˆBˆ[œ]XÝ]š]Y\Ð\OÊ
+Bˆˆ˜\ˆYYXT™]šY]ÓÙ™œÙ]H^›ÙQœ˜[YK›ÜšYÚ[‹›Ù™œÙ]žJˆKŒNˆKŒ
+È›ÛÜŠ
+YX\Ý\™S^[Ý]œÚ^™KšZYÚHÛÛ[[XYÙTÚ^™KšZYÚ
+HÈ‹Œ
+JBˆˆ]Y\ÜØYÙU\RXÛÛ’[XYÙHHÝ\œ™[Y\ÜØYÙU\RXÛÛ‚ˆ]Y\ÜØYÙU\RXÛÛ“Ù™œÙ]HÑÔÚ[
+ˆYYXT™]šY]ÓÙ™œÙ]ž
+ÈÝ\œ™[Y\ÜØYÙU\RXÛÛ“Ù™œÙ]žNˆYYXT™]šY]ÓÙ™œÙ]žH
+ÈÝ\œ™[Y\ÜØYÙU\RXÛÛ“Ù™œÙ]žJBˆˆYˆ]Y\ÜØYÙU\RXÛÛ’[XYÙHÂˆÝ›Û™ÔÙ[‹™›ÜØ\™YXÛÛ“›ÙKš[XYÙHHY\ÜØYÙU\RXÛÛ’[XYÙBˆYˆÝ›Û™ÔÙ[‹™›ÜØ\™YXÛÛ“›ÙKœÝ\\››ÙHOHš[ÂˆÝ›Û™ÔÙ[‹›XZ[ÛÛ[ÛÛZ[™\“›ÙK˜YÝX››ÙJÝ›Û™ÔÙ[‹™›ÜØ\™YXÛÛ“›ÙJBˆBˆ]XÛÛ”Ú^™HHÑÔÚ^™JÚYˆY\ÜØYÙU\RXÛÛ’[XYÙKœÚ^™KÚY
+ˆY\ÜØYÙU\RXÛÛ”ØØ[KZYÚˆY\ÜØYÙU\RXÛÛ’[XYÙKœÚ^™KšZYÚ
+ˆY\ÜØYÙU\RXÛÛ”ØØ[JBˆ˜[œÚ][Û‹\]Qœ˜[YJ›ÙNˆÝ›Û™ÔÙ[‹™›ÜØ\™YXÛÛ“›ÙKœ˜[YNˆÑÔ™XÝ
+ÜšYÚ[ŽˆY\ÜØYÙU\RXÛÛ“Ù™œÙ]Ú^™NˆXÛÛ”Ú^™JJBˆYYXT™]šY]ÓÙ™œÙ]ž
+ÏHY\ÜØYÙU\RXÛÛ’[XYÙKœÚ^™KÚY
+ˆY\ÜØYÙU\RXÛÛ”ØØ[H
+È›ÜØ\™YXÛÛ”ÜXÚ[™ÂˆH[ÙHYˆÝ›Û™ÔÙ[‹™›ÜØ\™YXÛÛ“›ÙKœÝ\\››ÙHOHš[ÂˆÝ›Û™ÔÙ[‹™›ÜØ\™YXÛÛ“›ÙKœ™[[Ý™Qœ›ÛTÝ\\››ÙJ
+BˆBˆˆ˜\ˆ˜[YYYXRYÎˆÑ[™Ú[™SYYXK’YHH×Bˆ›ÜˆÜXÈ[ˆÛÛ[[XYÙTÜXÜÈÂˆ]Y\ÜØYÙHHÜXË›Y\ÜØYÙBˆ]YYXHHÜXË›YYXBˆ]YYXTÚ^™HHÜXËœÚ^™Bˆˆ˜\ˆYYXRYHYYXKšYˆYˆYYXRYOHš[Ø\ÙH]˜XÝ[ÛŠXÝ[ÛŠHHYYXKØ\ÙH]œÝYÙÙ\ÝY›Ùš[TÝÊ[XYÙJHHXÝ[Û‹˜XÝ[ÛˆÂˆYYXRYH[XYÙOËšYˆBˆÝX\™]YYXRYHYYXRY[ÙHÂˆÛÛ[YBˆBˆ˜[YYYXRYË˜\[™
+YYXRY
+Bˆ]™]šY]Ó›ÙNˆÚ]\ÝYYXT™]šY]Ó›ÙBˆ˜\ˆ™]šY]Ó›ÙU˜[œÚ][ÛˆH˜[œÚ][Û‚ˆ˜\ˆ™]šY]Ó›ÙP[U˜[œÚ][ÛŽˆÛÛZ[™YšY]Ó^[Ý]˜[œÚ][ÛˆH˜[š[X]Y
+\˜][ÛŽˆŒMKÝ\™Nˆ™X\ÙR[“Ý]
+BˆYˆ]Ý\œ™[HÝ›Û™ÔÙ[‹›YYXT™]šY]Ó›Ù\ÖÛYYXRYHÂˆ™]šY]Ó›ÙHHÝ\œ™[ˆH[ÙHÂˆ™]šY]Ó›ÙU˜[œÚ][ÛˆHš[[YYX]Bˆ™]šY]Ó›ÙP[U˜[œÚ][ÛˆHš[[YYX]Bˆ™]šY]Ó›ÙHHÚ]\ÝYYXT™]šY]Ó›ÙJÛÛ^ˆ][K˜ÛÛ^Y\ÜØYÙNˆY\ÜØYÙKYYXNˆYYXJBˆÝ›Û™ÔÙ[‹›YYXT™]šY]Ó›Ù\ÖÛYYXRYHH™]šY]Ó›ÙBˆÝ›Û™ÔÙ[‹›XZ[ÛÛ[ÛÛZ[™\“›ÙK˜YÝX››ÙJ™]šY]Ó›ÙJBˆBˆ™]šY]Ó›ÙK\]S^[Ý]
+Ú^™NˆYYXTÚ^™KÞ[˜Ú›Û›Ý\ÓØYÎˆÞ[˜Ú›Û›Ý\ÓØYÊBˆ™]šY]Ó›ÙP[U˜[œÚ][Û‹\]P[J›ÙNˆ™]šY]Ó›ÙK[NˆÝ›Û™ÔÙ[‹š[œ]XÝ]š]Y\Ó›ÙK˜[Kš\Ö™\›ÈÈKŒˆŒ
+Bˆ™]šY]Ó›ÙU˜[œÚ][Û‹\]Qœ˜[YJ›ÙNˆ™]šY]Ó›ÙKœ˜[YNˆÑÔ™XÝ
+ÜšYÚ[ŽˆYYXT™]šY]ÓÙ™œÙ]Ú^™NˆYYXTÚ^™JJBˆYYXT™]šY]ÓÙ™œÙ]ž
+ÏHYYXTÚ^™KÚY
+ÈÛÛ[[XYÙTÜXÚ[™ÂˆBˆ˜\ˆ™[[Ý™SYYXRYÎˆÑ[™Ú[™SYYXK’YHH×Bˆ›Üˆ
+YYXRY][S›ÙJH[ˆÝ›Û™ÔÙ[‹›YYXT™]šY]Ó›Ù\ÈÂˆYˆ]˜[YYYXRYË˜ÛÛZ[œÊYYXRY
+HÂˆ™[[Ý™SYYXRYË˜\[™
+YYXRY
+Bˆ][S›ÙKœ™[[Ý™Qœ›ÛTÝ\\››ÙJ
+BˆBˆBˆ›ÜˆYYXRY[ˆ™[[Ý™SYYXRYÈÂˆÝ›Û™ÔÙ[‹›YYXT™]šY]Ó›Ù\Ëœ™[[Ý™U˜[YJ›Ü’Ù^NˆYYXRY
+BˆBˆÝ›Û™ÔÙ[‹˜Ý\œ™[YYXT™]šY]ÔÜXÜÈHÛÛ[[XYÙTÜXÜÂˆÝ›Û™ÔÙ[‹˜Ý\œ™[^YÝ]Ý]H^YÝ]Ý]ˆˆYˆ]]˜]\ÛÛ[[XYÙTÜXÈÂˆÝ›Û™ÔÙ[‹˜]˜]\“›ÙKš\ÒY[ˆHYBˆˆYˆ]™]š[Ý\ÈHÝ›Û™ÔÙ[‹˜]˜]\“YYXS›ÙK™]š[Ý\Ë›YYXHOH]˜]\ÛÛ[[XYÙTÜXË›YYXHÂˆÝ›Û™ÔÙ[‹˜]˜]\“YYXS›ÙHHš[ˆ™]š[Ý\Ëœ™[[Ý™Qœ›ÛTÝ\\››ÙJ
+BˆBˆˆ˜\ˆ]˜]\“YYXS›ÙU˜[œÚ][ÛˆH˜[œÚ][Û‚ˆ]]˜]\“YYXS›ÙNˆÚ]\ÝYYXT™]šY]Ó›ÙBˆYˆ]Ý\œ™[HÝ›Û™ÔÙ[‹˜]˜]\“YYXS›ÙHÂˆ]˜]\“YYXS›ÙHHÝ\œ™[ˆH[ÙHÂˆ]˜]\“YYXS›ÙU˜[œÚ][ÛˆHš[[YYX]Bˆ]˜]\“YYXS›ÙHHÚ]\ÝYYXT™]šY]Ó›ÙJÛÛ^ˆ][K˜ÛÛ^Y\ÜØYÙNˆ]˜]\ÛÛ[[XYÙTÜXË›Y\ÜØYÙKYYXNˆ]˜]\ÛÛ[[XYÙTÜXË›YYXJBˆÝ›Û™ÔÙ[‹˜]˜]\“YYXS›ÙHH]˜]\“YYXS›ÙBˆÝ›Û™ÔÙ[‹˜ÛÛ^ÛÛZ[™\‹˜YÝX››ÙJ]˜]\“YYXS›ÙJBˆBˆˆ]˜]\“YYXS›ÙU˜[œÚ][Û‹\]Qœ˜[YJ›ÙNˆ]˜]\“YYXS›ÙKœ˜[YNˆ]˜]\‘œ˜[YJBˆ]˜]\“YYXS›ÙK\]S^[Ý]
+Ú^™Nˆ]˜]\‘œ˜[YKœÚ^™KÞ[˜Ú›Û›Ý\ÓØYÎˆÞ[˜Ú›Û›Ý\ÓØYÊBˆH[ÙHÂˆÝ›Û™ÔÙ[‹˜]˜]\“›ÙKš\ÒY[ˆH˜[ÙBˆˆYˆ]]˜]\“YYXS›ÙHHÝ›Û™ÔÙ[‹˜]˜]\“YYXS›ÙHÂˆÝ›Û™ÔÙ[‹˜]˜]\“YYXS›ÙHHš[ˆ]˜]\“YYXS›ÙKœ™[[Ý™Qœ›ÛTÝ\\››ÙJ
+BˆBˆBˆˆYˆXÛÛ[[Kžš\Ö™\›ÈXÛÛ[[KžKš\Ö™\›ÈÂˆ]]TÜÚ][ÛˆHÝ›Û™ÔÙ[‹]S›ÙKœÜÚ][Û‚ˆ˜[œÚ][Û‹˜[š[X]TÜÚ][ÛŠ›ÙNˆÝ›Û™ÔÙ[‹]S›ÙKœ›ÛNˆÑÔÚ[
+ˆ]TÜÚ][Û‹žHÛÛ[[KžNˆ]TÜÚ][Û‹žHHÛÛ[[KžJJBˆˆYˆÝ›Û™ÔÙ[‹^›ÙK^›ÙKœÝ\\››ÙHOOHÝ›Û™ÔÙ[‹›XZ[ÛÛ[ÛÛZ[™\“›ÙHÂˆ˜[œÚ][Û‹˜[š[X]TÜÚ][ÛY]]™J›ÙNˆÝ›Û™ÔÙ[‹^›ÙK^›ÙKÙ™œÙ]ˆÑÔÚ[
+ˆXÛÛ[[KžNˆXÛÛ[[KžJJBˆYˆ]\Ý›ÙHHÝ›Û™ÔÙ[‹™\Ý›ÙHÂˆ˜[œÚ][Û‹˜[š[X]TÜÚ][ÛY]]™J›ÙNˆ\Ý›ÙKÙ™œÙ]ˆÑÔÚ[
+ˆXÛÛ[[KžNˆXÛÛ[[KžJJBˆBˆBˆˆ]]]Ü”ÜÚ][ÛˆHÝ›Û™ÔÙ[‹˜]]Ü“›ÙKœÜÚ][Û‚ˆ˜[œÚ][Û‹˜[š[X]TÜÚ][ÛŠ›ÙNˆÝ›Û™ÔÙ[‹˜]]Ü“›ÙKœ›ÛNˆÑÔÚ[
+ˆ]]Ü”ÜÚ][Û‹žHÛÛ[[KžNˆ]]Ü”ÜÚ][Û‹žHHÛÛ[[KžJJBˆYˆ]ÛÛ\Ý[™YÚYÚ[™Ó›ÙHHÝ›Û™ÔÙ[‹˜ÛÛ\Ý[™YÚYÚ[™Ó›ÙHÂˆ]ÛÛ\Ý[™YÚYÚ[™ÔÜÚ][ÛˆHÛÛ\Ý[™YÚYÚ[™Ó›ÙKœÜÚ][Û‚ˆ˜[œÚ][Û‹˜[š[X]TÜÚ][ÛŠ›ÙNˆÛÛ\Ý[™YÚYÚ[™Ó›ÙKœ›ÛNˆÑÔÚ[
+ˆÛÛ\Ý[™YÚYÚ[™ÔÜÚ][Û‹žHÛÛ[[KžNˆÛÛ\Ý[™YÚYÚ[™ÔÜÚ][Û‹žHHÛÛ[[KžJJBˆBˆBˆˆYˆÜ›ÜÜÙ˜YPÛÛ[ÂˆÝ›Û™ÔÙ[‹˜]]Ü“›ÙKœ™XÝ\œÚ]™[Q[œÝ\™Q\Ü^TÞ[˜Ú›Û›Ý\ÛJYJBˆÝ›Û™ÔÙ[‹]S›ÙKœ™XÝ\œÚ]™[Q[œÝ\™Q\Ü^TÞ[˜Ú›Û›Ý\ÛJYJBˆÝ›Û™ÔÙ[‹^›ÙK^›ÙKœ™XÝ\œÚ]™[Q[œÝ\™Q\Ü^TÞ[˜Ú›Û›Ý\ÛJYJBˆBˆˆ˜\ˆ™^]RXÛÛ“ÜšYÚ[ŽˆÑÑ›Ø]HÛÛ[™XÝ›ÜšYÚ[‹ž
+È]S^[Ý]˜Z[[™Ó[™UÚY
+ÈËŒ
+È]SÙ™œÙ]ˆ]\Ý[™T™XÝˆÑÔ™XÝˆYˆ]™XÝH]S^[Ý]›[™\Ô™XÝÊ
+K›\ÝÂˆ\Ý[™T™XÝHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆŒNˆ]S^[Ý]œÚ^™KšZYÚH™XÝšZYÚH‹Œ
+KÚ^™NˆÑÔÚ^™JÚYˆ™XÝÚYZYÚˆ™XÝšZYÚ
+È‹Œ
+JBˆH[ÙHÂˆ\Ý[™T™XÝHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+
+KÚ^™Nˆ]S^[Ý]œÚ^™JBˆBˆˆYˆ]Ý\œ™[Ý]\ÒXÛÛÛÛ[Âˆ]Ý]\ÒXÛÛ•šY]ÎˆÛÛ\Û™[ÜÝšY]Ï[\O‚ˆYˆ]Ý\œ™[HÝ›Û™ÔÙ[‹œÝ]\ÒXÛÛ•šY]ÈÂˆÝ]\ÒXÛÛ•šY]ÈHÝ\œ™[ˆH[ÙHÂˆÝ]\ÒXÛÛ•šY]ÈHÛÛ\Û™[ÜÝšY]Ï[\OŠ
+BˆÝ›Û™ÔÙ[‹œÝ]\ÒXÛÛ•šY]ÈHÝ]\ÒXÛÛ•šY]ÂˆÝ›Û™ÔÙ[‹›XZ[ÛÛ[ÛÛZ[™\“›ÙKšY]Ë˜YÝXšY]ÊÝ]\ÒXÛÛ•šY]ÊBˆBˆˆ]Ý]\ÒXÛÛÛÛ\Û™[H[[ÚšTÝ]\ÐÛÛ\Û™[
+ˆÛÛ^ˆ][K˜ÛÛ^ˆ[š[X][ÛØXÚNˆ][Kš[\˜XÝ[Û‹˜[š[X][ÛØXÚKˆ[š[X][Û”™[™\™\Žˆ][Kš[\˜XÝ[Û‹˜[š[X][Û”™[™\™\‹ˆÛÛ[ˆÝ\œ™[Ý]\ÒXÛÛÛÛ[ˆ\XÛPÛÛÜŽˆÝ\œ™[Ý]\ÒXÛÛ”\XÛPÛÛÜ‹ˆ\Õš\ÚX›Q›Ü[š[X][ÛœÎˆÝ›Û™ÔÙ[‹š\ÚXš[]TÝ]\È	‰ˆ][K˜ÛÛ^œÚ\™YÛÛ^™[™\™ÞU\ØYÙTÙ][™ÜË›ÛÜ[[ÚšKˆXÝ[ÛŽˆš[ˆ
+BˆÝ›Û™ÔÙ[‹œÝ]\ÒXÛÛÛÛ\Û™[HÝ]\ÒXÛÛÛÛ\Û™[ˆˆ]XÛÛ“ÜšYÚ[ŽˆÑÑ›Ø]H™^]RXÛÛ“ÜšYÚ[‚ˆ]ÛÛZ[™\”Ú^™HHÑÔÚ^™JÚYˆŒŒZYÚˆŒŒ
+Bˆ]XÛÛ”Ú^™HHÝ]\ÒXÛÛ•šY]Ë\]Jˆ˜[œÚ][ÛŽˆš[[YYX]KˆÛÛ\Û™[ˆ[žPÛÛ\Û™[
+Ý]\ÒXÛÛÛÛ\Û™[
+Kˆ[š\›Û›Y[ˆßKˆÛÛZ[™\”Ú^™NˆÛÛZ[™\”Ú^™Bˆ
+Bˆ˜[œÚ][Û‹\]Qœ˜[YJšY]ÎˆÝ]\ÒXÛÛ•šY]Ëœ˜[YNˆÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆXÛÛ“ÜšYÚ[‹Nˆ›ÛÜ•ÔØÜ™Y[”^[Ê]Qœ˜[YK›X^HH\Ý[™T™XÝšZYÚ
+ˆHHXÛÛ”Ú^™KšZYÚÈ‹Œ
+HHRTØÜ™Y[”^[
+KÚ^™NˆXÛÛ”Ú^™JJBˆ™^]RXÛÛ“ÜšYÚ[ˆ
+ÏHÝ]\ÒXÛÛ•šY]Ë˜›Ý[™ËÚY
+ÈŒˆH[ÙHYˆ]Ý]\ÒXÛÛ•šY]ÈHÝ›Û™ÔÙ[‹œÝ]\ÒXÛÛ•šY]ÈÂˆÝ›Û™ÔÙ[‹œÝ]\ÒXÛÛ•šY]ÈHš[ˆÝ]\ÒXÛÛ•šY]Ëœ™[[Ý™Qœ›ÛTÝ\\šY]Ê
+BˆBˆˆYˆ]Ý\œ™[Ü™YXš[]RXÛÛÛÛ[Âˆ]Ü™YXš[]RXÛÛ•šY]ÎˆÛÛ\Û™[ÜÝšY]Ï[\O‚ˆYˆ]Ý\œ™[HÝ›Û™ÔÙ[‹˜Ü™YXš[]RXÛÛ•šY]ÈÂˆÜ™YXš[]RXÛÛ•šY]ÈHÝ\œ™[ˆH[ÙHÂˆÜ™YXš[]RXÛÛ•šY]ÈHÛÛ\Û™[ÜÝšY]Ï[\OŠ
+BˆÝ›Û™ÔÙ[‹˜Ü™YXš[]RXÛÛ•šY]ÈHÜ™YXš[]RXÛÛ•šY]ÂˆÝ›Û™ÔÙ[‹›XZ[ÛÛ[ÛÛZ[™\“›ÙKšY]Ë˜YÝXšY]ÊÜ™YXš[]RXÛÛ•šY]ÊBˆBˆˆ]Ü™YXš[]RXÛÛÛÛ\Û™[H[[ÚšTÝ]\ÐÛÛ\Û™[
+ˆÛÛ^ˆ][K˜ÛÛ^ˆ[š[X][ÛØXÚNˆ][Kš[\˜XÝ[Û‹˜[š[X][ÛØXÚKˆ[š[X][Û”™[™\™\Žˆ][Kš[\˜XÝ[Û‹˜[š[X][Û”™[™\™\‹ˆÛÛ[ˆÝ\œ™[Ü™YXš[]RXÛÛÛÛ[ˆ\Õš\ÚX›Q›Ü[š[X][ÛœÎˆÝ›Û™ÔÙ[‹š\ÚXš[]TÝ]\È	‰ˆ][K˜ÛÛ^œÚ\™YÛÛ^™[™\™ÞU\ØYÙTÙ][™ÜË›ÛÜ[[ÚšKˆXÝ[ÛŽˆš[ˆ
+BˆÝ›Û™ÔÙ[‹˜Ü™YXš[]RXÛÛÛÛ\Û™[HÜ™YXš[]RXÛÛÛÛ\Û™[ˆˆ]XÛÛ“ÜšYÚ[ŽˆÑÑ›Ø]H™^]RXÛÛ“ÜšYÚ[‚ˆ]ÛÛZ[™\”Ú^™NˆÑÔÚ^™BˆYˆØ\ÙH™\šYšYYHÝ\œ™[Ü™YXš[]RXÛÛÛÛ[ÂˆÛÛZ[™\”Ú^™HHÑÔÚ^™JÚYˆM‹ŒZYÚˆM‹Œ
+BˆH[ÙHÂˆÛÛZ[™\”Ú^™HHÑÔÚ^™JÚYˆŒŒZYÚˆŒŒ
+BˆBˆ]XÛÛ”Ú^™HHÜ™YXš[]RXÛÛ•šY]Ë\]Jˆ˜[œÚ][ÛŽˆš[[YYX]KˆÛÛ\Û™[ˆ[žPÛÛ\Û™[
+Ü™YXš[]RXÛÛÛÛ\Û™[
+Kˆ[š\›Û›Y[ˆßKˆÛÛZ[™\”Ú^™NˆÛÛZ[™\”Ú^™Bˆ
+Bˆ˜[œÚ][Û‹\]Qœ˜[YJšY]ÎˆÜ™YXš[]RXÛÛ•šY]Ëœ˜[YNˆÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆXÛÛ“ÜšYÚ[‹Nˆ›ÛÜ•ÔØÜ™Y[”^[Ê]Qœ˜[YK›X^HH\Ý[™T™XÝšZYÚ
+ˆHHXÛÛ”Ú^™KšZYÚÈ‹Œ
+HHRTØÜ™Y[”^[
+KÚ^™NˆXÛÛ”Ú^™JJBˆ™^]RXÛÛ“ÜšYÚ[ˆ
+ÏHÜ™YXš[]RXÛÛ•šY]Ë˜›Ý[™ËÚY
+ÈŒˆH[ÙHYˆ]Ü™YXš[]RXÛÛ•šY]ÈHÝ›Û™ÔÙ[‹˜Ü™YXš[]RXÛÛ•šY]ÈÂˆÝ›Û™ÔÙ[‹˜Ü™YXš[]RXÛÛ•šY]ÈHš[ˆÜ™YXš[]RXÛÛ•šY]Ëœ™[[Ý™Qœ›ÛTÝ\\šY]Ê
+BˆBˆˆYˆ]Ý\œ™[™\šYšYYXÛÛÛÛ[Âˆ]™\šYšYYXÛÛ•šY]ÎˆÛÛ\Û™[ÜÝšY]Ï[\O‚ˆYˆ]Ý\œ™[HÝ›Û™ÔÙ[‹™\šYšYYXÛÛ•šY]ÈÂˆ™\šYšYYXÛÛ•šY]ÈHÝ\œ™[ˆH[ÙHÂˆ™\šYšYYXÛÛ•šY]ÈHÛÛ\Û™[ÜÝšY]Ï[\OŠ
+BˆÝ›Û™ÔÙ[‹™\šYšYYXÛÛ•šY]ÈH™\šYšYYXÛÛ•šY]ÂˆÝ›Û™ÔÙ[‹›XZ[ÛÛ[ÛÛZ[™\“›ÙKšY]Ë˜YÝXšY]Ê™\šYšYYXÛÛ•šY]ÊBˆBˆˆ]™\šYšYYXÛÛÛÛ\Û™[H[[ÚšTÝ]\ÐÛÛ\Û™[
+ˆÛÛ^ˆ][K˜ÛÛ^ˆ[š[X][ÛØXÚNˆ][Kš[\˜XÝ[Û‹˜[š[X][ÛØXÚKˆ[š[X][Û”™[™\™\Žˆ][Kš[\˜XÝ[Û‹˜[š[X][Û”™[™\™\‹ˆÛÛ[ˆÝ\œ™[™\šYšYYXÛÛÛÛ[ˆ\Õš\ÚX›Q›Ü[š[X][ÛœÎˆÝ›Û™ÔÙ[‹š\ÚXš[]TÝ]\È	‰ˆ][K˜ÛÛ^œÚ\™YÛÛ^™[™\™ÞU\ØYÙTÙ][™ÜË›ÛÜ[[ÚšKˆXÝ[ÛŽˆš[ˆ
+BˆÝ›Û™ÔÙ[‹™\šYšYYXÛÛÛÛ\Û™[H™\šYšYYXÛÛÛÛ\Û™[ˆˆ]XÛÛ“ÜšYÚ[ŽˆÑÑ›Ø]ˆYˆØ\ÙH˜[š[X][ÛˆHÝ\œ™[™\šYšYYXÛÛÛÛ[ÂˆXÛÛ“ÜšYÚ[ˆHÛÛ[™XÝ›ÜšYÚ[‹žˆH[ÙHÂˆXÛÛ“ÜšYÚ[ˆH™^]RXÛÛ“ÜšYÚ[‚ˆBˆ]XÛÛ”Ú^™HH™\šYšYYXÛÛ•šY]Ë\]Jˆ˜[œÚ][ÛŽˆš[[YYX]KˆÛÛ\Û™[ˆ[žPÛÛ\Û™[
+™\šYšYYXÛÛÛÛ\Û™[
+Kˆ[š\›Û›Y[ˆßKˆÛÛZ[™\”Ú^™NˆÑÔÚ^™JÚYˆM‹ŒZYÚˆM‹Œ
+Bˆ
+Bˆ˜[œÚ][Û‹\]Qœ˜[YJšY]Îˆ™\šYšYYXÛÛ•šY]Ëœ˜[YNˆÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆXÛÛ“ÜšYÚ[‹Nˆ›ÛÜ•ÔØÜ™Y[”^[Ê]Qœ˜[YK›X^HH\Ý[™T™XÝšZYÚ
+ˆHHXÛÛ”Ú^™KšZYÚÈ‹Œ
+HHRTØÜ™Y[”^[
+KÚ^™NˆXÛÛ”Ú^™JJBˆH[ÙHYˆ]™\šYšYYXÛÛ•šY]ÈHÝ›Û™ÔÙ[‹™\šYšYYXÛÛ•šY]ÈÂˆÝ›Û™ÔÙ[‹™\šYšYYXÛÛ•šY]ÈHš[ˆ™\šYšYYXÛÛ•šY]Ëœ™[[Ý™Qœ›ÛTÝ\\šY]Ê
+BˆBˆˆYˆ]Ý\œ™[^\˜RXÛÛÛÛ[Âˆ]^\˜RXÛÛ•šY]ÎˆÛÛ\Û™[ÜÝšY]Ï[\O‚ˆYˆ]Ý\œ™[HÝ›Û™ÔÙ[‹™^\˜RXÛÛ•šY]ÈÂˆ^\˜RXÛÛ•šY]ÈHÝ\œ™[ˆH[ÙHÂˆ^\˜RXÛÛ•šY]ÈHÛÛ\Û™[ÜÝšY]Ï[\OŠ
+BˆÝ›Û™ÔÙ[‹™^\˜RXÛÛ•šY]ÈH^\˜RXÛÛ•šY]ÂˆÝ›Û™ÔÙ[‹›XZ[ÛÛ[ÛÛZ[™\“›ÙKšY]Ë˜YÝXšY]Ê^\˜RXÛÛ•šY]ÊBˆB‚ˆ]^\˜RXÛÛÛÛ\Û™[H[[ÚšTÝ]\ÐÛÛ\Û™[
+ˆÛÛ^ˆ][K˜ÛÛ^ˆ[š[X][ÛØXÚNˆ][Kš[\˜XÝ[Û‹˜[š[X][ÛØXÚKˆ[š[X][Û”™[™\™\Žˆ][Kš[\˜XÝ[Û‹˜[š[X][Û”™[™\™\‹ˆÛÛ[ˆÝ\œ™[^\˜RXÛÛÛÛ[ˆ\Õš\ÚX›Q›Ü[š[X][ÛœÎˆÝ›Û™ÔÙ[‹š\ÚXš[]TÝ]\È	‰ˆ][K˜ÛÛ^œÚ\™YÛÛ^™[™\™ÞU\ØYÙTÙ][™ÜË›ÛÜ[[ÚšKˆXÝ[ÛŽˆš[ˆ
+BˆÝ›Û™ÔÙ[‹™^\˜RXÛÛÛÛ\Û™[H^\˜RXÛÛÛÛ\Û™[‚ˆ]XÛÛ”Ú^™HH^\˜RXÛÛ•šY]Ë\]Jˆ˜[œÚ][ÛŽˆš[[YYX]KˆÛÛ\Û™[ˆ[žPÛÛ\Û™[
+^\˜RXÛÛÛÛ\Û™[
+Kˆ[š\›Û›Y[ˆßKˆÛÛZ[™\”Ú^™Nˆ^\˜RXÛÛÛÛZ[™\”Ú^™Bˆ
+Bˆ˜[œÚ][Û‹\]Qœ˜[YJšY]Îˆ^\˜RXÛÛ•šY]Ëœ˜[YNˆÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆ™^]RXÛÛ“ÜšYÚ[‹Nˆ›ÛÜ•ÔØÜ™Y[”^[Ê]Qœ˜[YK›X^HH\Ý[™T™XÝšZYÚ
+ˆHHXÛÛ”Ú^™KšZYÚÈ‹Œ
+HHRTØÜ™Y[”^[
+KÚ^™NˆXÛÛ”Ú^™JJBˆ™^]RXÛÛ“ÜšYÚ[ˆ
+ÏHXÛÛ”Ú^™KÚY
+ÈŒˆH[ÙHYˆ]^\˜RXÛÛ•šY]ÈHÝ›Û™ÔÙ[‹™^\˜RXÛÛ•šY]ÈÂˆÝ›Û™ÔÙ[‹™^\˜RXÛÛ•šY]ÈHš[ˆÝ›Û™ÔÙ[‹™^\˜RXÛÛÛÛ\Û™[Hš[ˆ^\˜RXÛÛ•šY]Ëœ™[[Ý™Qœ›ÛTÝ\\šY]Ê
+BˆB‚ˆYˆ]Ý\œ™[Y[’XÛÛ’[XYÙHHÝ\œ™[Y[’XÛÛ’[XYÙHÂˆÝ›Û™ÔÙ[‹šY[”Y\’XÛÛ“›ÙKš[XYÙHHÝ\œ™[Y[’XÛÛ’[XYÙBˆÝ›Û™ÔÙ[‹šY[”Y\’XÛÛ“›ÙKš\ÒY[ˆH˜[ÙBˆ]Y[’XÛÛ‘œ˜[YHHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆ™^]RXÛÛ“ÜšYÚ[ˆ
+ÈKŒNˆ›ÛÜ•ÔØÜ™Y[”^[Ê]Qœ˜[YK›X^HH\Ý[™T™XÝšZYÚ
+ˆHHÝ\œ™[Y[’XÛÛ’[XYÙKœÚ^™KšZYÚÈ‹Œ
+JKÚ^™NˆÝ\œ™[Y[’XÛÛ’[XYÙKœÚ^™JBˆ˜[œÚ][Û‹\]Qœ˜[YJ›ÙNˆÝ›Û™ÔÙ[‹šY[”Y\’XÛÛ“›ÙKœ˜[YNˆY[’XÛÛ‘œ˜[YJBˆ™^]RXÛÛ“ÜšYÚ[ˆHY[’XÛÛ‘œ˜[YK›X^
+ÈKŒˆH[ÙHÂˆÝ›Û™ÔÙ[‹šY[”Y\’XÛÛ“›ÙKš[XYÙHHš[ˆÝ›Û™ÔÙ[‹šY[”Y\’XÛÛ“›ÙKš\ÒY[ˆHYBˆB‚ˆYˆ]Ý\œ™[]]YXÛÛ’[XYÙHHÝ\œ™[]]YXÛÛ’[XYÙHÂˆÝ›Û™ÔÙ[‹›]]YXÛÛ“›ÙKš[XYÙHHÝ\œ™[]]YXÛÛ’[XYÙBˆÝ›Û™ÔÙ[‹›]]YXÛÛ“›ÙKš\ÒY[ˆH˜[ÙBˆ]]]YXÛÛ“ÜšYÚ[–HÝ\œ™[Y[’XÛÛ’[XYÙHOHš[È™^]RXÛÛ“ÜšYÚ[ˆˆ™^]RXÛÛ“ÜšYÚ[ˆHKŒˆ˜[œÚ][Û‹\]Qœ˜[YJ›ÙNˆÝ›Û™ÔÙ[‹›]]YXÛÛ“›ÙKœ˜[YNˆÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆ]]YXÛÛ“ÜšYÚ[–Nˆ›ÛÜ•ÔØÜ™Y[”^[Ê]Qœ˜[YK›X^HH\Ý[™T™XÝšZYÚ
+ˆHHÝ\œ™[]]YXÛÛ’[XYÙKœÚ^™KšZYÚÈ‹Œ
+JKÚ^™NˆÝ\œ™[]]YXÛÛ’[XYÙKœÚ^™JJBˆ™^]RXÛÛ“ÜšYÚ[ˆ
+ÏHÝ\œ™[]]YXÛÛ’[XYÙKœÚ^™KÚY
+ÈKŒˆH[ÙHÂˆÝ›Û™ÔÙ[‹›]]YXÛÛ“›ÙKš[XYÙHHš[ˆÝ›Û™ÔÙ[‹›]]YXÛÛ“›ÙKš\ÒY[ˆHYBˆBˆˆYˆ]
+]P˜YÙS^[Ý]]P˜YÙP\JHH]P˜YÙS^[Ý][™\HÂˆ]]P˜YÙS›ÙHH]P˜YÙP\J
+Bˆ]˜XÚÙÜ›Ý[™šY]ÎˆRR[XYÙUšY]ÂˆYˆ]Ý\œ™[HÝ›Û™ÔÙ[‹]P˜YÙHÂˆ˜XÚÙÜ›Ý[™šY]ÈHÝ\œ™[˜˜XÚÙÜ›Ý[™šY]ÂˆH[ÙHÂˆ˜XÚÙÜ›Ý[™šY]ÈHRR[XYÙUšY]Ê[XYÙNˆÙ[™\˜]TÝ™]ÚX›Qš[YÚ\˜ÛR[XYÙJ˜Y]\ÎˆŒÛÛÜŽˆÚ]JOËÚ]™[™\š[™Ó[ÙJ˜[Ø^\Õ[\]JJBˆÝ›Û™ÔÙ[‹]P˜YÙHH
+˜XÚÙÜ›Ý[™šY]Ë]P˜YÙS›ÙJBˆˆÝ›Û™ÔÙ[‹›XZ[ÛÛ[ÛÛZ[™\“›ÙKšY]Ë˜YÝXšY]Ê˜XÚÙÜ›Ý[™šY]ÊBˆÝ›Û™ÔÙ[‹›XZ[ÛÛ[ÛÛZ[™\“›ÙK˜YÝX››ÙJ]P˜YÙS›ÙJBˆBˆYˆÝ\œ™[Y[’XÛÛ’[XYÙHOHš[Ý\œ™[]]YXÛÛ’[XYÙHOHš[Âˆ™^]RXÛÛ“ÜšYÚ[ˆOHËŒˆBˆ™^]RXÛÛ“ÜšYÚ[ˆ
+ÏHËŒˆ]]P˜YÙQœ˜[YHHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆ™^]RXÛÛ“ÜšYÚ[‹Nˆ]Qœ˜[YK›Z[–H
+È›ÛÜŠ
+]Qœ˜[YKšZYÚH]P˜YÙS^[Ý]œÚ^™KšZYÚ
+H
+ˆJJKÚ^™Nˆ]P˜YÙS^[Ý]œÚ^™JBˆ™^]RXÛÛ“ÜšYÚ[ˆ
+ÏH]P˜YÙS^[Ý]œÚ^™KÚY
+ÈŒˆ˜[œÚ][Û‹\]Qœ˜[YJ›ÙNˆ]P˜YÙS›ÙKœ˜[YNˆ]P˜YÙQœ˜[YJBˆˆ˜\ˆ]P˜YÙP˜XÚÙÜ›Ý[™œ˜[YHH]P˜YÙQœ˜[YKš[œÙ]žJˆMŒNˆL‹Œ
+Bˆ]P˜YÙP˜XÚÙÜ›Ý[™œ˜[YKœÚ^™KšZYÚOHKŒˆ˜[œÚ][Û‹\]Qœ˜[YJšY]Îˆ˜XÚÙÜ›Ý[™šY]Ëœ˜[YNˆ]P˜YÙP˜XÚÙÜ›Ý[™œ˜[YJBˆYˆ][Kœ™\Ù[][Û‘]K[YK›Ý™\˜[\šÐ\X\˜[˜ÙHÂˆ˜XÚÙÜ›Ý[™šY]Ë[ÛÛÜˆH[YK]PÛÛÜ‹Ú]][\YY[JŒJBˆH[ÙHÂˆ˜XÚÙÜ›Ý[™šY]Ë[ÛÛÜˆH[YK]PÛÛÜ‹Ú]][\YY[JŒJBˆBˆH[ÙHYˆ]]P˜YÙHHÝ›Û™ÔÙ[‹]P˜YÙHÂˆÝ›Û™ÔÙ[‹]P˜YÙHHš[ˆ]P˜YÙK˜˜XÚÙÜ›Ý[™šY]Ëœ™[[Ý™Qœ›ÛTÝ\\šY]Ê
+Bˆ]P˜YÙK^›ÙKœ™[[Ý™Qœ›ÛTÝ\\››ÙJ
+BˆBˆˆ]YÙ\\˜]Ü’[œÙ]ˆÑÑ›Ø]ˆ]šYÚÙ\\˜]Ü’[œÙ]ˆÑÑ›Ø]ˆ]YPÛÛ[][š]TÙ\\˜]ÜˆH][K\ÙPÛÛ[][š]UšY]Ó^[Ý]	‰ˆ\ÝˆYˆØ\ÙH]™Ü›Ý\™Y™\™[˜ÙJÜ›Ý\™Y™\™[˜ÙQ]JHH][K˜ÛÛ[Ü›Ý\™Y™\™[˜ÙQ]KšY[žQY˜][ÂˆYÙ\\˜]Ü’[œÙ]HŒˆšYÚÙ\\˜]Ü’[œÙ]HŒˆH[ÙHYˆ][K\ÙPÛÛ[][š]UšY]Ó^[Ý]ÂˆYÙ\\˜]Ü’[œÙ]HY][™ÓÙ™œÙ]
+ÈY[œÙ]
+È˜]ÐÛÛ[™XÝ›ÜšYÚ[‹žˆšYÚÙ\\˜]Ü’[œÙ]HM‹ŒˆH[ÙHYˆ
+[™^\Ô[›™Y	‰ˆ\Ô[›™Y
+H\ÝÂˆYÙ\\˜]Ü’[œÙ]HŒˆšYÚÙ\\˜]Ü’[œÙ]HŒˆH[ÙHÂˆYÙ\\˜]Ü’[œÙ]HY][™ÓÙ™œÙ]
+ÈY[œÙ]
+È˜]ÐÛÛ[™XÝ›ÜšYÚ[‹žˆšYÚÙ\\˜]Ü’[œÙ]HM‹ŒˆBˆˆ˜[œÚ][Û‹\]Qœ˜[YJ›ÙNˆÝ›Û™ÔÙ[‹œÙ\\˜]Ü“›ÙKœ˜[YNˆÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆYÙ\\˜]Ü’[œÙ]Nˆ^[Ý]Ù™œÙ]
+È][RZYÚHÙ\\˜]Ü’ZYÚ
+KÚ^™NˆÑÔÚ^™JÚYˆ\˜[\ËÚYHYÙ\\˜]Ü’[œÙ]HšYÚÙ\\˜]Ü’[œÙ]ZYÚˆÙ\\˜]Ü’ZYÚ
+JJBˆÝ›Û™ÔÙ[‹œÙ\\˜]Ü“›ÙKš\ÒY[ˆHYPÛÛ[][š]TÙ\\˜]Ü‚ˆYˆ][›[™S˜]šYØ][Û“ØØ][ÛˆH][Kš[\˜XÝ[Û‹š[›[™S˜]šYØ][Û“ØØ][ÛˆÂˆÝ›Û™ÔÙ[‹\]TÙ\\˜]Ü[J˜[œÚ][ÛŽˆ˜[œÚ][Û‹[›[™S˜]šYØ][Û”›ÙÜ™\ÜÎˆ[›[™S˜]šYØ][Û“ØØ][Û‹œ›ÙÜ™\ÜÊBˆH[ÙHÂˆÝ›Û™ÔÙ[‹\]TÙ\\˜]Ü[J˜[œÚ][ÛŽˆ˜[œÚ][ÛŠBˆBˆˆYˆØ\ÙH]œY\ŠY\‘]JHH][K˜ÛÛ[]Ý\ÝÛSY\ÜØYÙS\Ý]HHY\‘]K˜Ý\ÝÛSY\ÜØYÙS\Ý]HÂˆYˆÝ\ÝÛSY\ÜØYÙS\Ý]KšYTÙ\\˜]ÜˆÂˆÝ›Û™ÔÙ[‹œÙ\\˜]Ü“›ÙKš\ÒY[ˆHYBˆBˆBˆˆ˜[œÚ][Û‹\]Qœ˜[YJ›ÙNˆÝ›Û™ÔÙ[‹˜˜XÚÙÜ›Ý[™›ÙKœ˜[YNˆÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆŒNˆŒ
+KÚ^™NˆÑÔÚ^™JÚYˆ^[Ý]˜ÛÛ[Ú^™KÚYZYÚˆ][RZYÚ
+JJBˆ]˜XÚÙÜ›Ý[™ÛÛÜŽˆRPÛÛÜ‚ˆ]YÚYÚY˜XÚÙÜ›Ý[™ÛÛÜŽˆRPÛÛÜ‚ˆYˆ][KœÙ[XÝYÂˆ˜XÚÙÜ›Ý[™ÛÛÜˆH[YKš][TÙ[XÝY˜XÚÙÜ›Ý[™ÛÛÜ‚ˆYÚYÚY˜XÚÙÜ›Ý[™ÛÛÜˆH[YKš][RYÚYÚY˜XÚÙÜ›Ý[™ÛÛÜ‚ˆH[ÙHYˆ\Ô[›™YÂˆYˆØ\ÙH]™Ü›Ý\™Y™\™[˜ÙJÜ›Ý\™Y™\™[˜ÙQ]JHH][K˜ÛÛ[Ü›Ý\™Y™\™[˜ÙQ]KšY[žQY˜][Âˆ˜XÚÙÜ›Ý[™ÛÛÜˆHÜ›Ý\™Y™\™[˜ÙQ]K˜\X\œÔ[›™YÈ[YKœ[›™Y][P˜XÚÙÜ›Ý[™ÛÛÜˆˆ[YKš][P˜XÚÙÜ›Ý[™ÛÛÜ‚ˆYÚYÚY˜XÚÙÜ›Ý[™ÛÛÜˆHÜ›Ý\™Y™\™[˜ÙQ]K˜\X\œÔ[›™YÈ[YKœ[›™Y][RYÚYÚY˜XÚÙÜ›Ý[™ÛÛÜˆˆ[YKš][RYÚYÚY˜XÚÙÜ›Ý[™ÛÛÜ‚ˆH[ÙHÂˆ˜XÚÙÜ›Ý[™ÛÛÜˆH[YKœ[›™Y][P˜XÚÙÜ›Ý[™ÛÛÜ‚ˆYÚYÚY˜XÚÙÜ›Ý[™ÛÛÜˆH[YKœ[›™Y][RYÚYÚY˜XÚÙÜ›Ý[™ÛÛÜ‚ˆBˆH[ÙHÂˆYˆØ\ÙH]œY\ŠY\‘]JHH][K˜ÛÛ[Y\‘]K˜Ý\ÝÛSY\ÜØYÙS\Ý]HOHš[Âˆ˜XÚÙÜ›Ý[™ÛÛÜˆH˜ÛX\‚ˆH[ÙHÂˆ˜XÚÙÜ›Ý[™ÛÛÜˆH˜ÛX\‚ˆËØ˜XÚÙÜ›Ý[™ÛÛÜˆH[YKš][P˜XÚÙÜ›Ý[™ÛÛÜ‚ˆBˆYÚYÚY˜XÚÙÜ›Ý[™ÛÛÜˆH[YKš][RYÚYÚY˜XÚÙÜ›Ý[™ÛÛÜ‚ˆBˆˆYˆ[š[X]YÂˆ˜[œÚ][Û‹\]P˜XÚÙÜ›Ý[™ÛÛÜŠ›ÙNˆÝ›Û™ÔÙ[‹˜˜XÚÙÜ›Ý[™›ÙKÛÛÜŽˆ˜XÚÙÜ›Ý[™ÛÛÜŠBˆH[ÙHÂˆÝ›Û™ÔÙ[‹˜˜XÚÙÜ›Ý[™›ÙK˜˜XÚÙÜ›Ý[™ÛÛÜˆH˜XÚÙÜ›Ý[™ÛÛÜ‚ˆBˆˆYˆ][›[™S˜]šYØ][Û“ØØ][ÛˆH][Kš[\˜XÝ[Û‹š[›[™S˜]šYØ][Û“ØØ][ÛˆÂˆ˜[œÚ][Û‹\]P[J›ÙNˆÝ›Û™ÔÙ[‹˜˜XÚÙÜ›Ý[™›ÙK[NˆKŒH[›[™S˜]šYØ][Û“ØØ][Û‹œ›ÙÜ™\ÜÊBˆH[ÙHÂˆ˜[œÚ][Û‹\]P[J›ÙNˆÝ›Û™ÔÙ[‹˜˜XÚÙÜ›Ý[™›ÙK[NˆKŒ
+BˆBˆˆÝ›Û™ÔÙ[‹šYÚYÚY˜XÚÙÜ›Ý[™›ÙK˜˜XÚÙÜ›Ý[™ÛÛÜˆHYÚYÚY˜XÚÙÜ›Ý[™ÛÛÜ‚ˆ]Ü™YØ]]™R[œÙ]ˆÑÑ›Ø]HŒˆÝ›Û™ÔÙ[‹šYÚYÚY˜XÚÙÜ›Ý[™›ÙK™œ˜[YHHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆÝ›Û™ÔÙ[‹œ™]™X[Ù™œÙ]Nˆ^[Ý]Ù™œÙ]HÙ\\˜]Ü’ZYÚHÜ™YØ]]™R[œÙ]
+KÚ^™NˆÑÔÚ^™JÚYˆ^[Ý]˜ÛÛ[Ú^™KÚYZYÚˆ^[Ý]˜ÛÛ[Ú^™KšZYÚ
+ÈÙ\\˜]Ü’ZYÚ
+ÈÜ™YØ]]™R[œÙ]
+JBˆ˜[œÚ][Û‹\]PÛÜ›™\”˜Y]\Ê›ÙNˆÝ›Û™ÔÙ[‹šYÚYÚY˜XÚÙÜ›Ý[™›ÙKÛÜ›™\”˜Y]\ÎˆÝ›Û™ÔÙ[‹š\Ô™]™X[Ü[ÛœÐXÝ]™HÈ‹ŒˆŒ
+BˆˆYˆ]Y\”™\Ù[˜ÙHHY\”™\Ù[˜ÙHÂˆÝ›Û™ÔÙ[‹œY\”™\Ù[˜ÙSX[˜YÙ\Ëœ™\Ù]
+™\Ù[˜ÙNˆ[™Ú[™TY\‹”™\Ù[˜ÙJÝ]\ÎˆY\”™\Ù[˜ÙKœÝ]\Ë\ÝXÝ]š]Nˆ
+K\ÓÛ›[™NˆÛ›[™JBˆBˆˆÝ›Û™ÔÙ[‹\]S^[Ý]
+Ú^™NˆÑÔÚ^™JÚYˆ^[Ý]˜ÛÛ[Ú^™KÚYZYÚˆ][RZYÚ
+KY[œÙ]ˆ\˜[\Ë›Y[œÙ]šYÚ[œÙ]ˆ\˜[\ËœšYÚ[œÙ]
+BˆˆYˆ][K™Y][™ÈÂˆÝ›Û™ÔÙ[‹œÙ]™]™X[Ü[ÛœÊ
+Yˆ×KšYÚˆ×JK[˜X›P[š[X][ÛœÎˆ][K˜ÛÛ^œÚ\™YÛÛ^™[™\™ÞU\ØYÙTÙ][™ÜË™[˜[œÛXÙ[˜ÞJBˆH[ÙHÂˆÝ›Û™ÔÙ[‹œÙ]™]™X[Ü[ÛœÊ
+YˆY\“Y™]™X[Ü[ÛœËšYÚˆY\”™]™X[Ü[ÛœÊK[˜X›P[š[X][ÛœÎˆ][K˜ÛÛ^œÚ\™YÛÛ^™[™\™ÞU\ØYÙTÙ][™ÜË™[˜[œÛXÙ[˜ÞJBˆBˆYˆ\Ý›Û™ÔÙ[‹˜Ý\ÝÛP[š[X][Û’[”›ÙÜ™\ÜÈÂˆÝ›Û™ÔÙ[‹œÙ]™]™X[Ü[ÛœÓÜ[™Y
+][Kš\ÐXÝ]™T™]™X[ÛÛ›ÛË[š[X]YˆYJBˆBˆˆÝ›Û™ÔÙ[‹šY]Ë˜XØÙ\ÜÚXš[]SX™[HÝ›Û™ÔÙ[‹˜XØÙ\ÜÚXš[]SX™[ˆÝ›Û™ÔÙ[‹šY]Ë˜XØÙ\ÜÚXš[]U˜[YHHÝ›Û™ÔÙ[‹˜XØÙ\ÜÚXš[]U˜[YBˆˆYˆXÝ\ÝÛPXÝ[ÛœËš\Ñ[\HÂˆÝ›Û™ÔÙ[‹šY]Ë˜XØÙ\ÜÚXš[]PÝ\ÝÛPXÝ[ÛœÈHÝ\ÝÛPXÝ[ÛœË›X\
+ÈXÝ[ÛˆOˆRPXØÙ\ÜÚXš[]PÝ\ÝÛPXÝ[Ûˆ[‚ˆ™]\›ˆÚ]\Ý][PXØÙ\ÜÚXš[]PÝ\ÝÛPXÝ[ÛŠ˜[YNˆXÝ[Û‹›˜[YK\™Ù]ˆÝ›Û™ÔÙ[‹Ù[XÝÜŽˆÜÙ[XÝÜŠÝ›Û™ÔÙ[‹œ\™›Ü›SØØ[XØÙ\ÜÚXš[]PÝ\ÝÛPXÝ[ÛŠÎŠJKÙ^NˆXÝ[Û‹šÙ^JBˆJBˆH[ÙHÂˆÝ›Û™ÔÙ[‹šY]Ë˜XØÙ\ÜÚXš[]PÝ\ÝÛPXÝ[ÛœÈHš[ˆBˆˆÝ›Û™ÔÙ[‹˜]˜]\•\™XÛÙÛš^™\Ëš\Ñ[˜X›YH][Kš[\˜XÝ[Û‹š[›[™S˜]šYØ][Û“ØØ][ÛˆOHš[ˆˆYˆØ\ÙH›ØY[™ÈH][K˜ÛÛ[Âˆ]Ú[[Y\“›ÙNˆÚ[[Y\‘Y™™XÝ›ÙBˆYˆ]Ý\œ™[HÝ›Û™ÔÙ[‹œXÙZÛ\“›ÙHÂˆÚ[[Y\“›ÙHHÝ\œ™[ˆH[ÙHÂˆÚ[[Y\“›ÙHHÚ[[Y\‘Y™™XÝ›ÙJ
+BˆÝ›Û™ÔÙ[‹œXÙZÛ\“›ÙHHÚ[[Y\“›ÙBˆÝ›Û™ÔÙ[‹˜YÝX››ÙJÚ[[Y\“›ÙJBˆBˆÚ[[Y\“›ÙK™œ˜[YHHÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+
+KÚ^™NˆÑÔÚ^™JÚYˆ^[Ý]˜ÛÛ[Ú^™KÚYZYÚˆ^[Ý]˜ÛÛ[Ú^™KšZYÚHKŒ
+JBˆYˆ]
+™XÝÚ^™JHHÝ›Û™ÔÙ[‹˜XœÛÛ]SØØ][ÛˆÂˆÚ[[Y\“›ÙK\]PXœÛÛ]T™XÝ
+™XÝÚ][ŽˆÚ^™JBˆBˆˆ˜\ˆÚ\\ÎˆÔÚ[[Y\‘Y™™XÝ›ÙK”Ú\WHH×Bˆˆ]]S[™UÚYˆÑÑ›Ø]HNŒˆ]]S[™UÚYˆÑÑ›Ø]HÍ‹Œˆ]^š\œÝ[™UÚYˆÑÑ›Ø]HŒˆ]^ÙXÛÛ™[™UÚYˆÑÑ›Ø]HŒŒˆ][™QX[Y]\ŽˆÑÑ›Ø]HLŒˆˆÚ\\Ë˜\[™
+˜Ú\˜ÛJ]˜]\‘œ˜[YJJBˆˆ]]Qœ˜[YHHÝ›Û™ÔÙ[‹]S›ÙK™œ˜[YBˆÚ\\Ë˜\[™
+œ›Ý[™Y™XÝ[™JÝ\Ú[ˆÑÔÚ[
+ˆ]Qœ˜[YK›Z[–Nˆ]Qœ˜[YK›Z[–H
+È›ÛÜŠ
+]Qœ˜[YKšZYÚH[™QX[Y]\ŠHÈ‹Œ
+JKÚYˆ]S[™UÚYX[Y]\Žˆ[™QX[Y]\ŠJBˆˆ]^œ˜[YHHÝ›Û™ÔÙ[‹^›ÙK^›ÙK™œ˜[YBˆÚ\\Ë˜\[™
+œ›Ý[™Y™XÝ[™JÝ\Ú[ˆÑÔÚ[
+ˆ^œ˜[YK›Z[–Nˆ^œ˜[YK›Z[–H
+ÈËŒ
+KÚYˆ^š\œÝ[™UÚYX[Y]\Žˆ[™QX[Y]\ŠJBˆÚ\\Ë˜\[™
+œ›Ý[™Y™XÝ[™JÝ\Ú[ˆÑÔÚ[
+ˆ^œ˜[YK›Z[–Nˆ^œ˜[YK›Z[–H
+ÈËŒ
+È[™QX[Y]\ˆ
+ÈKŒ
+KÚYˆ^ÙXÛÛ™[™UÚYX[Y]\Žˆ[™QX[Y]\ŠJBˆˆ]]Qœ˜[YHHÝ›Û™ÔÙ[‹™]S›ÙK™œ˜[YBˆÚ\\Ë˜\[™
+œ›Ý[™Y™XÝ[™JÝ\Ú[ˆÑÔÚ[
+ˆ]Qœ˜[YK›X^H]S[™UÚYNˆ]Qœ˜[YK›Z[–H
+ÈËŒ
+KÚYˆ]S[™UÚYX[Y]\Žˆ[™QX[Y]\ŠJBˆˆÚ[[Y\“›ÙK\]J˜XÚÙÜ›Ý[™ÛÛÜŽˆ][Kœ™\Ù[][Û‘]K[YK›\ÝœZ[˜XÚÙÜ›Ý[™ÛÛÜ‹›Ü™YÜ›Ý[™ÛÛÜŽˆ][Kœ™\Ù[][Û‘]K[YK›\Ý›YYXTXÙZÛ\ÛÛÜ‹Ú[[Y\š[™ÐÛÛÜŽˆ][Kœ™\Ù[][Û‘]K[YK›\Ýš][P›ØÚÜÐ˜XÚÙÜ›Ý[™ÛÛÜ‹Ú][PÛÛ\Û™[
+
+KÚ\\ÎˆÚ\\ËÚ^™NˆÚ[[Y\“›ÙK™œ˜[YKœÚ^™JBˆH[ÙHYˆ]Ú[[Y\“›ÙHHÝ›Û™ÔÙ[‹œXÙZÛ\“›ÙHÂˆÝ›Û™ÔÙ[‹œXÙZÛ\“›ÙHHš[ˆÚ[[Y\“›ÙKœ™[[Ý™Qœ›ÛTÝ\\››ÙJ
+BˆBˆBˆJBˆBˆBˆˆÝ™\œšYHX›XÈ[˜È\]PXœÛÛ]T™XÝ
+È™XÝˆÑÔ™XÝÚ][ˆÛÛZ[™\”Ú^™NˆÑÔÚ^™JHÂˆ˜\ˆ™XÝH™XÝˆ™XÝ›ÜšYÚ[‹žH
+ÏHÙ[‹š[œÙ]ËÜˆÙ[‹˜XœÛÛ]SØØ][ÛˆH
+™XÝÛÛZ[™\”Ú^™JBˆYˆ]Ú[[Y\“›ÙHHÙ[‹œXÙZÛ\“›ÙHÂˆÚ[[Y\“›ÙK\]PXœÛÛ]T™XÝ
+™XÝÚ][ŽˆÛÛZ[™\”Ú^™JBˆBˆBˆˆØš˜Èš]˜]H[˜ÈÛÛ\Ý[™^]Û”™\ÜÙY
+
+HÂˆÝX\™]][H[ÙHÂˆ™]\›‚ˆBˆÝX\™Ø\ÙH]œY\ŠY\‘]JHH][K˜ÛÛ[[ÙHÂˆ™]\›‚ˆBˆÝX\™]ÜXÒ][HHY\‘]KÜ›Ü[UÜXÒ][\Ë™š\œÝ[ÙHÂˆ™]\›‚ˆBˆÝX\™Ø\ÙH]˜Ú]\Ý
+[™^
+HH][Kš[™^[ÙHÂˆ™]\›‚ˆBˆ][Kš[\˜XÝ[Û‹›Ü[‘›Ü[U™XY
+[™^›Y\ÜØYÙR[™^šYœY\’YÜXÒ][KšY
+BˆBˆˆØš˜Èš]˜]H[˜ÈXÝ[Û]Û”™\ÜÙY
+
+HÂˆÝX\™]][H[ÙHÂˆ™]\›‚ˆBˆÝX\™Ø\ÙH]œY\ŠY\‘]JHH][K˜ÛÛ[[ÙHÂˆ™]\›‚ˆBˆYˆØ\ÙH]\Ù\Š\Ù\ŠHHY\‘]KœY\‹œY\‹]›Ý[™›ÈH\Ù\‹˜›Ý[™›Ë›Ý[™›Ë™›YÜË˜ÛÛZ[œÊš\ÕÙX\
+HÂˆ][Kš[\˜XÝ[Û‹›Ü[•ÙX\
+\Ù\ŠBˆBˆBˆˆÝ™\œšYHX›XÈ[˜È[š[X]R[œÙ\[ÛŠÈÝ\œ™[[Y\Ý[\ˆÝX›K\˜][ÛŽˆÝX›KÜ[ÛœÎˆ\ÝšY]Ò][P[š[X][Û“Ü[ÛœÊHÂˆÙ[‹›^Y\‹˜[š[X]P[Jœ›ÛNˆŒÎˆKŒ\˜][ÛŽˆŒJBˆBˆˆÝ™\œšYHX›XÈ[˜È[š[X]T™[[Ý™Y
+ÈÝ\œ™[[Y\Ý[\ˆÝX›K\˜][ÛŽˆÝX›JHÂˆÙ[‹˜Û\ÕÐ›Ý[™ÈHYBˆYˆÙ[‹œÚÚ\˜Y[Ý]ÂˆÙ[‹œÚÚ\˜Y[Ý]H˜[ÙBˆH[ÙHÂˆÙ[‹›^Y\‹˜[š[X]P[Jœ›ÛNˆKŒÎˆŒ\˜][ÛŽˆŒ‹™[[Ý™SÛÛÛ\][ÛŽˆ˜[ÙJBˆBˆBˆˆÝ™\œšYHX›XÈ[˜ÈXY\œÊ
+HOˆÓ\ÝšY]Ò][RXY\—OÈÂˆYˆ]][HHÙ[‹›^[Ý]\˜[\ÏËŒÂˆ™]\›ˆ][KšXY\‹™›]X\ÈÉHBˆH[ÙHÂˆ™]\›ˆš[ˆBˆBˆˆš]˜]H[˜È\]UšY[Õš\ÚXš[]J
+HÂˆ]\Õš\ÚX›HHÙ[‹š\ÚXš[]TÝ]\È	‰ˆÙ[‹˜XÚÚ[™Ò\Ò[’Y\˜\˜ÚBˆÙ[‹˜]˜]\•šY[Ó›ÙOË\]Uš\ÚXš[]J\Õš\ÚX›JBˆˆYˆ]šY[Ó›ÙHHÙ[‹˜]˜]\•šY[Ó›ÙHÂˆšY[Ó›ÙK\]S^[Ý]
+Ú^™NˆÙ[‹˜]˜]\“›ÙK™œ˜[YKœÚ^™KÛÜ›™\”˜Y]\ÎˆÙ[‹˜]˜]\“›ÙK™œ˜[YKœÚ^™KÚYÈ‹Œ˜[œÚ][ÛŽˆš[[YYX]JBˆšY[Ó›ÙK™œ˜[YHHÙ[‹˜]˜]\“›ÙK˜›Ý[™ÂˆBˆBˆˆÝ™\œšYHX›XÈ[˜È\]T™]™X[Ù™œÙ]
+Ù™œÙ]ˆÑÑ›Ø]˜[œÚ][ÛŽˆÛÛZ[™YšY]Ó^[Ý]˜[œÚ][ÛŠHÂˆÝ\\‹\]T™]™X[Ù™œÙ]
+Ù™œÙ]ˆÙ™œÙ]˜[œÚ][ÛŽˆ˜[œÚ][ÛŠB‚ˆ˜[œÚ][Û‹\]P›Ý[™Ê›ÙNˆÙ[‹˜ÛÛ^ÛÛZ[™\‹›Ý[™ÎˆÙ[‹˜ÛÛ^ÛÛZ[™\‹™œ˜[YK›Ù™œÙ]žJˆ[Ù™œÙ]NˆŒ
+JB‚ˆ]YÚYÚY˜XÚÙÜ›Ý[™œ˜[YHHÙ[‹šYÚYÚY˜XÚÙÜ›Ý[™›ÙK™œ˜[YBˆ˜[œÚ][Û‹\]Qœ˜[YJ›ÙNˆÙ[‹šYÚYÚY˜XÚÙÜ›Ý[™›ÙKœ˜[YNˆÑÔ™XÝ
+ÜšYÚ[ŽˆÑÔÚ[
+ˆÙ™œÙ]NˆYÚYÚY˜XÚÙÜ›Ý[™œ˜[YK›Z[–JKÚ^™NˆYÚYÚY˜XÚÙÜ›Ý[™œ˜[YKœÚ^™JJBˆB‚ˆÝ™\œšYHX›XÈ[˜È™]™X[Ü[ÛœÐXÝ]™TÝ]U\]Y
+\ÐXÝ]™Nˆ›ÛÛ˜[œÚ][ÛŽˆÛÛZ[™YšY]Ó^[Ý]˜[œÚ][ÛŠHÂˆÝ\\‹œ™]™X[Ü[ÛœÐXÝ]™TÝ]U\]Y
+\ÐXÝ]™Nˆ\ÐXÝ]™K˜[œÚ][ÛŽˆ˜[œÚ][ÛŠB‚ˆÙ[‹\]R\ÒYÚYÚY
+˜[œÚ][ÛŽˆ˜[œÚ][ÛŠBˆB‚ˆÝ™\œšYHX›XÈ[˜È™^™]™X[Ü[ÛœÐXÝ]™TÝ]U\]Y
+\ÐXÝ]™Nˆ›ÛÛ˜[œÚ][ÛŽˆÛÛZ[™YšY]Ó^[Ý]˜[œÚ][ÛŠHÂˆÝ\\‹›™^™]™X[Ü[ÛœÐXÝ]™TÝ]U\]Y
+\ÐXÝ]™Nˆ\ÐXÝ]™K˜[œÚ][ÛŽˆ˜[œÚ][ÛŠB‚ˆÙ[‹\]TÙ\\˜]Ü[J˜[œÚ][ÛŽˆ˜[œÚ][ÛŠBˆBˆˆÝ™\œšYHX›XÈ[˜ÈÝXÚ\ÕÓÝ\’][\Ô™]™[Y
+
+HÂˆÝ\\‹ÝXÚ\ÕÓÝ\’][\Ô™]™[Y
+
+BˆYˆ]][HHÙ[‹š][HÂˆ][Kš[\˜XÝ[Û‹œÙ]Y\’YÚ]™]™X[YÜ[ÛœÊš[š[
+BˆBˆBˆˆÝ™\œšYHX›XÈ[˜È™]™X[Ü[ÛœÒ[\˜XÝ]™[SÜ[™Y
+
+HÂˆYˆ]][HHÙ[‹š][HÂˆÝÚ]Ú][Kš[™^ÂˆØ\ÙH]˜Ú]\Ý
+[™^
+N‚ˆ][Kš[\˜XÝ[Û‹œÙ]Y\’YÚ]™]™X[YÜ[ÛœÊ[™^›Y\ÜØYÙR[™^šYœY\’Yš[
+BˆØ\ÙH™›Ü[N‚ˆœ™XZÂˆBˆBˆBˆˆÝ™\œšYHX›XÈ[˜È™]™X[Ü[ÛœÒ[\˜XÝ]™[PÛÜÙY
+
+HÂˆYˆ]][HHÙ[‹š][HÂˆÝÚ]Ú][Kš[™^ÂˆØ\ÙH]˜Ú]\Ý
+[™^
+N‚ˆ][Kš[\˜XÝ[Û‹œÙ]Y\’YÚ]™]™X[YÜ[ÛœÊš[[™^›Y\ÜØYÙR[™^šYœY\’Y
+BˆØ\ÙH™›Ü[N‚ˆœ™XZÂˆBˆBˆBˆˆÝ™\œšYHX›XÈ[˜È™]™X[Ü[Û”Ù[XÝY
+ÈÜ[ÛŽˆ][S\Ý™]™X[Ü[Û‹[š[X]Yˆ›ÛÛ
+HÂˆÝX\™]][HHÙ[‹š][H[ÙHÂˆ™]\›‚ˆBˆˆ˜\ˆÛÜÙHHYBˆYˆØ\ÙH]˜Ú]\Ý
+[™^
+HH][Kš[™^ÂˆÝÚ]ÚÜ[Û‹šÙ^HÂˆØ\ÙH™]™X[Ü[Û’Ù^Kœ[‹œ˜]Õ˜[YN‚ˆÝÚ]Ú][K˜ÛÛ[ÂˆØ\ÙH›ØY[™Î‚ˆœ™XZÂˆØ\ÙHœY\Ž‚ˆ]][RYˆ[™Ú[™PÚ]\Ý”[›™Y][K’YHœY\Š[™^›Y\ÜØYÙR[™^šYœY\’Y
+Bˆ][Kš[\˜XÝ[Û‹œÙ]][T[›™Y
+][RYYJBˆØ\ÙH™Ü›Ý\™Y™\™[˜ÙN‚ˆœ™XZÂˆBˆØ\ÙH™]™X[Ü[Û’Ù^K[œ[‹œ˜]Õ˜[YN‚ˆÝÚ]Ú][K˜ÛÛ[ÂˆØ\ÙH›ØY[™Î‚ˆœ™XZÂˆØ\ÙHœY\Ž‚ˆ]][RYˆ[™Ú[™PÚ]\Ý”[›™Y][K’YHœY\Š[™^›Y\ÜØYÙR[™^šYœY\’Y
+Bˆ][Kš[\˜XÝ[Û‹œÙ]][T[›™Y
+][RY˜[ÙJBˆØ\ÙH™Ü›Ý\™Y™\™[˜ÙN‚ˆœ™XZÂˆBˆØ\ÙH™]™X[Ü[Û’Ù^K›]]Kœ˜]Õ˜[YN‚ˆ][Kš[\˜XÝ[Û‹œÙ]Y\“]]Y
+[™^›Y\ÜØYÙR[™^šYœY\’YYJBˆÛÜÙHH˜[ÙBˆØ\ÙH™]™X[Ü[Û’Ù^K[›]]Kœ˜]Õ˜[YN‚ˆ][Kš[\˜XÝ[Û‹œÙ]Y\“]]Y
+[™^›Y\ÜØYÙR[™^šYœY\’Y˜[ÙJBˆÛÜÙHH˜[ÙBˆØ\ÙH™]™X[Ü[Û’Ù^K™[]Kœ˜]Õ˜[YN‚ˆ˜\ˆ›Ú[™YH˜[ÙBˆYˆØ\ÙH]œY\ŠY\‘]JHH][K˜ÛÛ[]Y\ÜØYÙHHY\‘]K›Y\ÜØYÙ\Ë™š\œÝÂˆ›ÜˆYYXH[ˆY\ÜØYÙK›YYXHÂˆYˆ]XÝ[ÛˆHYYXH\ÏÈ[YÜ˜[SYYXPXÝ[Û‹XÝ[Û‹˜XÝ[ÛˆOHœY\’›Ú[™YÂˆ›Ú[™YHYBˆBˆBˆBˆ][Kš[\˜XÝ[Û‹™[]TY\Š[™^›Y\ÜØYÙR[™^šYœY\’Y›Ú[™Y
+BˆØ\ÙH™]™X[Ü[Û’Ù^K[™Ü›Ý\œ˜]Õ˜[YN‚ˆYˆØ\ÙH]œY\ŠY\‘]JHH][K˜ÛÛ[Ø\ÙH˜ÛÛ[][š]HHY\‘]KœY\‹œY\ˆÂˆ][Kš[\˜XÝ[Û‹[™Ü›Ý\ÛÛ[][š]JY\‘]KœY\‹œY\’Y
+BˆBˆØ\ÙH™]™X[Ü[Û’Ù^K˜\˜Ú]™Kœ˜]Õ˜[YN‚ˆ][Kš[\˜XÝ[Û‹\]TY\‘Ü›Ý\[™Ê[™^›Y\ÜØYÙR[™^šYœY\’YYJBˆÛÜÙHH˜[ÙBˆÙ[‹œÚÚ\˜Y[Ý]HYBˆÙ[‹˜Ý\ÝÛP[š[X][Û’[”›ÙÜ™\ÜÈHYBˆÙ[‹˜[š[X]T™]™X[Ü[ÛœÑš[ÂˆÙ[‹œ™]™X[Ü[ÛœÒ[\˜XÝ]™[PÛÜÙY
+
+BˆÙ[‹˜Ý\ÝÛP[š[X][Û’[”›ÙÜ™\ÜÈH˜[ÙBˆBˆØ\ÙH™]™X[Ü[Û’Ù^K[˜\˜Ú]™Kœ˜]Õ˜[YN‚ˆ][Kš[\˜XÝ[Û‹\]TY\‘Ü›Ý\[™Ê[™^›Y\ÜØYÙR[™^šYœY\’Y˜[ÙJBˆÛÜÙHH˜[ÙBˆÙ[‹œÚÚ\˜Y[Ý]HYBˆÙ[‹˜[š[X]T™]™X[Ü[ÛœÑš[ÂˆÙ[‹œ™]™X[Ü[ÛœÒ[\˜XÝ]™[PÛÜÙY
+
+BˆBˆØ\ÙH™]™X[Ü[Û’Ù^KÙÙÛSX\šÙY[œ™XYœ˜]Õ˜[YN‚ˆ][Kš[\˜XÝ[Û‹ÙÙÛTY\“X\šÙY[œ™XY
+[™^›Y\ÜØYÙR[™^šYœY\’Y[š[X]Y
+BˆÛÜÙHH˜[ÙBˆØ\ÙH™]™X[Ü[Û’Ù^KšYKœ˜]Õ˜[YN‚ˆ][Kš[\˜XÝ[Û‹ÙÙÛP\˜Ú]™Y›Û\’Y[žQY˜][
+
+BˆÛÜÙHH˜[ÙBˆÙ[‹œÚÚ\˜Y[Ý]HYBˆÙ[‹˜Ý\ÝÛP[š[X][Û’[”›ÙÜ™\ÜÈHYBˆÙ[‹˜[š[X]T™]™X[Ü[ÛœÑš[ÂˆÙ[‹œ™]™X[Ü[ÛœÒ[\˜XÝ]™[PÛÜÙY
+
+BˆÙ[‹˜Ý\ÝÛP[š[X][Û’[”›ÙÜ™\ÜÈH˜[ÙBˆBˆØ\ÙH™]™X[Ü[Û’Ù^K[šYKœ˜]Õ˜[YN‚ˆ][Kš[\˜XÝ[Û‹ÙÙÛP\˜Ú]™Y›Û\’Y[žQY˜][
+
+BˆÛÜÙHH˜[ÙBˆØ\ÙH™]™X[Ü[Û’Ù^KšYTØKœ˜]Õ˜[YN‚ˆYˆ]][HHÙ[‹š][KØ\ÙH]œY\ŠY\‘]JHH][K˜ÛÛ[Âˆ][Kš[\˜XÝ[Û‹šYTØJY\‘]KœY\‹œY\’Y
+BˆBˆÛÜÙHH˜[ÙBˆÙ[‹œÚÚ\˜Y[Ý]HYBˆÙ[‹˜Ý\ÝÛP[š[X][Û’[”›ÙÜ™\ÜÈHYBˆÙ[‹˜[š[X]T™]™X[Ü[ÛœÑš[ÂˆÙ[‹œ™]™X[Ü[ÛœÒ[\˜XÝ]™[PÛÜÙY
+
+BˆÙ[‹˜Ý\ÝÛP[š[X][Û’[”›ÙÜ™\ÜÈH˜[ÙBˆBˆØ\ÙH™]™X[Ü[Û’Ù^K™Y]œ˜]Õ˜[YN‚ˆ][Kš[\˜XÝ[Û‹™Y]Y\Š][JBˆÛÜÙHHYBˆY˜][‚ˆœ™XZÂˆBˆH[ÙHYˆØ\ÙH]™›Ü[JËË™XYYËÊHH][Kš[™^Ø\ÙH]™›Ü[JY\’Y
+HH][K˜Ú]\ÝØØ][ÛˆÂˆÝÚ]ÚÜ[Û‹šÙ^HÂˆØ\ÙH™]™X[Ü[Û’Ù^K™[]Kœ˜]Õ˜[YN‚ˆ][Kš[\˜XÝ[Û‹™[]TY\•™XY
+Y\’Y™XYY
+BˆØ\ÙH™]™X[Ü[Û’Ù^K›]]Kœ˜]Õ˜[YN‚ˆ][Kš[\˜XÝ[Û‹œÙ]Y\•™XY]]Y
+Y\’Y™XYYYJBˆÛÜÙHH˜[ÙBˆØ\ÙH™]™X[Ü[Û’Ù^K[›]]Kœ˜]Õ˜[YN‚ˆ][Kš[\˜XÝ[Û‹œÙ]Y\•™XY]]Y
+Y\’Y™XYY˜[ÙJBˆÛÜÙHH˜[ÙBˆØ\ÙH™]™X[Ü[Û’Ù^K˜ÛÜÙKœ˜]Õ˜[YN‚ˆ][Kš[\˜XÝ[Û‹œÙ]Y\•™XYÝÜY
+Y\’Y™XYYYJBˆØ\ÙH™]™X[Ü[Û’Ù^K›Ü[‹œ˜]Õ˜[YN‚ˆ][Kš[\˜XÝ[Û‹œÙ]Y\•™XYÝÜY
+Y\’Y™XYY˜[ÙJBˆØ\ÙH™]™X[Ü[Û’Ù^Kœ[‹œ˜]Õ˜[YN‚ˆ][Kš[\˜XÝ[Û‹œÙ]Y\•™XY[›™Y
+Y\’Y™XYYYJBˆØ\ÙH™]™X[Ü[Û’Ù^K[œ[‹œ˜]Õ˜[YN‚ˆ][Kš[\˜XÝ[Û‹œÙ]Y\•™XY[›™Y
+Y\’Y™XYY˜[ÙJBˆØ\ÙH™]™X[Ü[Û’Ù^KšYKœ˜]Õ˜[YN‚ˆ][Kš[\˜XÝ[Û‹œÙ]Y\•™XYY[ŠY\’Y™XYYYJBˆÛÜÙHH˜[ÙBˆÙ[‹œÚÚ\˜Y[Ý]HYBˆÙ[‹˜Ý\ÝÛP[š[X][Û’[”›ÙÜ™\ÜÈHYBˆÙ[‹˜[š[X]T™]™X[Ü[ÛœÑš[ÂˆÙ[‹œ™]™X[Ü[ÛœÒ[\˜XÝ]™[PÛÜÙY
+
+BˆÙ[‹˜Ý\ÝÛP[š[X][Û’[”›ÙÜ™\ÜÈH˜[ÙBˆBˆØ\ÙH™]™X[Ü[Û’Ù^K[šYKœ˜]Õ˜[YN‚ˆ][Kš[\˜XÝ[Û‹œÙ]Y\•™XYY[ŠY\’Y™XYY˜[ÙJBˆY˜][‚ˆœ™XZÂˆBˆBˆYˆÛÜÙHÂˆÙ[‹œÙ]™]™X[Ü[ÛœÓÜ[™Y
+˜[ÙK[š[X]YˆYJBˆÙ[‹œ™]™X[Ü[ÛœÒ[\˜XÝ]™[PÛÜÙY
+
+BˆBˆBˆˆÝ™\œšYHX›XÈ[˜È\Ô™[Ü™\˜X›J]Ú[ˆÑÔÚ[
+HOˆ›ÛÛÂˆYˆ]™[Ü™\ÛÛ›Û›ÙHHÙ[‹œ™[Ü™\ÛÛ›Û›ÙK™[Ü™\ÛÛ›Û›ÙK™œ˜[YK˜ÛÛZ[œÊÚ[
+HÂˆ™]\›ˆYBˆBˆ™]\›ˆ˜[ÙBˆBˆˆ[˜È›\ÚYÚYÚ
+
+HÂˆYˆÙ[‹šYÚYÚY˜XÚÙÜ›Ý[™›ÙKœÝ\\››ÙHOHš[ÂˆÙ[‹š[œÙ\ÝX››ÙJÙ[‹šYÚYÚY˜XÚÙÜ›Ý[™›ÙKX›Ý™TÝX››ÙNˆÙ[‹œÙ\\˜]Ü“›ÙJBˆÙ[‹šYÚYÚY˜XÚÙÜ›Ý[™›ÙK˜[HHŒˆBˆÙ[‹šYÚYÚY˜XÚÙÜ›Ý[™›ÙK›^Y\‹œ™[[Ý™P[[š[X][ÛœÊ
+BˆÙ[‹šYÚYÚY˜XÚÙÜ›Ý[™›ÙK›^Y\‹˜[š[X]Jœ›ÛNˆKŒ\È”Ó[X™\‹ÎˆŒ\È”Ó[X™\‹Ù^T]ˆ›ÜXÚ]H‹[Z[™Ñ[˜Ý[ÛŽˆÐSYYXU[Z[™Ñ[˜Ý[Û“˜[YK™X\ÙSÝ]œ˜]Õ˜[YK\˜][ÛŽˆŒË[^NˆËÛÛ\][ÛŽˆÈÝÙXZÈÙ[—HÈ[‚ˆÙ[Ë\]R\ÒYÚYÚY
+˜[œÚ][ÛŽˆš[[YYX]JBˆJBˆBˆˆ[˜È^P\˜Ú]™P[š[X][ÛŠ
+HÂˆÝX\™]][HHÙ[‹š][KØ\ÙH™Ü›Ý\™Y™\™[˜ÙHH][K˜ÛÛ[[ÙHÂˆ™]\›‚ˆBˆÙ[‹˜]˜]\“›ÙKœ^P\˜Ú]™P[š[X][ÛŠ
+BˆBˆˆÝ™\œšYHX›XÈ[˜È[š[X]Qœ˜[YU˜[œÚ][ÛŠÈ›ÙÜ™\ÜÎˆÑÑ›Ø]ÈÝ\œ™[˜[YNˆÑÑ›Ø]
+HÂˆÝ\\‹˜[š[X]Qœ˜[YU˜[œÚ][ÛŠ›ÙÜ™\ÜËÝ\œ™[˜[YJBˆˆYˆ]][HHÙ[‹š][HÂˆYˆØ\ÙH™Ü›Ý\™Y™\™[˜ÙHH][K˜ÛÛ[ÂˆÙ[‹›^Y\‹œÝX›^Y\•˜[œÙ›Ü›HHÐU˜[œÙ›Ü›LÑXZÙU˜[œÛ][ÛŠŒÝ\œ™[˜[YHH
+Ù[‹˜Ý\œ™[][RZYÚÏÈŒ
+KŒ
+BˆH[ÙHÂˆ˜\ˆÙ\\˜]Ü‘œ˜[YHHÙ[‹œÙ\\˜]Ü“›ÙK™œ˜[YBˆÙ\\˜]Ü‘œ˜[YK›ÜšYÚ[‹žHHÝ\œ™[˜[YHHRTØÜ™Y[”^[ˆÙ[‹œÙ\\˜]Ü“›ÙK™œ˜[YHHÙ\\˜]Ü‘œ˜[YBˆBˆBˆBˆˆØš˜Èš]˜]H[˜È\™›Ü›SØØ[XØÙ\ÜÚXš[]PÝ\ÝÛPXÝ[ÛŠÈXÝ[ÛŽˆRPXØÙ\ÜÚXš[]PÝ\ÝÛPXÝ[ÛŠHÂˆYˆ]XÝ[ÛˆHXÝ[Ûˆ\ÏÈÚ]\Ý][PXØÙ\ÜÚXš[]PÝ\ÝÛPXÝ[ÛˆÂˆÙ[‹œ™]™X[Ü[Û”Ù[XÝY
+][S\Ý™]™X[Ü[ÛŠÙ^NˆXÝ[Û‹šÙ^K]Nˆˆ‹XÛÛŽˆ››Û™KÛÛÜŽˆ˜›XÚËXÛÛÛÛÜŽˆÚ]K^ÛÛÜŽˆÚ]JK[š[X]Yˆ˜[ÙJBˆBˆBˆˆÝ™\œšYHX›XÈ[˜ÈÛ˜\ÚÝ›Ü”™[Ü™\š[™Ê
+HOˆRUšY]ÏÈÂˆÙ[‹˜˜XÚÙÜ›Ý[™›ÙK˜[HHŽBˆ]™\Ý[HÙ[‹šY]ËœÛ˜\ÚÝÛÛ[™YJ
+BˆÙ[‹˜˜XÚÙÜ›Ý[™›ÙK˜[HHKŒˆ™]\›ˆ™\Ý[ˆBˆˆÝ™\œšYHX›XÈ[˜È]\Ý
+ÈÚ[ˆÑÔÚ[Ú]]™[ˆRQ]™[ÊHOˆRUšY]ÏÈÂˆÝX\™]][HHÙ[‹š][KÙ[‹™œ˜[YKšZYÚˆŒ[ÙHÂˆ™]\›ˆš[ˆBˆˆYˆ]ÛÛ\Ý[™^]Û“›ÙHHÙ[‹˜ÛÛ\Ý[™^]Û“›ÙK]ÛÛ\Ý[™YÚYÚ[™Ó›ÙHHÙ[‹˜ÛÛ\Ý[™YÚYÚ[™Ó›ÙKÛÛ\Ý[™YÚYÚ[™Ó›ÙK˜[HOHŒÂˆ]ØØ[Ú[HÙ[‹šY]Ë˜ÛÛ™\
+Ú[ÎˆÛÛ\Ý[™YÚYÚ[™Ó›ÙKšY]ÊBˆ˜\ˆX]Ú\ÈH˜[ÙBˆ›Üˆ™XÝ[ˆÛÛ\Ý[™YÚYÚ[™Ó›ÙKœ™XÝÈÂˆYˆ™XÝ˜ÛÛZ[œÊØØ[Ú[
+HÂˆX]Ú\ÈHYBˆœ™XZÂˆBˆBˆYˆX]Ú\ÈÂˆ™]\›ˆÛÛ\Ý[™^]Û“›ÙKšY]ÂˆBˆBˆˆYˆ]ÈH][Kš[\˜XÝ[Û‹š[›[™S˜]šYØ][Û“ØØ][ÛˆÂˆH[ÙHÂˆ˜\ˆ\ÐÛÛ[][š]HH˜[ÙBˆYˆØ\ÙH]œY\ŠY\‘]JHH][K˜ÛÛ[Ø\ÙH˜ÛÛ[][š]HHY\‘]KœY\‹œY\ˆÂˆ\ÐÛÛ[][š]HHYBˆBˆ˜\ˆÚÝ[]\Ý]˜]\ˆHZ\ÐÛÛ[][š]H	‰ˆÙ[‹˜]˜]\“›ÙKœÝÜžTÝ]ÈOHš[ˆYˆØ\ÙH]œY\ŠY\‘]JHH][K˜ÛÛ[]Y\ˆHY\‘]KœY\‹œY\‹Y\‹˜ÛÛZ[™\”Y\’YOHš[ÂˆÚÝ[]\Ý]˜]\ˆHYBˆBˆYˆÚÝ[]\Ý]˜]\ˆÂˆYˆ]™\Ý[HÙ[‹˜]˜]\“›ÙKšY]Ëš]\Ý
+Ù[‹šY]Ë˜ÛÛ™\
+Ú[ÎˆÙ[‹˜]˜]\“›ÙKšY]ÊKÚ]ˆ]™[
+HÂˆ™]\›ˆ™\Ý[ˆBˆBˆBˆˆ™]\›ˆÝ\\‹š]\Ý
+Ú[Ú]ˆ]™[
+BˆBˆˆØš˜Èš]˜]H[˜È]˜]\”ÝÜžU\Ù\Ý\™JÈ™XÛÙÛš^™\ŽˆRU\Ù\Ý\™T™XÛÙÛš^™\ŠHÂˆYˆØ\ÙH™[™YH™XÛÙÛš^™\‹œÝ]HÂˆÝX\™]][HHÙ[‹š][H[ÙHÂˆ™]\›‚ˆBˆÝÚ]Ú][K˜ÛÛ[ÂˆØ\ÙH›ØY[™Î‚ˆœ™XZÂˆØ\ÙH]œY\ŠY\‘]JN‚ˆYˆ]Y\ˆHY\‘]KœY\‹œY\‹][šÙYÛÛ[][š]RYHY\‹˜ÛÛZ[™\”Y\’YÂˆ][Kš[\˜XÝ[Û‹›Ü[ÛÛ[][š]J[šÙYÛÛ[][š]RY
+BˆH[ÙHÂˆ][Kš[\˜XÝ[Û‹›Ü[”ÝÜšY\ÊœY\ŠY\‘]KœY\‹œY\’Y
+KÙ[ŠBˆBˆØ\ÙH™Ü›Ý\™Y™\™[˜ÙN‚ˆ][Kš[\˜XÝ[Û‹›Ü[”ÝÜšY\Ê˜\˜Ú]™KÙ[ŠBˆBˆBˆBŸB‚œš]˜]HÛ\ÜÈÝ\•šY]ÎˆRUšY]ÈÂˆ]Ý][™HHÚ[\S^Y\Š
+Bˆ]›Ü™YÜ›Ý[™HÚ[\S^Y\Š
+Bˆˆ˜\ˆÝ][™PÛÛÜŽˆRPÛÛÜˆHÚ]HÂˆYÙ]ÂˆÙ[‹›Ý][™K›^Y\•[ÛÛÜˆHÙ[‹›Ý][™PÛÛÜ‹˜ÙÐÛÛÜ‚ˆBˆBˆˆÝ™\œšYH[š]
+œ˜[YNˆÑÔ™XÝ
+HÂˆÙ[‹›Ý][™K˜ÛÛ[ÈHRR[XYÙJ[™R[XYÙS˜[YNˆ”™[Z][KÔÝ\œËÔÝ\“YY][SÝ][™HŠOË˜ÙÒ[XYÙBˆÙ[‹™›Ü™YÜ›Ý[™˜ÛÛ[ÈHRR[XYÙJ[™R[XYÙS˜[YNˆ”™[Z][KÔÝ\œËÔÝ\“YY][HŠOË˜ÙÒ[XYÙBˆˆÝ\\‹š[š]
+œ˜[YNˆœ˜[YJBˆˆÙ[‹›^Y\‹˜YÝX›^Y\ŠÙ[‹›Ý][™JBˆÙ[‹›^Y\‹˜YÝX›^Y\ŠÙ[‹™›Ü™YÜ›Ý[™
+BˆBˆˆ™\]Z\™Y[š]ÊÛÙ\Žˆ”ÐÛÙ\ŠHÂˆ™XÛÛ™][Û‘˜Z[\™J
+BˆBˆˆ[˜ÈÙ]Ý][™PÛÛÜŠÈÛÛÜŽˆRPÛÛÜ‹˜[œÚ][ÛŽˆÛÛZ[™YšY]Ó^[Ý]˜[œÚ][ÛŠHÂˆYˆØ\ÙH]˜[š[X]Y
+\˜][Û‹Ý\™JHH˜[œÚ][Û‹ÛÛÜˆOHÙ[‹›Ý][™PÛÛÜˆÂˆ]Û˜\ÚÝ^Y\ˆHÚ[\S^Y\Š
+BˆÛ˜\ÚÝ^Y\‹›^Y\•[ÛÛÜˆHÙ[‹›Ý][™PÛÛÜ‹˜ÙÐÛÛÜ‚ˆÛ˜\ÚÝ^Y\‹˜ÛÛ[ÈHÙ[‹›Ý][™K˜ÛÛ[ÂˆÛ˜\ÚÝ^Y\‹™œ˜[YHHÙ[‹›Ý][™K˜›Ý[™ÂˆÙ[‹›^Y\‹š[œÙ\ÝX›^Y\ŠÛ˜\ÚÝ^Y\‹X›Ý™NˆÙ[‹›Ý][™JBˆÛ˜\ÚÝ^Y\‹˜[š[X]P[Jœ›ÛNˆKŒÎˆŒ\˜][ÛŽˆ\˜][Û‹[Z[™Ñ[˜Ý[ÛŽˆÝ\™K[Z[™Ñ[˜Ý[Û‹™[[Ý™SÛÛÛ\][ÛŽˆ˜[ÙKÛÛ\][ÛŽˆÈÝÙXZÈÛ˜\ÚÝ^Y\—HÈ[‚ˆÛ˜\ÚÝ^Y\Ëœ™[[Ý™Qœ›ÛTÝ\\›^Y\Š
+BˆJBˆBˆÙ[‹›Ý][™PÛÛÜˆHÛÛÜ‚ˆBˆˆÝ™\œšYH[˜È^[Ý]ÝXšY]ÜÊ
+HÂˆÙ[‹›Ý][™K™œ˜[YHHÙ[‹˜›Ý[™ÂˆÙ[‹™›Ü™YÜ›Ý[™™œ˜[YHHÙ[‹˜›Ý[™ÂˆBŸB

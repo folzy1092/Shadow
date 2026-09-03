@@ -14,17 +14,23 @@ final class TabBarControllerNode: ASDisplayNode {
         let toolbar: Toolbar?
         let isTabBarHidden: Bool
         let currentControllerSearchState: ViewController.TabBarSearchState?
+        let showTabNames: Bool
+        let hideBottomSearch: Bool
         
         init(
             layout: ContainerViewLayout,
             toolbar: Toolbar?,
             isTabBarHidden: Bool,
-            currentControllerSearchState: ViewController.TabBarSearchState?
+            currentControllerSearchState: ViewController.TabBarSearchState?,
+            showTabNames: Bool,
+            hideBottomSearch: Bool
         ) {
             self.layout = layout
             self.toolbar = toolbar
             self.isTabBarHidden = isTabBarHidden
             self.currentControllerSearchState = currentControllerSearchState
+            self.showTabNames = showTabNames
+            self.hideBottomSearch = hideBottomSearch
         }
     }
     
@@ -177,7 +183,17 @@ final class TabBarControllerNode: ASDisplayNode {
     }
     
     func containerLayoutUpdated(_ layout: ContainerViewLayout, toolbar: Toolbar?, transition: ContainedViewLayoutTransition) -> CGFloat {
-        let params = Params(layout: layout, toolbar: toolbar, isTabBarHidden: self.tabBarHidden, currentControllerSearchState: self.currentController?.tabBarSearchState)
+        // Settings participate in the geometry cache, not just view rendering.
+        // Otherwise updateLayout returns the old inset until a tab is switched.
+        let defaults = UserDefaults.standard
+        let params = Params(
+            layout: layout,
+            toolbar: toolbar,
+            isTabBarHidden: self.tabBarHidden,
+            currentControllerSearchState: self.currentController?.tabBarSearchState,
+            showTabNames: !defaults.bool(forKey: "shadow.compactBottomBar"),
+            hideBottomSearch: defaults.bool(forKey: "shadow.hideBottomSearch")
+        )
         if let layoutResult = self.layoutResult, layoutResult.params == params {
             return layoutResult.bottomInset
         } else {
@@ -231,6 +247,8 @@ final class TabBarControllerNode: ASDisplayNode {
             transition: tabBarTransition,
             component: AnyComponent(TabBarComponent(
                 theme: self.theme,
+                showTabNames: params.showTabNames,
+                hideBottomSearch: params.hideBottomSearch,
                 strings: self.strings,
                 items: self.tabBarItems.map { item in
                     let itemId = AnyHashable(ObjectIdentifier(item.item))
@@ -265,7 +283,7 @@ final class TabBarControllerNode: ASDisplayNode {
                         }
                     )
                 },
-                search: UserDefaults.standard.bool(forKey: "shadow.hideBottomSearch") ? nil : self.currentController?.tabBarSearchState.flatMap { tabBarSearchState in
+                search: params.hideBottomSearch ? nil : self.currentController?.tabBarSearchState.flatMap { tabBarSearchState in
                     return TabBarComponent.Search(
                         isActive: tabBarSearchState.isActive,
                         activate: { [weak self] in
