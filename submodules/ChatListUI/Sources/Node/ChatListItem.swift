@@ -140,6 +140,7 @@ public enum ChatListItemContent {
         public var messages: [EngineMessage]
         public var peer: EngineRenderedPeer
         public var avatarPeer: EngineRenderedPeer?
+        public var isContact: Bool?
         public var threadInfo: ThreadInfo?
         public var combinedReadState: EnginePeerReadCounters?
         public var isRemovedFromTotalUnreadCount: Bool
@@ -167,6 +168,7 @@ public enum ChatListItemContent {
             messages: [EngineMessage],
             peer: EngineRenderedPeer,
             avatarPeer: EngineRenderedPeer? = nil,
+            isContact: Bool? = nil,
             threadInfo: ThreadInfo?,
             combinedReadState: EnginePeerReadCounters?,
             isRemovedFromTotalUnreadCount: Bool,
@@ -193,6 +195,7 @@ public enum ChatListItemContent {
             self.messages = messages
             self.peer = peer
             self.avatarPeer = avatarPeer
+            self.isContact = isContact
             self.threadInfo = threadInfo
             self.combinedReadState = combinedReadState
             self.isRemovedFromTotalUnreadCount = isRemovedFromTotalUnreadCount
@@ -3337,7 +3340,10 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                          titleAttributedString = NSAttributedString(string: item.presentationData.strings.DialogList_Replies, font: titleFont, textColor: theme.titleColor)
                     } else if let id = itemPeer.chatMainPeer?.id, id.isAnonymousSavedMessages {
                         titleAttributedString = NSAttributedString(string: item.presentationData.strings.ChatList_AuthorHidden, font: titleFont, textColor: theme.titleColor)
-                    } else if let displayTitle = itemPeer.chatOrMonoforumMainPeer?.displayTitle(strings: item.presentationData.strings, displayOrder: item.presentationData.nameDisplayOrder) {
+                    } else if let displayPeer = itemPeer.chatOrMonoforumMainPeer {
+                        let isContact: Bool?
+                        if case let .peer(peerData) = item.content { isContact = peerData.isContact } else { isContact = nil }
+                        let displayTitle = displayPeer.shadowDisplayTitle(strings: item.presentationData.strings, displayOrder: item.presentationData.nameDisplayOrder, accountPeerId: item.context.account.peerId, isContact: isContact, enabled: item.presentationData.preferUsernameForNonContacts)
                         let textColor: UIColor
                         if case let .chatList(index) = item.index, index.messageIndex.id.peerId.namespace == Namespaces.Peer.SecretChat {
                             textColor = theme.secretTitleColor

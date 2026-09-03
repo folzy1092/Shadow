@@ -259,6 +259,7 @@ private func ayuUpdateSettings(context: AccountContext, _ f: @escaping (AyuGramS
 
 private final class AyuCustomizationArguments {
     var openMessageScreenshot: () -> Void = {}
+    var updatePreferUsernameForNonContacts: (Bool) -> Void = { _ in }
     let updateShowMessageSeconds: (Bool) -> Void
     let updateEditedIndicatorAsPencil: (Bool) -> Void
     let updateEditedIndicatorText: (String) -> Void
@@ -383,6 +384,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
     case buildInfo
     case appearanceHeader
     case messageScreenshot
+    case preferUsernameForNonContacts(Bool)
     case showMessageSeconds(Bool)
     case editedIndicatorAsPencil(Bool)
     case editedIndicatorText(String)
@@ -443,6 +445,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
     var section: ItemListSectionId {
         switch self {
         case .messageScreenshot: return AyuCustomizationSection.appearance.rawValue
+        case .preferUsernameForNonContacts: return AyuCustomizationSection.appearance.rawValue
         case .buildInfo:
             return AyuCustomizationSection.buildInfo.rawValue
         case .appearanceHeader, .showMessageSeconds, .editedIndicatorAsPencil, .editedIndicatorText, .deletedIndicatorText, .regularEmojiFirst, .doubleTapToEdit, .showExactLastSeen, .showExactLastSeenSeconds, .wideChannelPosts, .showExactViewCounts, .showForwardCount, .appearanceFooter:
@@ -469,6 +472,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
     var stableId: Int32 {
         switch self {
         case .messageScreenshot: return 93
+        case .preferUsernameForNonContacts: return 94
         case .buildInfo: return -1
         case .appearanceHeader: return 0
         case .showMessageSeconds: return 1
@@ -525,6 +529,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
     private var sortKey: (Int32, Int) {
         switch self {
         case .messageScreenshot: return (9, 1)
+        case .preferUsernameForNonContacts: return (9, 2)
         case .editedIndicatorText: return (2, 1)
         case .deletedIndicatorText: return (2, 2)
         case .bottomBarScrollMode: return (17, 1)
@@ -542,6 +547,8 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         switch self {
         case .messageScreenshot:
             return ItemListDisclosureItem(presentationData: presentationData, title: "Скриншоты сообщений", label: "", sectionId: self.section, style: .blocks, action: arguments.openMessageScreenshot)
+        case let .preferUsernameForNonContacts(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "@username вместо имени незнакомых", value: value, sectionId: self.section, style: .blocks, updated: arguments.updatePreferUsernameForNonContacts)
         case let .bottomBarScrollMode(mode):
             return ItemListDisclosureItem(presentationData: presentationData, title: "Скрытие нижней панели", label: shadowBottomBarScrollLabel(mode), labelStyle: .detailText, sectionId: self.section, style: .blocks, action: arguments.selectBottomBarScrollMode)
         case .buildInfo:
@@ -728,6 +735,7 @@ private func ayuCustomizationEntries(settings: AyuGramSettings) -> [AyuCustomiza
     entries.append(.showExactViewCounts(settings.showExactViewCounts))
     entries.append(.showForwardCount(settings.showForwardCount))
     entries.append(.messageScreenshot)
+    entries.append(.preferUsernameForNonContacts(settings.preferUsernameForNonContacts))
     entries.append(.appearanceFooter)
 
     entries.append(.chatsHeader)
@@ -971,6 +979,9 @@ private func ayuCustomizationController(context: AccountContext, focus: ShadowSe
     }
     arguments.openMessageScreenshot = { [weak controller] in
         controller?.push(shadowMessageScreenshotSettingsController(context: context))
+    }
+    arguments.updatePreferUsernameForNonContacts = { value in
+        ayuUpdateSettings(context: context) { var s = $0; s.preferUsernameForNonContacts = value; return s }
     }
     return controller
 }

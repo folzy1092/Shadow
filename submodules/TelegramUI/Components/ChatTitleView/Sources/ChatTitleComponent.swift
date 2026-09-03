@@ -1,4 +1,5 @@
 import Foundation
+import SwiftSignalKit
 import UIKit
 import Display
 import ComponentFlow
@@ -6,6 +7,7 @@ import TelegramPresentationData
 import AccountContext
 import TelegramUIPreferences
 import TelegramCore
+import LocalizedPeerData
 import PeerPresenceStatusManager
 import ChatTitleActivityNode
 import AnimatedTextComponent
@@ -321,6 +323,8 @@ public final class ChatTitleComponent: Component {
         
         private var component: ChatTitleComponent?
         private weak var state: EmptyComponentState?
+        private var preferUsernameForNonContacts = false
+        private let shadowNamesDisposable = MetaDisposable()
         
         override init(frame: CGRect) {
             self.contentContainer = UIView()
@@ -345,6 +349,10 @@ public final class ChatTitleComponent: Component {
         required init?(coder: NSCoder) {
             fatalError("init(coder:) has not been implemented")
         }
+
+        deinit {
+            self.shadowNamesDisposable.dispose()
+        }
         
         @objc private func onTapGesture(_ recognizer: TapLongTapOrDoubleTapGestureRecognizer) {
             if let (gesture, _) = recognizer.lastRecognizedGestureAndLocation {
@@ -365,8 +373,25 @@ public final class ChatTitleComponent: Component {
             let rightTitleIconSpacing: CGFloat = 3.0
             let containerSideInset: CGFloat = 14.0
             
+            let contextChanged = self.component?.context !== component.context
             self.component = component
             self.state = state
+            if contextChanged {
+                let accountId = component.context.account.id
+                self.preferUsernameForNonContacts = currentAyuGramSettings(accountId: accountId).preferUsernameForNonContacts
+                self.shadowNamesDisposable.set((ayuGramSettings(postbox: component.context.account.postbox)
+                |> map { $0.preferUsernameForNonContacts }
+                |> distinctUntilChanged
+                |> deliverOnMainQueue).start(next: { [weak self] enabled in
+                    // An initial preference emission may arrive during update.
+                    DispatchQueue.main.async { [weak self] in
+                        guard let self, self.component?.context.account.id == accountId,
+                              self.preferUsernameForNonContacts != enabled else { return }
+                        self.preferUsernameForNonContacts = enabled
+                        self.state?.updated(transition: .immediate)
+                    }
+                }))
+            }
             
             var titleSegments: [AnimatedTextComponent.Item] = []
             var titleLeftIcon: TitleIconComponent.Kind?
@@ -429,7 +454,9 @@ public final class ChatTitleComponent: Component {
                                 content: .text(component.strings.ChatList_AuthorHidden)
                             )]
                         } else {
-                            if !peerView.isContact, let user = peer as? TelegramUser, !user.flags.contains(.isSupport), user.botInfo == nil, let phone = user.phone, !phone.isEmpty {
+                            if let username = EnginePeer(peer).shadowUsername(accountPeerId: component.context.account.peerId, isContact: peerView.isContact, enabled: self.preferUsernameForNonContacts) {
+                                titleSegments = [AnimatedTextComponent.Item(id: AnyHashable(0), isUnbreakable: true, content: .text(username))]
+                            } else if !peerView.isContact, let user = peer as? TelegramUser, !user.flags.contains(.isSupport), user.botInfo == nil, let phone = user.phone, !phone.isEmpty {
                                 titleSegments = [AnimatedTextComponent.Item(
                                     id: AnyHashable(0),
                                     isUnbreakable: true,

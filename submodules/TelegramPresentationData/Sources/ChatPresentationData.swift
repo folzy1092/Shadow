@@ -34,6 +34,7 @@ public final class ChatPresentationData {
     public let animatedEmojiScale: CGFloat
     public let isPreview: Bool
     public let shadowScreenshot: ShadowMessageScreenshotSettings?
+    public let preferUsernameForNonContacts: Bool
     
     public let messageFont: UIFont
     public let messageEmojiFont: UIFont
@@ -43,7 +44,7 @@ public final class ChatPresentationData {
     public let messageFixedFont: UIFont
     public let messageBlockQuoteFont: UIFont
     
-    public init(theme: ChatPresentationThemeData, fontSize: PresentationFontSize, strings: PresentationStrings, dateTimeFormat: PresentationDateTimeFormat, nameDisplayOrder: PresentationPersonNameOrder, disableAnimations: Bool, largeEmoji: Bool, chatBubbleCorners: PresentationChatBubbleCorners, animatedEmojiScale: CGFloat = 1.0, isPreview: Bool = false, shadowScreenshot: ShadowMessageScreenshotSettings? = nil) {
+    public init(theme: ChatPresentationThemeData, fontSize: PresentationFontSize, strings: PresentationStrings, dateTimeFormat: PresentationDateTimeFormat, nameDisplayOrder: PresentationPersonNameOrder, disableAnimations: Bool, largeEmoji: Bool, chatBubbleCorners: PresentationChatBubbleCorners, animatedEmojiScale: CGFloat = 1.0, isPreview: Bool = false, shadowScreenshot: ShadowMessageScreenshotSettings? = nil, preferUsernameForNonContacts: Bool = false) {
         self.theme = theme
         self.fontSize = fontSize
         self.strings = strings
@@ -54,6 +55,7 @@ public final class ChatPresentationData {
         self.largeEmoji = largeEmoji
         self.isPreview = isPreview
         self.shadowScreenshot = shadowScreenshot
+        self.preferUsernameForNonContacts = preferUsernameForNonContacts
         
         let baseFontSize = fontSize.baseDisplaySize
         self.messageFont = Font.regular(baseFontSize)
@@ -79,7 +81,8 @@ public final class ChatPresentationData {
             chatBubbleCorners: self.chatBubbleCorners,
             animatedEmojiScale: self.animatedEmojiScale,
             isPreview: self.isPreview,
-            shadowScreenshot: self.shadowScreenshot
+            shadowScreenshot: self.shadowScreenshot,
+            preferUsernameForNonContacts: self.preferUsernameForNonContacts
         )
     }
 }

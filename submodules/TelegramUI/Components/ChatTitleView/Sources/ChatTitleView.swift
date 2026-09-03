@@ -188,6 +188,8 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
     }
     
     private let context: AccountContext
+    private var preferUsernameForNonContacts = false
+    private let shadowNamesDisposable = MetaDisposable()
     
     private var theme: PresentationTheme
     private var strings: PresentationStrings
@@ -299,7 +301,9 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
                                 } else if peerView.peerId.isAnonymousSavedMessages {
                                     segments = [.text(0, NSAttributedString(string: self.strings.ChatList_AuthorHidden, font: titleFont, textColor: titleTheme.rootController.navigationBar.primaryTextColor))]
                                 } else {
-                                    if !peerView.isContact, let user = peer as? TelegramUser, !user.flags.contains(.isSupport), user.botInfo == nil, let phone = user.phone, !phone.isEmpty {
+                                    if let username = EnginePeer(peer).shadowUsername(accountPeerId: self.context.account.peerId, isContact: peerView.isContact, enabled: self.preferUsernameForNonContacts) {
+                                        segments = [.text(0, NSAttributedString(string: username, font: titleFont, textColor: titleTheme.rootController.navigationBar.primaryTextColor))]
+                                    } else if !peerView.isContact, let user = peer as? TelegramUser, !user.flags.contains(.isSupport), user.botInfo == nil, let phone = user.phone, !phone.isEmpty {
                                         segments = [.text(0, NSAttributedString(string: formatPhoneNumber(context: self.context, number: phone), font: titleFont, textColor: titleTheme.rootController.navigationBar.primaryTextColor))]
                                     } else {
                                         segments = [.text(0, NSAttributedString(string: EnginePeer(peer).displayTitle(strings: self.strings, displayOrder: self.nameDisplayOrder), font: titleFont, textColor: titleTheme.rootController.navigationBar.primaryTextColor))]
@@ -860,6 +864,20 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
             }
         }
         self.button.view.addGestureRecognizer(UILongPressGestureRecognizer(target: self, action: #selector(self.longPressGesture(_:))))
+        self.shadowNamesDisposable.set((ayuGramSettings(postbox: context.account.postbox)
+        |> map { $0.preferUsernameForNonContacts }
+        |> distinctUntilChanged
+        |> deliverOnMainQueue).start(next: { [weak self] enabled in
+            guard let self, self.preferUsernameForNonContacts != enabled else { return }
+            self.preferUsernameForNonContacts = enabled
+            let content = self.titleContent
+            self.titleContent = content
+            self.requestUpdate?(.immediate)
+        }))
+    }
+
+    deinit {
+        self.shadowNamesDisposable.dispose()
     }
     
     required public init?(coder aDecoder: NSCoder) {

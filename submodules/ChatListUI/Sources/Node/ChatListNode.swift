@@ -471,6 +471,7 @@ private func mappedInsertEntries(context: AccountContext, nodeInteraction: ChatL
                             messages: peerEntry.messages,
                             peer: peer,
                             avatarPeer: peerEntry.avatarPeer,
+                            isContact: isContact,
                             threadInfo: threadInfo,
                             combinedReadState: combinedReadState,
                             isRemovedFromTotalUnreadCount: isRemovedFromTotalUnreadCount,
@@ -838,6 +839,7 @@ private func mappedUpdateEntries(context: AccountContext, nodeInteraction: ChatL
                                 messages: peerEntry.messages,
                                 peer: peer,
                                 avatarPeer: peerEntry.avatarPeer,
+                                isContact: isContact,
                                 threadInfo: threadInfo,
                                 combinedReadState: combinedReadState,
                                 isRemovedFromTotalUnreadCount: isRemovedFromTotalUnreadCount,
@@ -1321,6 +1323,7 @@ public final class ChatListNode: ListViewImpl {
     }
     private let chatListLocation = ValuePromise<ChatListNodeLocation>()
     private let chatListDisposable = MetaDisposable()
+    private let shadowNamesDisposable = MetaDisposable()
     private var activityStatusesDisposable: Disposable?
     
     private let scrollToTopOptionPromise = Promise<ChatListGlobalScrollOption>(.none)
@@ -3188,10 +3191,22 @@ public final class ChatListNode: ListViewImpl {
             return strongSelf.isSelectionGestureEnabled
         }
         self.view.addGestureRecognizer(selectionRecognizer)
+        self.shadowNamesDisposable.set((ayuGramSettings(postbox: context.account.postbox)
+        |> map { $0.preferUsernameForNonContacts }
+        |> distinctUntilChanged
+        |> deliverOnMainQueue).start(next: { [weak self] enabled in
+            guard let self, self.currentState.presentationData.preferUsernameForNonContacts != enabled else { return }
+            self.updateState { state in
+                var state = state
+                state.presentationData = state.presentationData.withPreferUsernameForNonContacts(enabled)
+                return state
+            }
+        }))
     }
     
     deinit {
         self.chatListDisposable.dispose()
+        self.shadowNamesDisposable.dispose()
         self.activityStatusesDisposable?.dispose()
         self.updatedFilterDisposable.dispose()
         self.pollFilterUpdatesDisposable?.dispose()
@@ -3309,7 +3324,7 @@ public final class ChatListNode: ListViewImpl {
             
             self.updateState { state in
                 var state = state
-                state.presentationData = ChatListPresentationData(theme: theme, fontSize: fontSize, strings: strings, dateTimeFormat: dateTimeFormat, nameSortOrder: nameSortOrder, nameDisplayOrder: nameDisplayOrder, disableAnimations: disableAnimations)
+                state.presentationData = ChatListPresentationData(theme: theme, fontSize: fontSize, strings: strings, dateTimeFormat: dateTimeFormat, nameSortOrder: nameSortOrder, nameDisplayOrder: nameDisplayOrder, disableAnimations: disableAnimations, preferUsernameForNonContacts: state.presentationData.preferUsernameForNonContacts)
                 return state
             }
         }

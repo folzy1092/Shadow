@@ -32,7 +32,7 @@ public struct ShadowSettingsDocument: Codable, Equatable {
         "hideStoryViews", "askBeforeStoryView", "sendViaScheduled", "sendWithoutOnline",
         "showMessageSeconds", "editedIndicatorAsPencil", "regularEmojiFirst",
         "doubleTapToEdit", "showExactLastSeen", "showExactLastSeenSeconds",
-        "wideChannelPosts", "showExactViewCounts", "showForwardCount",
+        "wideChannelPosts", "showExactViewCounts", "showForwardCount", "preferUsernameForNonContacts",
         "hideAllChatsFolder", "foldersAtBottom", "hideBottomSearch", "compactBottomBar",
         "allowSaveRestrictedContent", "roundVideoUseBackCamera", "showCameraTile",
         "cameraTileLivePreview", "confirmCalls", "saveDestructingMedia",

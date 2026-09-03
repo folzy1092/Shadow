@@ -13,6 +13,7 @@ def main():
     if compiler is None:
         raise SystemExit('Swift compiler unavailable. Foundation tests were NOT run.')
     cases = [
+        ('peer-name', 'submodules/TelegramCore/Sources/AyuGram/ShadowPeerName.swift', 'Tests/ShadowSettings/PeerNameTests.swift'),
         ('message-screenshot', 'submodules/TelegramCore/Sources/AyuGram/ShadowMessageScreenshotSettings.swift', 'Tests/ShadowSettings/MessageScreenshotTests.swift'),
         ('document', 'submodules/TelegramCore/Sources/AyuGram/ShadowSettingsDocument.swift', 'Tests/ShadowSettings/DocumentTests.swift'),
         ('search', 'submodules/SettingsUI/Sources/ShadowSettingsSearchIndex.swift', 'Tests/ShadowSettings/SearchTests.swift'),

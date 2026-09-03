@@ -16,6 +16,7 @@ public extension PreferencesKeys {
 
 public struct AyuGramSettings: Codable, Equatable {
     public var messageScreenshot = ShadowMessageScreenshotSettings()
+    public var preferUsernameForNonContacts: Bool = false
     // Anti-deletion
     public var keepDeletedMessages: Bool
     public var saveEditHistory: Bool
@@ -426,6 +427,7 @@ public struct AyuGramSettings: Codable, Equatable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: StringCodingKey.self)
         self.messageScreenshot = try container.decodeIfPresent(ShadowMessageScreenshotSettings.self, forKey: "messageScreenshot") ?? ShadowMessageScreenshotSettings()
+        self.preferUsernameForNonContacts = ((try container.decodeIfPresent(Int32.self, forKey: "preferUsernameForNonContacts")) ?? 0) != 0
         self.keepDeletedMessages = ((try container.decodeIfPresent(Int32.self, forKey: "keepDeletedMessages")) ?? 1) != 0
         self.saveEditHistory = ((try container.decodeIfPresent(Int32.self, forKey: "saveEditHistory")) ?? 1) != 0
         self.keepSelfDestructMedia = ((try container.decodeIfPresent(Int32.self, forKey: "keepSelfDestructMedia")) ?? 1) != 0
@@ -486,6 +488,7 @@ public struct AyuGramSettings: Codable, Equatable {
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: StringCodingKey.self)
         try container.encode(self.messageScreenshot, forKey: "messageScreenshot")
+        try container.encode((self.preferUsernameForNonContacts ? 1 : 0) as Int32, forKey: "preferUsernameForNonContacts")
         try container.encode((self.keepDeletedMessages ? 1 : 0) as Int32, forKey: "keepDeletedMessages")
         try container.encode((self.saveEditHistory ? 1 : 0) as Int32, forKey: "saveEditHistory")
         try container.encode((self.keepSelfDestructMedia ? 1 : 0) as Int32, forKey: "keepSelfDestructMedia")
