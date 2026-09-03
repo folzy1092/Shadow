@@ -29,9 +29,24 @@ Device checklist: export/share/cancel on iPhone and iPad; invalid/oversized/newe
 JSON; import and undo; cancel import; change Ghost while preview is open; switch
 accounts; kill/relaunch; background during document selection/export.
 
+## Settings search
+
+Implemented a Foundation-only static catalog and search input in the Shadow hub.
+The same catalog is included in Telegram's existing global settings search.
+Matches are case/diacritic-insensitive, include Russian/English keywords, and
+require every search token. The query is bounded to 256 characters, not stored.
+
+Navigation opens the exact settings section, uses actual list indices (not the
+stable IDs as array indices), and highlights the target for 1.5 seconds. Hidden
+dependent controls fall back to their parent switch without changing settings.
+No new preference reads are performed by the Shadow search itself.
+
+Validation: five catalog/navigation structural tests, Swift syntax parsing and
+existing test suites. Added 15 Swift Foundation assertions for the CI runner.
+On-device scrolling/highlighting and Swift type-checking remain pending.
+
 ## Pending features
 
-- Search in Shadow settings.
 - Scroll-driven tab bar visibility.
 - Message filtering and rule transfer.
 - Message screenshots.

@@ -223,16 +223,21 @@ private final class ShadowSettingsBackupCoordinator: NSObject, UIDocumentPickerD
     }
 }
 
-func shadowSettingsBackupController(context: AccountContext) -> ViewController {
+func shadowSettingsBackupController(context: AccountContext, focus: ShadowSettingsSearchItem? = nil) -> ViewController {
+    var focusedIndex: Int?
     let coordinator = ShadowSettingsBackupCoordinator(context: context)
     let signal = combineLatest(queue: .mainQueue(), context.sharedContext.presentationData, shadowSettingsBackupAvailable(postbox: context.account.postbox), coordinator.busy.get())
     |> map { presentationData, hasBackup, busy -> (ItemListControllerState, (ItemListNodeState, Any)) in
         let data = ItemListPresentationData(presentationData)
         let state = ItemListControllerState(presentationData: data, title: .text("Резервная копия настроек"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
         let entries: [ShadowBackupEntry] = [.export(!busy), .import(!busy), .restore(hasBackup && !busy), .info]
-        return (state, (ItemListNodeState(presentationData: data, entries: entries, style: .blocks, animateChanges: true), coordinator))
+        focusedIndex = shadowSettingsFocusIndex(stableIds: entries.map { $0.stableId }, target: focus)
+        return (state, (ItemListNodeState(presentationData: data, entries: entries, style: .blocks, initialScrollToItem: shadowSettingsInitialScroll(index: focusedIndex), animateChanges: true), coordinator))
     }
     let controller = ItemListController(context: context, state: signal)
     coordinator.controller = controller
+    if focus != nil {
+        shadowSettingsInstallFocus(controller: controller, index: { focusedIndex }, color: context.sharedContext.currentPresentationData.with { $0 }.theme.list.itemAccentColor)
+    }
     return controller
 }

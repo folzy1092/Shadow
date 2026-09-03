@@ -4424,6 +4424,20 @@ func settingsSearchableItems(
         let strings = context.sharedContext.currentPresentationData.with { $0 }.strings
         
         var allItems: [SettingsSearchableItem] = []
+        // Reuse Shadow's metadata and exact-row navigation in Telegram's global
+        // settings search as well. No extra account reads for these entries.
+        allItems.append(contentsOf: ShadowSettingsSearchIndex.items.map { item in
+            SettingsSearchableItem(
+                id: "shadow/\(item.id)",
+                title: item.title,
+                alternate: [item.description, item.keywords],
+                icon: .appearance,
+                breadcrumbs: ["Shadow", item.destination.title],
+                present: { context, _, present in
+                    present(.push, shadowSettingsSearchDestinationController(context: context, item: item))
+                }
+            )
+        })
         
         let profileItems = profileSearchableItems(context: context, canAddAccount: canAddAccount)
         allItems.append(contentsOf: profileItems)

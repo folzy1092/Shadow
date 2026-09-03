@@ -73,11 +73,15 @@ private func attachmentSizeLabel(_ value: Int64) -> String {
 // MARK: - Hub
 
 private enum AyuHubSection: Int32 {
+    case search
     case sections
     case info
 }
 
 private enum AyuHubEntry: ItemListNodeEntry {
+    case query(String)
+    case result(ShadowSettingsSearchItem)
+    case noResults
     case customization
     case spy
     case ghost
@@ -87,6 +91,12 @@ private enum AyuHubEntry: ItemListNodeEntry {
 
     var section: ItemListSectionId {
         switch self {
+        case .query:
+            return AyuHubSection.search.rawValue
+        case .result:
+            return AyuHubSection.sections.rawValue
+        case .noResults:
+            return AyuHubSection.info.rawValue
         case .customization, .spy, .ghost, .misc, .backup:
             return AyuHubSection.sections.rawValue
         case .infoFooter:
@@ -96,6 +106,9 @@ private enum AyuHubEntry: ItemListNodeEntry {
 
     var stableId: Int32 {
         switch self {
+        case .query: return -1
+        case let .result(item): return 100 + item.id
+        case .noResults: return 10
         case .customization:
             return 0
         case .spy:
@@ -118,6 +131,12 @@ private enum AyuHubEntry: ItemListNodeEntry {
     func item(presentationData: ItemListPresentationData, arguments: Any) -> ListViewItem {
         let arguments = arguments as! AyuHubArguments
         switch self {
+        case let .query(value):
+            return ItemListSingleLineInputItem(presentationData: presentationData, title: NSAttributedString(string: ""), text: value, placeholder: "Поиск настроек Shadow", type: .regular(capitalization: false, autocorrection: false), clearType: .always, sectionId: self.section, textUpdated: arguments.updateQuery, action: {})
+        case let .result(item):
+            return ItemListDisclosureItem(presentationData: presentationData, title: item.title, label: item.path + "\n" + item.description, labelStyle: .multilineDetailText, sectionId: self.section, style: .blocks, action: { arguments.openResult(item) })
+        case .noResults:
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Ничего не найдено. Попробуйте другое слово на русском или английском."), sectionId: self.section)
         case .customization:
             return ItemListDisclosureItem(presentationData: presentationData, title: "Кастомизация", label: "", sectionId: self.section, style: .blocks, action: {
                 arguments.openCustomization()
@@ -143,13 +162,17 @@ private enum AyuHubEntry: ItemListNodeEntry {
 }
 
 private final class AyuHubArguments {
+    let updateQuery: (String) -> Void
+    let openResult: (ShadowSettingsSearchItem) -> Void
     let openCustomization: () -> Void
     let openSpy: () -> Void
     let openGhost: () -> Void
     let openMisc: () -> Void
     let openBackup: () -> Void
 
-    init(openCustomization: @escaping () -> Void, openSpy: @escaping () -> Void, openGhost: @escaping () -> Void, openMisc: @escaping () -> Void, openBackup: @escaping () -> Void) {
+    init(updateQuery: @escaping (String) -> Void, openResult: @escaping (ShadowSettingsSearchItem) -> Void, openCustomization: @escaping () -> Void, openSpy: @escaping () -> Void, openGhost: @escaping () -> Void, openMisc: @escaping () -> Void, openBackup: @escaping () -> Void) {
+        self.updateQuery = updateQuery
+        self.openResult = openResult
         self.openCustomization = openCustomization
         self.openSpy = openSpy
         self.openGhost = openGhost
@@ -158,10 +181,25 @@ private final class AyuHubArguments {
     }
 }
 
+func shadowSettingsSearchDestinationController(context: AccountContext, item: ShadowSettingsSearchItem) -> ViewController {
+    switch item.destination {
+    case .customization: return ayuCustomizationController(context: context, focus: item)
+    case .spy: return ayuSpyController(context: context, focus: item)
+    case .ghost: return ayuGhostController(context: context, focus: item)
+    case .misc: return ayuMiscController(context: context, focus: item)
+    case .backup: return shadowSettingsBackupController(context: context, focus: item)
+    }
+}
+
 public func ayuGramSettingsController(context: AccountContext) -> ViewController {
     var pushControllerImpl: ((ViewController) -> Void)?
+    let query = ValuePromise<String>("", ignoreRepeated: true)
 
     let arguments = AyuHubArguments(
+        updateQuery: { query.set(String($0.prefix(256))) },
+        openResult: { item in
+            pushControllerImpl?(shadowSettingsSearchDestinationController(context: context, item: item))
+        },
         openCustomization: {
             pushControllerImpl?(ayuCustomizationController(context: context))
         },
@@ -179,11 +217,16 @@ public func ayuGramSettingsController(context: AccountContext) -> ViewController
         }
     )
 
-    let entries: [AyuHubEntry] = [.customization, .spy, .ghost, .misc, .backup, .infoFooter]
-
-    let signal = context.sharedContext.presentationData
+    let signal = combineLatest(queue: .mainQueue(), context.sharedContext.presentationData, query.get())
     |> deliverOnMainQueue
-    |> map { presentationData -> (ItemListControllerState, (ItemListNodeState, Any)) in
+    |> map { presentationData, query -> (ItemListControllerState, (ItemListNodeState, Any)) in
+        var entries: [AyuHubEntry] = [.query(query)]
+        if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            entries += [.customization, .spy, .ghost, .misc, .backup, .infoFooter]
+        } else {
+            let matches = ShadowSettingsSearchIndex.search(query)
+            entries += matches.isEmpty ? [.noResults] : matches.map { .result($0) }
+        }
         let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Shadow"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
         let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, animateChanges: false)
         return (controllerState, (listState, arguments))
@@ -191,6 +234,7 @@ public func ayuGramSettingsController(context: AccountContext) -> ViewController
 
     let controller = ItemListController(context: context, state: signal)
     pushControllerImpl = { [weak controller] c in
+        controller?.view.endEditing(true)
         (controller?.navigationController as? NavigationController)?.pushViewController(c)
     }
     return controller
@@ -703,7 +747,8 @@ private func ayuCustomizationEntries(settings: AyuGramSettings) -> [AyuCustomiza
     return entries
 }
 
-private func ayuCustomizationController(context: AccountContext) -> ViewController {
+private func ayuCustomizationController(context: AccountContext, focus: ShadowSettingsSearchItem? = nil) -> ViewController {
+    var focusedIndex: Int?
     var presentControllerImpl: ((ViewController, ViewControllerPresentationArguments?) -> Void)?
     var presentBannerImagePickerImpl: (() -> Void)?
     var presentProfileBackgroundImagePickerImpl: (() -> Void)?
@@ -820,11 +865,16 @@ private func ayuCustomizationController(context: AccountContext) -> ViewControll
     |> deliverOnMainQueue
     |> map { presentationData, settings -> (ItemListControllerState, (ItemListNodeState, Any)) in
         let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Кастомизация"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
-        let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: ayuCustomizationEntries(settings: settings), style: .blocks, animateChanges: true)
+        let entries = ayuCustomizationEntries(settings: settings)
+        focusedIndex = shadowSettingsFocusIndex(stableIds: entries.map { $0.stableId }, target: focus)
+        let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, initialScrollToItem: shadowSettingsInitialScroll(index: focusedIndex), animateChanges: true)
         return (controllerState, (listState, arguments))
     }
 
     let controller = ItemListController(context: context, state: signal)
+    if focus != nil {
+        shadowSettingsInstallFocus(controller: controller, index: { focusedIndex }, color: context.sharedContext.currentPresentationData.with { $0 }.theme.list.itemAccentColor)
+    }
     presentControllerImpl = { [weak controller] c, a in
         controller?.present(c, in: .window(.root), with: a)
     }
@@ -1147,7 +1197,8 @@ private func ayuSpyEntries(settings: AyuGramSettings) -> [AyuSpyEntry] {
     return entries
 }
 
-private func ayuSpyController(context: AccountContext) -> ViewController {
+private func ayuSpyController(context: AccountContext, focus: ShadowSettingsSearchItem? = nil) -> ViewController {
+    var focusedIndex: Int?
     var presentControllerImpl: ((ViewController, ViewControllerPresentationArguments?) -> Void)?
     var pushControllerImpl: ((ViewController) -> Void)?
 
@@ -1234,11 +1285,16 @@ private func ayuSpyController(context: AccountContext) -> ViewController {
     |> deliverOnMainQueue
     |> map { presentationData, settings -> (ItemListControllerState, (ItemListNodeState, Any)) in
         let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Шпион"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
-        let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: ayuSpyEntries(settings: settings), style: .blocks, animateChanges: true)
+        let entries = ayuSpyEntries(settings: settings)
+        focusedIndex = shadowSettingsFocusIndex(stableIds: entries.map { $0.stableId }, target: focus)
+        let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, initialScrollToItem: shadowSettingsInitialScroll(index: focusedIndex), animateChanges: true)
         return (controllerState, (listState, arguments))
     }
 
     let controller = ItemListController(context: context, state: signal)
+    if focus != nil {
+        shadowSettingsInstallFocus(controller: controller, index: { focusedIndex }, color: context.sharedContext.currentPresentationData.with { $0 }.theme.list.itemAccentColor)
+    }
     presentControllerImpl = { [weak controller] c, a in
         controller?.present(c, in: .window(.root), with: a)
     }
@@ -1385,7 +1441,8 @@ private func ayuGhostEntries(settings: AyuGramSettings) -> [AyuGhostEntry] {
     ]
 }
 
-private func ayuGhostController(context: AccountContext) -> ViewController {
+private func ayuGhostController(context: AccountContext, focus: ShadowSettingsSearchItem? = nil) -> ViewController {
+    var focusedIndex: Int?
     let arguments = AyuGhostArguments(
         updateGhostMode: { value in
             ayuUpdateSettings(context: context) { var s = $0; s.ghostMode = value; return s }
@@ -1417,11 +1474,16 @@ private func ayuGhostController(context: AccountContext) -> ViewController {
     |> deliverOnMainQueue
     |> map { presentationData, settings -> (ItemListControllerState, (ItemListNodeState, Any)) in
         let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Призрак"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
-        let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: ayuGhostEntries(settings: settings), style: .blocks, animateChanges: true)
+        let entries = ayuGhostEntries(settings: settings)
+        focusedIndex = shadowSettingsFocusIndex(stableIds: entries.map { $0.stableId }, target: focus)
+        let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, initialScrollToItem: shadowSettingsInitialScroll(index: focusedIndex), animateChanges: true)
         return (controllerState, (listState, arguments))
     }
 
     let controller = ItemListController(context: context, state: signal)
+    if focus != nil {
+        shadowSettingsInstallFocus(controller: controller, index: { focusedIndex }, color: context.sharedContext.currentPresentationData.with { $0 }.theme.list.itemAccentColor)
+    }
     return controller
 }
 
@@ -1558,7 +1620,8 @@ private func ayuMiscEntries(settings: AyuGramSettings) -> [AyuMiscEntry] {
     return entries
 }
 
-private func ayuMiscController(context: AccountContext) -> ViewController {
+private func ayuMiscController(context: AccountContext, focus: ShadowSettingsSearchItem? = nil) -> ViewController {
+    var focusedIndex: Int?
     let arguments = AyuMiscArguments(
         updateSpoofIdEnabled: { value in
             ayuUpdateSettings(context: context) { var s = $0; s.spoofProfileIdEnabled = value; return s }
@@ -1587,10 +1650,15 @@ private func ayuMiscController(context: AccountContext) -> ViewController {
     |> deliverOnMainQueue
     |> map { presentationData, settings -> (ItemListControllerState, (ItemListNodeState, Any)) in
         let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Разное"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
-        let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: ayuMiscEntries(settings: settings), style: .blocks, animateChanges: true)
+        let entries = ayuMiscEntries(settings: settings)
+        focusedIndex = shadowSettingsFocusIndex(stableIds: entries.map { $0.stableId }, target: focus)
+        let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, initialScrollToItem: shadowSettingsInitialScroll(index: focusedIndex), animateChanges: true)
         return (controllerState, (listState, arguments))
     }
 
     let controller = ItemListController(context: context, state: signal)
+    if focus != nil {
+        shadowSettingsInstallFocus(controller: controller, index: { focusedIndex }, color: context.sharedContext.currentPresentationData.with { $0 }.theme.list.itemAccentColor)
+    }
     return controller
 }

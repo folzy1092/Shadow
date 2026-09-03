@@ -12,14 +12,18 @@ def main():
     compiler = shutil.which('swiftc')
     if compiler is None:
         raise SystemExit('Swift compiler unavailable. Foundation tests were NOT run.')
+    cases = [
+        ('document', 'submodules/TelegramCore/Sources/AyuGram/ShadowSettingsDocument.swift', 'Tests/ShadowSettings/DocumentTests.swift'),
+        ('search', 'submodules/SettingsUI/Sources/ShadowSettingsSearchIndex.swift', 'Tests/ShadowSettings/SearchTests.swift'),
+    ]
     with tempfile.TemporaryDirectory(prefix='shadow-foundation-tests-') as directory:
-        executable = Path(directory) / 'document-tests'
-        subprocess.run([
-            compiler, '-warnings-as-errors', '-o', str(executable),
-            str(ROOT / 'submodules/TelegramCore/Sources/AyuGram/ShadowSettingsDocument.swift'),
-            str(ROOT / 'Tests/ShadowSettings/DocumentTests.swift'),
-        ], check=True)
-        subprocess.run([str(executable)], check=True)
+        for name, source, tests in cases:
+            executable = Path(directory) / (name + '-tests')
+            subprocess.run([
+                compiler, '-warnings-as-errors', '-o', str(executable),
+                str(ROOT / source), str(ROOT / tests),
+            ], check=True)
+            subprocess.run([str(executable)], check=True)
 
 
 if __name__ == '__main__':
