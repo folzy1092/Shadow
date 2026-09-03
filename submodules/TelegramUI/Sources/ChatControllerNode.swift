@@ -5207,9 +5207,19 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                             return message.withUpdatedThreadId(overrideThreadId)
                         }
                     }
+
+                    // A Ghost-mode delayed message is inserted into Telegram's
+                    // ScheduledCloud history, not this chat's current history.
+                    // Consequently setupSendActionOnViewUpdate never observes
+                    // its correlation id and would leave the composer untouched.
+                    // Explicit user scheduling keeps Telegram's native path.
+                    var shouldClearInputImmediately = false
+                    if scheduleTime == nil, repeatPeriod == nil, !postpone, let peerId = self.chatLocation.peerId {
+                        shouldClearInputImmediately = AyuDelayedSend.willAutomaticallySchedule(messages: messages, peerId: peerId)
+                    }
                     
                     var usedCorrelationId: Int64?
-                    if !messages.isEmpty, case .message = messages[messages.count - 1] {
+                    if !shouldClearInputImmediately, !messages.isEmpty, case .message = messages[messages.count - 1] {
                         let correlationId = Int64.random(in: 0 ..< Int64.max)
                         messages[messages.count - 1] = messages[messages.count - 1].withUpdatedCorrelationId(correlationId)
                         
@@ -5228,8 +5238,8 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                             })
                         }
                     }
-                    
-                    self.setupSendActionOnViewUpdate({ [weak self] in
+
+                    let clearInputAfterSend: () -> Void = { [weak self] in
                         guard let self, let textInputPanelNode = self.inputPanelNode as? ChatTextInputPanelNode else {
                             return
                         }
@@ -5253,10 +5263,16 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                             return state
                         })
                         self.ignoreUpdateHeight = false
-                    }, usedCorrelationId)
+                    }
+                    if !shouldClearInputImmediately {
+                        self.setupSendActionOnViewUpdate(clearInputAfterSend, usedCorrelationId)
+                    }
                     completion()
                     
                     self.sendMessages(messages, silentPosting, scheduleTime, repeatPeriod, messages.count > 1, postpone)
+                    if shouldClearInputImmediately {
+                        clearInputAfterSend()
+                    }
                 }
                 
                 var targetThreadId: Int64?

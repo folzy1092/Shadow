@@ -97,6 +97,22 @@ public enum AyuDelayedSend {
         return false
     }
 
+    // The normal chat UI clears its composer when the newly-enqueued message
+    // appears in the current history view. Automatically scheduled messages go
+    // into ScheduledCloud instead, so that view update never arrives. Expose the
+    // exact transform eligibility to the UI so it can clear optimistically.
+    public static func willAutomaticallySchedule(messages: [EnqueueMessage], peerId: PeerId) -> Bool {
+        guard ayuGramSettingsCurrent.effectiveSendViaScheduled else {
+            return false
+        }
+        guard peerSupportsScheduling(peerId) else {
+            return false
+        }
+        return messages.contains(where: { message in
+            return !hasOverridingAttribute(message.attributes)
+        })
+    }
+
     private static func messageHasMedia(_ message: EnqueueMessage) -> Bool {
         switch message {
         case let .message(_, _, _, mediaReference, _, _, _, _, _, _):
@@ -112,10 +128,7 @@ public enum AyuDelayedSend {
     // attribute to each eligible message. `now` is the current unix time. Returns
     // the possibly-modified messages. Cheap and side-effect-free.
     public static func transform(messages: [EnqueueMessage], peerId: PeerId, now: Int32) -> [EnqueueMessage] {
-        guard ayuGramSettingsCurrent.effectiveSendViaScheduled else {
-            return messages
-        }
-        guard peerSupportsScheduling(peerId) else {
+        guard willAutomaticallySchedule(messages: messages, peerId: peerId) else {
             return messages
         }
         return messages.map { message -> EnqueueMessage in
