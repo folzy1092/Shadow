@@ -29,6 +29,12 @@ public struct AyuGramSettings: Codable, Equatable {
     public var ghostMode: Bool
     // Presence hiding
     public var hideOnlineStatus: Bool
+    // Timestamp of the last server-confirmed online -> offline transition.
+    // Telegram deliberately stores our own peer as permanently online in the
+    // local Postbox, so the own-profile header cannot derive this value from a
+    // PeerPresence. Keep it account-scoped with the rest of the settings state.
+    // Zero means that this build has not observed a confirmed transition yet.
+    public var ghostLastSeenTimestamp: Int32
     public var hideTyping: Bool
     // Don't send read receipts to the server, so reading a chat never marks you
     // online and the sender never sees the "read" ticks.
@@ -357,13 +363,15 @@ public struct AyuGramSettings: Codable, Equatable {
         customProfileBackgroundEnabled: Bool,
         customProfileBackgroundForOthers: Bool,
         customProfileBackgroundForSettings: Bool,
-        bottomBarScrollMode: Int32 = 0
+        bottomBarScrollMode: Int32 = 0,
+        ghostLastSeenTimestamp: Int32 = 0
     ) {
         self.keepDeletedMessages = keepDeletedMessages
         self.saveEditHistory = saveEditHistory
         self.keepSelfDestructMedia = keepSelfDestructMedia
         self.ghostMode = ghostMode
         self.hideOnlineStatus = hideOnlineStatus
+        self.ghostLastSeenTimestamp = max(0, ghostLastSeenTimestamp)
         self.hideTyping = hideTyping
         self.hideReadReceipts = hideReadReceipts
         self.hideStoryViews = hideStoryViews
@@ -421,6 +429,7 @@ public struct AyuGramSettings: Codable, Equatable {
         self.keepSelfDestructMedia = ((try container.decodeIfPresent(Int32.self, forKey: "keepSelfDestructMedia")) ?? 1) != 0
         self.ghostMode = ((try container.decodeIfPresent(Int32.self, forKey: "ghostMode")) ?? 0) != 0
         self.hideOnlineStatus = ((try container.decodeIfPresent(Int32.self, forKey: "hideOnlineStatus")) ?? 0) != 0
+        self.ghostLastSeenTimestamp = max(0, (try container.decodeIfPresent(Int32.self, forKey: "ghostLastSeenTimestamp")) ?? 0)
         self.hideTyping = ((try container.decodeIfPresent(Int32.self, forKey: "hideTyping")) ?? 0) != 0
         self.hideReadReceipts = ((try container.decodeIfPresent(Int32.self, forKey: "hideReadReceipts")) ?? 0) != 0
         self.hideStoryViews = ((try container.decodeIfPresent(Int32.self, forKey: "hideStoryViews")) ?? 0) != 0
@@ -479,6 +488,7 @@ public struct AyuGramSettings: Codable, Equatable {
         try container.encode((self.keepSelfDestructMedia ? 1 : 0) as Int32, forKey: "keepSelfDestructMedia")
         try container.encode((self.ghostMode ? 1 : 0) as Int32, forKey: "ghostMode")
         try container.encode((self.hideOnlineStatus ? 1 : 0) as Int32, forKey: "hideOnlineStatus")
+        try container.encode(self.ghostLastSeenTimestamp, forKey: "ghostLastSeenTimestamp")
         try container.encode((self.hideTyping ? 1 : 0) as Int32, forKey: "hideTyping")
         try container.encode((self.hideReadReceipts ? 1 : 0) as Int32, forKey: "hideReadReceipts")
         try container.encode((self.hideStoryViews ? 1 : 0) as Int32, forKey: "hideStoryViews")

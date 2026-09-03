@@ -10,6 +10,7 @@ private typealias SignalKitTimer = SwiftSignalKit.Timer
 private final class AccountPresenceManagerImpl {
     private let queue: Queue
     private let network: Network
+    private let postbox: Postbox
     let isPerformingUpdate = ValuePromise<Bool>(false, ignoreRepeated: true)
 
     private var shouldKeepOnlinePresenceDisposable: Disposable?
@@ -17,7 +18,12 @@ private final class AccountPresenceManagerImpl {
     // right after a send while "send without appearing online" is on.
     private var offlineReassertDisposable: Disposable?
     private let currentRequestDisposable = MetaDisposable()
+    private let lastSeenUpdateDisposable = MetaDisposable()
     private var onlineTimer: SignalKitTimer?
+    // Set only for a real online -> offline transition. Timer-driven offline
+    // reasserts and post-send reasserts must not keep moving the displayed
+    // last-seen time forward while the account remains hidden.
+    private var pendingOfflineTransitionTimestamp: Int32?
     
     // AyuGram: start as "unknown" (nil) so the very first value — including a
     // `false` when online is hidden from launch — actually triggers updatePresence
@@ -26,9 +32,10 @@ private final class AccountPresenceManagerImpl {
     // account and reading a chat could leave you online.
     private var wasOnline: Bool? = nil
 
-    init(queue: Queue, shouldKeepOnlinePresence: Signal<Bool, NoError>, network: Network) {
+    init(queue: Queue, shouldKeepOnlinePresence: Signal<Bool, NoError>, network: Network, postbox: Postbox) {
         self.queue = queue
         self.network = network
+        self.postbox = postbox
         
         self.shouldKeepOnlinePresenceDisposable = (shouldKeepOnlinePresence
         |> distinctUntilChanged
@@ -36,8 +43,16 @@ private final class AccountPresenceManagerImpl {
             guard let `self` = self else {
                 return
             }
-            if self.wasOnline != value {
+            let previousValue = self.wasOnline
+            if previousValue != value {
                 self.wasOnline = value
+                if value {
+                    // An in-flight offline request no longer represents the
+                    // account's current transition.
+                    self.pendingOfflineTransitionTimestamp = nil
+                } else if previousValue == true {
+                    self.pendingOfflineTransitionTimestamp = Int32(Date().timeIntervalSince1970)
+                }
                 self.updatePresence(value)
             }
         })
@@ -62,6 +77,7 @@ private final class AccountPresenceManagerImpl {
         self.shouldKeepOnlinePresenceDisposable?.dispose()
         self.offlineReassertDisposable?.dispose()
         self.currentRequestDisposable.dispose()
+        self.lastSeenUpdateDisposable.dispose()
         self.onlineTimer?.invalidate()
     }
     
@@ -93,7 +109,20 @@ private final class AccountPresenceManagerImpl {
         |> `catch` { _ -> Signal<Api.Bool, NoError> in
             return .single(.boolFalse)
         }
-        |> deliverOn(self.queue)).start(completed: { [weak self] in
+        |> deliverOn(self.queue)).start(next: { [weak self] result in
+            guard let self, !isOnline, case .boolTrue = result, let timestamp = self.pendingOfflineTransitionTimestamp else {
+                return
+            }
+            self.pendingOfflineTransitionTimestamp = nil
+            self.lastSeenUpdateDisposable.set(updateAyuGramSettings(postbox: self.postbox) { settings in
+                guard timestamp > settings.ghostLastSeenTimestamp else {
+                    return settings
+                }
+                var settings = settings
+                settings.ghostLastSeenTimestamp = timestamp
+                return settings
+            }.start())
+        }, completed: { [weak self] in
             guard let strongSelf = self else {
                 return
             }
@@ -106,10 +135,10 @@ final class AccountPresenceManager {
     private let queue = Queue()
     private let impl: QueueLocalObject<AccountPresenceManagerImpl>
     
-    init(shouldKeepOnlinePresence: Signal<Bool, NoError>, network: Network) {
+    init(shouldKeepOnlinePresence: Signal<Bool, NoError>, network: Network, postbox: Postbox) {
         let queue = self.queue
         self.impl = QueueLocalObject(queue: self.queue, generate: {
-            return AccountPresenceManagerImpl(queue: queue, shouldKeepOnlinePresence: shouldKeepOnlinePresence, network: network)
+            return AccountPresenceManagerImpl(queue: queue, shouldKeepOnlinePresence: shouldKeepOnlinePresence, network: network, postbox: postbox)
         })
     }
     

@@ -642,6 +642,33 @@ public func stringAndActivityForUserPresence(strings: PresentationStrings, dateT
     }
 }
 
+// Shadow: the local Postbox intentionally marks the account's own peer as
+// online forever, so the own-profile Ghost Mode header uses the timestamp saved
+// by AccountPresenceManager instead. Unlike the regular presence formatter,
+// this always includes the real clock time, even during the first minute.
+public func ayuExactLastSeenString(strings: PresentationStrings, dateTimeFormat: PresentationDateTimeFormat, lastSeenTimestamp: Int32, relativeTo timestamp: Int32, includeSeconds: Bool) -> String {
+    var t: time_t = time_t(lastSeenTimestamp)
+    var timeinfo: tm = tm()
+    localtime_r(&t, &timeinfo)
+
+    var now: time_t = time_t(timestamp)
+    var timeinfoNow: tm = tm()
+    localtime_r(&now, &timeinfoNow)
+
+    let seconds: Int32? = includeSeconds ? timeinfo.tm_sec : nil
+    if timeinfo.tm_year == timeinfoNow.tm_year {
+        let dayDifference = timeinfo.tm_yday - timeinfoNow.tm_yday
+        if dayDifference == 0 || dayDifference == -1 {
+            let day: RelativeTimestampFormatDay = dayDifference == 0 ? .today : .yesterday
+            return stringForUserPresence(strings: strings, day: day, dateTimeFormat: dateTimeFormat, hours: timeinfo.tm_hour, minutes: timeinfo.tm_min, seconds: seconds)
+        }
+    }
+
+    let date = stringForTimestamp(day: timeinfo.tm_mday, month: timeinfo.tm_mon + 1, year: timeinfo.tm_year, dateTimeFormat: dateTimeFormat)
+    let time = stringForShortTimestamp(hours: timeinfo.tm_hour, minutes: timeinfo.tm_min, seconds: seconds, dateTimeFormat: dateTimeFormat)
+    return strings.LastSeen_AtDate("\(date), \(time)").string
+}
+
 // AyuGram (Этап 4b): format an approximate "last seen" from a user's most recent
 // activity in shared chats, used when the real last seen is hidden. We reuse the
 // standard formatter by presenting the activity timestamp as a past ".present"

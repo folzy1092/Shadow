@@ -1491,8 +1491,29 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             } else if self.isMyProfile {
                 let subtitleColor: UIColor
                 subtitleColor = .white
-                
-                subtitleStringText = presentationData.strings.Presence_online
+
+                // Telegram seeds the account's own Postbox presence with
+                // `.present(until: Int32.max - 1)`, therefore the normal profile
+                // status can only say "online". While Ghost Mode really hides
+                // online presence, show the last server-confirmed transition to
+                // offline instead. Never invent "now" on a cold start.
+                if self.ayuSettings.effectiveHideOnline {
+                    let timestamp = self.ayuSettings.ghostLastSeenTimestamp
+                    if timestamp > 0 {
+                        let now = Int32(CFAbsoluteTimeGetCurrent() + NSTimeIntervalSince1970)
+                        subtitleStringText = ayuExactLastSeenString(
+                            strings: presentationData.strings,
+                            dateTimeFormat: presentationData.dateTimeFormat,
+                            lastSeenTimestamp: timestamp,
+                            relativeTo: now,
+                            includeSeconds: self.ayuSettings.showExactLastSeen && self.ayuSettings.showExactLastSeenSeconds
+                        )
+                    } else {
+                        subtitleStringText = presentationData.strings.LastSeen_Lately
+                    }
+                } else {
+                    subtitleStringText = presentationData.strings.Presence_online
+                }
                 subtitleAttributes = MultiScaleTextState.Attributes(font: Font.regular(17.0), color: subtitleColor)
                 smallSubtitleAttributes = MultiScaleTextState.Attributes(font: Font.regular(16.0), color: .white, shadowColor: titleShadowColor)
                 
