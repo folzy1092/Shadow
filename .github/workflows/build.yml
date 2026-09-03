@@ -16,8 +16,9 @@ jobs:
           submodules: 'recursive'
           fetch-depth: '0'
 
-      - name: Cache Bazel output
-        uses: actions/cache@v4
+      - name: Restore Bazel output
+        id: bazel_cache
+        uses: actions/cache/restore@v4
         with:
           path: /private/var/tmp/_bazel_containerhost
           key: bazel-${{ runner.os }}-${{ hashFiles('versions.json') }}-${{ github.sha }}
@@ -37,7 +38,13 @@ jobs:
           cp -R $GITHUB_WORKSPACE /Users/Shared/
           mv /Users/Shared/$(basename $GITHUB_WORKSPACE) /Users/Shared/telegram-ios
 
+      - name: Configure Bazel memory and Swift execution
+        run: |
+          python3 -m unittest discover -s Tests/ShadowCI -v
+          python3 build-system/ci/configure_bazel.py --workspace /Users/Shared/telegram-ios
+
       - name: Build the App
+        id: build
         env:
           TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
           TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
@@ -110,6 +117,16 @@ jobs:
             cp -R bazel-bin/Telegram/Telegram.app.dSYM build/DSYMs/ || true
           fi
           zip -r "./$OUTPUT_PATH/Telegram.DSYMs.zip" build/DSYMs 1>/dev/null || true
+
+      # actions/cache's default post-step saves only on success. Keep completed
+      # actions after a compiler failure too, so retries can reuse that work.
+      - name: Save Bazel output
+        if: ${{ !cancelled() && (steps.build.outcome == 'success' || steps.build.outcome == 'failure') && steps.bazel_cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        continue-on-error: true
+        with:
+          path: /private/var/tmp/_bazel_containerhost
+          key: ${{ steps.bazel_cache.outputs.cache-primary-key }}
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
@@ -209,4 +226,3 @@ jobs:
             -X POST "$DISCORD_WEBHOOK_URL" \
             -d "$PAYLOAD" \
             || echo "Discord notification failed (non-fatal)"
-
