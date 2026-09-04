@@ -1,4 +1,4 @@
-name: Export ChatTitle patch
+name: Apply ChatTitle patch
 
 on:
   push:
@@ -6,11 +6,16 @@ on:
     paths:
       - '.github/workflows/export-chat-title-patch.yml'
 
+permissions:
+  contents: write
+
 jobs:
-  export:
+  apply:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: master
       - name: Patch ChatTitle signals
         shell: python
         run: |
@@ -57,9 +62,11 @@ jobs:
               if old_block not in text:
                   raise SystemExit(f'old block not found in {path}')
               path.write_text(text.replace(old_block, new_block, 1))
-      - uses: actions/upload-artifact@v4
-        with:
-          name: patched-chat-title
-          path: |
-            submodules/TelegramUI/Components/ChatTitleView/Sources/ChatTitleComponent.swift
-            submodules/TelegramUI/Components/ChatTitleView/Sources/ChatTitleView.swift
+      - name: Commit patch
+        run: |
+          git config user.name "Shadow CI"
+          git config user.email "actions@github.com"
+          git add submodules/TelegramUI/Components/ChatTitleView/Sources/ChatTitleComponent.swift \
+                  submodules/TelegramUI/Components/ChatTitleView/Sources/ChatTitleView.swift
+          git commit -m "Split ChatTitle settings signal expressions"
+          git push origin HEAD:master
