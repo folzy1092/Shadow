@@ -1637,6 +1637,9 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         let content = item.content
         let firstMessage = content.firstMessage
         let incoming = item.content.effectivelyIncoming(item.context.account.peerId, associatedData: item.associatedData)
+        // Export places every author on the left. Change bubble geometry only:
+        // message direction (delivery status, actions and ownership) stays intact.
+        let bubbleIncoming = incoming || item.presentationData.shadowScreenshot != nil
         
         let messageTheme = incoming ? item.presentationData.theme.theme.chat.message.incoming : item.presentationData.theme.theme.chat.message.outgoing
         let isEphemeralMessage = Namespaces.Message.allEphemeral.contains(firstMessage.id.namespace)
@@ -2369,8 +2372,8 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             index += 1
         }
         
-        let topNodeMergeStatus: ChatMessageBubbleMergeStatus = mergedTop.merged ? (incoming ? .Left : .Right) : .None(incoming ? .Incoming : .Outgoing)
-        var bottomNodeMergeStatus: ChatMessageBubbleMergeStatus = mergedBottom.merged ? (incoming ? .Left : .Right) : .None(incoming ? .Incoming : .Outgoing)
+        let topNodeMergeStatus: ChatMessageBubbleMergeStatus = mergedTop.merged ? (bubbleIncoming ? .Left : .Right) : .None(bubbleIncoming ? .Incoming : .Outgoing)
+        var bottomNodeMergeStatus: ChatMessageBubbleMergeStatus = mergedBottom.merged ? (bubbleIncoming ? .Left : .Right) : .None(bubbleIncoming ? .Incoming : .Outgoing)
         
         let bubbleReactions: ReactionsMessageAttribute
         if needReactions || forceReactionsOutside {
@@ -2379,7 +2382,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             bubbleReactions = ReactionsMessageAttribute(canViewList: false, isTags: false, reactions: [], recentPeers: [], topPeers: [])
         }
         if !bubbleReactions.reactions.isEmpty && !item.presentationData.isPreview {
-            if incoming {
+            if bubbleIncoming {
                 bottomNodeMergeStatus = .Left
             } else {
                 bottomNodeMergeStatus = .Right
@@ -3725,19 +3728,19 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         let contentUpperRightCorner: CGPoint
         switch alignment {
             case .none:
-                backgroundFrame = CGRect(origin: CGPoint(x: incoming ? (params.leftInset + layoutConstants.bubble.edgeInset + avatarInset) : (params.width - params.rightInset - layoutBubbleSize.width - layoutConstants.bubble.edgeInset - deliveryFailedInset), y: detachedContentNodesHeight + additionalTopHeight), size: layoutBubbleSize)
-                contentOrigin = CGPoint(x: backgroundFrame.origin.x + (incoming ? layoutConstants.bubble.contentInsets.left : layoutConstants.bubble.contentInsets.right), y: backgroundFrame.origin.y + layoutConstants.bubble.contentInsets.top + headerSize.height + contentVerticalOffset)
-                contentUpperRightCorner = CGPoint(x: backgroundFrame.maxX - (incoming ? layoutConstants.bubble.contentInsets.right : layoutConstants.bubble.contentInsets.left), y: backgroundFrame.origin.y + layoutConstants.bubble.contentInsets.top + headerSize.height)
+                backgroundFrame = CGRect(origin: CGPoint(x: bubbleIncoming ? (params.leftInset + layoutConstants.bubble.edgeInset + avatarInset) : (params.width - params.rightInset - layoutBubbleSize.width - layoutConstants.bubble.edgeInset - deliveryFailedInset), y: detachedContentNodesHeight + additionalTopHeight), size: layoutBubbleSize)
+                contentOrigin = CGPoint(x: backgroundFrame.origin.x + (bubbleIncoming ? layoutConstants.bubble.contentInsets.left : layoutConstants.bubble.contentInsets.right), y: backgroundFrame.origin.y + layoutConstants.bubble.contentInsets.top + headerSize.height + contentVerticalOffset)
+                contentUpperRightCorner = CGPoint(x: backgroundFrame.maxX - (bubbleIncoming ? layoutConstants.bubble.contentInsets.right : layoutConstants.bubble.contentInsets.left), y: backgroundFrame.origin.y + layoutConstants.bubble.contentInsets.top + headerSize.height)
             case .center:
                 backgroundFrame = CGRect(origin: CGPoint(x: params.leftInset + floor((availableWidth - layoutBubbleSize.width) / 2.0), y: detachedContentNodesHeight), size: layoutBubbleSize)
                 let contentOriginX: CGFloat
                 if !hideBackground {
-                    contentOriginX = (incoming ? layoutConstants.bubble.contentInsets.left : layoutConstants.bubble.contentInsets.right)
+                    contentOriginX = (bubbleIncoming ? layoutConstants.bubble.contentInsets.left : layoutConstants.bubble.contentInsets.right)
                 } else {
                     contentOriginX = floor(layoutConstants.bubble.contentInsets.right + layoutConstants.bubble.contentInsets.left) / 2.0
                 }
                 contentOrigin = CGPoint(x: backgroundFrame.minX + contentOriginX, y: backgroundFrame.minY + layoutConstants.bubble.contentInsets.top + headerSize.height + contentVerticalOffset)
-                contentUpperRightCorner = CGPoint(x: backgroundFrame.maxX - (incoming ? layoutConstants.bubble.contentInsets.right : layoutConstants.bubble.contentInsets.left), y: backgroundFrame.origin.y + layoutConstants.bubble.contentInsets.top + headerSize.height)
+                contentUpperRightCorner = CGPoint(x: backgroundFrame.maxX - (bubbleIncoming ? layoutConstants.bubble.contentInsets.right : layoutConstants.bubble.contentInsets.left), y: backgroundFrame.origin.y + layoutConstants.bubble.contentInsets.top + headerSize.height)
         }
         
         let bubbleContentWidth = maxContentWidth - layoutConstants.bubble.edgeInset * 2.0 - (layoutConstants.bubble.contentInsets.right + layoutConstants.bubble.contentInsets.left)
@@ -3997,10 +4000,11 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             forceBackgroundSide = true
         }
         let mergeType = ChatMessageBackgroundMergeType(top: updatedMergedTop == .fullyMerged, bottom: updatedMergedBottom == .fullyMerged, side: forceBackgroundSide)
+        let bubbleIncoming = incoming || item.presentationData.shadowScreenshot != nil
         let backgroundType: ChatMessageBackgroundType
         if hideBackground {
             backgroundType = .none
-        } else if !incoming {
+        } else if !bubbleIncoming {
             backgroundType = .outgoing(mergeType)
         } else {
             if case let .messageOptions(_, _, info) = item.associatedData.subject, case let .link(link) = info, link.isCentered {

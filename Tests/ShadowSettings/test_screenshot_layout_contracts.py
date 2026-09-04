@@ -53,6 +53,17 @@ class ScreenshotLayoutContracts(unittest.TestCase):
         self.assertIn('ShadowMessageScreenshotGrouping.swift', runner)
         self.assertIn('ScreenshotGroupingTests.swift', runner)
 
+    def test_export_tail_and_media_corners_share_left_geometry(self):
+        bubble = (ROOT / 'submodules/TelegramUI/Components/Chat/ChatMessageBubbleItemNode/Sources/ChatMessageBubbleItemNode.swift').read_text()
+        # Both measurement (media corner positions) and apply (bubble masks)
+        # must override geometry, without changing the actual message direction.
+        self.assertEqual(bubble.count('let bubbleIncoming = incoming || item.presentationData.shadowScreenshot != nil'), 2)
+        self.assertIn('mergedTop.merged ? (bubbleIncoming ? .Left : .Right)', bubble)
+        self.assertIn('mergedBottom.merged ? (bubbleIncoming ? .Left : .Right)', bubble)
+        self.assertIn('.None(bubbleIncoming ? .Incoming : .Outgoing)', bubble)
+        self.assertIn('} else if !bubbleIncoming {\n            backgroundType = .outgoing(mergeType)', bubble)
+        self.assertIn('backgroundFrame.origin.x + (bubbleIncoming ? layoutConstants.bubble.contentInsets.left', bubble)
+
 
 if __name__ == '__main__':
     unittest.main()
