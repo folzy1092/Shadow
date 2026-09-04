@@ -20,9 +20,11 @@ private final class AccountPresenceManagerImpl {
     private let currentRequestDisposable = MetaDisposable()
     private let lastSeenUpdateDisposable = MetaDisposable()
     private var onlineTimer: SignalKitTimer?
-    // Set only for a real online -> offline transition. Timer-driven offline
-    // reasserts and post-send reasserts must not keep moving the displayed
-    // last-seen time forward while the account remains hidden.
+    // Timestamp of a real presence exposure that should become our displayed
+    // last-seen once the server confirms that we are offline again. This is set
+    // for an explicit online -> offline transition and for the post-send trigger,
+    // because Telegram send RPCs can briefly expose the account as online.
+    // Timer-driven offline reasserts never advance it.
     private var pendingOfflineTransitionTimestamp: Int32?
     
     // AyuGram: start as "unknown" (nil) so the very first value — including a
@@ -61,12 +63,15 @@ private final class AccountPresenceManagerImpl {
         // are currently meant to be hidden/offline, re-send "offline" right away
         // (bypassing the 30s timer and the same-value `wasOnline` guard) so the
         // brief server-side online blip from the send RPC is cleared immediately.
+        // This blip is a real server-visible activity event, so remember its time
+        // and persist it only after the server confirms the following offline RPC.
         self.offlineReassertDisposable = (ayuOfflineReassertPipe.signal()
         |> deliverOn(self.queue)).start(next: { [weak self] in
             guard let self else {
                 return
             }
             if self.wasOnline != true {
+                self.pendingOfflineTransitionTimestamp = Int32(Date().timeIntervalSince1970)
                 self.updatePresence(false)
             }
         })
