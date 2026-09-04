@@ -381,10 +381,15 @@ public final class ChatTitleComponent: Component {
                 let accountId = component.context.account.id
                 self.preferUsernameForNonContacts = currentAyuGramSettings(accountId: accountId).preferUsernameForNonContacts
                 self.preferUsernameForBots = currentAyuGramSettings(accountId: accountId).preferUsernameForBots
-                self.shadowNamesDisposable.set((ayuGramSettings(postbox: component.context.account.postbox)
-                |> map { ($0.preferUsernameForNonContacts, $0.preferUsernameForBots) }
-                |> distinctUntilChanged(isEqual: { $0.0 == $1.0 && $0.1 == $1.1 })
-                |> deliverOnMainQueue).start(next: { [weak self] enabled in
+                let shadowNamesSignal: Signal<(Bool, Bool), NoError> = ayuGramSettings(postbox: component.context.account.postbox)
+                |> map { settings -> (Bool, Bool) in
+                    return (settings.preferUsernameForNonContacts, settings.preferUsernameForBots)
+                }
+                |> distinctUntilChanged(isEqual: { lhs, rhs in
+                    return lhs.0 == rhs.0 && lhs.1 == rhs.1
+                })
+                |> deliverOnMainQueue
+                self.shadowNamesDisposable.set(shadowNamesSignal.start(next: { [weak self] enabled in
                     // An initial preference emission may arrive during update.
                     DispatchQueue.main.async { [weak self] in
                         guard let self, self.component?.context.account.id == accountId,

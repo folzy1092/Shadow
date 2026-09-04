@@ -865,10 +865,15 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
             }
         }
         self.button.view.addGestureRecognizer(UILongPressGestureRecognizer(target: self, action: #selector(self.longPressGesture(_:))))
-        self.shadowNamesDisposable.set((ayuGramSettings(postbox: context.account.postbox)
-        |> map { ($0.preferUsernameForNonContacts, $0.preferUsernameForBots) }
-        |> distinctUntilChanged(isEqual: { $0.0 == $1.0 && $0.1 == $1.1 })
-        |> deliverOnMainQueue).start(next: { [weak self] enabled in
+        let shadowNamesSignal: Signal<(Bool, Bool), NoError> = ayuGramSettings(postbox: context.account.postbox)
+        |> map { settings -> (Bool, Bool) in
+            return (settings.preferUsernameForNonContacts, settings.preferUsernameForBots)
+        }
+        |> distinctUntilChanged(isEqual: { lhs, rhs in
+            return lhs.0 == rhs.0 && lhs.1 == rhs.1
+        })
+        |> deliverOnMainQueue
+        self.shadowNamesDisposable.set(shadowNamesSignal.start(next: { [weak self] enabled in
             guard let self, self.preferUsernameForNonContacts != enabled.0 || self.preferUsernameForBots != enabled.1 else { return }
             self.preferUsernameForNonContacts = enabled.0
             self.preferUsernameForBots = enabled.1
