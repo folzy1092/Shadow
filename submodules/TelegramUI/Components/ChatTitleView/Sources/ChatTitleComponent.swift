@@ -381,13 +381,16 @@ public final class ChatTitleComponent: Component {
                 let accountId = component.context.account.id
                 self.preferUsernameForNonContacts = currentAyuGramSettings(accountId: accountId).preferUsernameForNonContacts
                 self.preferUsernameForBots = currentAyuGramSettings(accountId: accountId).preferUsernameForBots
-                let shadowNamesSignal: Signal<(Bool, Bool), NoError> = ayuGramSettings(postbox: component.context.account.postbox)
+                let settingsSignal = ayuGramSettings(postbox: component.context.account.postbox)
+                let mappedSignal: Signal<(Bool, Bool), NoError> = settingsSignal
                 |> map { settings -> (Bool, Bool) in
                     return (settings.preferUsernameForNonContacts, settings.preferUsernameForBots)
                 }
+                let distinctSignal: Signal<(Bool, Bool), NoError> = mappedSignal
                 |> distinctUntilChanged(isEqual: { lhs, rhs in
                     return lhs.0 == rhs.0 && lhs.1 == rhs.1
                 })
+                let shadowNamesSignal: Signal<(Bool, Bool), NoError> = distinctSignal
                 |> deliverOnMainQueue
                 self.shadowNamesDisposable.set(shadowNamesSignal.start(next: { [weak self] enabled in
                     // An initial preference emission may arrive during update.
