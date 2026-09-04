@@ -32,9 +32,14 @@ class GhostLastSeenContracts(unittest.TestCase):
 
     def test_post_send_reassert_captures_real_server_visible_activity(self):
         reassert = PRESENCE.split("self.offlineReassertDisposable", 1)[1].split("deinit", 1)[0]
-        self.assertIn("self.pendingOfflineTransitionTimestamp = Int32(Date().timeIntervalSince1970)", reassert)
-        self.assertIn("self.updatePresence(false)", reassert)
-        self.assertIn("brief server-side online blip", reassert)
+        guard = "if self.wasOnline != true"
+        capture = "self.pendingOfflineTransitionTimestamp = Int32(Date().timeIntervalSince1970)"
+        reassert_offline = "self.updatePresence(false)"
+        self.assertIn(guard, reassert)
+        self.assertIn(capture, reassert)
+        self.assertIn(reassert_offline, reassert)
+        self.assertLess(reassert.index(guard), reassert.index(capture))
+        self.assertLess(reassert.index(capture), reassert.index(reassert_offline))
 
     def test_timer_reassert_does_not_create_a_timestamp(self):
         timer = PRESENCE.split("let timer = SignalKitTimer", 1)[1].split("self.onlineTimer = timer", 1)[0]
