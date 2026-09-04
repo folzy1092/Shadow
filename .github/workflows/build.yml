@@ -141,3 +141,94 @@ jobs:
           path: /Users/Shared/telegram-ios/build/artifacts/Telegram.ipa
           if-no-files-found: error
           retention-days: 30
+
+      - name: Notify Telegram
+        if: always()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          JOB_STATUS: ${{ job.status }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+        run: |
+          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
+            echo "Telegram secrets not set — skipping notification"
+            exit 0
+          fi
+
+          if [ "$JOB_STATUS" = "success" ]; then
+            ICON="✅"
+            HEAD="Сборка готова"
+            TAIL="IPA: артефакт Shadow-IPA-${BUILD_NUMBER} на странице прогона."
+          else
+            ICON="❌"
+            HEAD="Сборка упала"
+            TAIL="Открой лог прогона, чтобы посмотреть ошибку."
+          fi
+
+          # first line of the commit message only
+          COMMIT_FIRST_LINE="$(printf '%s' "$COMMIT_MSG" | head -n 1)"
+
+          TEXT="$(printf '%s %s\nShadow %s (build %s)\nКоммит: %s\n%s\n%s' \
+            "$ICON" "$HEAD" "$APP_VERSION" "$BUILD_NUMBER" "$COMMIT_FIRST_LINE" "$TAIL" "$RUN_URL")"
+
+          curl -sS --max-time 30 \
+            -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
+            --data-urlencode "text=${TEXT}" \
+            --data-urlencode "disable_web_page_preview=true" \
+            || echo "Telegram notification failed (non-fatal)"
+
+      - name: Notify Discord
+        if: always()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          DISCORD_PING_USER_ID: ${{ secrets.DISCORD_PING_USER_ID }}
+          JOB_STATUS: ${{ job.status }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+        run: |
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+            echo "Discord webhook secret not set — skipping notification"
+            exit 0
+          fi
+
+          if [ "$JOB_STATUS" = "success" ]; then
+            ICON="✅"
+            HEAD="Сборка готова"
+            TAIL="IPA: артефакт Shadow-IPA-${BUILD_NUMBER} на странице прогона."
+          else
+            ICON="❌"
+            HEAD="Сборка упала"
+            TAIL="Открой лог прогона, чтобы посмотреть ошибку."
+          fi
+
+          COMMIT_FIRST_LINE="$(printf '%s' "$COMMIT_MSG" | head -n 1)"
+
+          MENTION=""
+          ALLOWED_USERS="[]"
+          if [ -n "$DISCORD_PING_USER_ID" ]; then
+            MENTION="<@${DISCORD_PING_USER_ID}> "
+            ALLOWED_USERS="[\"${DISCORD_PING_USER_ID}\"]"
+          fi
+
+          CONTENT="$(printf '%s%s %s\nShadow %s (build %s)\nКоммит: %s\n%s\n%s' \
+            "$MENTION" "$ICON" "$HEAD" "$APP_VERSION" "$BUILD_NUMBER" "$COMMIT_FIRST_LINE" "$TAIL" "$RUN_URL")"
+
+          PAYLOAD="$(python3 - "$CONTENT" "$ALLOWED_USERS" <<'PY'
+          import json, sys
+          content = sys.argv[1]
+          allowed_users = json.loads(sys.argv[2])
+          print(json.dumps({
+              "username": "Shadow CI",
+              "content": content,
+              "allowed_mentions": {"users": allowed_users},
+          }))
+          PY
+          )"
+
+          curl -sS --max-time 30 \
+            -H "Content-Type: application/json" \
+            -X POST "$DISCORD_WEBHOOK_URL" \
+            -d "$PAYLOAD" \
+            || echo "Discord notification failed (non-fatal)"
