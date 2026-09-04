@@ -1,0 +1,65 @@
+name: Export ChatTitle patch
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/export-chat-title-patch.yml'
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch ChatTitle signals
+        shell: python
+        run: |
+          from pathlib import Path
+
+          paths = [
+              Path('submodules/TelegramUI/Components/ChatTitleView/Sources/ChatTitleComponent.swift'),
+              Path('submodules/TelegramUI/Components/ChatTitleView/Sources/ChatTitleView.swift'),
+          ]
+
+          old = '''let shadowNamesSignal: Signal<(Bool, Bool), NoError> = ayuGramSettings(postbox: {postbox})
+          |> map {{ settings -> (Bool, Bool) in
+              return (settings.preferUsernameForNonContacts, settings.preferUsernameForBots)
+          }}
+          |> distinctUntilChanged(isEqual: {{ lhs, rhs in
+              return lhs.0 == rhs.0 && lhs.1 == rhs.1
+          }})
+          |> deliverOnMainQueue'''
+
+          new = '''let settingsSignal = ayuGramSettings(postbox: {postbox})
+          let mappedSignal: Signal<(Bool, Bool), NoError> = settingsSignal
+          |> map {{ settings -> (Bool, Bool) in
+              return (settings.preferUsernameForNonContacts, settings.preferUsernameForBots)
+          }}
+          let distinctSignal: Signal<(Bool, Bool), NoError> = mappedSignal
+          |> distinctUntilChanged(isEqual: {{ lhs, rhs in
+              return lhs.0 == rhs.0 && lhs.1 == rhs.1
+          }})
+          let shadowNamesSignal: Signal<(Bool, Bool), NoError> = distinctSignal
+          |> deliverOnMainQueue'''
+
+          replacements = {
+              paths[0]: ('component.context.account.postbox', 16),
+              paths[1]: ('context.account.postbox', 8),
+          }
+
+          for path, (postbox, indent) in replacements.items():
+              text = path.read_text()
+              old_block = old.format(postbox=postbox)
+              new_block = new.format(postbox=postbox)
+              prefix = ' ' * indent
+              old_block = '\n'.join(prefix + line if i else prefix + line for i, line in enumerate(old_block.splitlines()))
+              new_block = '\n'.join(prefix + line if i else prefix + line for i, line in enumerate(new_block.splitlines()))
+              if old_block not in text:
+                  raise SystemExit(f'old block not found in {path}')
+              path.write_text(text.replace(old_block, new_block, 1))
+      - uses: actions/upload-artifact@v4
+        with:
+          name: patched-chat-title
+          path: |
+            submodules/TelegramUI/Components/ChatTitleView/Sources/ChatTitleComponent.swift
+            submodules/TelegramUI/Components/ChatTitleView/Sources/ChatTitleView.swift
