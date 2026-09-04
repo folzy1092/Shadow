@@ -472,6 +472,11 @@ public class ItemListDisclosureItemNode: ListViewItemNode, ItemListItemNode {
             if item.iconPeer != nil {
                 labelConstrain -= 6.0
             }
+            if case .color = item.labelStyle {
+                // Reserve room between a textual value (for example #RRGGBB)
+                // and the 17-point color preview circle.
+                labelConstrain -= 26.0
+            }
             
             switch item.labelStyle {
             case .badge:
@@ -764,6 +769,8 @@ public class ItemListDisclosureItemNode: ListViewItemNode, ItemListItemNode {
                         labelFrame = CGRect(origin: CGPoint(x: params.width - rightInset - badgeWidth + (badgeWidth - labelLayout.size.width) / 2.0, y: badgeFrame.minY + 1.0 - UIScreenPixel + floorToScreenPixels((badgeDiameter - labelLayout.size.height) / 2.0)), size: labelLayout.size)
                     case .detailText, .multilineDetailText:
                         labelFrame = CGRect(origin: CGPoint(x: leftInset, y: titleFrame.maxY + titleSpacing), size: labelLayout.size)
+                    case .color:
+                        labelFrame = CGRect(origin: CGPoint(x: params.width - rightInset - 26.0 - labelLayout.size.width, y: floorToScreenPixels((height - labelLayout.size.height) / 2.0) + 1.0), size: labelLayout.size)
                     default:
                         labelFrame = CGRect(origin: CGPoint(x: params.width - rightInset - labelLayout.size.width, y: floorToScreenPixels((height - labelLayout.size.height) / 2.0) + 1.0), size: labelLayout.size)
                     }

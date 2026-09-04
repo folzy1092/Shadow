@@ -19,6 +19,15 @@ class MessageScreenshotContracts(unittest.TestCase):
         self.assertIn('messages.count == ids.count', source)
         self.assertIn('popoverPresentationController?.barButtonItem', source)
 
+    def test_renderer_prepares_real_neighbors_for_native_merge(self):
+        source = (ROOT / 'submodules/TelegramUI/Sources/Chat/ChatControllerMessageScreenshot.swift').read_text()
+        self.assertIn('private var preparedItems: [ChatMessageItemImpl] = []', source)
+        self.assertIn('private func prepareItems() -> Bool', source)
+        self.assertNotIn('previousItem: nil, nextItem: nil', source)
+        self.assertIn('previousItem: previousItem', source)
+        self.assertIn('nextItem: nextItem', source)
+        self.assertIn('message.effectivelyIncoming(', source)
+
     def test_options_live_in_customization(self):
         source = (ROOT / 'submodules/SettingsUI/Sources/AyuGramSettingsController.swift').read_text()
         self.assertIn('case .messageScreenshot: return AyuCustomizationSection.appearance.rawValue', source)
@@ -27,6 +36,14 @@ class MessageScreenshotContracts(unittest.TestCase):
             self.assertIn('path = \\.' + key, source)
         self.assertIn('ayuGramSettings(postbox: context.account.postbox)', source)
         self.assertNotIn('UserDefaults', source)
+        self.assertIn('UIColorPickerViewController', source)
+        self.assertIn('supportsAlpha = false', source)
+        self.assertIn('colorPickerViewControllerDidSelectColor', source)
+        self.assertIn('colorPickerViewControllerDidFinish', source)
+        self.assertIn('labelStyle: .color(', source)
+        self.assertIn('customColorARGB', source)
+        self.assertNotIn('case .white', source)
+        self.assertNotIn('case .black', source)
 
     def test_native_render_dependencies_and_visibility(self):
         source = (ROOT / 'submodules/TelegramUI/Sources/Chat/ChatControllerMessageScreenshot.swift').read_text()
@@ -37,12 +54,26 @@ class MessageScreenshotContracts(unittest.TestCase):
         self.assertIn('automaticPlayback = false', block)
         self.assertIn('automaticDownload = .none', block)
 
-    def test_snapshot_is_opt_in_and_encoded(self):
+    def test_snapshot_is_opt_in_encoded_and_portable(self):
         source = (ROOT / 'submodules/TelegramPresentationData/Sources/ChatPresentationData.swift').read_text()
         self.assertIn('shadowScreenshot: ShadowMessageScreenshotSettings? = nil', source)
         core = (ROOT / 'submodules/TelegramCore/Sources/AyuGram/AyuGramSettings.swift').read_text()
         self.assertIn('decodeIfPresent(ShadowMessageScreenshotSettings.self', core)
         self.assertIn('encode(self.messageScreenshot', core)
+
+        model = (ROOT / 'submodules/TelegramCore/Sources/AyuGram/ShadowMessageScreenshotSettings.swift').read_text()
+        self.assertIn('case customColor = 2', model)
+        self.assertIn('public var customColorARGB: Int32', model)
+        self.assertIn('legacyWhiteARGB', model)
+        self.assertIn('legacyBlackARGB', model)
+
+        document = (ROOT / 'submodules/TelegramCore/Sources/AyuGram/ShadowSettingsDocument.swift').read_text()
+        transfer = (ROOT / 'submodules/TelegramCore/Sources/AyuGram/ShadowSettingsTransfer.swift').read_text()
+        self.assertIn('screenshotCustomColorARGB', document)
+        self.assertIn('screenshotCustomColorARGB', transfer)
+        self.assertIn('settings.messageScreenshot.customColorARGB', transfer)
+        self.assertIn('legacyWhiteARGB', transfer)
+        self.assertIn('legacyBlackARGB', transfer)
 
     def test_camera_is_adjacent_to_incognito_and_reacts_to_setting(self):
         source = (ROOT / 'submodules/TelegramUI/Components/Chat/ChatMessageSelectionInputPanelNode/Sources/ChatMessageSelectionInputPanelNode.swift').read_text()

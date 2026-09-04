@@ -15,6 +15,8 @@ class ScreenshotLayoutContracts(unittest.TestCase):
         self.assertIn('avatar.setPeer(context:', source)
         self.assertIn('clipStyle: .round, synchronousLoad: true, displayDimensions: size', source)
         self.assertIn('avatar.setCustomLetters(["?"])', source)
+        self.assertIn('self.width - 8.0 - size.width', source)
+        self.assertIn('incoming', source)
         self.assertLess(source.index('avatar.setPeer(context:'), source.index('self.content.addSubnode(avatar)'))
         self.assertIn('avatar.recursivelyEnsureDisplaySynchronously(true)', source)
 
@@ -27,18 +29,21 @@ class ScreenshotLayoutContracts(unittest.TestCase):
         self.assertIn('message.withUpdatedAuthor($0._asPeer())', source)
         self.assertNotIn('withUpdatedFlags', source)
 
-    def test_grouping_keeps_per_message_time(self):
+    def test_grouping_keeps_per_message_time_and_avatar_on_group_end(self):
         source = PREVIEW.read_text()
         self.assertIn('rowOptions.showNames = self.options.showNames && startsGroup', source)
-        self.assertIn('self.options.showAvatars && startsGroup', source)
+        self.assertIn('let endsGroup = self.endsGroup(at: index)', source)
+        self.assertIn('self.options.showAvatars && endsGroup', source)
         self.assertIn('previous.threadId', source)
         self.assertIn('startsGroup ? 10.0 : 2.0', source)
         self.assertIn('if !self.options.showTime { self.hideTime(in: node) }', source)
         self.assertNotIn('rowOptions.showTime =', source)
 
-    def test_native_bubbles_are_left_aligned_and_portal_free_only_in_export(self):
+    def test_native_bubbles_preserve_real_direction_and_export_stays_portal_free(self):
         source = PREVIEW.read_text()
-        self.assertIn('avatarWidth + 8.0 - contentFrame.minX', source)
+        self.assertIn('columnLeft - contentFrame.minX', source)
+        self.assertIn('columnRight - contentFrame.maxX', source)
+        self.assertIn('message.effectivelyIncoming(', source)
         self.assertIn('desktopBubbleTheme', source)
         self.assertIn('withUpdated(incoming: colors, outgoing: colors)', source)
         bubble = (ROOT / 'submodules/TelegramUI/Components/Chat/ChatMessageBubbleItemNode/Sources/ChatMessageBubbleItemNode.swift').read_text()
@@ -53,11 +58,10 @@ class ScreenshotLayoutContracts(unittest.TestCase):
         self.assertIn('ShadowMessageScreenshotGrouping.swift', runner)
         self.assertIn('ScreenshotGroupingTests.swift', runner)
 
-    def test_export_tail_and_media_corners_share_left_geometry(self):
+    def test_export_tail_and_media_corners_follow_real_direction(self):
         bubble = (ROOT / 'submodules/TelegramUI/Components/Chat/ChatMessageBubbleItemNode/Sources/ChatMessageBubbleItemNode.swift').read_text()
-        # Both measurement (media corner positions) and apply (bubble masks)
-        # must override geometry, without changing the actual message direction.
-        self.assertEqual(bubble.count('let bubbleIncoming = incoming || item.presentationData.shadowScreenshot != nil'), 2)
+        self.assertEqual(bubble.count('let bubbleIncoming = incoming'), 2)
+        self.assertNotIn('incoming || item.presentationData.shadowScreenshot != nil', bubble)
         self.assertIn('mergedTop.merged ? (bubbleIncoming ? .Left : .Right)', bubble)
         self.assertIn('mergedBottom.merged ? (bubbleIncoming ? .Left : .Right)', bubble)
         self.assertIn('.None(bubbleIncoming ? .Incoming : .Outgoing)', bubble)

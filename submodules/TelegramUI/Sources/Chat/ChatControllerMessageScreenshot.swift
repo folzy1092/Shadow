@@ -16,6 +16,16 @@ import ChatMessageItemImpl
 import ChatMessageDateAndStatusNode
 import ChatMessageBubbleItemNode
 
+private func shadowScreenshotUIColor(argb: Int32) -> UIColor {
+    let value = UInt32(bitPattern: argb)
+    return UIColor(
+        red: CGFloat((value >> 16) & 0xFF) / 255.0,
+        green: CGFloat((value >> 8) & 0xFF) / 255.0,
+        blue: CGFloat(value & 0xFF) / 255.0,
+        alpha: CGFloat((value >> 24) & 0xFF) / 255.0
+    )
+}
+
 extension ChatControllerImpl {
     func presentShadowMessageScreenshot() {
         guard !self.shadowScreenshotPreparing,
@@ -64,6 +74,7 @@ private final class ShadowMessageScreenshotPreview: UIViewController {
     private let content = ASDisplayNode()
     private var background: WallpaperBackgroundNode?
     private var imageBackground: UIImageView?
+    private var preparedItems: [ChatMessageItemImpl] = []
     private var started = false
     private var ready = false
     private let width: CGFloat = 390.0
@@ -118,10 +129,27 @@ private final class ShadowMessageScreenshotPreview: UIViewController {
         return !ShadowMessageScreenshotGrouping.continuesGroup(authorId: author?.id.toInt64(), timestamp: message.timestamp, previousAuthorId: self.author(of: previous)?.id.toInt64(), previousTimestamp: previous.timestamp, sameConversation: sameConversation)
     }
 
-    private func appendAvatar(author: EnginePeer?, y: CGFloat) {
+    private func endsGroup(at index: Int) -> Bool {
+        guard index + 1 < self.messages.count else { return true }
+        return self.startsGroup(at: index + 1, author: self.author(of: self.messages[index + 1]))
+    }
+
+    private func screenshotWallpaper() -> TelegramWallpaper {
+        switch self.options.background {
+        case .chat:
+            return self.data.theme.wallpaper
+        case .customImage:
+            return .color(0x000000)
+        case .customColor:
+            return .color(UInt32(bitPattern: self.options.customColorARGB) & 0x00FFFFFF)
+        }
+    }
+
+    private func appendAvatar(author: EnginePeer?, y: CGFloat, incoming: Bool) {
         let size = CGSize(width: 32.0, height: 32.0)
+        let x: CGFloat = incoming ? 8.0 : self.width - 8.0 - size.width
         let avatar = AvatarNode(font: Font.regular(14.0))
-        avatar.frame = CGRect(origin: CGPoint(x: 8.0, y: y), size: size)
+        avatar.frame = CGRect(origin: CGPoint(x: x, y: y), size: size)
         avatar.updateSize(size: size)
         avatar.clipsToBounds = true
         avatar.cornerRadius = size.width * 0.5
@@ -150,8 +178,8 @@ private final class ShadowMessageScreenshotPreview: UIViewController {
         self.content.backgroundColor = self.data.theme.theme.chatList.backgroundColor
 
         switch self.options.background {
-        case .white: self.content.backgroundColor = .white
-        case .black: self.content.backgroundColor = .black
+        case .customColor:
+            self.content.backgroundColor = shadowScreenshotUIColor(argb: self.options.customColorARGB)
         case .customImage:
             let url = ShadowMessageScreenshotSettings.backgroundURL(mediaBoxPath: self.context.account.postbox.mediaBox.basePath)
             if let image = UIImage(contentsOfFile: url.path) {
@@ -178,7 +206,43 @@ private final class ShadowMessageScreenshotPreview: UIViewController {
             self.fail("Своя картинка не найдена. Выбери её в Кастомизации → Скриншоты сообщений.")
             return
         }
+        guard self.prepareItems() else { return }
         self.appendMessage(at: 0)
+    }
+
+    private func prepareItems() -> Bool {
+        var items: [ChatMessageItemImpl] = []
+        items.reserveCapacity(self.messages.count)
+        let wallpaper = self.screenshotWallpaper()
+
+        for (index, message) in self.messages.enumerated() {
+            let author = self.author(of: message)
+            let startsGroup = self.startsGroup(at: index, author: author)
+            var rowOptions = self.options
+            rowOptions.showNames = self.options.showNames && startsGroup
+
+            // Render-only copy. It does not touch Postbox, direction,
+            // forwarding metadata, read status or message IDs.
+            let renderMessage = message.author == nil ? (author.map { message.withUpdatedAuthor($0._asPeer()) } ?? message) : message
+            guard let template = self.context.sharedContext.makeChatMessagePreviewItem(context: self.context, messages: [renderMessage], theme: self.messageTheme, strings: self.data.strings, wallpaper: wallpaper, fontSize: self.data.fontSize, chatBubbleCorners: self.data.chatBubbleCorners, dateTimeFormat: self.data.dateTimeFormat, nameOrder: self.data.nameDisplayOrder, forcedResourceStatus: nil, tapMessage: nil, clickThroughMessage: nil, backgroundNode: self.background, availableReactions: nil, accountPeer: nil, isCentered: false, isPreview: false, isStandalone: true, rank: nil, rankRole: nil) as? ChatMessageItemImpl else {
+                self.fail("Не удалось подготовить сообщение.")
+                return false
+            }
+            template.controllerInteraction.chatIsRotated = false
+            template.controllerInteraction.canReadHistory = false
+            var downloads = template.controllerInteraction.automaticMediaDownloadSettings
+            downloads.cellular.enabled = false
+            downloads.wifi.enabled = false
+            downloads.downloadInBackground = false
+            template.controllerInteraction.automaticMediaDownloadSettings = downloads
+
+            let itemData = ChatPresentationData(theme: ChatPresentationThemeData(theme: self.messageTheme, wallpaper: wallpaper), fontSize: self.data.fontSize, strings: self.data.strings, dateTimeFormat: self.data.dateTimeFormat, nameDisplayOrder: self.data.nameDisplayOrder, disableAnimations: true, largeEmoji: false, chatBubbleCorners: self.data.chatBubbleCorners, shadowScreenshot: rowOptions)
+            let item = ChatMessageItemImpl(presentationData: itemData, context: self.context, chatLocation: template.chatLocation, associatedData: template.associatedData, controllerInteraction: template.controllerInteraction, content: template.content, disableDate: true)
+            items.append(item)
+        }
+
+        self.preparedItems = items
+        return true
     }
 
     private func appendMessage(at index: Int) {
@@ -190,36 +254,36 @@ private final class ShadowMessageScreenshotPreview: UIViewController {
             self.updateContentLayout()
             return
         }
+        guard index < self.preparedItems.count else {
+            self.fail("Не удалось подготовить сообщение.")
+            return
+        }
+
         let message = self.messages[index]
         let author = self.author(of: message)
         let startsGroup = self.startsGroup(at: index, author: author)
+        let endsGroup = self.endsGroup(at: index)
         if index > 0 {
             self.contentHeight += startsGroup ? 10.0 : 2.0
         }
+
         var rowOptions = self.options
         rowOptions.showNames = self.options.showNames && startsGroup
-        // This is a render-only copy, not a Postbox write or a change to the
-        // message's direction, ID, forwarding information or read state.
-        let renderMessage = message.author == nil ? (author.map { message.withUpdatedAuthor($0._asPeer()) } ?? message) : message
+
+        // Match Telegram's canonical direction calculation instead of relying
+        // only on the raw Incoming flag.
+        let incoming = message.effectivelyIncoming(self.context.account.peerId)
         let avatarWidth: CGFloat = self.options.showAvatars ? 42.0 : 0.0
-        let wallpaper: TelegramWallpaper = self.options.background == .chat ? self.data.theme.wallpaper : .color(self.options.background == .white ? 0xffffff : 0x000000)
-        guard let template = self.context.sharedContext.makeChatMessagePreviewItem(context: self.context, messages: [renderMessage], theme: self.messageTheme, strings: self.data.strings, wallpaper: wallpaper, fontSize: self.data.fontSize, chatBubbleCorners: self.data.chatBubbleCorners, dateTimeFormat: self.data.dateTimeFormat, nameOrder: self.data.nameDisplayOrder, forcedResourceStatus: nil, tapMessage: nil, clickThroughMessage: nil, backgroundNode: self.background, availableReactions: nil, accountPeer: nil, isCentered: false, isPreview: false, isStandalone: true, rank: nil, rankRole: nil) as? ChatMessageItemImpl else {
-            self.fail("Не удалось подготовить сообщение."); return
-        }
-        template.controllerInteraction.chatIsRotated = false
-        template.controllerInteraction.canReadHistory = false
-        var downloads = template.controllerInteraction.automaticMediaDownloadSettings
-        downloads.cellular.enabled = false
-        downloads.wifi.enabled = false
-        downloads.downloadInBackground = false
-        template.controllerInteraction.automaticMediaDownloadSettings = downloads
-        let data = ChatPresentationData(theme: ChatPresentationThemeData(theme: self.messageTheme, wallpaper: wallpaper), fontSize: self.data.fontSize, strings: self.data.strings, dateTimeFormat: self.data.dateTimeFormat, nameDisplayOrder: self.data.nameDisplayOrder, disableAnimations: true, largeEmoji: false, chatBubbleCorners: self.data.chatBubbleCorners, shadowScreenshot: rowOptions)
-        let item = ChatMessageItemImpl(presentationData: data, context: self.context, chatLocation: template.chatLocation, associatedData: template.associatedData, controllerInteraction: template.controllerInteraction, content: template.content, disableDate: true)
+        let item = self.preparedItems[index]
+        let previousItem: ListViewItem? = index > 0 ? self.preparedItems[index - 1] : nil
+        let nextItem: ListViewItem? = index + 1 < self.preparedItems.count ? self.preparedItems[index + 1] : nil
         let params = ListViewItemLayoutParams(width: self.width - avatarWidth - 8.0, leftInset: 0.0, rightInset: 0.0, availableHeight: 1000.0)
-        item.nodeConfiguredForParams(async: { $0() }, params: params, synchronousLoads: true, previousItem: nil, nextItem: nil, completion: { [weak self] node, apply in
+
+        item.nodeConfiguredForParams(async: { $0() }, params: params, synchronousLoads: true, previousItem: previousItem, nextItem: nextItem, completion: { [weak self] node, apply in
             guard let self, self.viewIfLoaded?.window != nil else { return }
             apply().1(ListViewItemApply(isOnScreen: true))
-            let groupTop = self.contentHeight
+            let rowTop = self.contentHeight
+
             // Stickers use a separate native node without the bubble's author
             // header. Give those rows the same once-per-group name treatment.
             var header: UILabel?
@@ -229,29 +293,36 @@ private final class ShadowMessageScreenshotPreview: UIViewController {
                 label.textColor = self.messageTheme.chat.message.incoming.accentTextColor
                 label.text = author.compactDisplayTitle
                 label.lineBreakMode = .byTruncatingTail
-                label.frame = CGRect(x: avatarWidth + 8.0, y: self.contentHeight, width: params.width - 8.0, height: 20.0)
+                label.textAlignment = incoming ? .left : .right
+                let headerX: CGFloat = incoming ? avatarWidth + 8.0 : 8.0
+                label.frame = CGRect(x: headerX, y: self.contentHeight, width: params.width - 8.0, height: 20.0)
                 header = label
             }
+
             let headerHeight: CGFloat = header == nil ? 0.0 : 20.0
-            let height = max(startsGroup && self.options.showAvatars ? 32.0 : 1.0, node.contentSize.height + headerHeight)
+            let height = max(endsGroup && self.options.showAvatars ? 32.0 : 1.0, node.contentSize.height + headerHeight)
             guard ShadowMessageScreenshotSettings.renderScale(width: Double(self.width), height: Double(self.contentHeight + height + 20.0)) != nil else {
-                self.fail("Подборка слишком длинная. Выбери меньше сообщений."); return
+                self.fail("Подборка слишком длинная. Выбери меньше сообщений.")
+                return
             }
             if let header { self.content.view.addSubview(header) }
-            // Native cells retain their actual direction and media semantics.
-            // Align their content frame, not the full-width cell, to one column.
+
             let contentFrame = (node as? ChatMessageItemNodeProtocol)?.contentFrame() ?? CGRect(origin: .zero, size: node.contentSize)
-            node.frame = CGRect(x: avatarWidth + 8.0 - contentFrame.minX, y: self.contentHeight + headerHeight, width: params.width, height: node.contentSize.height)
+            let columnLeft: CGFloat = incoming ? avatarWidth + 8.0 : 8.0
+            let columnRight: CGFloat = incoming ? self.width - 8.0 : self.width - avatarWidth - 8.0
+            let nodeX: CGFloat = incoming ? columnLeft - contentFrame.minX : columnRight - contentFrame.maxX
+            node.frame = CGRect(x: nodeX, y: self.contentHeight + headerHeight, width: params.width, height: node.contentSize.height)
             self.content.addSubnode(node)
             node.isUserInteractionEnabled = false
             node.visibility = .visible(1.0, CGRect(origin: .zero, size: node.bounds.size))
             if !self.options.showTime { self.hideTime(in: node) }
-            if self.options.showAvatars && startsGroup {
-                self.appendAvatar(author: author, y: groupTop)
+            if self.options.showAvatars && endsGroup {
+                self.appendAvatar(author: author, y: rowTop + height - 32.0, incoming: incoming)
             }
             self.contentHeight += height
             self.updateContentLayout()
-            // Yield between messages to keep dismissal responsive.
+
+            // Keep layout/render sequential and yield between messages.
             DispatchQueue.main.async { [weak self] in self?.appendMessage(at: index + 1) }
         })
     }

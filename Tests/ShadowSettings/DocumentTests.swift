@@ -58,6 +58,25 @@ struct DocumentTests {
         let bots = try ShadowSettingsDocument(settings: ["preferUsernameForBots": .bool(true)])
         let restoredBots = try ShadowSettingsDocument.decode(bots.encoded())
         check(restoredBots.settings["preferUsernameForBots"] == .bool(true), "Bot names preference is portable")
+
+        let screenshotColor = Int64(Int32(bitPattern: 0xFF12AB34))
+        let screenshotDocument = try ShadowSettingsDocument(settings: [
+            "screenshotBackground": .integer(2),
+            "screenshotCustomColorARGB": .integer(screenshotColor)
+        ])
+        let restoredScreenshotDocument = try ShadowSettingsDocument.decode(screenshotDocument.encoded())
+        check(restoredScreenshotDocument.settings["screenshotBackground"] == .integer(2), "Screenshot custom-color mode is portable")
+        check(restoredScreenshotDocument.settings["screenshotCustomColorARGB"] == .integer(screenshotColor), "Screenshot custom color ARGB is portable")
+
+        let legacyBlackScreenshot = try ShadowSettingsDocument(settings: ["screenshotBackground": .integer(3)])
+        check(legacyBlackScreenshot.settings["screenshotBackground"] == .integer(3), "Legacy screenshot black background remains importable")
+        expectFailure("Screenshot ARGB above Int32") {
+            _ = try ShadowSettingsDocument(settings: ["screenshotCustomColorARGB": .integer(Int64(Int32.max) + 1)])
+        }
+        expectFailure("Screenshot ARGB below Int32") {
+            _ = try ShadowSettingsDocument(settings: ["screenshotCustomColorARGB": .integer(Int64(Int32.min) - 1)])
+        }
+
         print("Shadow settings document: \(count) checks passed")
     }
 }

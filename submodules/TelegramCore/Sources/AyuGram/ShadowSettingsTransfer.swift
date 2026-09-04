@@ -75,11 +75,19 @@ public enum ShadowSettingsTransfer {
         values["attachmentSizeLimit"] = .integer(settings.attachmentSizeLimit)
         values["bottomBarScrollMode"] = .integer(Int64(settings.bottomBarScrollMode))
         values["screenshotBackground"] = .integer(Int64(settings.messageScreenshot.background.rawValue))
+        values["screenshotCustomColorARGB"] = .integer(Int64(settings.messageScreenshot.customColorARGB))
         return try ShadowSettingsDocument(settings: values)
     }
 
     public static func applying(_ document: ShadowSettingsDocument, to current: AyuGramSettings) -> AyuGramSettings {
         var updated = current
+
+        // Handle screenshot appearance after the generic loop. Dictionary
+        // iteration order must not decide whether raw background 2 means old
+        // white or the new customColor representation.
+        var screenshotBackgroundRaw: Int32?
+        var screenshotCustomColorARGB: Int32?
+
         for (key, value) in document.settings {
             switch value {
             case let .bool(flag):
@@ -97,17 +105,59 @@ public enum ShadowSettingsTransfer {
                 case "mediaAutoCleanInterval": updated.mediaAutoCleanInterval = Int32(number)
                 case "attachmentSizeLimit": updated.attachmentSizeLimit = number
                 case "bottomBarScrollMode": updated.bottomBarScrollMode = Int32(number)
-                case "screenshotBackground": updated.messageScreenshot.background = ShadowMessageScreenshotSettings.Background(rawValue: Int32(number)) ?? .chat
+                case "screenshotBackground": screenshotBackgroundRaw = Int32(number)
+                case "screenshotCustomColorARGB": screenshotCustomColorARGB = Int32(number)
                 default: break
                 }
             }
         }
+
+        if let rawBackground = screenshotBackgroundRaw {
+            switch rawBackground {
+            case 2:
+                updated.messageScreenshot.background = .customColor
+                if let screenshotCustomColorARGB {
+                    // New export: raw 2 + explicit color.
+                    updated.messageScreenshot.customColorARGB = screenshotCustomColorARGB
+                } else {
+                    // Legacy export: raw 2 = white.
+                    updated.messageScreenshot.customColorARGB = ShadowMessageScreenshotSettings.legacyWhiteARGB
+                }
+            case 3:
+                // Legacy export: raw 3 = black.
+                updated.messageScreenshot.background = .customColor
+                updated.messageScreenshot.customColorARGB = ShadowMessageScreenshotSettings.legacyBlackARGB
+            default:
+                updated.messageScreenshot.background = ShadowMessageScreenshotSettings.Background(rawValue: rawBackground) ?? .chat
+                if let screenshotCustomColorARGB {
+                    updated.messageScreenshot.customColorARGB = screenshotCustomColorARGB
+                }
+            }
+        } else if let screenshotCustomColorARGB {
+            // A partial/newer document may carry only the color value.
+            updated.messageScreenshot.customColorARGB = screenshotCustomColorARGB
+        }
+
         return updated
     }
 
     public static func changedKeys(_ document: ShadowSettingsDocument, from current: AyuGramSettings) throws -> [String] {
         let existing = try self.document(from: current)
-        return document.settings.keys.filter { existing.settings[$0] != document.settings[$0] }.sorted()
+        var changed = document.settings.keys.filter { existing.settings[$0] != document.settings[$0] }
+
+        // Raw value 2 is ambiguous across versions. Compare the semantic result
+        // too, otherwise an old white export may look identical to a new
+        // customColor=2 setting even when applying it changes the color.
+        let applied = self.applying(document, to: current)
+        let screenshotAppearanceChanged = applied.messageScreenshot.background != current.messageScreenshot.background
+            || applied.messageScreenshot.customColorARGB != current.messageScreenshot.customColorARGB
+        if screenshotAppearanceChanged
+            && !changed.contains("screenshotBackground")
+            && !changed.contains("screenshotCustomColorARGB") {
+            changed.append("screenshotBackground")
+        }
+
+        return changed.sorted()
     }
 }
 

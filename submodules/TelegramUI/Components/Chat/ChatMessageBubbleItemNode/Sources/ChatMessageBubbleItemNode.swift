@@ -1637,9 +1637,10 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         let content = item.content
         let firstMessage = content.firstMessage
         let incoming = item.content.effectivelyIncoming(item.context.account.peerId, associatedData: item.associatedData)
-        // Export places every author on the left. Change bubble geometry only:
-        // message direction (delivery status, actions and ownership) stays intact.
-        let bubbleIncoming = incoming || item.presentationData.shadowScreenshot != nil
+        // Screenshot export keeps the real incoming/outgoing geometry. The export
+        // owns its avatar column separately; bubble side, merge corners and tail
+        // must still follow the actual message direction.
+        let bubbleIncoming = incoming
         
         let messageTheme = incoming ? item.presentationData.theme.theme.chat.message.incoming : item.presentationData.theme.theme.chat.message.outgoing
         let isEphemeralMessage = Namespaces.Message.allEphemeral.contains(firstMessage.id.namespace)
@@ -4000,7 +4001,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             forceBackgroundSide = true
         }
         let mergeType = ChatMessageBackgroundMergeType(top: updatedMergedTop == .fullyMerged, bottom: updatedMergedBottom == .fullyMerged, side: forceBackgroundSide)
-        let bubbleIncoming = incoming || item.presentationData.shadowScreenshot != nil
+        let bubbleIncoming = incoming
         let backgroundType: ChatMessageBackgroundType
         if hideBackground {
             backgroundType = .none
