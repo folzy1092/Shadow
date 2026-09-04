@@ -75,6 +75,17 @@ class MessageScreenshotContracts(unittest.TestCase):
         self.assertIn('legacyWhiteARGB', transfer)
         self.assertIn('legacyBlackARGB', transfer)
 
+    def test_reaction_icons_have_files_in_screenshot_preview(self):
+        source = (ROOT / 'submodules/TelegramUI/Sources/Chat/ChatControllerMessageScreenshot.swift').read_text()
+        self.assertIn('self.context.engine.stickers.availableReactions()', source)
+        self.assertIn('availableReactions: self.availableReactions', source)
+        self.assertIn('accountPeer: self.accountPeer?._asPeer()', source)
+        self.assertNotIn('availableReactions: nil, accountPeer: nil', source)
+
+        footer = (ROOT / 'submodules/TelegramUI/Components/Chat/ChatMessageReactionsFooterContentNode/Sources/ChatMessageReactionsFooterContentNode.swift').read_text()
+        self.assertIn('message.associatedMedia[mediaId] as? TelegramMediaFile', footer)
+        self.assertIn('centerAnimation = file', footer)
+
     def test_camera_is_adjacent_to_incognito_and_reacts_to_setting(self):
         source = (ROOT / 'submodules/TelegramUI/Components/Chat/ChatMessageSelectionInputPanelNode/Sources/ChatMessageSelectionInputPanelNode.swift').read_text()
         self.assertIn('self.screenshotButton.icon = "camera"', source)

@@ -32,11 +32,17 @@ extension ChatControllerImpl {
               let ids = self.presentationInterfaceState.interfaceState.selectionState?.selectedIds, !ids.isEmpty else { return }
         guard ids.count <= 100 else { self.shadowScreenshotError("Выбери не больше 100 сообщений."); return }
         self.shadowScreenshotPreparing = true
-        let _ = (self.context.account.postbox.transaction { transaction -> (AyuGramSettings, [EngineRawMessage], EnginePeer?) in
+        let dataSignal: Signal<(AyuGramSettings, [EngineRawMessage], EnginePeer?), NoError> = self.context.account.postbox.transaction { transaction in
             let messages = ids.compactMap { transaction.getMessage($0) }.sorted { $0.index < $1.index }
             let accountPeer = transaction.getPeer(self.context.account.peerId).map(EnginePeer.init)
             return (currentAyuGramSettings(transaction: transaction), messages, accountPeer)
-        } |> deliverOnMainQueue).start(next: { [weak self] settings, messages, accountPeer in
+        }
+        let availableReactionsSignal: Signal<AvailableReactions?, NoError> = self.context.engine.stickers.availableReactions()
+        |> take(1)
+        let combinedSignal: Signal<((AyuGramSettings, [EngineRawMessage], EnginePeer?), AvailableReactions?), NoError> = combineLatest(dataSignal, availableReactionsSignal)
+        let _ = (combinedSignal
+        |> deliverOnMainQueue).start(next: { [weak self] payload, availableReactions in
+            let (settings, messages, accountPeer) = payload
             guard let self else { return }
             self.shadowScreenshotPreparing = false
             guard settings.messageScreenshot.enabled, self.viewIfLoaded?.window != nil else { return }
@@ -52,7 +58,7 @@ extension ChatControllerImpl {
             while let next = presenter.presentedViewController { presenter = next }
             let state = self.presentationInterfaceState
             let data = ChatPresentationData(theme: ChatPresentationThemeData(theme: state.theme, wallpaper: state.chatWallpaper), fontSize: state.fontSize, strings: state.strings, dateTimeFormat: state.dateTimeFormat, nameDisplayOrder: state.nameDisplayOrder, disableAnimations: true, largeEmoji: false, chatBubbleCorners: state.bubbleCorners, shadowScreenshot: settings.messageScreenshot)
-            let preview = ShadowMessageScreenshotPreview(context: self.context, accountPeer: accountPeer, messages: messages, data: data, options: settings.messageScreenshot)
+            let preview = ShadowMessageScreenshotPreview(context: self.context, accountPeer: accountPeer, availableReactions: availableReactions, messages: messages, data: data, options: settings.messageScreenshot)
             presenter.present(UINavigationController(rootViewController: preview), animated: true)
         })
     }
@@ -66,6 +72,7 @@ extension ChatControllerImpl {
 private final class ShadowMessageScreenshotPreview: UIViewController {
     private let context: AccountContext
     private let accountPeer: EnginePeer?
+    private let availableReactions: AvailableReactions?
     private let messages: [EngineRawMessage]
     private let data: ChatPresentationData
     private let messageTheme: PresentationTheme
@@ -80,9 +87,10 @@ private final class ShadowMessageScreenshotPreview: UIViewController {
     private let width: CGFloat = 390.0
     private var contentHeight: CGFloat = 12.0
 
-    init(context: AccountContext, accountPeer: EnginePeer?, messages: [EngineRawMessage], data: ChatPresentationData, options: ShadowMessageScreenshotSettings) {
+    init(context: AccountContext, accountPeer: EnginePeer?, availableReactions: AvailableReactions?, messages: [EngineRawMessage], data: ChatPresentationData, options: ShadowMessageScreenshotSettings) {
         self.context = context
         self.accountPeer = accountPeer
+        self.availableReactions = availableReactions
         self.messages = messages
         self.data = data
         self.messageTheme = Self.desktopBubbleTheme(data.theme.theme)
@@ -224,7 +232,7 @@ private final class ShadowMessageScreenshotPreview: UIViewController {
             // Render-only copy. It does not touch Postbox, direction,
             // forwarding metadata, read status or message IDs.
             let renderMessage = message.author == nil ? (author.map { message.withUpdatedAuthor($0._asPeer()) } ?? message) : message
-            guard let template = self.context.sharedContext.makeChatMessagePreviewItem(context: self.context, messages: [renderMessage], theme: self.messageTheme, strings: self.data.strings, wallpaper: wallpaper, fontSize: self.data.fontSize, chatBubbleCorners: self.data.chatBubbleCorners, dateTimeFormat: self.data.dateTimeFormat, nameOrder: self.data.nameDisplayOrder, forcedResourceStatus: nil, tapMessage: nil, clickThroughMessage: nil, backgroundNode: self.background, availableReactions: nil, accountPeer: nil, isCentered: false, isPreview: false, isStandalone: true, rank: nil, rankRole: nil) as? ChatMessageItemImpl else {
+            guard let template = self.context.sharedContext.makeChatMessagePreviewItem(context: self.context, messages: [renderMessage], theme: self.messageTheme, strings: self.data.strings, wallpaper: wallpaper, fontSize: self.data.fontSize, chatBubbleCorners: self.data.chatBubbleCorners, dateTimeFormat: self.data.dateTimeFormat, nameOrder: self.data.nameDisplayOrder, forcedResourceStatus: nil, tapMessage: nil, clickThroughMessage: nil, backgroundNode: self.background, availableReactions: self.availableReactions, accountPeer: self.accountPeer?._asPeer(), isCentered: false, isPreview: false, isStandalone: true, rank: nil, rankRole: nil) as? ChatMessageItemImpl else {
                 self.fail("Не удалось подготовить сообщение.")
                 return false
             }

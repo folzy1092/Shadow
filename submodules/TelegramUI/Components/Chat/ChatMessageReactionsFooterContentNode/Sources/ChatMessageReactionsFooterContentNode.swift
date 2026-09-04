@@ -158,6 +158,10 @@ public final class MessageReactionButtonsNode: ASDisplayNode {
                 }
             case let .custom(fileId):
                 animationFileId = fileId
+                let mediaId = EngineMedia.Id(namespace: Namespaces.Media.CloudFile, id: fileId)
+                if let file = message.associatedMedia[mediaId] as? TelegramMediaFile {
+                    centerAnimation = file
+                }
             case .stars:
                 hadStars = true
                 if let availableReactions = availableReactions {
