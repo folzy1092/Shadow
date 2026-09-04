@@ -28,6 +28,9 @@ def main():
         ], check=True)
         sources = [
             ROOT / 'submodules/Postbox/Sources/Coding.swift',
+            # Coding.swift calls postboxLog when decoding fails. Include the
+            # production logger even though the positive tests do not log.
+            ROOT / 'submodules/Postbox/Sources/PostboxLogging.swift',
             ROOT / 'submodules/Postbox/Sources/ValueBoxKey.swift',
         ]
         for kind in ('Encoder', 'Decoder'):
