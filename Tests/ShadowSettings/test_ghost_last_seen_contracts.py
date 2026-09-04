@@ -24,17 +24,23 @@ class GhostLastSeenContracts(unittest.TestCase):
         self.assertIn("private let postbox: Postbox", PRESENCE)
         self.assertIn("updateAyuGramSettings(postbox: self.postbox)", PRESENCE)
 
-    def test_only_a_real_online_to_offline_transition_starts_capture(self):
+    def test_real_online_to_offline_transition_starts_capture(self):
         transition = PRESENCE.split("let previousValue = self.wasOnline", 1)[1].split("self.updatePresence(value)", 1)[0]
         self.assertIn("previousValue == true", transition)
         self.assertIn("pendingOfflineTransitionTimestamp", transition)
         self.assertNotIn("previousValue == nil", transition)
 
-    def test_reasserts_do_not_advance_the_timestamp(self):
+    def test_post_send_reassert_captures_real_server_visible_activity(self):
         reassert = PRESENCE.split("self.offlineReassertDisposable", 1)[1].split("deinit", 1)[0]
+        self.assertIn("self.pendingOfflineTransitionTimestamp = Int32(Date().timeIntervalSince1970)", reassert)
         self.assertIn("self.updatePresence(false)", reassert)
-        self.assertNotIn("pendingOfflineTransitionTimestamp =", reassert)
-        self.assertEqual(PRESENCE.count("pendingOfflineTransitionTimestamp = Int32(Date().timeIntervalSince1970)"), 1)
+        self.assertIn("brief server-side online blip", reassert)
+
+    def test_timer_reassert_does_not_create_a_timestamp(self):
+        timer = PRESENCE.split("let timer = SignalKitTimer", 1)[1].split("self.onlineTimer = timer", 1)[0]
+        self.assertIn("strongSelf.updatePresence(isOnline)", timer)
+        self.assertNotIn("pendingOfflineTransitionTimestamp", timer)
+        self.assertEqual(PRESENCE.count("pendingOfflineTransitionTimestamp = Int32(Date().timeIntervalSince1970)"), 2)
 
     def test_only_a_confirmed_offline_rpc_is_saved(self):
         response = PRESENCE.split("start(next:", 1)[1].split("completed:", 1)[0]
