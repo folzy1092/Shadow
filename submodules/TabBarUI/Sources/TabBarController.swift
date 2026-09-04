@@ -77,9 +77,9 @@ open class TabBarControllerImpl: ViewController, TabBarController {
         self.scrollState.beginGesture()
     }
 
-    public func tabBarScrollChanged(translation: CGFloat, from controller: ViewController) {
+    public func tabBarScrollChanged(translation: CGFloat, atTop: Bool, from controller: ViewController) {
         guard self.acceptsScroll(from: controller) else { return }
-        self.scrollState.updateGesture(translation: Double(translation))
+        self.scrollState.updateGesture(translation: Double(translation), atTop: atTop)
         self.applyScrollVisibility(transition: self.scrollTransition)
     }
 

@@ -4,6 +4,7 @@ public enum TabBarScrollMode: Int32 {
     case alwaysVisible = 0
     case hideOnScroll = 1
     case hideWhileScrolling = 2
+    case hideOnAnyScroll = 3
 }
 
 // Desired visibility, independent of UIKit animation and content insets. Using
@@ -32,7 +33,13 @@ public struct TabBarScrollState {
         self.accumulated = 0.0
     }
 
-    public mutating func updateGesture(translation: Double) {
+    public mutating func updateGesture(translation: Double, atTop: Bool = false) {
+        // Keep the existing top-edge reveal in directional modes. In the
+        // bidirectional mode, even a top-edge bounce stays hidden until stop.
+        if atTop && self.mode != .hideOnAnyScroll {
+            self.reset()
+            return
+        }
         guard self.mode != .alwaysVisible, translation.isFinite else { return }
         guard let previous = self.previousTranslation else {
             // A reset (e.g. overscroll at the top) can happen mid-gesture.
@@ -44,6 +51,10 @@ public struct TabBarScrollState {
         // Finger moving upward means scrolling down through the chat list.
         let delta = previous - translation
         guard delta != 0.0 else { return }
+        if self.mode == .hideOnAnyScroll {
+            self.isHidden = true
+            return
+        }
         if (delta > 0.0) != (self.accumulated > 0.0) { self.accumulated = 0.0 }
         self.accumulated += delta
         if !self.isHidden && self.accumulated >= 20.0 {
@@ -58,6 +69,6 @@ public struct TabBarScrollState {
     public mutating func endScrolling() {
         self.previousTranslation = nil
         self.accumulated = 0.0
-        if self.mode == .hideWhileScrolling { self.isHidden = false }
+        if self.mode == .hideWhileScrolling || self.mode == .hideOnAnyScroll { self.isHidden = false }
     }
 }

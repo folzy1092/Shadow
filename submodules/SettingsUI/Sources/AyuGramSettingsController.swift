@@ -55,6 +55,7 @@ private func shadowBottomBarScrollLabel(_ mode: Int32) -> String {
     switch mode {
     case 1: return "Скрывать при прокрутке вниз"
     case 2: return "Скрывать и показывать при остановке"
+    case 3: return "Скрывать при прокрутке вверх и вниз"
     default: return "Всегда показывать"
     }
 }
@@ -633,7 +634,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
                 arguments.updateCompactBottomBar(value)
             })
         case .bottomBarFooter:
-            return ItemListTextItem(presentationData: presentationData, text: .plain("«Папки снизу» показывают папки чатов над нижней панелью. «Убрать поиск снизу» скрывает нижнюю кнопку поиска, чтобы поиск не дублировался (верхняя строка поиска не затрагивается). «Уменьшить интерфейс снизу» делает нижнюю панель компактнее. Все три переключателя работают независимо."), sectionId: self.section)
+            return ItemListTextItem(presentationData: presentationData, text: .plain("«Папки снизу» показывают папки чатов над нижней панелью. «Убрать поиск снизу» скрывает нижнюю кнопку поиска, чтобы поиск не дублировался (верхняя строка поиска не затрагивается). «Уменьшить интерфейс снизу» делает нижнюю панель компактнее. Все три переключателя работают независимо. Режим «Скрывать при прокрутке вверх и вниз» возвращает панель после полной остановки списка, включая инерцию."), sectionId: self.section)
         case .profilesHeader:
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "ПРОФИЛЬ", sectionId: self.section)
         case let .showProfileId(value):
@@ -865,7 +866,7 @@ private func ayuCustomizationController(context: AccountContext, focus: ShadowSe
         selectBottomBarScrollMode: {
             let data = context.sharedContext.currentPresentationData.with { $0 }
             let sheet = ActionSheetController(presentationData: data)
-            let items: [ActionSheetItem] = (0...2).map { mode in
+            let items: [ActionSheetItem] = (0...3).map { mode in
                 ActionSheetButtonItem(title: shadowBottomBarScrollLabel(Int32(mode)), action: { [weak sheet] in
                     sheet?.dismissAnimated()
                     ayuUpdateSettings(context: context) { var settings = $0; settings.bottomBarScrollMode = Int32(mode); return settings }

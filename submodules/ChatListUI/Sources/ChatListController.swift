@@ -103,8 +103,8 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         (self.parent as? TabBarController)?.tabBarScrollBegan(from: self)
     }
 
-    func shadowBarScrollChanged(translation: CGFloat) {
-        (self.parent as? TabBarController)?.tabBarScrollChanged(translation: translation, from: self)
+    func shadowBarScrollChanged(translation: CGFloat, atTop: Bool) {
+        (self.parent as? TabBarController)?.tabBarScrollChanged(translation: translation, atTop: atTop, from: self)
     }
 
     func shadowBarScrollEnded() {

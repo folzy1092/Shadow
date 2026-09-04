@@ -1344,6 +1344,14 @@ public final class ChatListNode: ListViewImpl {
     public private(set) var pinnedScrollFraction: CGFloat = 0.0
     public var pinnedHeaderDisplayFractionUpdated: ((ContainedViewLayoutTransition) -> Void)?
     public var contentScrollingEnded: ((ListView) -> Bool)?
+
+    // A search/story header snap continues after didEndScrolling. The base
+    // ListView has no animation-end handler; its delegate proxy forwards this
+    // optional callback here so the bar is revealed only once the snap settles.
+    @objc public func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
+        guard !self.isTracking && !self.isDragging && !self.isDeceleratingAfterTracking else { return }
+        let _ = self.contentScrollingEnded?(self)
+    }
     public var didBeginInteractiveDragging: ((ListView) -> Void)?
     
     public var isEmptyUpdated: ((ChatListNodeEmptyState, Bool, ContainedViewLayoutTransition) -> Void)?

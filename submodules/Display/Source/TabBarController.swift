@@ -26,7 +26,7 @@ public protocol TabBarController: ViewController {
     
     func updateControllerLayout(controller: ViewController)
     func tabBarScrollBegan(from controller: ViewController)
-    func tabBarScrollChanged(translation: CGFloat, from controller: ViewController)
+    func tabBarScrollChanged(translation: CGFloat, atTop: Bool, from controller: ViewController)
     func tabBarScrollEnded(from controller: ViewController)
     func revealScrollingTabBar(from controller: ViewController)
 }
@@ -34,7 +34,7 @@ public protocol TabBarController: ViewController {
 // Other tab bar implementations can retain their existing behavior.
 public extension TabBarController {
     func tabBarScrollBegan(from controller: ViewController) {}
-    func tabBarScrollChanged(translation: CGFloat, from controller: ViewController) {}
+    func tabBarScrollChanged(translation: CGFloat, atTop: Bool, from controller: ViewController) {}
     func tabBarScrollEnded(from controller: ViewController) {}
     func revealScrollingTabBar(from controller: ViewController) {}
 }

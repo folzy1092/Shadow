@@ -29,7 +29,7 @@ enum ShadowSettingsSearchIndex {
     static let items: [ShadowSettingsSearchItem] = [
         ShadowSettingsSearchItem(destination: .customization, entryId: 95, title: "@username для ботов", description: "Также для ботов. Доступно после включения @username вместо имени незнакомых. По умолчанию выключено.", keywords: "username юзернейм бот bot имя", parentEntryId: 94),
         ShadowSettingsSearchItem(destination: .customization, entryId: 94, title: "@username вместо имени незнакомых", description: "В списке чатов, заголовке, профиле и подписях сообщений. Сохранённые контакты не меняются.", keywords: "username юзернейм юз ник name contacts"),
-        ShadowSettingsSearchItem(destination: .customization, entryId: 92, title: "Скрытие нижней панели", description: "Только в списке чатов. Вверх или тап снизу возвращает панель.", keywords: "auto hide bottom tab bar scroll прокрутка"),
+        ShadowSettingsSearchItem(destination: .customization, entryId: 92, title: "Скрытие нижней панели", description: "В списке чатов: скрывать вниз или в обе стороны до полной остановки.", keywords: "auto hide bottom tab bar scroll прокрутка"),
         ShadowSettingsSearchItem(destination: .customization, entryId: 1, title: "Секунды в метках времени", description: "Время сообщений с секундами", keywords: "message seconds timestamp"),
         ShadowSettingsSearchItem(destination: .customization, entryId: 2, title: "Значок вместо «Изменено»", description: "Иконка отредактированного сообщения", keywords: "edited pencil"),
         ShadowSettingsSearchItem(destination: .customization, entryId: 90, title: "Свой значок правки", description: "Текст или эмодзи вместо метки правки", keywords: "edited icon marker"),

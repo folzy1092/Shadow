@@ -51,7 +51,10 @@ struct DocumentTests {
         check(marker.settings.count == 1, "64-character marker is accepted")
         let scroll = try ShadowSettingsDocument(settings: ["bottomBarScrollMode": .integer(2)])
         check(scroll.settings["bottomBarScrollMode"] == .integer(2), "Scroll mode is portable")
-        expectFailure("Unsupported scroll mode") { _ = try ShadowSettingsDocument(settings: ["bottomBarScrollMode": .integer(3)]) }
+        let bothDirections = try ShadowSettingsDocument(settings: ["bottomBarScrollMode": .integer(3)])
+        let restoredScroll = try ShadowSettingsDocument.decode(bothDirections.encoded())
+        check(restoredScroll.settings["bottomBarScrollMode"] == .integer(3), "Bidirectional scroll mode is portable")
+        expectFailure("Unsupported scroll mode") { _ = try ShadowSettingsDocument(settings: ["bottomBarScrollMode": .integer(4)]) }
         let bots = try ShadowSettingsDocument(settings: ["preferUsernameForBots": .bool(true)])
         let restoredBots = try ShadowSettingsDocument.decode(bots.encoded())
         check(restoredBots.settings["preferUsernameForBots"] == .bool(true), "Bot names preference is portable")

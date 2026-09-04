@@ -106,7 +106,7 @@ public struct ShadowSettingsDocument: Codable, Equatable {
             case let .text(text) where textKeys.contains(key) && text.count <= 64: break
             case let .integer(number) where key == "mediaAutoCleanInterval" && ageIntervals.contains(number): break
             case let .integer(number) where key == "attachmentSizeLimit" && sizeLimits.contains(number): break
-            case let .integer(number) where key == "bottomBarScrollMode" && (0...2).contains(number): break
+            case let .integer(number) where key == "bottomBarScrollMode" && (0...3).contains(number): break
             case let .integer(number) where key == "screenshotBackground" && (0...3).contains(number): break
             default: throw ShadowSettingsTransferError.invalidValue(key)
             }

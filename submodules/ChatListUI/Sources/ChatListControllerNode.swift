@@ -2238,10 +2238,14 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
     
     private func contentOffsetChanged(offset: ListViewVisibleContentOffset, listView: ListView, isPrimary: Bool) {
         if isPrimary && self.inlineStackContainerNode == nil {
+            let atTop: Bool
             if case let .known(value) = offset, value <= 0.0 {
-                self.controller?.shadowRevealScrollingBar()
-            } else if listView.isTracking {
-                self.controller?.shadowBarScrollChanged(translation: listView.scroller.panGestureRecognizer.translation(in: listView.view).y)
+                atTop = true
+            } else {
+                atTop = false
+            }
+            if listView.isTracking || atTop {
+                self.controller?.shadowBarScrollChanged(translation: listView.scroller.panGestureRecognizer.translation(in: listView.view).y, atTop: atTop)
             }
         }
         guard let containerLayout = self.containerLayout else {
@@ -2372,7 +2376,12 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
     }
     
     private func contentScrollingEnded(listView: ListView, isPrimary: Bool) -> Bool {
-        if isPrimary && self.inlineStackContainerNode == nil { self.controller?.shadowBarScrollEnded() }
+        var continuesScrolling = false
+        defer {
+            if !continuesScrolling && isPrimary && self.inlineStackContainerNode == nil {
+                self.controller?.shadowBarScrollEnded()
+            }
+        }
         if !isPrimary || self.inlineStackContainerNode == nil {
         } else {
             return false
@@ -2386,18 +2395,18 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
             let searchScrollOffset = clippedScrollOffset
             if searchScrollOffset > 0.0 && searchScrollOffset < ChatListNavigationBar.searchScrollHeight {
                 if searchScrollOffset < ChatListNavigationBar.searchScrollHeight * 0.5 {
-                    let _ = listView.scrollToOffsetFromTop(0.0, animated: true)
+                    continuesScrolling = listView.scrollToOffsetFromTop(0.0, animated: true)
                 } else {
-                    let _ = listView.scrollToOffsetFromTop(ChatListNavigationBar.searchScrollHeight, animated: true)
+                    continuesScrolling = listView.scrollToOffsetFromTop(ChatListNavigationBar.searchScrollHeight, animated: true)
                 }
-                return true
+                return continuesScrolling
             } else if clippedScrollOffset < 0.0 && clippedScrollOffset > -listView.tempTopInset {
                 if navigationBarComponentView.storiesUnlocked {
-                    let _ = listView.scrollToOffsetFromTop(-listView.tempTopInset, animated: true)
+                    continuesScrolling = listView.scrollToOffsetFromTop(-listView.tempTopInset, animated: true)
                 } else {
-                    let _ = listView.scrollToOffsetFromTop(0.0, animated: true)
+                    continuesScrolling = listView.scrollToOffsetFromTop(0.0, animated: true)
                 }
-                return true
+                return continuesScrolling
             }
         }
         

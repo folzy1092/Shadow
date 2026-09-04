@@ -81,7 +81,7 @@ private struct UnknownBackground: Encodable {
                 envelope.ghostMode = Int32((flags >> 5) & 1)
                 envelope.preferUsernameForNonContacts = Int32((flags >> 1) & 1)
                 envelope.preferUsernameForBots = Int32((flags >> 2) & 1)
-                envelope.bottomBarScrollMode = Int32(flags % 3)
+                envelope.bottomBarScrollMode = Int32(flags % 4)
                 envelope.ghostLastSeenTimestamp = Int32(1_700_000_000 + flags)
                 precondition(decodedEntry(SettingsEnvelope.self, encodedEntry(envelope)) == envelope)
             }

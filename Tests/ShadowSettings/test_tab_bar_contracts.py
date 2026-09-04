@@ -10,7 +10,7 @@ SETTINGS = (ROOT / 'submodules/TelegramCore/Sources/AyuGram/AyuGramSettings.swif
 class TabBarContracts(unittest.TestCase):
     def test_setting_decodes_old_snapshots_safely(self):
         self.assertIn('decodeIfPresent(Int32.self, forKey: "bottomBarScrollMode") ?? 0', SETTINGS)
-        self.assertIn('(0...2).contains(bottomBarScrollMode)', SETTINGS)
+        self.assertIn('(0...3).contains(bottomBarScrollMode)', SETTINGS)
         self.assertIn('encode(self.bottomBarScrollMode, forKey: "bottomBarScrollMode")', SETTINGS)
 
     def test_scroll_requires_registered_current_controller(self):
@@ -20,7 +20,8 @@ class TabBarContracts(unittest.TestCase):
 
     def test_motion_comes_from_gesture_not_layout_offset(self):
         self.assertIn('panGestureRecognizer.translation(in: listView.view).y', NODE)
-        self.assertIn('else if listView.isTracking', NODE)
+        self.assertIn('if listView.isTracking || atTop', NODE)
+        self.assertIn('atTop: atTop', BAR)
         self.assertIn('isPrimary && self.inlineStackContainerNode == nil', NODE)
 
     def test_manual_hiding_is_separate(self):
@@ -44,6 +45,23 @@ class TabBarContracts(unittest.TestCase):
         model = (ROOT / 'submodules/Display/Source/TabBarScrollState.swift').read_text()
         for token in ['UIKit', 'UserDefaults', 'Postbox', 'frame', 'setControllers']:
             self.assertNotIn(token, model.replace('independent of UIKit animation', 'independent of animation'))
+
+    def test_bidirectional_mode_is_selectable_and_portable(self):
+        ui = (ROOT / 'submodules/SettingsUI/Sources/AyuGramSettingsController.swift').read_text()
+        document = (ROOT / 'submodules/TelegramCore/Sources/AyuGram/ShadowSettingsDocument.swift').read_text()
+        self.assertIn('case 3: return "Скрывать при прокрутке вверх и вниз"', ui)
+        self.assertIn('(0...3).map', ui)
+        self.assertEqual(SETTINGS.count('(0...3).contains(bottomBarScrollMode)'), 2)
+        self.assertIn('key == "bottomBarScrollMode" && (0...3).contains(number)', document)
+
+    def test_reveal_waits_for_header_snap_animation(self):
+        ended = NODE.split('private func contentScrollingEnded(', 1)[1].split('private func pinnedHeaderDisplayFractionUpdated', 1)[0]
+        self.assertIn('if !continuesScrolling && isPrimary', ended)
+        self.assertIn('continuesScrolling = listView.scrollToOffsetFromTop', ended)
+        chat_list = (ROOT / 'submodules/ChatListUI/Sources/Node/ChatListNode.swift').read_text()
+        animation = chat_list.split('func scrollViewDidEndScrollingAnimation(', 1)[1].split('\n    }', 1)[0]
+        self.assertIn('!self.isTracking && !self.isDragging && !self.isDeceleratingAfterTracking', animation)
+        self.assertIn('self.contentScrollingEnded?(self)', animation)
 
 
 if __name__ == '__main__':

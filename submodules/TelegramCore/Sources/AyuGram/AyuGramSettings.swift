@@ -396,7 +396,7 @@ public struct AyuGramSettings: Codable, Equatable {
         self.foldersAtBottom = foldersAtBottom
         self.hideBottomSearch = hideBottomSearch
         self.compactBottomBar = compactBottomBar
-        self.bottomBarScrollMode = (0...2).contains(bottomBarScrollMode) ? bottomBarScrollMode : 0
+        self.bottomBarScrollMode = (0...3).contains(bottomBarScrollMode) ? bottomBarScrollMode : 0
         self.allowSaveRestrictedContent = allowSaveRestrictedContent
         self.roundVideoUseBackCamera = roundVideoUseBackCamera
         self.showCameraTile = showCameraTile
@@ -458,7 +458,7 @@ public struct AyuGramSettings: Codable, Equatable {
         self.hideBottomSearch = ((try container.decodeIfPresent(Int32.self, forKey: "hideBottomSearch")) ?? 0) != 0
         self.compactBottomBar = ((try container.decodeIfPresent(Int32.self, forKey: "compactBottomBar")) ?? 0) != 0
         let bottomBarScrollMode = try container.decodeIfPresent(Int32.self, forKey: "bottomBarScrollMode") ?? 0
-        self.bottomBarScrollMode = (0...2).contains(bottomBarScrollMode) ? bottomBarScrollMode : 0
+        self.bottomBarScrollMode = (0...3).contains(bottomBarScrollMode) ? bottomBarScrollMode : 0
         self.allowSaveRestrictedContent = ((try container.decodeIfPresent(Int32.self, forKey: "allowSaveRestrictedContent")) ?? 1) != 0
         self.roundVideoUseBackCamera = ((try container.decodeIfPresent(Int32.self, forKey: "roundVideoUseBackCamera")) ?? 0) != 0
         self.showCameraTile = ((try container.decodeIfPresent(Int32.self, forKey: "showCameraTile")) ?? 1) != 0
