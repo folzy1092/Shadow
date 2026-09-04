@@ -35,6 +35,7 @@ public final class ChatPresentationData {
     public let isPreview: Bool
     public let shadowScreenshot: ShadowMessageScreenshotSettings?
     public let preferUsernameForNonContacts: Bool
+    public let preferUsernameForBots: Bool
     public let wideChannelPosts: Bool
     
     public let messageFont: UIFont
@@ -45,7 +46,7 @@ public final class ChatPresentationData {
     public let messageFixedFont: UIFont
     public let messageBlockQuoteFont: UIFont
     
-    public init(theme: ChatPresentationThemeData, fontSize: PresentationFontSize, strings: PresentationStrings, dateTimeFormat: PresentationDateTimeFormat, nameDisplayOrder: PresentationPersonNameOrder, disableAnimations: Bool, largeEmoji: Bool, chatBubbleCorners: PresentationChatBubbleCorners, animatedEmojiScale: CGFloat = 1.0, isPreview: Bool = false, shadowScreenshot: ShadowMessageScreenshotSettings? = nil, preferUsernameForNonContacts: Bool = false, wideChannelPosts: Bool = false) {
+    public init(theme: ChatPresentationThemeData, fontSize: PresentationFontSize, strings: PresentationStrings, dateTimeFormat: PresentationDateTimeFormat, nameDisplayOrder: PresentationPersonNameOrder, disableAnimations: Bool, largeEmoji: Bool, chatBubbleCorners: PresentationChatBubbleCorners, animatedEmojiScale: CGFloat = 1.0, isPreview: Bool = false, shadowScreenshot: ShadowMessageScreenshotSettings? = nil, preferUsernameForNonContacts: Bool = false, preferUsernameForBots: Bool = false, wideChannelPosts: Bool = false) {
         self.theme = theme
         self.fontSize = fontSize
         self.strings = strings
@@ -57,6 +58,7 @@ public final class ChatPresentationData {
         self.isPreview = isPreview
         self.shadowScreenshot = shadowScreenshot
         self.preferUsernameForNonContacts = preferUsernameForNonContacts
+        self.preferUsernameForBots = preferUsernameForBots
         self.wideChannelPosts = wideChannelPosts
         
         let baseFontSize = fontSize.baseDisplaySize
@@ -85,6 +87,7 @@ public final class ChatPresentationData {
             isPreview: self.isPreview,
             shadowScreenshot: self.shadowScreenshot,
             preferUsernameForNonContacts: self.preferUsernameForNonContacts,
+            preferUsernameForBots: self.preferUsernameForBots,
             wideChannelPosts: self.wideChannelPosts
         )
     }

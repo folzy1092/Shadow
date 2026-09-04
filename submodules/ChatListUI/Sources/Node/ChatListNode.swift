@@ -3192,13 +3192,13 @@ public final class ChatListNode: ListViewImpl {
         }
         self.view.addGestureRecognizer(selectionRecognizer)
         self.shadowNamesDisposable.set((ayuGramSettings(postbox: context.account.postbox)
-        |> map { $0.preferUsernameForNonContacts }
-        |> distinctUntilChanged
+        |> map { ($0.preferUsernameForNonContacts, $0.preferUsernameForBots) }
+        |> distinctUntilChanged(isEqual: { $0.0 == $1.0 && $0.1 == $1.1 })
         |> deliverOnMainQueue).start(next: { [weak self] enabled in
-            guard let self, self.currentState.presentationData.preferUsernameForNonContacts != enabled else { return }
+            guard let self, self.currentState.presentationData.preferUsernameForNonContacts != enabled.0 || self.currentState.presentationData.preferUsernameForBots != enabled.1 else { return }
             self.updateState { state in
                 var state = state
-                state.presentationData = state.presentationData.withPreferUsernameForNonContacts(enabled)
+                state.presentationData = state.presentationData.withPreferUsernameForNonContacts(enabled.0, botsEnabled: enabled.1)
                 return state
             }
         }))
@@ -3324,7 +3324,7 @@ public final class ChatListNode: ListViewImpl {
             
             self.updateState { state in
                 var state = state
-                state.presentationData = ChatListPresentationData(theme: theme, fontSize: fontSize, strings: strings, dateTimeFormat: dateTimeFormat, nameSortOrder: nameSortOrder, nameDisplayOrder: nameDisplayOrder, disableAnimations: disableAnimations, preferUsernameForNonContacts: state.presentationData.preferUsernameForNonContacts)
+                state.presentationData = ChatListPresentationData(theme: theme, fontSize: fontSize, strings: strings, dateTimeFormat: dateTimeFormat, nameSortOrder: nameSortOrder, nameDisplayOrder: nameDisplayOrder, disableAnimations: disableAnimations, preferUsernameForNonContacts: state.presentationData.preferUsernameForNonContacts, preferUsernameForBots: state.presentationData.preferUsernameForBots)
                 return state
             }
         }

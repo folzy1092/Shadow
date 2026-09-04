@@ -2475,7 +2475,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 // The history's contact set describes actual authors, not an
                 // arbitrary forwarded identity or a custom author override.
                 let authorIsContact: Bool? = effectiveAuthor.id == firstMessage.author?.id ? item.associatedData.contactsPeerIds.contains(effectiveAuthor.id) : nil
-                authorNameString = EnginePeer(effectiveAuthor).shadowDisplayTitle(strings: item.presentationData.strings, displayOrder: item.presentationData.nameDisplayOrder, accountPeerId: item.context.account.peerId, isContact: authorIsContact, enabled: item.presentationData.preferUsernameForNonContacts)
+                authorNameString = EnginePeer(effectiveAuthor).shadowDisplayTitle(strings: item.presentationData.strings, displayOrder: item.presentationData.nameDisplayOrder, accountPeerId: item.context.account.peerId, isContact: authorIsContact, enabled: item.presentationData.preferUsernameForNonContacts, botsEnabled: item.presentationData.preferUsernameForBots)
                 
                 let nameColors: PeerNameColors.Colors
                 switch effectiveAuthor.nameColor {

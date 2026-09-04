@@ -2595,12 +2595,12 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
                 let previousData = strongSelf.currentPresentationData
                 let textSettingsChanged = previousData.fontSize != presentationData.chatFontSize || previousData.nameDisplayOrder != presentationData.nameDisplayOrder || previousData.dateTimeFormat != presentationData.dateTimeFormat || previousData.largeEmoji != presentationData.largeEmoji || previousData.chatBubbleCorners != presentationData.chatBubbleCorners
                 
-                let shadowLayoutChanged = previousData.preferUsernameForNonContacts != shadowSettings.preferUsernameForNonContacts || previousData.wideChannelPosts != shadowSettings.wideChannelPosts
+                let shadowLayoutChanged = previousData.preferUsernameForNonContacts != shadowSettings.preferUsernameForNonContacts || previousData.preferUsernameForBots != shadowSettings.preferUsernameForBots || previousData.wideChannelPosts != shadowSettings.wideChannelPosts
                 if !didSetPresentationData || previousTheme.theme !== presentationData.theme || previousStrings !== presentationData.strings || previousWallpaper != presentationData.chatWallpaper || previousAnimatedEmojiScale != animatedEmojiConfig.scale || textSettingsChanged || shadowLayoutChanged {
                     didSetPresentationData = true
                     
                     let themeData = ChatPresentationThemeData(theme: presentationData.theme, wallpaper: presentationData.chatWallpaper)
-                    let chatPresentationData = ChatPresentationData(theme: themeData, fontSize: presentationData.chatFontSize, strings: presentationData.strings, dateTimeFormat: presentationData.dateTimeFormat, nameDisplayOrder: presentationData.nameDisplayOrder, disableAnimations: true, largeEmoji: presentationData.largeEmoji, chatBubbleCorners: presentationData.chatBubbleCorners, animatedEmojiScale: animatedEmojiConfig.scale, preferUsernameForNonContacts: shadowSettings.preferUsernameForNonContacts, wideChannelPosts: shadowSettings.wideChannelPosts)
+                    let chatPresentationData = ChatPresentationData(theme: themeData, fontSize: presentationData.chatFontSize, strings: presentationData.strings, dateTimeFormat: presentationData.dateTimeFormat, nameDisplayOrder: presentationData.nameDisplayOrder, disableAnimations: true, largeEmoji: presentationData.largeEmoji, chatBubbleCorners: presentationData.chatBubbleCorners, animatedEmojiScale: animatedEmojiConfig.scale, preferUsernameForNonContacts: shadowSettings.preferUsernameForNonContacts, preferUsernameForBots: shadowSettings.preferUsernameForBots, wideChannelPosts: shadowSettings.wideChannelPosts)
                     
                     strongSelf.currentPresentationData = chatPresentationData
                     

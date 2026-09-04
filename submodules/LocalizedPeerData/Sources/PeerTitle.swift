@@ -5,13 +5,13 @@ import TelegramUIPreferences
 //import PhoneNumberFormat
 
 public extension EnginePeer {
-    func shadowUsername(accountPeerId: EnginePeer.Id, isContact: Bool?, enabled: Bool) -> String? {
-        guard case .user = self, !self.id.isRepliesOrVerificationCodes else { return nil }
-        return ShadowPeerName.username(self.addressName, enabled: enabled, isContact: isContact, isSelf: self.id == accountPeerId)
+    func shadowUsername(accountPeerId: EnginePeer.Id, isContact: Bool?, enabled: Bool, botsEnabled: Bool = false) -> String? {
+        guard case let .user(user) = self, !self.id.isRepliesOrVerificationCodes else { return nil }
+        return ShadowPeerName.username(self.addressName, enabled: enabled, isContact: isContact, isSelf: self.id == accountPeerId, isBot: user.botInfo != nil, botsEnabled: botsEnabled)
     }
 
-    func shadowDisplayTitle(strings: PresentationStrings, displayOrder: PresentationPersonNameOrder, accountPeerId: EnginePeer.Id, isContact: Bool?, enabled: Bool) -> String {
-        return self.shadowUsername(accountPeerId: accountPeerId, isContact: isContact, enabled: enabled)
+    func shadowDisplayTitle(strings: PresentationStrings, displayOrder: PresentationPersonNameOrder, accountPeerId: EnginePeer.Id, isContact: Bool?, enabled: Bool, botsEnabled: Bool = false) -> String {
+        return self.shadowUsername(accountPeerId: accountPeerId, isContact: isContact, enabled: enabled, botsEnabled: botsEnabled)
             ?? self.displayTitle(strings: strings, displayOrder: displayOrder)
     }
 

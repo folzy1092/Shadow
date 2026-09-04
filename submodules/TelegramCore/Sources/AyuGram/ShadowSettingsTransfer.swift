@@ -36,6 +36,7 @@ public enum ShadowSettingsTransfer {
         "showExactLastSeenSeconds": \.showExactLastSeenSeconds,
         "wideChannelPosts": \.wideChannelPosts,
         "preferUsernameForNonContacts": \.preferUsernameForNonContacts,
+        "preferUsernameForBots": \.preferUsernameForBots,
         "showExactViewCounts": \.showExactViewCounts,
         "showForwardCount": \.showForwardCount,
         "hideAllChatsFolder": \.hideAllChatsFolder,

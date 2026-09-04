@@ -12,8 +12,9 @@ public final class ChatListPresentationData {
     public let nameDisplayOrder: PresentationPersonNameOrder
     public let disableAnimations: Bool
     public let preferUsernameForNonContacts: Bool
+    public let preferUsernameForBots: Bool
     
-    public init(theme: PresentationTheme, fontSize: PresentationFontSize, strings: PresentationStrings, dateTimeFormat: PresentationDateTimeFormat, nameSortOrder: PresentationPersonNameOrder, nameDisplayOrder: PresentationPersonNameOrder, disableAnimations: Bool, preferUsernameForNonContacts: Bool = false) {
+    public init(theme: PresentationTheme, fontSize: PresentationFontSize, strings: PresentationStrings, dateTimeFormat: PresentationDateTimeFormat, nameSortOrder: PresentationPersonNameOrder, nameDisplayOrder: PresentationPersonNameOrder, disableAnimations: Bool, preferUsernameForNonContacts: Bool = false, preferUsernameForBots: Bool = false) {
         self.theme = theme
         self.fontSize = fontSize
         self.strings = strings
@@ -22,9 +23,10 @@ public final class ChatListPresentationData {
         self.nameDisplayOrder = nameDisplayOrder
         self.disableAnimations = disableAnimations
         self.preferUsernameForNonContacts = preferUsernameForNonContacts
+        self.preferUsernameForBots = preferUsernameForBots
     }
 
-    public func withPreferUsernameForNonContacts(_ enabled: Bool) -> ChatListPresentationData {
-        return ChatListPresentationData(theme: self.theme, fontSize: self.fontSize, strings: self.strings, dateTimeFormat: self.dateTimeFormat, nameSortOrder: self.nameSortOrder, nameDisplayOrder: self.nameDisplayOrder, disableAnimations: self.disableAnimations, preferUsernameForNonContacts: enabled)
+    public func withPreferUsernameForNonContacts(_ enabled: Bool, botsEnabled: Bool) -> ChatListPresentationData {
+        return ChatListPresentationData(theme: self.theme, fontSize: self.fontSize, strings: self.strings, dateTimeFormat: self.dateTimeFormat, nameSortOrder: self.nameSortOrder, nameDisplayOrder: self.nameDisplayOrder, disableAnimations: self.disableAnimations, preferUsernameForNonContacts: enabled, preferUsernameForBots: botsEnabled)
     }
 }

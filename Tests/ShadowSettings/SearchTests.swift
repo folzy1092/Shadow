@@ -22,6 +22,8 @@ struct SearchTests {
         precondition(Set(all.map { $0.id }).count == all.count)
         precondition(all == all.sorted { $0.id < $1.id })
         precondition(all.first { $0.destination == .customization && $0.entryId == 6 }?.parentEntryId == 5)
-        print("Shadow settings search: 15 checks passed")
+        precondition(finds("бот", .customization, 95))
+        precondition(all.first { $0.destination == .customization && $0.entryId == 95 }?.parentEntryId == 94)
+        print("Shadow settings search: 17 checks passed")
     }
 }

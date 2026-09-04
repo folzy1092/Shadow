@@ -17,7 +17,8 @@ class PeerNameContracts(unittest.TestCase):
 
     def test_channel_titles_are_not_replaced(self):
         source = self.read('LocalizedPeerData/Sources/PeerTitle.swift')
-        self.assertIn('guard case .user = self', source)
+        self.assertIn('guard case let .user(user) = self', source)
+        self.assertIn('isBot: user.botInfo != nil, botsEnabled: botsEnabled', source)
         self.assertIn('?? self.displayTitle', source)
 
     def test_chat_list_contacts_and_account_refresh(self):
@@ -39,6 +40,33 @@ class PeerNameContracts(unittest.TestCase):
         source = self.read('TelegramUI/Sources/ChatHistoryListNode.swift')
         self.assertIn('ayuGramSettings(postbox: self.context.account.postbox)', source)
         self.assertIn('preferUsernameForNonContacts: shadowSettings.preferUsernameForNonContacts', source)
+
+    def test_bot_preference_defaults_to_names_and_is_portable(self):
+        settings = self.read('TelegramCore/Sources/AyuGram/AyuGramSettings.swift')
+        self.assertIn('public var preferUsernameForBots: Bool = false', settings)
+        self.assertIn('decodeIfPresent(Int32.self, forKey: "preferUsernameForBots")) ?? 0', settings)
+        self.assertIn('encode((self.preferUsernameForBots ? 1 : 0) as Int32', settings)
+        for file in ['ShadowSettingsTransfer.swift', 'ShadowSettingsDocument.swift']:
+            self.assertIn('"preferUsernameForBots"', self.read('TelegramCore/Sources/AyuGram/' + file))
+        ui = self.read('SettingsUI/Sources/AyuGramSettingsController.swift')
+        self.assertIn('if settings.preferUsernameForNonContacts {\n        entries.append(.preferUsernameForBots(settings.preferUsernameForBots))', ui)
+        self.assertIn('case .preferUsernameForBots: return (9, 3)', ui)
+
+    def test_bot_preference_reaches_every_title_surface(self):
+        for file in [
+            'ChatListUI/Sources/Node/ChatListItem.swift',
+            'TelegramUI/Components/ChatTitleView/Sources/ChatTitleView.swift',
+            'TelegramUI/Components/ChatTitleView/Sources/ChatTitleComponent.swift',
+            'TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoHeaderNode.swift',
+            'TelegramUI/Components/Chat/ChatMessageBubbleItemNode/Sources/ChatMessageBubbleItemNode.swift',
+        ]:
+            source = self.read(file)
+            calls = [line for line in source.splitlines() if '.shadowDisplayTitle(' in line or '.shadowUsername(' in line]
+            self.assertTrue(calls, file)
+            for line in calls:
+                self.assertIn('botsEnabled:', line, file)
+        for file in ['ChatListUI/Sources/Node/ChatListNode.swift', 'TelegramUI/Components/ChatTitleView/Sources/ChatTitleView.swift', 'TelegramUI/Components/ChatTitleView/Sources/ChatTitleComponent.swift']:
+            self.assertIn('map { ($0.preferUsernameForNonContacts, $0.preferUsernameForBots) }', self.read(file))
 
 
 if __name__ == '__main__':

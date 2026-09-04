@@ -3343,7 +3343,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                     } else if let displayPeer = itemPeer.chatOrMonoforumMainPeer {
                         let isContact: Bool?
                         if case let .peer(peerData) = item.content { isContact = peerData.isContact } else { isContact = nil }
-                        let displayTitle = displayPeer.shadowDisplayTitle(strings: item.presentationData.strings, displayOrder: item.presentationData.nameDisplayOrder, accountPeerId: item.context.account.peerId, isContact: isContact, enabled: item.presentationData.preferUsernameForNonContacts)
+                        let displayTitle = displayPeer.shadowDisplayTitle(strings: item.presentationData.strings, displayOrder: item.presentationData.nameDisplayOrder, accountPeerId: item.context.account.peerId, isContact: isContact, enabled: item.presentationData.preferUsernameForNonContacts, botsEnabled: item.presentationData.preferUsernameForBots)
                         let textColor: UIColor
                         if case let .chatList(index) = item.index, index.messageIndex.id.peerId.namespace == Namespaces.Peer.SecretChat {
                             textColor = theme.secretTitleColor

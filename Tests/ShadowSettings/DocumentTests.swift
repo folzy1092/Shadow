@@ -52,6 +52,9 @@ struct DocumentTests {
         let scroll = try ShadowSettingsDocument(settings: ["bottomBarScrollMode": .integer(2)])
         check(scroll.settings["bottomBarScrollMode"] == .integer(2), "Scroll mode is portable")
         expectFailure("Unsupported scroll mode") { _ = try ShadowSettingsDocument(settings: ["bottomBarScrollMode": .integer(3)]) }
+        let bots = try ShadowSettingsDocument(settings: ["preferUsernameForBots": .bool(true)])
+        let restoredBots = try ShadowSettingsDocument.decode(bots.encoded())
+        check(restoredBots.settings["preferUsernameForBots"] == .bool(true), "Bot names preference is portable")
         print("Shadow settings document: \(count) checks passed")
     }
 }

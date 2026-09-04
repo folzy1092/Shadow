@@ -324,6 +324,7 @@ public final class ChatTitleComponent: Component {
         private var component: ChatTitleComponent?
         private weak var state: EmptyComponentState?
         private var preferUsernameForNonContacts = false
+        private var preferUsernameForBots = false
         private let shadowNamesDisposable = MetaDisposable()
         
         override init(frame: CGRect) {
@@ -379,15 +380,17 @@ public final class ChatTitleComponent: Component {
             if contextChanged {
                 let accountId = component.context.account.id
                 self.preferUsernameForNonContacts = currentAyuGramSettings(accountId: accountId).preferUsernameForNonContacts
+                self.preferUsernameForBots = currentAyuGramSettings(accountId: accountId).preferUsernameForBots
                 self.shadowNamesDisposable.set((ayuGramSettings(postbox: component.context.account.postbox)
-                |> map { $0.preferUsernameForNonContacts }
-                |> distinctUntilChanged
+                |> map { ($0.preferUsernameForNonContacts, $0.preferUsernameForBots) }
+                |> distinctUntilChanged(isEqual: { $0.0 == $1.0 && $0.1 == $1.1 })
                 |> deliverOnMainQueue).start(next: { [weak self] enabled in
                     // An initial preference emission may arrive during update.
                     DispatchQueue.main.async { [weak self] in
                         guard let self, self.component?.context.account.id == accountId,
-                              self.preferUsernameForNonContacts != enabled else { return }
-                        self.preferUsernameForNonContacts = enabled
+                              self.preferUsernameForNonContacts != enabled.0 || self.preferUsernameForBots != enabled.1 else { return }
+                        self.preferUsernameForNonContacts = enabled.0
+                        self.preferUsernameForBots = enabled.1
                         self.state?.updated(transition: .immediate)
                     }
                 }))
@@ -454,7 +457,7 @@ public final class ChatTitleComponent: Component {
                                 content: .text(component.strings.ChatList_AuthorHidden)
                             )]
                         } else {
-                            if let username = EnginePeer(peer).shadowUsername(accountPeerId: component.context.account.peerId, isContact: peerView.isContact, enabled: self.preferUsernameForNonContacts) {
+                            if let username = EnginePeer(peer).shadowUsername(accountPeerId: component.context.account.peerId, isContact: peerView.isContact, enabled: self.preferUsernameForNonContacts, botsEnabled: self.preferUsernameForBots) {
                                 titleSegments = [AnimatedTextComponent.Item(id: AnyHashable(0), isUnbreakable: true, content: .text(username))]
                             } else if !peerView.isContact, let user = peer as? TelegramUser, !user.flags.contains(.isSupport), user.botInfo == nil, let phone = user.phone, !phone.isEmpty {
                                 titleSegments = [AnimatedTextComponent.Item(

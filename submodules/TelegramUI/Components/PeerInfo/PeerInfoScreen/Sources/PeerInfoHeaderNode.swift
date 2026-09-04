@@ -1442,7 +1442,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             } else if let threadData = threadData {
                 title = threadData.info.title
             } else {
-                title = peer.shadowDisplayTitle(strings: presentationData.strings, displayOrder: presentationData.nameDisplayOrder, accountPeerId: self.context.account.peerId, isContact: isContact, enabled: self.ayuSettings.preferUsernameForNonContacts)
+                title = peer.shadowDisplayTitle(strings: presentationData.strings, displayOrder: presentationData.nameDisplayOrder, accountPeerId: self.context.account.peerId, isContact: isContact, enabled: self.ayuSettings.preferUsernameForNonContacts, botsEnabled: self.ayuSettings.preferUsernameForBots)
             }
             title = title.replacingOccurrences(of: "\u{1160}", with: "").replacingOccurrences(of: "\u{3164}", with: "")
             if title.replacingOccurrences(of: "\u{fe0e}", with: "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {

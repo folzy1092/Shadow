@@ -7,11 +7,13 @@ private struct SettingsEnvelope: Codable, Equatable {
     var messageScreenshot = ShadowMessageScreenshotSettings()
     var ghostMode: Int32 = 0
     var preferUsernameForNonContacts: Int32 = 0
+    var preferUsernameForBots: Int32 = 0
     var bottomBarScrollMode: Int32 = 0
     var ghostLastSeenTimestamp: Int32 = 0
 
     enum CodingKeys: String, CodingKey {
         case messageScreenshot, ghostMode, preferUsernameForNonContacts
+        case preferUsernameForBots
         case bottomBarScrollMode, ghostLastSeenTimestamp
     }
 
@@ -22,6 +24,7 @@ private struct SettingsEnvelope: Codable, Equatable {
         self.messageScreenshot = try c.decodeIfPresent(ShadowMessageScreenshotSettings.self, forKey: .messageScreenshot) ?? ShadowMessageScreenshotSettings()
         self.ghostMode = try c.decodeIfPresent(Int32.self, forKey: .ghostMode) ?? 0
         self.preferUsernameForNonContacts = try c.decodeIfPresent(Int32.self, forKey: .preferUsernameForNonContacts) ?? 0
+        self.preferUsernameForBots = try c.decodeIfPresent(Int32.self, forKey: .preferUsernameForBots) ?? 0
         self.bottomBarScrollMode = try c.decodeIfPresent(Int32.self, forKey: .bottomBarScrollMode) ?? 0
         self.ghostLastSeenTimestamp = try c.decodeIfPresent(Int32.self, forKey: .ghostLastSeenTimestamp) ?? 0
     }
@@ -77,6 +80,7 @@ private struct UnknownBackground: Encodable {
                 envelope.messageScreenshot = options
                 envelope.ghostMode = Int32((flags >> 5) & 1)
                 envelope.preferUsernameForNonContacts = Int32((flags >> 1) & 1)
+                envelope.preferUsernameForBots = Int32((flags >> 2) & 1)
                 envelope.bottomBarScrollMode = Int32(flags % 3)
                 envelope.ghostLastSeenTimestamp = Int32(1_700_000_000 + flags)
                 precondition(decodedEntry(SettingsEnvelope.self, encodedEntry(envelope)) == envelope)
@@ -84,6 +88,7 @@ private struct UnknownBackground: Encodable {
         }
         let old = decodedEntry(SettingsEnvelope.self, encodedEntry(OldSettings(ghostMode: 1)))
         precondition(old?.ghostMode == 1)
+        precondition(old?.preferUsernameForBots == 0)
         precondition(old?.messageScreenshot == ShadowMessageScreenshotSettings())
         for raw in [Int32(-1), 4, Int32.max] {
             let decoded = decodedEntry(ShadowMessageScreenshotSettings.self, encodedEntry(UnknownBackground(background: raw)))
