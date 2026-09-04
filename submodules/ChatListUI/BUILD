@@ -8,8 +8,6 @@ swift_library(
     ]),
     copts = [
         "-warnings-as-errors",
-        "-Xfrontend",
-        "-solver-expression-time-threshold=120",
     ],
     deps = [
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
