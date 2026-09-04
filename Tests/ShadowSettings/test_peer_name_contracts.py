@@ -65,8 +65,15 @@ class PeerNameContracts(unittest.TestCase):
             self.assertTrue(calls, file)
             for line in calls:
                 self.assertIn('botsEnabled:', line, file)
-        for file in ['ChatListUI/Sources/Node/ChatListNode.swift', 'TelegramUI/Components/ChatTitleView/Sources/ChatTitleView.swift', 'TelegramUI/Components/ChatTitleView/Sources/ChatTitleComponent.swift']:
-            self.assertIn('map { ($0.preferUsernameForNonContacts, $0.preferUsernameForBots) }', self.read(file))
+        for file in [
+            'ChatListUI/Sources/Node/ChatListNode.swift',
+            'TelegramUI/Components/ChatTitleView/Sources/ChatTitleView.swift',
+            'TelegramUI/Components/ChatTitleView/Sources/ChatTitleComponent.swift',
+        ]:
+            source = self.read(file)
+            self.assertIn('ayuGramSettings(postbox:', source, file)
+            self.assertIn('preferUsernameForNonContacts', source, file)
+            self.assertIn('preferUsernameForBots', source, file)
 
 
 if __name__ == '__main__':
