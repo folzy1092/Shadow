@@ -5,6 +5,12 @@ Settings → Shadow → Диагностика push (also searchable).
 This patch diagnoses delivery; it does not create APNs provider credentials,
 change the bundle identity, or replace the fake-sign → ESign workflow.
 
+The current `.bazelrc` explicitly sets `build --//Telegram:disableExtensions`.
+Consequently the absence of NSE in a re-signed IPA does not demonstrate that
+the re-signer removed it. The app also falls back to local Documents storage
+when the expected App Group is unavailable; NSE has no equivalent shared-data
+fallback. Re-enabling extensions requires a separate signing/data-sharing plan.
+
 ## Evidence exposed
 
 - iOS authorization and alert/sound/badge settings, live while the page is open.

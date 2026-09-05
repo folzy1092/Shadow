@@ -24,9 +24,12 @@ jobs:
           fetch-depth: 2
       - name: Parse changed Swift sources
         run: |
-          git diff-tree --no-commit-id --name-only -r HEAD -- '*.swift' |
+          # On pull_request HEAD is a merge commit: compare with its base parent.
+          # diff-tree without -m would silently emit no files for that commit.
+          git diff --diff-filter=ACMR --name-only HEAD^ HEAD -- '*.swift' |
           while IFS= read -r source; do
             if [ -f "$source" ]; then
+              printf 'Parsing %s\n' "$source"
               xcrun swiftc -frontend -parse "$source" || exit 1
             fi
           done
