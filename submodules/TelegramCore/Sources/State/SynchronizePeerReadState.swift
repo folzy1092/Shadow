@@ -255,7 +255,7 @@ private func pushPeerReadState(network: Network, postbox: Postbox, stateManager:
                     // server (keeps you offline and hides the "read" ticks). Read
                     // state is still applied locally, so unread badges clear.
                     var pushSignal: Signal<Void, NoError> = postbox.transaction { transaction -> Bool in
-                        return currentAyuGramSettings(transaction: transaction).suppressReadReceipts
+                        return currentAyuGramSettings(transaction: transaction).suppressReadReceipts(peerId: peerId)
                     }
                     |> mapToSignal { hideReadReceipts -> Signal<Void, NoError> in
                         if hideReadReceipts {
@@ -296,7 +296,7 @@ private func pushPeerReadState(network: Network, postbox: Postbox, stateManager:
                     // server (keeps you offline and hides the "read" ticks). Read
                     // state is still applied locally, so unread badges clear.
                     var pushSignal: Signal<Void, NoError> = postbox.transaction { transaction -> Bool in
-                        return currentAyuGramSettings(transaction: transaction).suppressReadReceipts
+                        return currentAyuGramSettings(transaction: transaction).suppressReadReceipts(peerId: peerId)
                     }
                     |> mapToSignal { hideReadReceipts -> Signal<Void, NoError> in
                         if hideReadReceipts {

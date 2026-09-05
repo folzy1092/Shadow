@@ -6,11 +6,33 @@ import MtProtoKit
 
 private typealias SignalKitTimer = SwiftSignalKit.Timer
 
+// Read the self user's raw API status before Postbox substitutes its permanent
+// "own account is online" presence. This read never sends account.updateStatus.
+public func shadowOwnServerPresence(account: Account) -> Signal<ShadowOwnServerPresence, NoError> {
+    let result: Signal<ShadowOwnServerPresence, MTRpcError> = account.network.request(Api.functions.users.getUsers(id: [.inputUserSelf]))
+    |> map { (users: [Api.User]) -> ShadowOwnServerPresence in
+        guard let user = users.first, case let .user(data) = user, let status = data.status else {
+            return .unavailable
+        }
+        switch status {
+        case let .userStatusOffline(data): return .offline(wasOnline: data.wasOnline)
+        case let .userStatusOnline(data): return .online(expires: data.expires)
+        case .userStatusRecently: return .recently
+        case .userStatusLastWeek: return .lastWeek
+        case .userStatusLastMonth: return .lastMonth
+        case .userStatusEmpty: return .unavailable
+        }
+    }
+    return result
+    |> `catch` { _ -> Signal<ShadowOwnServerPresence, NoError> in
+        return .single(.unavailable)
+    }
+    |> timeout(10.0, queue: Queue.concurrentDefaultQueue(), alternate: .single(.unavailable))
+}
 
 private final class AccountPresenceManagerImpl {
     private let queue: Queue
     private let network: Network
-    private let postbox: Postbox
     let isPerformingUpdate = ValuePromise<Bool>(false, ignoreRepeated: true)
 
     private var shouldKeepOnlinePresenceDisposable: Disposable?
@@ -18,14 +40,7 @@ private final class AccountPresenceManagerImpl {
     // right after a send while "send without appearing online" is on.
     private var offlineReassertDisposable: Disposable?
     private let currentRequestDisposable = MetaDisposable()
-    private let lastSeenUpdateDisposable = MetaDisposable()
     private var onlineTimer: SignalKitTimer?
-    // Timestamp of a real presence exposure that should become our displayed
-    // last-seen once the server confirms that we are offline again. This is set
-    // for an explicit online -> offline transition and for the post-send trigger,
-    // because Telegram send RPCs can briefly expose the account as online.
-    // Timer-driven offline reasserts never advance it.
-    private var pendingOfflineTransitionTimestamp: Int32?
     
     // AyuGram: start as "unknown" (nil) so the very first value — including a
     // `false` when online is hidden from launch — actually triggers updatePresence
@@ -34,10 +49,9 @@ private final class AccountPresenceManagerImpl {
     // account and reading a chat could leave you online.
     private var wasOnline: Bool? = nil
 
-    init(queue: Queue, shouldKeepOnlinePresence: Signal<Bool, NoError>, network: Network, postbox: Postbox) {
+    init(queue: Queue, shouldKeepOnlinePresence: Signal<Bool, NoError>, network: Network) {
         self.queue = queue
         self.network = network
-        self.postbox = postbox
         
         self.shouldKeepOnlinePresenceDisposable = (shouldKeepOnlinePresence
         |> distinctUntilChanged
@@ -48,13 +62,6 @@ private final class AccountPresenceManagerImpl {
             let previousValue = self.wasOnline
             if previousValue != value {
                 self.wasOnline = value
-                if value {
-                    // An in-flight offline request no longer represents the
-                    // account's current transition.
-                    self.pendingOfflineTransitionTimestamp = nil
-                } else if previousValue == true {
-                    self.pendingOfflineTransitionTimestamp = Int32(Date().timeIntervalSince1970)
-                }
                 self.updatePresence(value)
             }
         })
@@ -63,15 +70,12 @@ private final class AccountPresenceManagerImpl {
         // are currently meant to be hidden/offline, re-send "offline" right away
         // (bypassing the 30s timer and the same-value `wasOnline` guard) so the
         // brief server-side online blip from the send RPC is cleared immediately.
-        // This blip is a real server-visible activity event, so remember its time
-        // and persist it only after the server confirms the following offline RPC.
         self.offlineReassertDisposable = (ayuOfflineReassertPipe.signal()
         |> deliverOn(self.queue)).start(next: { [weak self] in
             guard let self else {
                 return
             }
             if self.wasOnline != true {
-                self.pendingOfflineTransitionTimestamp = Int32(Date().timeIntervalSince1970)
                 self.updatePresence(false)
             }
         })
@@ -82,7 +86,6 @@ private final class AccountPresenceManagerImpl {
         self.shouldKeepOnlinePresenceDisposable?.dispose()
         self.offlineReassertDisposable?.dispose()
         self.currentRequestDisposable.dispose()
-        self.lastSeenUpdateDisposable.dispose()
         self.onlineTimer?.invalidate()
     }
     
@@ -114,20 +117,7 @@ private final class AccountPresenceManagerImpl {
         |> `catch` { _ -> Signal<Api.Bool, NoError> in
             return .single(.boolFalse)
         }
-        |> deliverOn(self.queue)).start(next: { [weak self] result in
-            guard let self, !isOnline, case .boolTrue = result, let timestamp = self.pendingOfflineTransitionTimestamp else {
-                return
-            }
-            self.pendingOfflineTransitionTimestamp = nil
-            self.lastSeenUpdateDisposable.set(updateAyuGramSettings(postbox: self.postbox) { settings in
-                guard timestamp > settings.ghostLastSeenTimestamp else {
-                    return settings
-                }
-                var settings = settings
-                settings.ghostLastSeenTimestamp = timestamp
-                return settings
-            }.start())
-        }, completed: { [weak self] in
+        |> deliverOn(self.queue)).start(completed: { [weak self] in
             guard let strongSelf = self else {
                 return
             }
@@ -140,10 +130,10 @@ final class AccountPresenceManager {
     private let queue = Queue()
     private let impl: QueueLocalObject<AccountPresenceManagerImpl>
     
-    init(shouldKeepOnlinePresence: Signal<Bool, NoError>, network: Network, postbox: Postbox) {
+    init(shouldKeepOnlinePresence: Signal<Bool, NoError>, network: Network) {
         let queue = self.queue
         self.impl = QueueLocalObject(queue: self.queue, generate: {
-            return AccountPresenceManagerImpl(queue: queue, shouldKeepOnlinePresence: shouldKeepOnlinePresence, network: network, postbox: postbox)
+            return AccountPresenceManagerImpl(queue: queue, shouldKeepOnlinePresence: shouldKeepOnlinePresence, network: network)
         })
     }
     

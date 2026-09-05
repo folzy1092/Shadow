@@ -119,6 +119,12 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     private var profileBackgroundLoadedSignature: String?
     private var ayuSettings: AyuGramSettings
     private var ayuSettingsDisposable: Disposable?
+    private var ownServerPresence: ShadowOwnServerPresence = .unavailable
+    private let ownServerPresenceDisposable = MetaDisposable()
+    private var ownServerPresenceTimer: SwiftSignalKit.Timer?
+    private var ownPresencePolling = false
+    private var ownHeaderVisible = false
+    private var ownPresenceApplicationActive = false
     let buttonsContainerNode: SparseNode
     let buttonsBackgroundNode: NavigationBackgroundNode
     let buttonsMaskView: UIView
@@ -420,6 +426,8 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 return
             }
             self.ayuSettings = settings
+            self.ownPresenceApplicationActive = isActive
+            self.updateOwnPresencePolling()
             if isActive {
                 self.requestUpdateLayout?(false)
             }
@@ -429,6 +437,48 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     deinit {
         self.emojiStatusPackDisposable.dispose()
         self.ayuSettingsDisposable?.dispose()
+        self.ownServerPresenceDisposable.dispose()
+        self.ownServerPresenceTimer?.invalidate()
+    }
+
+    override func didEnterHierarchy() {
+        super.didEnterHierarchy()
+        self.ownHeaderVisible = true
+        self.updateOwnPresencePolling()
+    }
+
+    override func didExitHierarchy() {
+        super.didExitHierarchy()
+        self.ownHeaderVisible = false
+        self.updateOwnPresencePolling()
+    }
+
+    private func updateOwnPresencePolling() {
+        let enabled = self.isMyProfile && !self.isSettings && self.ayuSettings.effectiveHideOnline
+            && self.ownPresenceApplicationActive && self.ownHeaderVisible
+        guard enabled != self.ownPresencePolling else { return }
+        self.ownPresencePolling = enabled
+        self.ownServerPresenceDisposable.set(nil)
+        self.ownServerPresenceTimer?.invalidate()
+        self.ownServerPresenceTimer = nil
+        self.ownServerPresence = .unavailable
+        if enabled {
+            self.refreshOwnServerPresence()
+            let timer = SwiftSignalKit.Timer(timeout: 15.0, repeat: true, completion: { [weak self] in
+                self?.refreshOwnServerPresence()
+            }, queue: Queue.mainQueue())
+            self.ownServerPresenceTimer = timer
+            timer.start()
+        }
+    }
+
+    private func refreshOwnServerPresence() {
+        self.ownServerPresenceDisposable.set((shadowOwnServerPresence(account: self.context.account)
+        |> deliverOnMainQueue).start(next: { [weak self] presence in
+            guard let self, self.ownPresencePolling else { return }
+            self.ownServerPresence = presence
+            self.requestUpdateLayout?(false)
+        }))
     }
     
     override func didLoad() {
@@ -1492,15 +1542,12 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 let subtitleColor: UIColor
                 subtitleColor = .white
 
-                // Telegram seeds the account's own Postbox presence with
-                // `.present(until: Int32.max - 1)`, therefore the normal profile
-                // status can only say "online". While Ghost Mode really hides
-                // online presence, show the last server-confirmed transition to
-                // offline instead. Never invent "now" on a cold start.
+                // Only the live self-user API response can supply last seen.
+                // Neither our permanent-online Postbox peer nor a successful
+                // updateStatus acknowledgement contains that timestamp.
                 if self.ayuSettings.effectiveHideOnline {
-                    let timestamp = self.ayuSettings.ghostLastSeenTimestamp
-                    if timestamp > 0 {
-                        let now = Int32(CFAbsoluteTimeGetCurrent() + NSTimeIntervalSince1970)
+                    let now = Int32(CFAbsoluteTimeGetCurrent() + NSTimeIntervalSince1970)
+                    if let timestamp = self.ownServerPresence.exactLastSeenTimestamp {
                         subtitleStringText = ayuExactLastSeenString(
                             strings: presentationData.strings,
                             dateTimeFormat: presentationData.dateTimeFormat,
@@ -1509,7 +1556,18 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                             includeSeconds: self.ayuSettings.showExactLastSeen && self.ayuSettings.showExactLastSeenSeconds
                         )
                     } else {
-                        subtitleStringText = presentationData.strings.LastSeen_Lately
+                        switch self.ownServerPresence {
+                        case let .online(expires) where expires > now:
+                            subtitleStringText = presentationData.strings.Presence_online
+                        case .recently:
+                            subtitleStringText = presentationData.strings.LastSeen_Lately
+                        case .lastWeek:
+                            subtitleStringText = presentationData.strings.LastSeen_WithinAWeek
+                        case .lastMonth:
+                            subtitleStringText = presentationData.strings.LastSeen_WithinAMonth
+                        default:
+                            subtitleStringText = "Статус Telegram недоступен"
+                        }
                     }
                 } else {
                     subtitleStringText = presentationData.strings.Presence_online

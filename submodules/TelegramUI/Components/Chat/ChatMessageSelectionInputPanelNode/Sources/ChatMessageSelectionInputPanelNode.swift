@@ -356,6 +356,9 @@ public final class ChatMessageSelectionInputPanelNode: ChatInputPanelNode {
         if let peer = self.presentationInterfaceState?.renderedPeer?.peer, peer.isCopyProtectionEnabled {
             return true
         }
+        if let channel = self.presentationInterfaceState?.renderedPeer?.peer as? TelegramChannel, case .broadcast = channel.info, channel.addressName == nil {
+            return true
+        }
         return false
     }
 
@@ -554,6 +557,10 @@ public final class ChatMessageSelectionInputPanelNode: ChatInputPanelNode {
         if self.presentationInterfaceState != interfaceState {
             self.presentationInterfaceState = interfaceState
         }
+        let protectedForward = self.shouldForwardAsCopy
+        // A copied upload has no source author, so a protected chat exposes one
+        // Forward button instead of two identical actions.
+        self.incognitoForwardButton.isHidden = protectedForward
         if let actions = self.actions {
             self.deleteButton.isEnabled = false
             self.reportButton.isEnabled = false
@@ -712,7 +719,7 @@ public final class ChatMessageSelectionInputPanelNode: ChatInputPanelNode {
         // Shadow: content-protection notice under the buttons — an icon (circle /
         // "no-forward" glyph, copyright-style) followed by the text, matching the
         // Swiftgram-style restricted-forward hint.
-        if interfaceState.copyProtectionEnabled {
+        if protectedForward {
             let buttonsBottom = buttonSize.height
             let noticeColor = interfaceState.theme.chat.inputPanel.secondaryTextColor
             let noticeString = NSMutableAttributedString()
@@ -724,7 +731,7 @@ public final class ChatMessageSelectionInputPanelNode: ChatInputPanelNode {
                 noticeString.append(NSAttributedString(attachment: attachment))
                 noticeString.append(NSAttributedString(string: "  ", font: Font.regular(13.0), textColor: noticeColor))
             }
-            noticeString.append(NSAttributedString(string: "Обычная пересылка запрещена", font: Font.regular(13.0), textColor: noticeColor))
+            noticeString.append(NSAttributedString(string: "Будет отправлено новой копией", font: Font.regular(13.0), textColor: noticeColor))
             self.restrictedForwardInfoNode.attributedText = noticeString
             let noticeInset: CGFloat = 16.0
             let noticeSize = self.restrictedForwardInfoNode.updateLayout(CGSize(width: width - leftInset - rightInset - noticeInset * 2.0, height: 44.0))

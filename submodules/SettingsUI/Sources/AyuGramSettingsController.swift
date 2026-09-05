@@ -96,6 +96,7 @@ private enum AyuHubEntry: ItemListNodeEntry {
     case ghost
     case misc
     case backup
+    case filters
     case infoFooter
 
     var section: ItemListSectionId {
@@ -106,7 +107,7 @@ private enum AyuHubEntry: ItemListNodeEntry {
             return AyuHubSection.sections.rawValue
         case .noResults:
             return AyuHubSection.info.rawValue
-        case .customization, .spy, .ghost, .misc, .backup:
+        case .customization, .spy, .ghost, .misc, .backup, .filters:
             return AyuHubSection.sections.rawValue
         case .infoFooter:
             return AyuHubSection.info.rawValue
@@ -127,9 +128,11 @@ private enum AyuHubEntry: ItemListNodeEntry {
         case .misc:
             return 3
         case .infoFooter:
-            return 5
+            return 6
         case .backup:
             return 4
+        case .filters:
+            return 5
         }
     }
 
@@ -166,6 +169,8 @@ private enum AyuHubEntry: ItemListNodeEntry {
             return ItemListTextItem(presentationData: presentationData, text: .plain("Кастомизация — внешний вид и поведение приложения. Шпион — сохранение информации, которую Telegram скрывает или удаляет. Призрак — максимально незаметное использование Telegram. Разное — визуальная подмена данных профиля для скриншотов."), sectionId: self.section)
         case .backup:
             return ItemListDisclosureItem(presentationData: presentationData, title: "Резервная копия настроек", label: "", sectionId: self.section, style: .blocks, action: arguments.openBackup)
+        case .filters:
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Фильтры сообщений", label: "", sectionId: self.section, style: .blocks, action: arguments.openFilters)
         }
     }
 }
@@ -178,8 +183,9 @@ private final class AyuHubArguments {
     let openGhost: () -> Void
     let openMisc: () -> Void
     let openBackup: () -> Void
+    let openFilters: () -> Void
 
-    init(updateQuery: @escaping (String) -> Void, openResult: @escaping (ShadowSettingsSearchItem) -> Void, openCustomization: @escaping () -> Void, openSpy: @escaping () -> Void, openGhost: @escaping () -> Void, openMisc: @escaping () -> Void, openBackup: @escaping () -> Void) {
+    init(updateQuery: @escaping (String) -> Void, openResult: @escaping (ShadowSettingsSearchItem) -> Void, openCustomization: @escaping () -> Void, openSpy: @escaping () -> Void, openGhost: @escaping () -> Void, openMisc: @escaping () -> Void, openBackup: @escaping () -> Void, openFilters: @escaping () -> Void) {
         self.updateQuery = updateQuery
         self.openResult = openResult
         self.openCustomization = openCustomization
@@ -187,6 +193,7 @@ private final class AyuHubArguments {
         self.openGhost = openGhost
         self.openMisc = openMisc
         self.openBackup = openBackup
+        self.openFilters = openFilters
     }
 }
 
@@ -197,6 +204,7 @@ func shadowSettingsSearchDestinationController(context: AccountContext, item: Sh
     case .ghost: return ayuGhostController(context: context, focus: item)
     case .misc: return ayuMiscController(context: context, focus: item)
     case .backup: return shadowSettingsBackupController(context: context, focus: item)
+    case .filters: return shadowMessageFiltersController(context: context)
     }
 }
 
@@ -223,6 +231,9 @@ public func ayuGramSettingsController(context: AccountContext) -> ViewController
         },
         openBackup: {
             pushControllerImpl?(shadowSettingsBackupController(context: context))
+        },
+        openFilters: {
+            pushControllerImpl?(shadowMessageFiltersController(context: context))
         }
     )
 
@@ -231,7 +242,7 @@ public func ayuGramSettingsController(context: AccountContext) -> ViewController
     |> map { presentationData, query -> (ItemListControllerState, (ItemListNodeState, Any)) in
         var entries: [AyuHubEntry] = [.query(query)]
         if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            entries += [.customization, .spy, .ghost, .misc, .backup, .infoFooter]
+            entries += [.customization, .spy, .ghost, .filters, .misc, .backup, .infoFooter]
         } else {
             let matches = ShadowSettingsSearchIndex.search(query)
             entries += matches.isEmpty ? [.noResults] : matches.map { .result($0) }

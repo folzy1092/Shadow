@@ -21,6 +21,7 @@ enum SettingsSection: Int, CaseIterable {
     case proxy
     case apps
     case shortcuts
+    case shadowReads
     case advanced
     case payment
     case extra
@@ -223,6 +224,13 @@ func settingsItems(data: PeerInfoScreenData?, context: AccountContext, presentat
     items[.shortcuts]!.append(PeerInfoScreenDisclosureItem(id: 5, text: "Shadow", icon: PresentationResourcesSettings.shadow, action: {
         interaction.openSettings(.ayugram)
     }))
+    items[.shadowReads]!.append(PeerInfoScreenDisclosureItem(id: 0, text: "Прочитать локально", icon: UIImage(bundleImageName: "Chat/Context Menu/MarkAsRead"), action: {
+        interaction.openSettings(.markAllReadLocally)
+    }))
+    items[.shadowReads]!.append(PeerInfoScreenDisclosureItem(id: 1, text: "Прочитать на сервере", icon: UIImage(bundleImageName: "Chat/Context Menu/MarkAsRead"), action: {
+        interaction.openSettings(.markAllReadOnServer)
+    }))
+    items[.shadowReads]!.append(PeerInfoScreenCommentItem(id: 2, text: "Локально: отметки меняются только здесь. На сервере: Telegram получает подтверждение прочтения для текущего аккаунта."))
 
     let notificationsWarning: Bool
     if let settings = data.globalSettings {

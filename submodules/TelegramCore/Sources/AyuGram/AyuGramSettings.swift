@@ -14,10 +14,33 @@ public extension PreferencesKeys {
     }()
 }
 
+public enum ShadowChatPrivacyValue: Int32, Codable, Equatable {
+    case inherit = 0
+    case allow = 1
+    case hide = 2
+}
+
+public struct ShadowChatPrivacyRule: Codable, Equatable {
+    public var readReceipts: ShadowChatPrivacyValue
+    public var inputActivity: ShadowChatPrivacyValue
+
+    public init(readReceipts: ShadowChatPrivacyValue = .inherit, inputActivity: ShadowChatPrivacyValue = .inherit) {
+        self.readReceipts = readReceipts
+        self.inputActivity = inputActivity
+    }
+
+    public var isDefault: Bool {
+        return self.readReceipts == .inherit && self.inputActivity == .inherit
+    }
+}
+
 public struct AyuGramSettings: Codable, Equatable {
     public var messageScreenshot = ShadowMessageScreenshotSettings()
     public var preferUsernameForNonContacts: Bool = false
     public var preferUsernameForBots: Bool = false
+    // Account-scoped overrides keyed by the stable peer id string.
+    public var chatPrivacyRules: [String: ShadowChatPrivacyRule] = [:]
+    public var messageFilterPhrases: [String] = []
     // Anti-deletion
     public var keepDeletedMessages: Bool
     public var saveEditHistory: Bool
@@ -271,6 +294,35 @@ public struct AyuGramSettings: Codable, Equatable {
         return self.ghostMode && (self.hideReadReceipts || self.hideOnlineStatus)
     }
 
+    public func chatPrivacyRule(peerId: PeerId) -> ShadowChatPrivacyRule {
+        return self.chatPrivacyRules[String(peerId.toInt64())] ?? ShadowChatPrivacyRule()
+    }
+
+    public func suppressReadReceipts(peerId: PeerId) -> Bool {
+        switch self.chatPrivacyRule(peerId: peerId).readReceipts {
+        case .inherit: return self.suppressReadReceipts
+        case .allow: return false
+        case .hide: return true
+        }
+    }
+
+    public func suppressInputActivity(peerId: PeerId, globalValue: Bool) -> Bool {
+        switch self.chatPrivacyRule(peerId: peerId).inputActivity {
+        case .inherit: return globalValue
+        case .allow: return false
+        case .hide: return true
+        }
+    }
+
+    public func matchesMessageFilter(text: String) -> Bool {
+        guard !self.messageFilterPhrases.isEmpty else { return false }
+        let normalized = text.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale.current)
+        return self.messageFilterPhrases.contains { phrase in
+            let needle = phrase.trimmingCharacters(in: .whitespacesAndNewlines)
+            return !needle.isEmpty && normalized.range(of: needle, options: [.caseInsensitive, .diacriticInsensitive]) != nil
+        }
+    }
+
     // MARK: - Effective presence gates
     //
     // Ghost Mode is the master switch; each effective gate is
@@ -367,7 +419,9 @@ public struct AyuGramSettings: Codable, Equatable {
         customProfileBackgroundForOthers: Bool,
         customProfileBackgroundForSettings: Bool,
         bottomBarScrollMode: Int32 = 0,
-        ghostLastSeenTimestamp: Int32 = 0
+        ghostLastSeenTimestamp: Int32 = 0,
+        chatPrivacyRules: [String: ShadowChatPrivacyRule] = [:],
+        messageFilterPhrases: [String] = []
     ) {
         self.keepDeletedMessages = keepDeletedMessages
         self.saveEditHistory = saveEditHistory
@@ -423,6 +477,8 @@ public struct AyuGramSettings: Codable, Equatable {
         self.customProfileBackgroundEnabled = customProfileBackgroundEnabled
         self.customProfileBackgroundForOthers = customProfileBackgroundForOthers
         self.customProfileBackgroundForSettings = customProfileBackgroundForSettings
+        self.chatPrivacyRules = chatPrivacyRules.filter { !$0.value.isDefault }
+        self.messageFilterPhrases = messageFilterPhrases.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
     }
 
     public init(from decoder: Decoder) throws {
@@ -430,6 +486,8 @@ public struct AyuGramSettings: Codable, Equatable {
         self.messageScreenshot = try container.decodeIfPresent(ShadowMessageScreenshotSettings.self, forKey: "messageScreenshot") ?? ShadowMessageScreenshotSettings()
         self.preferUsernameForNonContacts = ((try container.decodeIfPresent(Int32.self, forKey: "preferUsernameForNonContacts")) ?? 0) != 0
         self.preferUsernameForBots = ((try container.decodeIfPresent(Int32.self, forKey: "preferUsernameForBots")) ?? 0) != 0
+        self.chatPrivacyRules = (try container.decodeIfPresent([String: ShadowChatPrivacyRule].self, forKey: "chatPrivacyRules")) ?? [:]
+        self.messageFilterPhrases = (try container.decodeIfPresent([String].self, forKey: "messageFilterPhrases")) ?? []
         self.keepDeletedMessages = ((try container.decodeIfPresent(Int32.self, forKey: "keepDeletedMessages")) ?? 1) != 0
         self.saveEditHistory = ((try container.decodeIfPresent(Int32.self, forKey: "saveEditHistory")) ?? 1) != 0
         self.keepSelfDestructMedia = ((try container.decodeIfPresent(Int32.self, forKey: "keepSelfDestructMedia")) ?? 1) != 0
@@ -492,6 +550,8 @@ public struct AyuGramSettings: Codable, Equatable {
         try container.encode(self.messageScreenshot, forKey: "messageScreenshot")
         try container.encode((self.preferUsernameForNonContacts ? 1 : 0) as Int32, forKey: "preferUsernameForNonContacts")
         try container.encode((self.preferUsernameForBots ? 1 : 0) as Int32, forKey: "preferUsernameForBots")
+        try container.encode(self.chatPrivacyRules, forKey: "chatPrivacyRules")
+        try container.encode(self.messageFilterPhrases, forKey: "messageFilterPhrases")
         try container.encode((self.keepDeletedMessages ? 1 : 0) as Int32, forKey: "keepDeletedMessages")
         try container.encode((self.saveEditHistory ? 1 : 0) as Int32, forKey: "saveEditHistory")
         try container.encode((self.keepSelfDestructMedia ? 1 : 0) as Int32, forKey: "keepSelfDestructMedia")

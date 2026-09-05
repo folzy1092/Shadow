@@ -195,7 +195,13 @@ public func restoreShadowSettingsBackup(postbox: Postbox) -> Signal<ShadowSettin
         guard let backup = transaction.getPreferencesEntry(key: shadowSettingsBackupKey)?.get(ShadowSettingsBackup.self) else {
             return .noBackup
         }
-        updateAyuGramSettings(transaction: transaction) { _ in backup.settings }
+        updateAyuGramSettings(transaction: transaction) { current in
+            // Presence telemetry belongs to the account service state and must
+            // never move backwards when a user restores an older UI snapshot.
+            var restored = backup.settings
+            restored.ghostLastSeenTimestamp = max(current.ghostLastSeenTimestamp, restored.ghostLastSeenTimestamp)
+            return restored
+        }
         transaction.setPreferencesEntry(key: shadowSettingsBackupKey, value: nil)
         return .applied
     }

@@ -2048,7 +2048,7 @@ private final class NotificationServiceHandler {
                                     // extension is a separate process without the in-memory
                                     // settings snapshot.
                                     reportDeliverySignal = stateManager.postbox.transaction { transaction -> Bool in
-                                        return currentAyuGramSettings(transaction: transaction).suppressReadReceipts
+                                        return currentAyuGramSettings(transaction: transaction).suppressReadReceipts(peerId: messageId.peerId)
                                     }
                                     |> mapToSignal { suppress -> Signal<Bool, NoError> in
                                         if suppress {

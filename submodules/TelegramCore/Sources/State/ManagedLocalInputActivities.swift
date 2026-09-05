@@ -154,11 +154,11 @@ private func requestActivity(postbox: Postbox, network: Network, accountPeerId: 
             let ayuSuppress: Bool
             switch activity {
                 case .typingText, .choosingSticker, .interactingWithEmoji, .seeingEmojiInteraction:
-                    ayuSuppress = ayuSettings.effectiveHideTyping
+                    ayuSuppress = ayuSettings.suppressInputActivity(peerId: peerId, globalValue: ayuSettings.effectiveHideTyping)
                 case .recordingVoice, .recordingInstantVideo:
-                    ayuSuppress = ayuSettings.effectiveHideRecording
+                    ayuSuppress = ayuSettings.suppressInputActivity(peerId: peerId, globalValue: ayuSettings.effectiveHideRecording)
                 case .uploadingFile, .uploadingPhoto, .uploadingVideo, .uploadingInstantVideo:
-                    ayuSuppress = ayuSettings.effectiveHideUploading
+                    ayuSuppress = ayuSettings.suppressInputActivity(peerId: peerId, globalValue: ayuSettings.effectiveHideUploading)
                 case .playingGame, .speakingInGroupCall:
                     ayuSuppress = false
             }

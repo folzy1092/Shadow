@@ -101,6 +101,48 @@ public extension TelegramEngine {
             return _internal_applyMaxReadIndexInteractively(postbox: self.account.postbox, stateManager: self.account.stateManager, index: index)
         }
 
+        // Shadow: an explicitly authorized, exact server read. This path does
+        // not depend on the background read-state synchronizer, so Ghost Mode
+        // cannot suppress it or replace maxId with a later local boundary.
+        public func readMessageHistoryExplicitly(index: MessageIndex, threadId: Int64? = nil) -> Signal<Bool, NoError> {
+            let account = self.account
+            return account.postbox.transaction { transaction -> Api.InputPeer? in
+                return transaction.getPeer(index.id.peerId).flatMap(apiInputPeer)
+            }
+            |> mapToSignal { inputPeer -> Signal<Bool, NoError> in
+                guard let inputPeer else {
+                    return .single(false)
+                }
+                if let threadId {
+                    return account.network.request(Api.functions.messages.readDiscussion(peer: inputPeer, msgId: Int32(clamping: threadId), readMaxId: index.id.id))
+                    |> map { _ in true }
+                    |> `catch` { _ in .single(false) }
+                }
+                switch inputPeer {
+                case let .inputPeerChannel(data):
+                    return account.network.request(Api.functions.channels.readHistory(channel: .inputChannel(.init(channelId: data.channelId, accessHash: data.accessHash)), maxId: index.id.id))
+                    |> map { _ in true }
+                    |> `catch` { _ in .single(false) }
+                default:
+                    return account.network.request(Api.functions.messages.readHistory(peer: inputPeer, maxId: index.id.id))
+                    |> map { result -> Bool in
+                        if case let .affectedMessages(data) = result {
+                            account.stateManager.addUpdateGroups([.updatePts(pts: data.pts, ptsCount: data.ptsCount)])
+                        }
+                        return true
+                    }
+                    |> `catch` { _ in .single(false) }
+                }
+            }
+            |> mapToSignal { success -> Signal<Bool, NoError> in
+                guard success else { return .single(false) }
+                return account.postbox.transaction { transaction -> Bool in
+                    transaction.applyIncomingReadMaxId(index.id)
+                    return true
+                }
+            }
+        }
+
         public func sendScheduledMessageNowInteractively(messageId: MessageId) -> Signal<Never, NoError> {
             return _internal_sendScheduledMessageNowInteractively(postbox: self.account.postbox, messageId: messageId)
         }
@@ -907,6 +949,37 @@ public extension TelegramEngine {
                 }
             }
             |> ignoreValues
+        }
+
+        public func markAllChatsAsReadLocally(items: [(groupId: EngineChatList.Group, filterPredicate: ChatListFilterPredicate?)]) -> Signal<Never, NoError> {
+            return self.account.postbox.transaction { transaction -> Void in
+                for (groupId, filterPredicate) in items {
+                    _internal_markAllChatsAsReadLocally(transaction: transaction, groupId: groupId._asGroup(), filterPredicate: filterPredicate)
+                }
+            }
+            |> ignoreValues
+        }
+
+        public func markAllChatsAsReadOnServerExplicitly() -> Signal<Never, NoError> {
+            return self.account.postbox.transaction { transaction -> [MessageIndex] in
+                var peerIds = Set<PeerId>()
+                for peerId in transaction.chatListGetAllPeerIds(groupId: .root) { peerIds.insert(peerId) }
+                for peerId in transaction.chatListGetAllPeerIds(groupId: Namespaces.PeerGroup.archive) { peerIds.insert(peerId) }
+                return peerIds.compactMap { peerId in
+                    guard peerId.namespace != Namespaces.Peer.SecretChat else { return nil }
+                    return transaction.getTopPeerMessageIndex(peerId: peerId)
+                }.sorted()
+            }
+            |> mapToSignal { [weak self] indices -> Signal<Never, NoError> in
+                guard let self else { return .complete() }
+                // Keep requests sequential to avoid flooding Telegram for large
+                // accounts. Each index was frozen by the transaction above.
+                var result: Signal<Never, NoError> = .complete()
+                for index in indices {
+                    result = result |> then(self.readMessageHistoryExplicitly(index: index) |> ignoreValues)
+                }
+                return result
+            }
         }
         
         public func getRelativeUnreadChatListIndex(filtered: Bool, position: EngineChatList.RelativePosition, groupId: EngineChatList.Group) -> Signal<EngineChatList.Item.Index?, NoError> {

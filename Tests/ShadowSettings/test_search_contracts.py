@@ -13,7 +13,7 @@ class SearchContracts(unittest.TestCase):
     def test_destinations_reference_existing_entries(self):
         enums = {'customization': 'AyuCustomizationEntry', 'spy': 'AyuSpyEntry',
                  'ghost': 'AyuGhostEntry', 'misc': 'AyuMiscEntry'}
-        ids = {'backup': {0, 1, 2}}
+        ids = {'backup': {0, 1, 2}, 'filters': {0}}
         for destination, name in enums.items():
             enum = UI.split(f'private enum {name}:', 1)[1].split('\nprivate ', 1)[0]
             ids[destination] = {int(i) for i in re.findall(r'case \.\w+: return (-?\d+)', enum)}

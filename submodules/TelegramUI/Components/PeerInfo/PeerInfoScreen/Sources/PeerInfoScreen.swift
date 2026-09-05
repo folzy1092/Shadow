@@ -189,6 +189,8 @@ enum PeerInfoSettingsSection {
     case stars
     case ton
     case ayugram
+    case markAllReadLocally
+    case markAllReadOnServer
 }
 
 enum PeerInfoReportType {

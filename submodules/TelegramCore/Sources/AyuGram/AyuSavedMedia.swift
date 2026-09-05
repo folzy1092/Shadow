@@ -488,9 +488,7 @@ private func ayuMediaAutoCleanParameters(transaction: Transaction, postbox: Post
             }
         }
     }
-    // Channel / bot exclusions: scan the peers owning gallery files and add
-    // the matching ones to the whitelist. Channels are recognised by the peer
-    // id namespace alone; bots require a peer lookup.
+    // Channel / bot exclusions apply to both saved files and retained messages.
     if settings.mediaAutoCleanKeepChannels || settings.mediaAutoCleanKeepBots {
         var ownerIds = Set<Int64>()
         for entry in AyuSavedMedia.entries(basePath: postbox.mediaBox.basePath) {
@@ -498,11 +496,16 @@ private func ayuMediaAutoCleanParameters(transaction: Transaction, postbox: Post
                 ownerIds.insert(peerId)
             }
         }
+        for ref in ayuForkStore(transaction: transaction).keptDeleted {
+            ownerIds.insert(ref.peer)
+        }
         for ownerId in ownerIds {
             let peerId = PeerId(ownerId)
-            if settings.mediaAutoCleanKeepChannels, peerId.namespace == Namespaces.Peer.CloudChannel {
-                keep.insert(ownerId)
-                continue
+            if settings.mediaAutoCleanKeepChannels, let channel = transaction.getPeer(peerId) as? TelegramChannel {
+                if case .broadcast = channel.info {
+                    keep.insert(ownerId)
+                    continue
+                }
             }
             if settings.mediaAutoCleanKeepBots, peerId.namespace == Namespaces.Peer.CloudUser {
                 if let user = transaction.getPeer(peerId) as? TelegramUser, user.botInfo != nil {
@@ -523,7 +526,7 @@ public func managedAyuMediaAutoClean(postbox: Postbox) -> Signal<Never, NoError>
         let (maxAge, maxBytes, keep) = ayuMediaAutoCleanParameters(transaction: transaction, postbox: postbox)
         // Same retention window applies to the kept (anti-deleted) messages
         // themselves — not just to their media files in the gallery.
-        ayuForkStorePruneKeptDeleted(transaction: transaction, mediaBox: postbox.mediaBox, maxAge: maxAge, now: Int32(Date().timeIntervalSince1970))
+        ayuForkStorePruneKeptDeleted(transaction: transaction, mediaBox: postbox.mediaBox, maxAge: maxAge, keepPeerIds: keep, now: Int32(Date().timeIntervalSince1970))
         return (maxAge, maxBytes, keep)
     }
     |> mapToSignal { maxAge, maxBytes, keep -> Signal<Never, NoError> in
@@ -558,11 +561,13 @@ public func managedAyuMediaAutoClean(postbox: Postbox) -> Signal<Never, NoError>
 // vs "some removed but the total still looks wrong" points at two different
 // kinds of bugs (the logic never running at all, vs. it running but not
 // matching what the user expects).
-public func ayuRunMediaCleanupNow(postbox: Postbox) -> Signal<(ageRemoved: Int, sizeRemoved: Int, maxAge: Int32, maxBytes: Int64), NoError> {
-    return postbox.transaction { transaction -> (Int32, Int64, Set<Int64>) in
-        return ayuMediaAutoCleanParameters(transaction: transaction, postbox: postbox)
+public func ayuRunMediaCleanupNow(postbox: Postbox) -> Signal<(ageRemoved: Int, sizeRemoved: Int, messagesRemoved: Int, maxAge: Int32, maxBytes: Int64), NoError> {
+    return postbox.transaction { transaction -> (Int32, Int64, Set<Int64>, Int) in
+        let parameters = ayuMediaAutoCleanParameters(transaction: transaction, postbox: postbox)
+        let messagesRemoved = ayuForkStorePruneKeptDeleted(transaction: transaction, mediaBox: postbox.mediaBox, maxAge: parameters.maxAge, keepPeerIds: parameters.keep, now: Int32(Date().timeIntervalSince1970))
+        return (parameters.maxAge, parameters.maxBytes, parameters.keep, messagesRemoved)
     }
-    |> mapToSignal { maxAge, maxBytes, keep -> Signal<(ageRemoved: Int, sizeRemoved: Int, maxAge: Int32, maxBytes: Int64), NoError> in
+    |> mapToSignal { maxAge, maxBytes, keep, messagesRemoved -> Signal<(ageRemoved: Int, sizeRemoved: Int, messagesRemoved: Int, maxAge: Int32, maxBytes: Int64), NoError> in
         let basePath = postbox.mediaBox.basePath
         return Signal { subscriber in
             var ageRemoved = 0
@@ -573,7 +578,7 @@ public func ayuRunMediaCleanupNow(postbox: Postbox) -> Signal<(ageRemoved: Int, 
             if maxBytes > 0 {
                 sizeRemoved = AyuSavedMedia.cleanupBySize(basePath: basePath, maxBytes: maxBytes, keepPeerIds: keep)
             }
-            subscriber.putNext((ageRemoved, sizeRemoved, maxAge, maxBytes))
+            subscriber.putNext((ageRemoved, sizeRemoved, messagesRemoved, maxAge, maxBytes))
             subscriber.putCompletion()
             return EmptyDisposable
         }
