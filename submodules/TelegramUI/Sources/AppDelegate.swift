@@ -1612,6 +1612,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         }
         
         if #available(iOS 12.0, *) {
+            ShadowPushDiagnostics.shared.apnsRegistrationCalled()
             UIApplication.shared.registerForRemoteNotifications()
         }
         
@@ -2060,11 +2061,13 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
     }
     
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
-        Logger.shared.log("App \(self.episodeId)", "register for notifications: didRegisterForRemoteNotificationsWithDeviceToken (deviceToken: \(hexString(deviceToken)))")
+        ShadowPushDiagnostics.shared.apnsRegistrationSucceeded(token: deviceToken)
+        Logger.shared.log("App \(self.episodeId)", "register for notifications: didRegisterForRemoteNotificationsWithDeviceToken (\(deviceToken.count) bytes; token available only in local Shadow diagnostics)")
         self.notificationTokenPromise.set(.single(deviceToken))
     }
     
     func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        ShadowPushDiagnostics.shared.apnsRegistrationFailed(error: error)
         Logger.shared.log("App \(self.episodeId)", "register for notifications: didFailToRegisterForRemoteNotificationsWithError (error: \(error))")
     }
     
@@ -2966,6 +2969,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
     func requestNotificationTokenInvalidation() {
         UIApplication.shared.unregisterForRemoteNotifications()
         DispatchQueue.main.asyncAfter(deadline: DispatchTime.now() + 1.0, execute: {
+            ShadowPushDiagnostics.shared.apnsRegistrationCalled()
             UIApplication.shared.registerForRemoteNotifications()
         })
     }
@@ -3048,6 +3052,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                                 ])
                                 
                                 Logger.shared.log("App \(self.episodeId)", "register for notifications: invoke registerForRemoteNotifications")
+                                ShadowPushDiagnostics.shared.apnsRegistrationCalled()
                                 UIApplication.shared.registerForRemoteNotifications()
                             }
                         }
