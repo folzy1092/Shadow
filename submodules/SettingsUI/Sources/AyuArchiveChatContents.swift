@@ -233,6 +233,58 @@ private func ayuEditHistoryMessages(context: AccountContext, message: Message) -
     |> runOn(Queue.concurrentDefaultQueue())
 }
 
+private func ayuEditComparisonMessages(context: AccountContext, message: Message) -> Signal<[Message], NoError> {
+    let basePath = context.account.postbox.mediaBox.basePath
+    return Signal { subscriber in
+        guard let history = message.attributes.first(where: { $0 is SavedMessageEditsAttribute }) as? SavedMessageEditsAttribute,
+              let previous = history.versions.last else {
+            subscriber.putNext([])
+            subscriber.putCompletion()
+            return EmptyDisposable
+        }
+
+        let oldLine = "− " + (previous.text.isEmpty ? "[без текста]" : previous.text)
+        let newLine = "+ " + (message.text.isEmpty ? "[без текста]" : message.text)
+        var mediaLine = ""
+        let currentMediaKind = AyuSavedMedia.mediaKind(for: message.media)
+        if previous.mediaKind != currentMediaKind || previous.mediaFileName != nil {
+            if previous.mediaKind == nil { mediaLine = "\n+ Вложение добавлено" }
+            else if currentMediaKind == nil { mediaLine = "\n− Вложение удалено" }
+            else { mediaLine = "\n↔ Вложение заменено: \(previous.mediaKind ?? "файл") → \(currentMediaKind ?? "файл")" }
+        }
+        let summaryText = oldLine + "\n" + newLine + mediaLine
+        let oldRange = NSRange(location: 0, length: (oldLine as NSString).length)
+        let newRange = NSRange(location: oldRange.length + 1, length: (newLine as NSString).length)
+        let entities = TextEntitiesMessageAttribute(entities: [
+            MessageTextEntity(range: oldRange.location ..< oldRange.location + oldRange.length, type: .Strikethrough),
+            MessageTextEntity(range: newRange.location ..< newRange.location + newRange.length, type: .Bold)
+        ])
+        let cleanAttributes = message.attributes.filter { !($0 is SavedMessageEditsAttribute) && !($0 is DeletedMessageAttribute) }
+        let summary = message
+            .withUpdatedId(id: MessageId(peerId: message.id.peerId, namespace: Namespaces.Message.Local, id: 1))
+            .withUpdatedStableId(stableId: 1)
+            .withUpdatedText(summaryText)
+            .withUpdatedMedia([])
+            .withUpdatedAttributes(cleanAttributes + [entities])
+        var oldVersion = message
+            .withUpdatedId(id: MessageId(peerId: message.id.peerId, namespace: Namespaces.Message.Local, id: 2))
+            .withUpdatedStableId(stableId: 2)
+            .withUpdatedText("До\n" + previous.text)
+            .withUpdatedTimestamp(previous.date)
+            .withUpdatedAttributes(cleanAttributes)
+        oldVersion = oldVersion.withUpdatedMedia(ayuRestoredMedia(basePath: basePath, version: previous).map { [$0] } ?? [])
+        let current = message
+            .withUpdatedId(id: MessageId(peerId: message.id.peerId, namespace: Namespaces.Message.Local, id: 3))
+            .withUpdatedStableId(stableId: 3)
+            .withUpdatedText("После\n" + message.text)
+            .withUpdatedAttributes(cleanAttributes)
+        subscriber.putNext([summary, oldVersion, current])
+        subscriber.putCompletion()
+        return EmptyDisposable
+    }
+    |> runOn(Queue.concurrentDefaultQueue())
+}
+
 // MARK: - Экраны
 
 private func ayuArchiveController(context: AccountContext, messages: Signal<[Message], NoError>) -> ViewController {
@@ -255,4 +307,8 @@ public func ayuArchiveChatController(context: AccountContext, peerId: PeerId? = 
 // История правок одного сообщения, показанная чатом.
 public func ayuEditHistoryChatController(context: AccountContext, message: Message) -> ViewController {
     return ayuArchiveController(context: context, messages: ayuEditHistoryMessages(context: context, message: message))
+}
+
+public func ayuEditComparisonChatController(context: AccountContext, message: Message) -> ViewController {
+    return ayuArchiveController(context: context, messages: ayuEditComparisonMessages(context: context, message: message))
 }

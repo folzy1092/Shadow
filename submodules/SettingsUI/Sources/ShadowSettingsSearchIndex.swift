@@ -1,7 +1,7 @@
 import Foundation
 
 enum ShadowSettingsSearchDestination: Int32 {
-    case customization, spy, ghost, misc, backup
+    case customization, spy, ghost, misc, backup, filters, pushDiagnostics
 
     var title: String {
         switch self {
@@ -10,6 +10,8 @@ enum ShadowSettingsSearchDestination: Int32 {
         case .ghost: return "Призрак"
         case .misc: return "Разное"
         case .backup: return "Резервная копия настроек"
+        case .filters: return "Фильтры сообщений"
+        case .pushDiagnostics: return "Диагностика push"
         }
     }
 }
@@ -27,6 +29,7 @@ struct ShadowSettingsSearchItem: Equatable {
 
 enum ShadowSettingsSearchIndex {
     static let items: [ShadowSettingsSearchItem] = [
+        ShadowSettingsSearchItem(destination: .pushDiagnostics, entryId: 0, title: "Диагностика push", description: "APNs, подпись приложения, регистрация токена в Telegram и NotificationService", keywords: "notification уведомления push token esign certificate сертификат"),
         ShadowSettingsSearchItem(destination: .customization, entryId: 95, title: "@username для ботов", description: "Также для ботов. Доступно после включения @username вместо имени незнакомых. По умолчанию выключено.", keywords: "username юзернейм бот bot имя", parentEntryId: 94),
         ShadowSettingsSearchItem(destination: .customization, entryId: 94, title: "@username вместо имени незнакомых", description: "В списке чатов, заголовке, профиле и подписях сообщений. Сохранённые контакты не меняются.", keywords: "username юзернейм юз ник name contacts"),
         ShadowSettingsSearchItem(destination: .customization, entryId: 92, title: "Скрытие нижней панели", description: "В списке чатов: скрывать вниз или в обе стороны до полной остановки.", keywords: "auto hide bottom tab bar scroll прокрутка"),
@@ -81,6 +84,7 @@ enum ShadowSettingsSearchIndex {
         ShadowSettingsSearchItem(destination: .ghost, entryId: 5, title: "Скрывать просмотры историй", description: "Не отмечаться среди зрителей", keywords: "hide story views"),
         ShadowSettingsSearchItem(destination: .ghost, entryId: 8, title: "Отправлять через отложенные сообщения", description: "Отправка с задержкой в режиме призрака", keywords: "scheduled delayed send"),
         ShadowSettingsSearchItem(destination: .ghost, entryId: 9, title: "Отправлять без появления онлайн", description: "Повторно устанавливать статус офлайн", keywords: "send without online offline"),
+        ShadowSettingsSearchItem(destination: .filters, entryId: 0, title: "Фильтры сообщений", description: "Локально сворачивать сообщения по словам и фразам", keywords: "local filter phrase скрыть слово фильтр"),
         ShadowSettingsSearchItem(destination: .misc, entryId: 1, title: "Подменить ID", description: "Визуальная подмена ID в профиле", keywords: "spoof profile id"),
         ShadowSettingsSearchItem(destination: .misc, entryId: 3, title: "Подменить DC", description: "Визуальная подмена дата-центра", keywords: "spoof dc data center"),
         ShadowSettingsSearchItem(destination: .misc, entryId: 5, title: "Подменить номер", description: "Визуальная подмена телефона", keywords: "spoof phone number"),

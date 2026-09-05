@@ -63,6 +63,15 @@ func chatHistoryEntriesForView(
     pinToTopStableId: EngineMessage.StableId?
 ) -> ([ChatHistoryEntry], ChatHistoryEntriesForViewState) {
     var currentState = currentState
+
+    let forkMessages = view.entries.map { $0.message }.filter { message in
+        return message.attributes.contains(where: { $0 is DeletedMessageAttribute || $0 is SavedMessageEditsAttribute })
+    }
+    if !forkMessages.isEmpty {
+        let _ = context.account.postbox.transaction { transaction in
+            ayuForkStoreRepair(transaction: transaction, messages: forkMessages)
+        }.startStandalone()
+    }
     
     if historyAppearsCleared {
         return ([], currentState)
@@ -842,6 +851,29 @@ func chatHistoryEntriesForView(
     
     if isMusicPlaylist && entries.count == 1 {
         return ([], currentState)
+    }
+
+    let shadowSettings = currentAyuGramSettings(accountId: context.account.id)
+    if !shadowSettings.messageFilterPhrases.isEmpty {
+        entries = entries.flatMap { entry -> [ChatHistoryEntry] in
+            switch entry {
+            case let .MessageEntry(message, presentation, isRead, location, selection, attributes):
+                guard shadowSettings.matchesMessageFilter(text: message.text) else { return [entry] }
+                let placeholder = message.withUpdatedText("Скрыто локальным фильтром").withUpdatedMedia([])
+                return [.MessageEntry(placeholder, presentation, isRead, location, selection, attributes)]
+            case let .MessageGroupEntry(_, messages, presentation):
+                if !messages.contains(where: { shadowSettings.matchesMessageFilter(text: $0.0.text) }) {
+                    return [entry]
+                }
+                return messages.map { item in
+                    let (message, isRead, selection, attributes, location) = item
+                    let displayed = shadowSettings.matchesMessageFilter(text: message.text) ? message.withUpdatedText("Скрыто локальным фильтром").withUpdatedMedia([]) : message
+                    return .MessageEntry(displayed, presentation, isRead, location, selection, attributes)
+                }
+            default:
+                return [entry]
+            }
+        }
     }
     
     if reverse {

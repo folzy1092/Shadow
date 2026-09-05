@@ -19,39 +19,26 @@ class GhostLastSeenContracts(unittest.TestCase):
         self.assertIn('encode(self.ghostLastSeenTimestamp, forKey: "ghostLastSeenTimestamp")', SETTINGS)
         self.assertNotIn('"ghostLastSeenTimestamp":', (ROOT / "submodules/TelegramCore/Sources/AyuGram/ShadowSettingsTransfer.swift").read_text())
 
-    def test_presence_manager_receives_the_owning_postbox(self):
-        self.assertIn("network: network, postbox: postbox", ACCOUNT)
-        self.assertIn("private let postbox: Postbox", PRESENCE)
-        self.assertIn("updateAyuGramSettings(postbox: self.postbox)", PRESENCE)
+    def test_profile_reads_the_owning_account_from_telegram(self):
+        self.assertIn("shadowOwnServerPresence(account: self.context.account)", HEADER)
+        self.assertIn("account.network.request(Api.functions.users.getUsers(id: [.inputUserSelf]))", PRESENCE)
+        self.assertIn("case let .userStatusOffline(data): return .offline(wasOnline: data.wasOnline)", PRESENCE)
 
-    def test_real_online_to_offline_transition_starts_capture(self):
-        transition = PRESENCE.split("let previousValue = self.wasOnline", 1)[1].split("self.updatePresence(value)", 1)[0]
-        self.assertIn("previousValue == true", transition)
-        self.assertIn("pendingOfflineTransitionTimestamp", transition)
-        self.assertNotIn("previousValue == nil", transition)
+    def test_status_commands_never_generate_last_seen(self):
+        self.assertNotIn("pendingOfflineTransitionTimestamp", PRESENCE)
+        self.assertNotIn("ghostLastSeenTimestamp =", PRESENCE)
+        self.assertNotIn("Date().timeIntervalSince1970", PRESENCE)
 
-    def test_post_send_reassert_captures_real_server_visible_activity(self):
+    def test_reasserts_do_not_advance_the_timestamp(self):
         reassert = PRESENCE.split("self.offlineReassertDisposable", 1)[1].split("deinit", 1)[0]
-        guard = "if self.wasOnline != true"
-        capture = "self.pendingOfflineTransitionTimestamp = Int32(Date().timeIntervalSince1970)"
-        reassert_offline = "self.updatePresence(false)"
-        self.assertIn(guard, reassert)
-        self.assertIn(capture, reassert)
-        self.assertIn(reassert_offline, reassert)
-        self.assertLess(reassert.index(guard), reassert.index(capture))
-        self.assertLess(reassert.index(capture), reassert.index(reassert_offline))
+        self.assertIn("self.updatePresence(false)", reassert)
+        self.assertNotIn("ghostLastSeenTimestamp", reassert)
 
-    def test_timer_reassert_does_not_create_a_timestamp(self):
-        timer = PRESENCE.split("let timer = SignalKitTimer", 1)[1].split("self.onlineTimer = timer", 1)[0]
-        self.assertIn("strongSelf.updatePresence(isOnline)", timer)
-        self.assertNotIn("pendingOfflineTransitionTimestamp", timer)
-        self.assertEqual(PRESENCE.count("pendingOfflineTransitionTimestamp = Int32(Date().timeIntervalSince1970)"), 2)
-
-    def test_only_a_confirmed_offline_rpc_is_saved(self):
-        response = PRESENCE.split("start(next:", 1)[1].split("completed:", 1)[0]
-        self.assertIn("!isOnline", response)
-        self.assertIn("case .boolTrue = result", response)
-        self.assertIn("timestamp > settings.ghostLastSeenTimestamp", response)
+    def test_fetch_failure_is_unknown_and_read_does_not_publish_online(self):
+        query = PRESENCE.split("public func shadowOwnServerPresence", 1)[1].split("private final class", 1)[0]
+        self.assertIn("return .single(.unavailable)", query)
+        self.assertIn("timeout(10.0", query)
+        self.assertNotIn("account.updateStatus", query)
 
     def test_own_profile_replaces_online_only_while_presence_is_hidden(self):
         own_profile = HEADER.split("} else if self.isMyProfile {", 1)[1].split("} else if let _ = threadData", 1)[0]
@@ -59,6 +46,16 @@ class GhostLastSeenContracts(unittest.TestCase):
         self.assertIn("ayuExactLastSeenString", own_profile)
         self.assertIn("presentationData.strings.LastSeen_Lately", own_profile)
         self.assertIn("presentationData.strings.Presence_online", own_profile)
+        self.assertIn("self.ownServerPresence.exactLastSeenTimestamp", own_profile)
+        self.assertIn("Статус Telegram недоступен", own_profile)
+        self.assertNotIn("ghostLastSeenTimestamp", own_profile)
+
+    def test_polling_stops_offscreen_and_in_background(self):
+        self.assertIn("self.ownPresenceApplicationActive && self.ownHeaderVisible", HEADER)
+        self.assertIn("override func didExitHierarchy()", HEADER)
+        self.assertIn("self.ownServerPresenceDisposable.set(nil)", HEADER)
+        self.assertIn("self.ownServerPresenceTimer?.invalidate()", HEADER)
+        self.assertIn("self.ownServerPresence = .unavailable", HEADER)
 
     def test_exact_formatter_never_uses_just_now(self):
         formatter = STRINGS.split("public func ayuExactLastSeenString", 1)[1].split("// AyuGram (Этап 4b)", 1)[0]

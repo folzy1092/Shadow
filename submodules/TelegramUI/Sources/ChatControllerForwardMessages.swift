@@ -16,6 +16,38 @@ import TopMessageReactions
 import ChatMessagePaymentAlertController
 
 extension ChatControllerImpl {
+    private struct AyuCopyMessageBatch {
+        let messages: [EnqueueMessage]
+        let temporaryFiles: [EngineTempBoxFile]
+
+        static let empty = AyuCopyMessageBatch(messages: [], temporaryFiles: [])
+    }
+
+    private func ayuTemporaryUploadCopy(sourcePath: String, fileName: String) -> EngineTempBoxFile? {
+        let file = EngineTempBox.shared.tempFile(fileName: fileName)
+        let fileManager = FileManager.default
+        do {
+            if fileManager.fileExists(atPath: file.path) {
+                try fileManager.removeItem(atPath: file.path)
+            }
+            do {
+                try fileManager.linkItem(atPath: sourcePath, toPath: file.path)
+            } catch {
+                try fileManager.copyItem(atPath: sourcePath, toPath: file.path)
+            }
+            return file
+        } catch {
+            EngineTempBox.shared.dispose(file)
+            return nil
+        }
+    }
+
+    private func ayuDisposeCopyBatch(_ batch: AyuCopyMessageBatch) {
+        for file in batch.temporaryFiles {
+            EngineTempBox.shared.dispose(file)
+        }
+    }
+
     // Shadow: waits for a media resource to be FULLY present in the local
     // MediaBox, actively triggering the download rather than assuming it's
     // already cached. A copy-protected source often has auto-download disabled
@@ -62,9 +94,9 @@ extension ChatControllerImpl {
     // of how many media items the original post had. Messages with no
     // forwardable media and no text (service actions, expired media, webpages-
     // only) are dropped.
-    private func ayuBuildCopyMessages(_ messages: [EngineRawMessage], threadId: Int64?) -> Signal<[EnqueueMessage], NoError> {
+    private func ayuBuildCopyMessages(_ messages: [EngineRawMessage], threadId: Int64?) -> Signal<AyuCopyMessageBatch, NoError> {
         var groupingKeyMap: [Int64: Int64] = [:]
-        var perMessageSignals: [Signal<EnqueueMessage?, NoError>] = []
+        var perMessageSignals: [Signal<(EnqueueMessage?, EngineTempBoxFile?), NoError>] = []
 
         for message in messages {
             // Shadow: resourceToWait carries the ORIGINAL resource only to
@@ -81,8 +113,13 @@ extension ChatControllerImpl {
             // exists to preserve, since the local copy may be the only one left).
             var resourceToWait: (resource: MediaResource, mediaReference: AnyMediaReference, userContentType: MediaResourceUserContentType)?
             var buildMedia: ((String) -> Media)?
+            var temporaryFileName = "shadow-forward.bin"
             for media in message.media {
                 if let file = media as? TelegramMediaFile {
+                    if let fileName = file.fileName {
+                        let lastPathComponent = (fileName as NSString).lastPathComponent
+                        temporaryFileName = lastPathComponent.isEmpty ? "shadow-forward.bin" : lastPathComponent
+                    }
                     resourceToWait = (file.resource, .standalone(media: file), MediaResourceUserContentType(file: file))
                     buildMedia = { path in
                         let localResource = LocalFileReferenceMediaResource(localFilePath: path, randomId: Int64.random(in: Int64.min ... Int64.max))
@@ -90,6 +127,7 @@ extension ChatControllerImpl {
                     }
                     break
                 } else if let image = media as? TelegramMediaImage {
+                    temporaryFileName = "shadow-forward.jpg"
                     if let largest = largestImageRepresentation(image.representations) {
                         resourceToWait = (largest.resource, .standalone(media: image), .image)
                         buildMedia = { path in
@@ -129,27 +167,39 @@ extension ChatControllerImpl {
                 let userLocation: MediaResourceUserLocation = .peer(message.id.peerId)
                 perMessageSignals.append(
                     ayuWaitForResourceDownload(resource: resourceToWait.resource, mediaReference: resourceToWait.mediaReference, userLocation: userLocation, userContentType: resourceToWait.userContentType)
-                    |> map { path -> EnqueueMessage? in
+                    |> mapToSignal { [weak self] path -> Signal<(EnqueueMessage?, EngineTempBoxFile?), NoError> in
                         // Couldn't get the media locally (timed out / resource gone) —
                         // drop this item rather than enqueue an upload that will just
                         // fail; fall back to a text-only message if there was a caption.
                         guard let path else {
                             if !text.isEmpty {
-                                return .message(text: text, attributes: attributes, inlineStickers: [:], mediaReference: nil, threadId: threadId, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])
+                                return .single((.message(text: text, attributes: attributes, inlineStickers: [:], mediaReference: nil, threadId: threadId, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: []), nil))
                             }
-                            return nil
+                            return .single((nil, nil))
                         }
-                        let mediaReference: AnyMediaReference = .standalone(media: buildMedia(path))
-                        return .message(text: text, attributes: attributes, inlineStickers: [:], mediaReference: mediaReference, threadId: threadId, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: localGroupingKey, correlationId: nil, bubbleUpEmojiOrStickersets: [])
+                        return Signal<(EnqueueMessage?, EngineTempBoxFile?), NoError> { subscriber in
+                            guard let self, let temporaryFile = self.ayuTemporaryUploadCopy(sourcePath: path, fileName: temporaryFileName) else {
+                                subscriber.putNext((text.isEmpty ? nil : .message(text: text, attributes: attributes, inlineStickers: [:], mediaReference: nil, threadId: threadId, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: []), nil))
+                                subscriber.putCompletion()
+                                return EmptyDisposable
+                            }
+                            let mediaReference: AnyMediaReference = .standalone(media: buildMedia(temporaryFile.path))
+                            subscriber.putNext((.message(text: text, attributes: attributes, inlineStickers: [:], mediaReference: mediaReference, threadId: threadId, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: localGroupingKey, correlationId: nil, bubbleUpEmojiOrStickersets: []), temporaryFile))
+                            subscriber.putCompletion()
+                            return EmptyDisposable
+                        }
+                        |> runOn(Queue.concurrentDefaultQueue())
                     }
                 )
             } else {
-                perMessageSignals.append(.single(.message(text: text, attributes: attributes, inlineStickers: [:], mediaReference: nil, threadId: threadId, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: localGroupingKey, correlationId: nil, bubbleUpEmojiOrStickersets: [])))
+                perMessageSignals.append(.single((.message(text: text, attributes: attributes, inlineStickers: [:], mediaReference: nil, threadId: threadId, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: localGroupingKey, correlationId: nil, bubbleUpEmojiOrStickersets: []), nil)))
             }
         }
 
         return combineLatest(perMessageSignals)
-        |> map { $0.compactMap { $0 } }
+        |> map { results in
+            return AyuCopyMessageBatch(messages: results.compactMap { $0.0 }, temporaryFiles: results.compactMap { $0.1 })
+        }
     }
 
     func forwardMessages(messageIds: [EngineMessage.Id], options: ChatInterfaceForwardOptionsState? = nil, resetCurrent: Bool = false, asCopy: Bool = false) {
@@ -279,7 +329,7 @@ extension ChatControllerImpl {
                         // (async, see ayuBuildCopyMessages) before this body executes,
                         // while the non-asCopy branch still calls it synchronously —
                         // zero behavior change for the native-forward path.
-                        let continueForward: ([EnqueueMessage]) -> Void = { copyMessages in
+                        let continueForward: (AyuCopyMessageBatch) -> Void = { copyBatch in
                         var result: [EnqueueMessage] = []
                         if messageText.string.count > 0 {
                             let inputText = convertMarkdownToAttributes(messageText)
@@ -300,7 +350,7 @@ extension ChatControllerImpl {
 
                         if asCopy {
                             // Shadow: content-protection bypass — re-send copies instead of native forwards.
-                            result.append(contentsOf: copyMessages)
+                            result.append(contentsOf: copyBatch.messages)
                         } else {
                             result.append(contentsOf: messages.map { message -> EnqueueMessage in
                                 return .forward(source: message.id, threadId: nil, grouping: .auto, attributes: attributes, correlationId: nil)
@@ -336,7 +386,21 @@ extension ChatControllerImpl {
                                 }
                                 
                                 var displayConvertingTooltip = false
-                                
+                                var pendingCopyEnqueues = asCopy ? targetPeersShouldDivert.count : 0
+                                var copyFilesDisposed = false
+                                let finishCopyEnqueue: () -> Void = {
+                                    guard asCopy, !copyFilesDisposed else { return }
+                                    pendingCopyEnqueues -= 1
+                                    if pendingCopyEnqueues <= 0 {
+                                        copyFilesDisposed = true
+                                        strongSelf.ayuDisposeCopyBatch(copyBatch)
+                                    }
+                                }
+                                if pendingCopyEnqueues == 0 {
+                                    copyFilesDisposed = true
+                                    strongSelf.ayuDisposeCopyBatch(copyBatch)
+                                }
+
                                 var displayPeers: [EnginePeer] = []
                                 for (peer, shouldDivert) in targetPeersShouldDivert {
                                     var peerMessages = result
@@ -385,6 +449,7 @@ extension ChatControllerImpl {
                                             strongSelf.shareStatusDisposable?.set((combineLatest(signals)
                                             |> deliverOnMainQueue).startStrict())
                                         }
+                                        finishCopyEnqueue()
                                     })
                                     
                                     if case let .secretChat(secretPeer) = peer {
@@ -478,11 +543,11 @@ extension ChatControllerImpl {
 
                         if asCopy {
                             let _ = (strongSelf.ayuBuildCopyMessages(messages, threadId: nil)
-                            |> deliverOnMainQueue).startStandalone(next: { copyMessages in
-                                continueForward(copyMessages)
+                            |> deliverOnMainQueue).startStandalone(next: { copyBatch in
+                                continueForward(copyBatch)
                             })
                         } else {
-                            continueForward([])
+                            continueForward(.empty)
                         }
                     }
                     
@@ -527,9 +592,14 @@ extension ChatControllerImpl {
                     strongSelf.updateChatPresentationInterfaceState(animated: false, interactive: true, { $0.updatedInterfaceState({ $0.withoutSelectionState() }) })
                     strongController.dismiss()
                     let _ = (strongSelf.ayuBuildCopyMessages(messages, threadId: threadId)
-                    |> deliverOnMainQueue).startStandalone(next: { copyMessages in
-                        if !copyMessages.isEmpty {
-                            let _ = enqueueMessages(account: strongSelf.context.account, peerId: peerId, messages: copyMessages).startStandalone()
+                    |> deliverOnMainQueue).startStandalone(next: { copyBatch in
+                        if !copyBatch.messages.isEmpty {
+                            let _ = (enqueueMessages(account: strongSelf.context.account, peerId: peerId, messages: copyBatch.messages)
+                            |> deliverOnMainQueue).startStandalone(next: { _ in
+                                strongSelf.ayuDisposeCopyBatch(copyBatch)
+                            })
+                        } else {
+                            strongSelf.ayuDisposeCopyBatch(copyBatch)
                         }
                     })
                     return

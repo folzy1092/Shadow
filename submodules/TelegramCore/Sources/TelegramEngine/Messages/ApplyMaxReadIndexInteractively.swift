@@ -334,3 +334,35 @@ func _internal_markAllChatsAsReadInteractively(transaction: Transaction, network
         _internal_togglePeerUnreadMarkInteractively(transaction: transaction, network: network, viewTracker: viewTracker, peerId: peerId, setToValue: false)
     }
 }
+
+// Shadow: clear unread counters in Postbox without installing any network read
+// action. This is deliberately separate from the interactive/server path so a
+// Ghost Mode user can clean the local chat list without emitting receipts.
+func _internal_markAllChatsAsReadLocally(transaction: Transaction, groupId: PeerGroupId, filterPredicate: ChatListFilterPredicate?) {
+    for peerId in transaction.getUnreadChatListPeerIds(groupId: groupId, filterPredicate: filterPredicate, additionalFilter: nil, stopOnFirstMatch: false) {
+        guard let peer = transaction.getPeer(peerId) else {
+            continue
+        }
+        if peer.isForumOrMonoForum {
+            for item in transaction.getMessageHistoryThreadIndex(peerId: peerId, limit: 100) {
+                guard var data = transaction.getMessageHistoryThreadInfo(peerId: peerId, threadId: item.threadId)?.data.get(MessageHistoryThreadData.self),
+                      let index = transaction.getMessageHistoryThreadTopMessage(peerId: peerId, threadId: item.threadId, namespaces: Set([Namespaces.Message.Cloud])) else {
+                    continue
+                }
+                data.incomingUnreadCount = 0
+                data.isMarkedUnread = false
+                data.maxIncomingReadId = max(index.id.id, data.maxIncomingReadId)
+                data.maxKnownMessageId = max(data.maxKnownMessageId, index.id.id)
+                if let entry = StoredMessageHistoryThreadInfo(data) {
+                    transaction.setMessageHistoryThreadInfo(peerId: peerId, threadId: item.threadId, info: entry)
+                }
+            }
+        }
+        if let index = transaction.getTopPeerMessageIndex(peerId: peerId) {
+            transaction.applyIncomingReadMaxId(index.id)
+        } else {
+            let namespace = peerId.namespace == Namespaces.Peer.SecretChat ? Namespaces.Message.SecretIncoming : Namespaces.Message.Cloud
+            transaction.applyMarkUnread(peerId: peerId, namespace: namespace, value: false, interactive: true)
+        }
+    }
+}

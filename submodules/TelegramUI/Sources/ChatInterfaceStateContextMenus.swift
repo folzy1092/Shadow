@@ -1338,6 +1338,11 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         // option for protected chats — so without this the context menu would show
         // neither a working Forward action nor the "forwarding disabled" notice.
         let isServerCopyProtected = message.isServerCopyProtected()
+        let isPrivateChannel: Bool = {
+            guard let channel = message.peers[message.id.peerId] as? TelegramChannel, case .broadcast = channel.info else { return false }
+            return channel.addressName == nil
+        }()
+        let shouldForwardAsCopy = isServerCopyProtected || isPrivateChannel
         if !messageText.isEmpty || richMessageMarkdown != nil || (resourceAvailable && isImage) || diceEmoji != nil {
             if !isExpired {
                 if !isPoll {
@@ -1934,7 +1939,16 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             })))
         }
 
-        if data.messageActions.options.contains(.forward) {
+        if shouldForwardAsCopy {
+            // A protected chat gets exactly one Forward row. It downloads the
+            // source and sends a fresh upload, which already has no source author.
+            actions.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Conversation_ContextMenuForward, textColor: .primary, icon: { theme in
+                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Forward"), color: theme.actionSheet.primaryTextColor)
+            }, action: { _, f in
+                interfaceInteraction.forwardMessagesAsCopy(selectAll || isImage ? messages : [message])
+                f(.dismissWithoutContent)
+            })))
+        } else if data.messageActions.options.contains(.forward) {
             if !isCopyProtected {
                 actions.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Conversation_ContextMenuForward, icon: { theme in
                     return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Forward"), color: theme.actionSheet.primaryTextColor)
@@ -1950,18 +1964,13 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                     f(.dismissWithoutContent)
                 })))
             }
-        } else if isServerCopyProtected {
-            // Shadow: content protection strips the .forward option upstream, so
-            // there is no native Forward action to show — but forwardMessagesAsCopy
-            // (re-upload as a fresh message, bypassing noforwards) still works here.
-            // Gated on the real server-side protection flag (not on isCopyProtected,
-            // which the fork's allowSaveRestrictedContent toggle forces false — that
-            // would hide this row even though the server still blocks native
-            // forwards).
-            actions.append(.action(ContextMenuActionItem(text: "Обычная пересылка запрещена. Переслать копией", textColor: .primary, icon: { theme in
-                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/ForwardDisable"), color: theme.actionSheet.primaryTextColor)
+        }
+
+        if messages.count == 1, message.flags.contains(.Incoming), message.id.namespace == Namespaces.Message.Cloud {
+            actions.append(.action(ContextMenuActionItem(text: "Прочитать", icon: { theme in
+                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/MarkAsRead"), color: theme.actionSheet.primaryTextColor)
             }, action: { _, f in
-                interfaceInteraction.forwardMessagesAsCopy(selectAll || isImage ? messages : [message])
+                let _ = context.engine.messages.readMessageHistoryExplicitly(index: message.index, threadId: message.threadId).startStandalone()
                 f(.dismissWithoutContent)
             })))
         }
@@ -1990,6 +1999,12 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
 
         // AyuGram: "Edit history" — show previous versions captured before edits.
         if messages.count == 1, let editHistory = message.attributes.first(where: { $0 is SavedMessageEditsAttribute }) as? SavedMessageEditsAttribute, !editHistory.versions.isEmpty {
+            actions.append(.action(ContextMenuActionItem(text: "Сравнить правки", icon: { theme in
+                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Edit"), color: theme.actionSheet.primaryTextColor)
+            }, action: { _, f in
+                f(.dismissWithoutContent)
+                controllerInteraction.navigationController()?.pushViewController(ayuEditComparisonChatController(context: context, message: message))
+            })))
             actions.append(.action(ContextMenuActionItem(text: "История изменений", icon: { theme in
                 return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Time"), color: theme.actionSheet.primaryTextColor)
             }, action: { _, f in

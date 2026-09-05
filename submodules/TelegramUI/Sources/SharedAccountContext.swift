@@ -1623,12 +1623,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
     }
     
     public func updateNotificationTokensRegistration() {
-        let sandbox: Bool
-        #if DEBUG
-        sandbox = true
-        #else
-        sandbox = false
-        #endif
+        let sandbox = ShadowPushDiagnostics.telegramSandbox
         
         let settings = self.accountManager.sharedData(keys: [ApplicationSpecificSharedDataKeys.inAppNotificationSettings])
         |> map { sharedData -> (allAccounts: Bool, includeMuted: Bool) in
@@ -1654,7 +1649,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         )
         |> mapToSignal { settings, activeAccountsAndInfo, apsNotificationToken -> Signal<(Bool, Data?), NoError> in
             let (primary, activeAccounts, _) = activeAccountsAndInfo
-            var appliedApsList: [Signal<Bool?, NoError>] = []
+            var appliedApsList: [Signal<NotificationTokenRegistrationResult?, NoError>] = []
             var appliedVoipList: [Signal<Never, NoError>] = []
             var activeProductionUserIds = activeAccounts.map({ $0.1 }).filter({ !$0.account.testingEnvironment }).map({ $0.account.peerId.id })
             var activeTestingUserIds = activeAccounts.map({ $0.1 }).filter({ $0.account.testingEnvironment }).map({ $0.account.peerId.id })
@@ -1678,17 +1673,18 @@ public final class SharedAccountContextImpl: SharedAccountContext {
             }
             
             for (_, account, _) in activeAccounts {
-                let appliedAps: Signal<Bool, NoError>
+                let appliedAps: Signal<NotificationTokenRegistrationResult, NoError>
                 let appliedVoip: Signal<Never, NoError>
                 
                 if !activeProductionUserIds.contains(account.account.peerId.id) && !activeTestingUserIds.contains(account.account.peerId.id) {
+                    ShadowPushDiagnostics.shared.registrationFinished(accountId: account.account.id.int64, tokenType: 1, result: .notRequired)
                     if let apsNotificationToken {
                         appliedAps = account.engine.accountData.unregisterNotificationToken(token: apsNotificationToken, type: .aps(encrypt: false), otherAccountUserIds: (account.account.testingEnvironment ? allTestingUserIds : allProductionUserIds).filter({ $0 != account.account.peerId.id }))
-                        |> map { _ -> Bool in
+                        |> map { _ -> NotificationTokenRegistrationResult in
                         }
-                        |> then(.single(true))
+                        |> then(.single(.notRequired))
                     } else {
-                        appliedAps = .single(true)
+                        appliedAps = .single(.notRequired)
                     }
                     
                     appliedVoip = self.voipNotificationToken
@@ -1703,7 +1699,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
                     if let apsNotificationToken {
                         appliedAps = account.engine.accountData.registerNotificationToken(token: apsNotificationToken, type: .aps(encrypt: true), sandbox: sandbox, otherAccountUserIds: (account.account.testingEnvironment ? activeTestingUserIds : activeProductionUserIds).filter({ $0 != account.account.peerId.id }), excludeMutedChats: !settings.includeMuted)
                     } else {
-                        appliedAps = .single(true)
+                        appliedAps = .single(.notRequired)
                     }
                     appliedVoip = self.voipNotificationToken
                     |> distinctUntilChanged(isEqual: { $0 == $1 })
@@ -1716,19 +1712,21 @@ public final class SharedAccountContextImpl: SharedAccountContext {
                     }
                 }
                 
-                appliedApsList.append(Signal<Bool?, NoError>.single(nil) |> then(appliedAps |> map(Optional.init)))
+                appliedApsList.append(Signal<NotificationTokenRegistrationResult?, NoError>.single(nil) |> then(appliedAps |> map(Optional.init)))
                 appliedVoipList.append(appliedVoip)
             }
             
-            let allApsSuccess = combineLatest(appliedApsList)
+            let apsTokenRemainsValid = combineLatest(appliedApsList)
             |> map { values -> Bool in
-                return !values.contains(false)
+                // RPC failures are visible in diagnostics but must not trigger an
+                // unregister/register loop unless Telegram invalidated the token.
+                return !values.contains(where: { $0?.requiresTokenInvalidation == true })
             }
             
             let allVoipSuccess = combineLatest(appliedVoipList)
             
             return combineLatest(
-                allApsSuccess,
+                apsTokenRemainsValid,
                 Signal<Void, NoError>.single(Void())
                 |> then(
                     allVoipSuccess
@@ -1737,15 +1735,15 @@ public final class SharedAccountContextImpl: SharedAccountContext {
                     }
                 )
             )
-            |> map { allApsSuccess, _ -> (Bool, Data?) in
-                return (allApsSuccess, apsNotificationToken)
+            |> map { tokenRemainsValid, _ -> (Bool, Data?) in
+                return (tokenRemainsValid, apsNotificationToken)
             }
         }
-        |> deliverOnMainQueue).start(next: { [weak self] allApsSuccess, apsToken in
+        |> deliverOnMainQueue).start(next: { [weak self] tokenRemainsValid, apsToken in
             guard let self, let appDelegate = self.appDelegate else {
                 return
             }
-            if !allApsSuccess {
+            if !tokenRemainsValid {
                 if self.invalidatedApsToken != apsToken {
                     self.invalidatedApsToken = apsToken
                     

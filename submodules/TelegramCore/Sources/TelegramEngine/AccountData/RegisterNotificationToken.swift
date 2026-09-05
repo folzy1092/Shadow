@@ -22,9 +22,9 @@ func _internal_unregisterNotificationToken(account: Account, token: Data, type: 
     |> ignoreValues
 }
 
-func _internal_registerNotificationToken(account: Account, token: Data, type: NotificationTokenType, sandbox: Bool, otherAccountUserIds: [PeerId.Id], excludeMutedChats: Bool) -> Signal<Bool, NoError> {
+func _internal_registerNotificationToken(account: Account, token: Data, type: NotificationTokenType, sandbox: Bool, otherAccountUserIds: [PeerId.Id], excludeMutedChats: Bool) -> Signal<NotificationTokenRegistrationResult, NoError> {
     return masterNotificationsKey(account: account, ignoreDisabled: false)
-    |> mapToSignal { masterKey -> Signal<Bool, NoError> in
+    |> mapToSignal { masterKey -> Signal<NotificationTokenRegistrationResult, NoError> in
         let mappedType: Int32
         var keyData = Data()
         switch type {
@@ -41,16 +41,24 @@ func _internal_registerNotificationToken(account: Account, token: Data, type: No
         if excludeMutedChats {
             flags |= 1 << 0
         }
+        ShadowPushDiagnostics.shared.registrationStarted(accountId: account.id.int64, tokenType: mappedType, sandbox: sandbox, encrypted: !keyData.isEmpty, otherAccountCount: otherAccountUserIds.count, noMuted: excludeMutedChats)
         return account.network.request(Api.functions.account.registerDevice(flags: flags, tokenType: mappedType, token: hexString(token), appSandbox: sandbox ? .boolTrue : .boolFalse, secret: Buffer(data: keyData), otherUids: otherAccountUserIds.map({ $0._internalGetInt64Value() })))
-        |> map { _ -> Bool in
-            return true
-        }
-        |> `catch` { error -> Signal<Bool, NoError> in
-            if error.errorDescription == "TOKEN_WAS_INVALIDATED" {
-                return .single(false)
-            } else {
-                return .single(true)
+        |> map { value -> NotificationTokenRegistrationResult in
+            let accepted: Bool
+            switch value {
+            case .boolTrue: accepted = true
+            case .boolFalse: accepted = false
             }
+            let result = NotificationTokenRegistrationResult.acknowledged(accepted)
+            ShadowPushDiagnostics.shared.registrationFinished(accountId: account.id.int64, tokenType: mappedType, result: result)
+            Logger.shared.log("ShadowPush", "token_type=\(mappedType) \(result.diagnosticDescription)")
+            return result
+        }
+        |> `catch` { error -> Signal<NotificationTokenRegistrationResult, NoError> in
+            let result = NotificationTokenRegistrationResult.rpcError(code: error.errorCode, description: error.errorDescription)
+            ShadowPushDiagnostics.shared.registrationFinished(accountId: account.id.int64, tokenType: mappedType, result: result)
+            Logger.shared.log("ShadowPush", "token_type=\(mappedType) \(result.diagnosticDescription)")
+            return .single(result)
         }
     }
 }

@@ -16,8 +16,8 @@ Implemented in `ShadowSettingsDocument`, `ShadowSettingsTransfer` and
 - Coordinated, bounded file-provider reads; iPad popover anchor; temporary export
   cleanup on completion/cancellation.
 
-Filter-rule transfer will be added with the filtering feature, not exposed as a
-nonfunctional control in this commit.
+Local filter phrases and per-chat privacy rules remain device/account-local and
+are deliberately excluded from portable setting exports.
 
 Validation performed on Linux: 8 structural transfer tests, Swift syntax parsing,
 existing CI/visual contracts and workflow shell/YAML checks. The committed
@@ -76,6 +76,23 @@ features has been built yet.
 
 ## Pending features
 
-- Message filtering and rule transfer.
-- Message screenshots.
+- Expand local filters beyond phrases to author and media-type conditions.
+- Add selection of arbitrary edit-history versions in the comparison view.
 - Replies to locally preserved deleted messages.
+
+## Privacy and message tools
+
+- Main Settings now has separate local-only and explicit server-read actions.
+- Incoming cloud messages expose an exact-boundary «Прочитать» action; forum
+  topics use `messages.readDiscussion`.
+- Private broadcast channels and copy-protected chats show one Forward action.
+  Media is hard-linked/copied to an owned temporary file before enqueue and is
+  released after every selected destination has imported the upload.
+- Chat profiles expose account-scoped Shadow rules for receipts and input
+  activity, each with inherit/allow/hide values.
+- Shadow has a searchable phrase-filter screen. Matching text/captions render as
+  a local placeholder without mutating Postbox or sending activity.
+- Edit history has a comparison view with deleted/added text markers,
+  strikethrough/bold entities, before/after copies and media change status.
+- Fork indexes no longer discard entries above 5,000; older missing references
+  are repaired lazily as affected history becomes visible.

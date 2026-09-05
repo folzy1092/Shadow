@@ -1,0 +1,39 @@
+name: Shadow diagnostics tests
+
+on:
+  push:
+    branches: [codex/shadow-features]
+  pull_request:
+    branches: [master, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: shadow-diagnostics-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Parse changed Swift sources
+        run: |
+          # On pull_request HEAD is a merge commit: compare with its base parent.
+          # diff-tree without -m would silently emit no files for that commit.
+          git diff --diff-filter=ACMR --name-only HEAD^ HEAD -- '*.swift' |
+          while IFS= read -r source; do
+            if [ -f "$source" ]; then
+              printf 'Parsing %s\n' "$source"
+              xcrun swiftc -frontend -parse "$source" || exit 1
+            fi
+          done
+      - name: Python source contracts
+        run: python3 -B -m unittest discover -s Tests/ShadowSettings -p 'test_*.py'
+      - name: Swift Foundation behavior tests
+        run: python3 build-system/ci/test_shadow_foundation.py

@@ -42,10 +42,6 @@ public struct AyuForkMsgRef: Codable, Equatable {
 }
 
 public struct AyuForkStore: Codable, Equatable {
-    // Cap each list so the index can never grow without bound; the oldest refs
-    // are dropped first (the actual data is unaffected — only its bookkeeping).
-    static let maxEntries = 5000
-
     public var keptDeleted: [AyuForkMsgRef]
     public var editHistory: [AyuForkMsgRef]
 
@@ -74,12 +70,9 @@ private func updateAyuForkStore(transaction: Transaction, _ f: (AyuForkStore) ->
     }
 }
 
-private func appendCapped(_ list: inout [AyuForkMsgRef], _ refs: [AyuForkMsgRef]) {
+private func appendUnique(_ list: inout [AyuForkMsgRef], _ refs: [AyuForkMsgRef]) {
     for ref in refs where !list.contains(ref) {
         list.append(ref)
-    }
-    if list.count > AyuForkStore.maxEntries {
-        list.removeFirst(list.count - AyuForkStore.maxEntries)
     }
 }
 
@@ -88,7 +81,7 @@ func ayuForkStoreRecordKeptDeleted(transaction: Transaction, ids: [MessageId]) {
     let refs = ids.map(AyuForkMsgRef.init)
     updateAyuForkStore(transaction: transaction) { store in
         var store = store
-        appendCapped(&store.keptDeleted, refs)
+        appendUnique(&store.keptDeleted, refs)
         return store
     }
 }
@@ -98,7 +91,22 @@ func ayuForkStoreRecordEditHistory(transaction: Transaction, id: MessageId) {
     let ref = AyuForkMsgRef(id)
     updateAyuForkStore(transaction: transaction) { store in
         var store = store
-        appendCapped(&store.editHistory, [ref])
+        appendUnique(&store.editHistory, [ref])
+        return store
+    }
+}
+
+// Repairs indexes created by older builds that discarded references after
+// 5,000 entries. Visible history is scanned lazily, so those messages become
+// manageable again without an expensive full database migration at launch.
+public func ayuForkStoreRepair(transaction: Transaction, messages: [Message]) {
+    let kept = messages.filter { message in message.attributes.contains(where: { $0 is DeletedMessageAttribute }) }.map { AyuForkMsgRef($0.id) }
+    let edited = messages.filter { message in message.attributes.contains(where: { $0 is SavedMessageEditsAttribute }) }.map { AyuForkMsgRef($0.id) }
+    guard !kept.isEmpty || !edited.isEmpty else { return }
+    updateAyuForkStore(transaction: transaction) { store in
+        var store = store
+        appendUnique(&store.keptDeleted, kept)
+        appendUnique(&store.editHistory, edited)
         return store
     }
 }
@@ -139,7 +147,7 @@ public func ayuForkStoreClearKeptDeleted(postbox: Postbox) -> Signal<Never, NoEr
 // media gallery was already pruned by age, but kept messages themselves lived
 // forever until the user hit "Очистить" by hand.
 @discardableResult
-func ayuForkStorePruneKeptDeleted(transaction: Transaction, mediaBox: MediaBox, maxAge: Int32, now: Int32) -> Int {
+func ayuForkStorePruneKeptDeleted(transaction: Transaction, mediaBox: MediaBox, maxAge: Int32, keepPeerIds: Set<Int64>, now: Int32) -> Int {
     guard maxAge > 0 else {
         return 0
     }
@@ -150,6 +158,10 @@ func ayuForkStorePruneKeptDeleted(transaction: Transaction, mediaBox: MediaBox, 
     var expiredIds: [MessageId] = []
     var remaining: [AyuForkMsgRef] = []
     for ref in store.keptDeleted {
+        if keepPeerIds.contains(ref.peer) {
+            remaining.append(ref)
+            continue
+        }
         let messageId = ref.messageId
         guard let message = transaction.getMessage(messageId) else {
             // Already gone — the ref is stale, drop it.

@@ -46,6 +46,14 @@ private func rootPathForBasePath(_ appGroupPath: String) -> String {
     return appGroupPath + "/telegram-data"
 }
 
+// Cross-process evidence only; never persist notification payloads or keys.
+private func shadowRecordNSEEvent(_ event: String) {
+    guard let identifier = Bundle.main.bundleIdentifier, let dot = identifier.lastIndex(of: ".") else { return }
+    let group = "group.\(identifier[..<dot])"
+    guard FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: group) != nil else { return }
+    UserDefaults(suiteName: group)?.set("\(ISO8601DateFormatter().string(from: Date())) · \(event)", forKey: "ShadowPushNSELastEvent")
+}
+
 private let deviceColorSpace: CGColorSpace = {
     if #available(iOSApplicationExtension 9.3, iOS 9.3, *) {
         if let colorSpace = CGColorSpace(name: CGColorSpace.displayP3) {
@@ -758,6 +766,7 @@ private final class NotificationServiceHandler {
         let maybeAppGroupUrl = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupName)
 
         guard let appGroupUrl = maybeAppGroupUrl else {
+            NSLog("ShadowPush NSE: expected App Group unavailable: %@", appGroupName)
             return nil
         }
 
@@ -2048,7 +2057,7 @@ private final class NotificationServiceHandler {
                                     // extension is a separate process without the in-memory
                                     // settings snapshot.
                                     reportDeliverySignal = stateManager.postbox.transaction { transaction -> Bool in
-                                        return currentAyuGramSettings(transaction: transaction).suppressReadReceipts
+                                        return currentAyuGramSettings(transaction: transaction).suppressReadReceipts(peerId: messageId.peerId)
                                     }
                                     |> mapToSignal { suppress -> Signal<Bool, NoError> in
                                         if suppress {
@@ -2567,6 +2576,7 @@ final class NotificationService: UNNotificationServiceExtension {
     }
     
     override func didReceive(_ request: UNNotificationRequest, withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void) {
+        shadowRecordNSEEvent("didReceive")
         let episode = String(UInt32.random(in: 0 ..< UInt32.max), radix: 16)
         self.episode = episode
         
@@ -2596,8 +2606,10 @@ final class NotificationService: UNNotificationServiceExtension {
                         strongSelf.contentHandler = nil
                         
                         if let content = content.with({ $0 }) {
+                            shadowRecordNSEEvent("completed: processed content")
                             contentHandler(content.generate())
                         } else if let initialContent = strongSelf.initialContent {
+                            shadowRecordNSEEvent("completed: original fallback")
                             contentHandler(initialContent)
                         }
                     } else {
@@ -2610,6 +2622,7 @@ final class NotificationService: UNNotificationServiceExtension {
     }
     
     override func serviceExtensionTimeWillExpire() {
+        shadowRecordNSEEvent("time limit: fallback")
         if let contentHandler = self.contentHandler {
             self.contentHandler = nil
             
