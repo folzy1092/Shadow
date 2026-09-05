@@ -53,8 +53,7 @@ extension PeerInfoScreenNode {
         case .ayugram:
             self.controller?.push(ayuGramSettingsController(context: self.context))
         case .markAllReadLocally:
-            let groups: [(groupId: EngineChatList.Group, filterPredicate: ChatListFilterPredicate?)] = [(.root, nil), (.archive, nil)]
-            let _ = self.context.engine.messages.markAllChatsAsReadLocally(items: groups).startStandalone()
+            let _ = self.context.engine.messages.markAllChatsAsReadLocally(items: [(.root, nil), (.archive, nil)]).startStandalone()
         case .markAllReadOnServer:
             let accountName = self.data?.peer?.compactDisplayTitle ?? "текущего аккаунта"
             self.controller?.present(textAlertController(context: self.context, updatedPresentationData: self.controller?.updatedPresentationData, title: "Прочитать на сервере?", text: "Прочтения будут отправлены для чатов аккаунта \(accountName). Это действие сработает и при включённом призраке.", actions: [
