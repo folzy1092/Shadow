@@ -388,11 +388,6 @@ func infoItems(
             )
         }
         
-        if user.id != context.account.peerId {
-            items[.ayugram]!.append(PeerInfoScreenDisclosureItem(id: 3499, label: .none, text: "Правила Shadow", icon: PresentationResourcesSettings.security, action: {
-                interaction.getController()?.push(shadowChatPrivacyController(context: context, peerId: user.id, title: EnginePeer(user).compactDisplayTitle))
-            }))
-        }
         // AyuGram: technical info card (id / dc / registration date / mutual
         // contact) — pinned to its own top-of-profile section, not the
         // username/bio section.
@@ -774,9 +769,6 @@ func infoItems(
         // AyuGram: technical info card for channels (id / dc only — registration
         // date is omitted, channel ids don't map onto the user-id timeline, and
         // there's no "mutual contact" concept for channels).
-        items[.ayugram]!.append(PeerInfoScreenDisclosureItem(id: 3499, label: .none, text: "Правила Shadow", icon: PresentationResourcesSettings.security, action: {
-            interaction.getController()?.push(shadowChatPrivacyController(context: context, peerId: channel.id, title: EnginePeer(channel).compactDisplayTitle))
-        }))
         items[.ayugram]!.append(contentsOf: ayuGramProfileItems(peerId: channel.id, photo: channel.photo, includeRegistration: false, idBase: 3500, presentationData: presentationData, getController: { [weak interaction] in
             interaction?.getController()
         }))
