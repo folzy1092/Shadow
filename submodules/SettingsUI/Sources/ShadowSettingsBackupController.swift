@@ -175,9 +175,9 @@ private final class ShadowSettingsBackupCoordinator: NSObject, UIDocumentPickerD
                 if changed.isEmpty { self.message("Настройки из файла уже применены."); return }
                 let ghost = updated.ghostMode ? "включён" : "выключен"
                 let sections = Set(changed.map { key -> String in
-                    if ["ghostMode", "hideOnlineStatus", "hideTyping", "hideReadReceipts", "hideStoryViews", "sendViaScheduled", "sendWithoutOnline"].contains(key) { return "Призрак" }
-                    if key.hasPrefix("keep") || key.hasPrefix("save") || key.hasPrefix("mediaAutoClean") || key == "attachmentSizeLimit" || key == "allowSaveRestrictedContent" || key == "askBeforeStoryView" { return "Шпион" }
-                    return "Кастомизация"
+                    if ["ghostMode", "hideOnlineStatus", "hideTyping", "hideReadReceipts", "hideStoryViews", "sendViaScheduled", "sendWithoutOnline"].contains(key) { return "Приватность" }
+                    if key.hasPrefix("keep") || key.hasPrefix("save") || key.hasPrefix("mediaAutoClean") || key == "showEditComparisonAction" || key == "attachmentSizeLimit" || key == "allowSaveRestrictedContent" || key == "askBeforeStoryView" { return "Архив и медиа" }
+                    return "Интерфейс"
                 }).sorted().joined(separator: ", ")
                 let alert = UIAlertController(title: "Импорт в текущий аккаунт", message: "Формат: \(document.version)\nИзменений: \(changed.count)\nРазделы: \(sections)\n\nПосле импорта режим призрака: \(ghost).\nТекущие настройки будут сохранены для отмены.", preferredStyle: .alert)
                 alert.addAction(UIAlertAction(title: "Отмена", style: .cancel))

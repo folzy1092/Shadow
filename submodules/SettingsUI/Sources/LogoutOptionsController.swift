@@ -135,41 +135,8 @@ public func logoutOptionsController(context: AccountContext, navigationControlle
     let supportPeerDisposable = MetaDisposable()
     
     let arguments = LogoutOptionsItemArguments(addAccount: {
-        let _ = (activeAccountsAndPeers(context: context)
-        |> take(1)
-        |> deliverOnMainQueue
-        ).start(next: { accountAndPeer, accountsAndPeers in
-            var maximumAvailableAccounts: Int = 3
-            if accountAndPeer?.1.isPremium == true && !context.account.testingEnvironment {
-                maximumAvailableAccounts = 4
-            }
-            var count: Int = 1
-            for (accountContext, peer, _) in accountsAndPeers {
-                if !accountContext.account.testingEnvironment {
-                    if peer.isPremium {
-                        maximumAvailableAccounts = 4
-                    }
-                    count += 1
-                }
-            }
-            
-            if count >= maximumAvailableAccounts {
-                var replaceImpl: ((ViewController) -> Void)?
-                let controller = PremiumLimitScreen(context: context, subject: .accounts, count: Int32(count), action: {
-                    let controller = PremiumIntroScreen(context: context, source: .accounts)
-                    replaceImpl?(controller)
-                    return true
-                })
-                replaceImpl = { [weak controller] c in
-                    controller?.replace(with: c)
-                }
-                pushControllerImpl?(controller)
-            } else {
-                context.sharedContext.beginNewAuth(testingEnvironment: context.account.testingEnvironment)
-                
-                dismissImpl?()
-            }
-        })
+        context.sharedContext.beginNewAuth(testingEnvironment: context.account.testingEnvironment)
+        dismissImpl?()
     }, setPasscode: {
         let _ = passcodeOptionsAccessController(context: context, pushController: { controller in
             replaceTopControllerImpl?(controller)
@@ -303,4 +270,3 @@ public func logoutOptionsController(context: AccountContext, navigationControlle
     
     return controller
 }
-

@@ -6625,7 +6625,13 @@ public final class PeerInfoScreenImpl: ViewController, PeerInfoScreen, KeyShortc
             }
             self.activeSessionsContextAndCount.set(activeSessionsContextAndCountSignal)
             
-            self.accountsAndPeers.set(activeAccountsAndPeers(context: context))
+            self.accountsAndPeers.set(combineLatest(activeAccountsAndPeers(context: context), ShadowHiddenAccounts.signal())
+            |> map { accountData, hiddenIds in
+                let (primary, accounts) = accountData
+                return (primary, accounts.filter { account in
+                    return !hiddenIds.contains(account.0.account.peerId.toInt64())
+                })
+            })
             self.accountsAndPeersDisposable = (self.accountsAndPeers.get()
             |> deliverOnMainQueue).startStrict(next: { [weak self] value in
                 self?.accountsAndPeersValue = value

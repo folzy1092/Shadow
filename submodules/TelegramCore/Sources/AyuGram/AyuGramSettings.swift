@@ -34,6 +34,48 @@ public struct ShadowChatPrivacyRule: Codable, Equatable {
     }
 }
 
+// Postbox cannot encode a Dictionary<String, Codable struct> directly: its
+// unkeyed container would mix string keys with object values and traps. Store
+// per-chat overrides as a homogeneous array of keyed records instead.
+private struct ShadowChatPrivacyRuleRecord: Codable, Equatable {
+    let peerId: String
+    let readReceipts: Int32
+    let inputActivity: Int32
+
+    init(peerId: String, rule: ShadowChatPrivacyRule) {
+        self.peerId = peerId
+        self.readReceipts = rule.readReceipts.rawValue
+        self.inputActivity = rule.inputActivity.rawValue
+    }
+
+    var rule: ShadowChatPrivacyRule {
+        return ShadowChatPrivacyRule(
+            readReceipts: ShadowChatPrivacyValue(rawValue: self.readReceipts) ?? .inherit,
+            inputActivity: ShadowChatPrivacyValue(rawValue: self.inputActivity) ?? .inherit
+        )
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case peerId
+        case readReceipts
+        case inputActivity
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.peerId = try container.decode(String.self, forKey: .peerId)
+        self.readReceipts = try container.decodeIfPresent(Int32.self, forKey: .readReceipts) ?? ShadowChatPrivacyValue.inherit.rawValue
+        self.inputActivity = try container.decodeIfPresent(Int32.self, forKey: .inputActivity) ?? ShadowChatPrivacyValue.inherit.rawValue
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(self.peerId, forKey: .peerId)
+        try container.encode(self.readReceipts, forKey: .readReceipts)
+        try container.encode(self.inputActivity, forKey: .inputActivity)
+    }
+}
+
 public struct AyuGramSettings: Codable, Equatable {
     public var messageScreenshot = ShadowMessageScreenshotSettings()
     public var preferUsernameForNonContacts: Bool = false
@@ -44,6 +86,8 @@ public struct AyuGramSettings: Codable, Equatable {
     // Anti-deletion
     public var keepDeletedMessages: Bool
     public var saveEditHistory: Bool
+    // Keep the comparison action out of every message menu until requested.
+    public var showEditComparisonAction: Bool = false
     // Keep opened self-destruct / view-once media in the chat instead of letting
     // it expire (and don't tell the sender it was opened).
     public var keepSelfDestructMedia: Bool
@@ -368,6 +412,7 @@ public struct AyuGramSettings: Codable, Equatable {
     public init(
         keepDeletedMessages: Bool,
         saveEditHistory: Bool,
+        showEditComparisonAction: Bool = false,
         keepSelfDestructMedia: Bool,
         ghostMode: Bool,
         hideOnlineStatus: Bool,
@@ -425,6 +470,7 @@ public struct AyuGramSettings: Codable, Equatable {
     ) {
         self.keepDeletedMessages = keepDeletedMessages
         self.saveEditHistory = saveEditHistory
+        self.showEditComparisonAction = showEditComparisonAction
         self.keepSelfDestructMedia = keepSelfDestructMedia
         self.ghostMode = ghostMode
         self.hideOnlineStatus = hideOnlineStatus
@@ -486,10 +532,21 @@ public struct AyuGramSettings: Codable, Equatable {
         self.messageScreenshot = try container.decodeIfPresent(ShadowMessageScreenshotSettings.self, forKey: "messageScreenshot") ?? ShadowMessageScreenshotSettings()
         self.preferUsernameForNonContacts = ((try container.decodeIfPresent(Int32.self, forKey: "preferUsernameForNonContacts")) ?? 0) != 0
         self.preferUsernameForBots = ((try container.decodeIfPresent(Int32.self, forKey: "preferUsernameForBots")) ?? 0) != 0
-        self.chatPrivacyRules = (try container.decodeIfPresent([String: ShadowChatPrivacyRule].self, forKey: "chatPrivacyRules")) ?? [:]
+        if let records = try? container.decode([ShadowChatPrivacyRuleRecord].self, forKey: "chatPrivacyRulesV2") {
+            var rules: [String: ShadowChatPrivacyRule] = [:]
+            for record in records where !record.rule.isDefault {
+                rules[record.peerId] = record.rule
+            }
+            self.chatPrivacyRules = rules
+        } else if let legacyRules = try? container.decode([String: ShadowChatPrivacyRule].self, forKey: "chatPrivacyRules") {
+            self.chatPrivacyRules = legacyRules.filter { !$0.value.isDefault }
+        } else {
+            self.chatPrivacyRules = [:]
+        }
         self.messageFilterPhrases = (try container.decodeIfPresent([String].self, forKey: "messageFilterPhrases")) ?? []
         self.keepDeletedMessages = ((try container.decodeIfPresent(Int32.self, forKey: "keepDeletedMessages")) ?? 1) != 0
         self.saveEditHistory = ((try container.decodeIfPresent(Int32.self, forKey: "saveEditHistory")) ?? 1) != 0
+        self.showEditComparisonAction = ((try container.decodeIfPresent(Int32.self, forKey: "showEditComparisonAction")) ?? 0) != 0
         self.keepSelfDestructMedia = ((try container.decodeIfPresent(Int32.self, forKey: "keepSelfDestructMedia")) ?? 1) != 0
         self.ghostMode = ((try container.decodeIfPresent(Int32.self, forKey: "ghostMode")) ?? 0) != 0
         self.hideOnlineStatus = ((try container.decodeIfPresent(Int32.self, forKey: "hideOnlineStatus")) ?? 0) != 0
@@ -550,10 +607,15 @@ public struct AyuGramSettings: Codable, Equatable {
         try container.encode(self.messageScreenshot, forKey: "messageScreenshot")
         try container.encode((self.preferUsernameForNonContacts ? 1 : 0) as Int32, forKey: "preferUsernameForNonContacts")
         try container.encode((self.preferUsernameForBots ? 1 : 0) as Int32, forKey: "preferUsernameForBots")
-        try container.encode(self.chatPrivacyRules, forKey: "chatPrivacyRules")
+        let privacyRecords = self.chatPrivacyRules
+            .filter { !$0.value.isDefault }
+            .map { ShadowChatPrivacyRuleRecord(peerId: $0.key, rule: $0.value) }
+            .sorted { $0.peerId < $1.peerId }
+        try container.encode(privacyRecords, forKey: "chatPrivacyRulesV2")
         try container.encode(self.messageFilterPhrases, forKey: "messageFilterPhrases")
         try container.encode((self.keepDeletedMessages ? 1 : 0) as Int32, forKey: "keepDeletedMessages")
         try container.encode((self.saveEditHistory ? 1 : 0) as Int32, forKey: "saveEditHistory")
+        try container.encode((self.showEditComparisonAction ? 1 : 0) as Int32, forKey: "showEditComparisonAction")
         try container.encode((self.keepSelfDestructMedia ? 1 : 0) as Int32, forKey: "keepSelfDestructMedia")
         try container.encode((self.ghostMode ? 1 : 0) as Int32, forKey: "ghostMode")
         try container.encode((self.hideOnlineStatus ? 1 : 0) as Int32, forKey: "hideOnlineStatus")

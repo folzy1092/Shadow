@@ -5,10 +5,10 @@ enum ShadowSettingsSearchDestination: Int32 {
 
     var title: String {
         switch self {
-        case .customization: return "Кастомизация"
-        case .spy: return "Шпион"
-        case .ghost: return "Призрак"
-        case .misc: return "Разное"
+        case .customization: return "Интерфейс"
+        case .spy: return "Архив и медиа"
+        case .ghost: return "Приватность и призрак"
+        case .misc: return "Подмена профиля"
         case .backup: return "Резервная копия настроек"
         case .filters: return "Фильтры сообщений"
         case .pushDiagnostics: return "Диагностика push"
@@ -67,16 +67,17 @@ enum ShadowSettingsSearchIndex {
         ShadowSettingsSearchItem(destination: .spy, entryId: 1, title: "Сохранять удалённые", description: "Локальная история удалённых сообщений", keywords: "keep deleted anti delete антиреколл"),
         ShadowSettingsSearchItem(destination: .spy, entryId: 2, title: "Сохранять самоуничтожающиеся", description: "Оставлять открытые исчезающие медиа", keywords: "view once self destruct"),
         ShadowSettingsSearchItem(destination: .spy, entryId: 5, title: "История редактирования", description: "Сохранять прежние версии сообщений", keywords: "edit history"),
-        ShadowSettingsSearchItem(destination: .spy, entryId: 8, title: "Сохранение защищённого контента", description: "Настройка копирования и пересылки", keywords: "restricted protected copy forward"),
-        ShadowSettingsSearchItem(destination: .spy, entryId: 11, title: "Спрашивать перед просмотром истории", description: "Предупреждение перед открытием чужой истории", keywords: "ask story view"),
-        ShadowSettingsSearchItem(destination: .spy, entryId: 14, title: "Сохранять исчезающие медиа", description: "Копия во внутренней галерее", keywords: "save destructing media"),
-        ShadowSettingsSearchItem(destination: .spy, entryId: 15, title: "Сохранять все входящие медиа", description: "Автоматическая локальная копия вложений", keywords: "save all incoming media"),
-        ShadowSettingsSearchItem(destination: .spy, entryId: 16, title: "Лимит галереи", description: "Ограничение объёма сохранённых вложений", keywords: "attachment size storage limit"),
-        ShadowSettingsSearchItem(destination: .spy, entryId: 17, title: "Срок хранения медиа", description: "Автоматическая очистка по возрасту", keywords: "auto clean retention age"),
-        ShadowSettingsSearchItem(destination: .spy, entryId: 18, title: "Не очищать закреплённые", description: "Исключить закреплённые чаты из очистки", keywords: "keep pinned cleanup"),
-        ShadowSettingsSearchItem(destination: .spy, entryId: 19, title: "Не очищать каналы", description: "Исключить каналы из очистки", keywords: "keep channels cleanup"),
-        ShadowSettingsSearchItem(destination: .spy, entryId: 20, title: "Не очищать ботов", description: "Исключить ботов из очистки", keywords: "keep bots cleanup"),
-        ShadowSettingsSearchItem(destination: .spy, entryId: 21, title: "Хранилище Shadow", description: "Галерея, история и очистка", keywords: "storage archive gallery cache кэш"),
+        ShadowSettingsSearchItem(destination: .spy, entryId: 6, title: "Сравнить правки", description: "Отдельно показывать действие сравнения в меню сообщения", keywords: "edit diff comparison сравнение правок"),
+        ShadowSettingsSearchItem(destination: .spy, entryId: 9, title: "Сохранение защищённого контента", description: "Настройка копирования и пересылки", keywords: "restricted protected copy forward"),
+        ShadowSettingsSearchItem(destination: .spy, entryId: 12, title: "Спрашивать перед просмотром истории", description: "Предупреждение перед открытием чужой истории", keywords: "ask story view"),
+        ShadowSettingsSearchItem(destination: .spy, entryId: 15, title: "Сохранять исчезающие медиа", description: "Копия во внутренней галерее", keywords: "save destructing media"),
+        ShadowSettingsSearchItem(destination: .spy, entryId: 16, title: "Сохранять все входящие медиа", description: "Автоматическая локальная копия вложений", keywords: "save all incoming media"),
+        ShadowSettingsSearchItem(destination: .spy, entryId: 17, title: "Лимит галереи", description: "Ограничение объёма сохранённых вложений", keywords: "attachment size storage limit"),
+        ShadowSettingsSearchItem(destination: .spy, entryId: 18, title: "Срок хранения медиа", description: "Автоматическая очистка по возрасту", keywords: "auto clean retention age"),
+        ShadowSettingsSearchItem(destination: .spy, entryId: 19, title: "Не очищать закреплённые", description: "Исключить закреплённые чаты из очистки", keywords: "keep pinned cleanup"),
+        ShadowSettingsSearchItem(destination: .spy, entryId: 20, title: "Не очищать каналы", description: "Исключить каналы из очистки", keywords: "keep channels cleanup"),
+        ShadowSettingsSearchItem(destination: .spy, entryId: 21, title: "Не очищать ботов", description: "Исключить ботов из очистки", keywords: "keep bots cleanup"),
+        ShadowSettingsSearchItem(destination: .spy, entryId: 22, title: "Хранилище Shadow", description: "Галерея, история и очистка", keywords: "storage archive gallery cache кэш"),
         ShadowSettingsSearchItem(destination: .ghost, entryId: 1, title: "Режим призрака", description: "Главный переключатель скрытия активности", keywords: "ghost mode приватность"),
         ShadowSettingsSearchItem(destination: .ghost, entryId: 2, title: "Не показывать онлайн", description: "Скрывать свой статус при включённом призраке", keywords: "hide online status"),
         ShadowSettingsSearchItem(destination: .ghost, entryId: 3, title: "Не показывать набор текста", description: "Не отправлять статус печати", keywords: "hide typing"),
