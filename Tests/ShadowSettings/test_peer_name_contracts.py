@@ -41,6 +41,13 @@ class PeerNameContracts(unittest.TestCase):
         self.assertIn('ayuGramSettings(postbox: self.context.account.postbox)', source)
         self.assertIn('preferUsernameForNonContacts: shadowSettings.preferUsernameForNonContacts', source)
 
+    def test_channel_comments_keep_saved_contact_names(self):
+        source = self.read('TelegramUI/Sources/ChatHistoryListNode.swift')
+        reply_thread = source.split('Reply threads, including channel comments', 1)[1].split('return ChatMessageItemAssociatedData', 1)[0]
+        self.assertIn('for entry in view.entries', reply_thread)
+        self.assertIn('entry.attributes.authorIsContact', reply_thread)
+        self.assertIn('contactsPeerIds.insert(peerId)', reply_thread)
+
     def test_bot_preference_defaults_to_names_and_is_portable(self):
         settings = self.read('TelegramCore/Sources/AyuGram/AyuGramSettings.swift')
         self.assertIn('public var preferUsernameForBots: Bool = false', settings)

@@ -12,6 +12,7 @@ import NotificationExceptionsScreen
 import TranslateUI
 import TelegramNotices
 import AlertComponent
+import SettingsUI
 
 extension PeerInfoScreenNode {
     func performButtonAction(key: PeerInfoHeaderButtonKey, buttonNode: PeerInfoHeaderButtonNode?, gesture: ContextGesture?) {
@@ -473,6 +474,27 @@ extension PeerInfoScreenNode {
                     }, action: { [weak self] _, f in
                         f(.dismissWithoutContent)
                         self?.performButtonAction(key: .discussion, buttonNode: nil, gesture: nil)
+                    })))
+                }
+
+                let canOpenShadowRules: Bool
+                switch peer {
+                case let .user(user):
+                    canOpenShadowRules = user.id != strongSelf.context.account.peerId && user.botInfo == nil
+                case .channel:
+                    canOpenShadowRules = true
+                default:
+                    canOpenShadowRules = false
+                }
+                if canOpenShadowRules {
+                    items.append(.action(ContextMenuActionItem(text: "Правила Shadow", icon: { theme in
+                        generateTintedImage(image: PresentationResourcesSettings.security, color: theme.contextMenu.primaryColor)
+                    }, action: { [weak self] _, f in
+                        f(.dismissWithoutContent)
+                        guard let self, let peer = self.data?.peer else {
+                            return
+                        }
+                        self.controller?.push(shadowChatPrivacyController(context: self.context, peerId: peer.id, title: peer.compactDisplayTitle))
                     })))
                 }
                 

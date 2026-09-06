@@ -107,13 +107,7 @@ private enum AyuHubEntry: ItemListNodeEntry {
             return AyuHubSection.privacy.rawValue
         case .noResults:
             return AyuHubSection.info.rawValue
-        case .ghost, .spy, .filters:
-            return AyuHubSection.privacy.rawValue
-        case .customization, .misc:
-            return AyuHubSection.interface.rawValue
-        case .hiddenAccounts:
-            return AyuHubSection.accounts.rawValue
-        case .backup, .pushDiagnostics:
+        case .customization, .spy, .ghost, .filters, .misc, .hiddenAccounts, .backup, .pushDiagnostics:
             return AyuHubSection.tools.rawValue
         case .infoFooter:
             return AyuHubSection.info.rawValue
@@ -126,19 +120,19 @@ private enum AyuHubEntry: ItemListNodeEntry {
         case let .result(item): return 100 + item.id
         case .noResults: return 10
         case .customization:
-            return 3
+            return 0
         case .spy:
             return 1
         case .ghost:
-            return 0
+            return 2
+        case .filters:
+            return 3
         case .misc:
             return 4
         case .infoFooter:
             return 9
         case .backup:
             return 6
-        case .filters:
-            return 2
         case .hiddenAccounts:
             return 5
         case .pushDiagnostics:
@@ -160,15 +154,15 @@ private enum AyuHubEntry: ItemListNodeEntry {
         case .noResults:
             return ItemListTextItem(presentationData: presentationData, text: .plain("Ничего не найдено. Попробуйте другое слово на русском или английском."), sectionId: self.section)
         case .customization:
-            return ItemListDisclosureItem(presentationData: presentationData, title: "Интерфейс", label: "", sectionId: self.section, style: .blocks, action: {
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Кастомизация", label: "", sectionId: self.section, style: .blocks, action: {
                 arguments.openCustomization()
             })
         case .spy:
-            return ItemListDisclosureItem(presentationData: presentationData, title: "Архив, правки и медиа", label: "", sectionId: self.section, style: .blocks, action: {
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Шпион", label: "", sectionId: self.section, style: .blocks, action: {
                 arguments.openSpy()
             })
         case .ghost:
-            return ItemListDisclosureItem(presentationData: presentationData, title: "Приватность и призрак", label: "", sectionId: self.section, style: .blocks, action: {
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Призрак", label: "", sectionId: self.section, style: .blocks, action: {
                 arguments.openGhost()
             })
         case .misc:
@@ -176,15 +170,15 @@ private enum AyuHubEntry: ItemListNodeEntry {
                 arguments.openMisc()
             })
         case .infoFooter:
-            return ItemListTextItem(presentationData: presentationData, text: .plain("Настройки разделены по назначению. Скрытый аккаунт остаётся авторизованным и продолжает получать обновления, но не показывается в переключателе аккаунтов."), sectionId: self.section)
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Скрытый аккаунт остаётся авторизованным и продолжает получать обновления, но не показывается в переключателе аккаунтов."), sectionId: self.section)
         case .backup:
             return ItemListDisclosureItem(presentationData: presentationData, title: "Резервная копия настроек", label: "", sectionId: self.section, style: .blocks, action: arguments.openBackup)
         case .filters:
-            return ItemListDisclosureItem(presentationData: presentationData, title: "Фильтры сообщений", label: "", sectionId: self.section, style: .blocks, action: arguments.openFilters)
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Фильтры", label: "", sectionId: self.section, style: .blocks, action: arguments.openFilters)
         case .hiddenAccounts:
-            return ItemListDisclosureItem(presentationData: presentationData, title: "Скрытые аккаунты", label: "", sectionId: self.section, style: .blocks, action: arguments.openHiddenAccounts)
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Скрытие аккаунтов", label: "", sectionId: self.section, style: .blocks, action: arguments.openHiddenAccounts)
         case .pushDiagnostics:
-            return ItemListDisclosureItem(presentationData: presentationData, title: "Диагностика push", label: "", sectionId: self.section, style: .blocks, action: arguments.openPushDiagnostics)
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Разное", label: "", sectionId: self.section, style: .blocks, action: arguments.openPushDiagnostics)
         }
     }
 }
@@ -267,7 +261,7 @@ public func ayuGramSettingsController(context: AccountContext) -> ViewController
     |> map { presentationData, query -> (ItemListControllerState, (ItemListNodeState, Any)) in
         var entries: [AyuHubEntry] = [.query(query)]
         if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            entries += [.ghost, .spy, .filters, .customization, .misc, .hiddenAccounts, .backup, .pushDiagnostics, .infoFooter]
+            entries += [.customization, .spy, .ghost, .filters, .misc, .hiddenAccounts, .backup, .pushDiagnostics, .infoFooter]
         } else {
             let matches = ShadowSettingsSearchIndex.search(query)
             entries += matches.isEmpty ? [.noResults] : matches.map { .result($0) }
@@ -1092,7 +1086,7 @@ private func ayuCustomizationController(context: AccountContext, focus: ShadowSe
     )
     |> deliverOnMainQueue
     |> map { presentationData, settings -> (ItemListControllerState, (ItemListNodeState, Any)) in
-        let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Интерфейс"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
+        let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Кастомизация"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
         let entries = ayuCustomizationEntries(settings: settings)
         focusedIndex = shadowSettingsFocusIndex(stableIds: entries.map { $0.stableId }, target: focus)
         let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, initialScrollToItem: shadowSettingsInitialScroll(index: focusedIndex), animateChanges: true)
@@ -1534,7 +1528,7 @@ private func ayuSpyController(context: AccountContext, focus: ShadowSettingsSear
     )
     |> deliverOnMainQueue
     |> map { presentationData, settings -> (ItemListControllerState, (ItemListNodeState, Any)) in
-        let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Архив и медиа"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
+        let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Шпион"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
         let entries = ayuSpyEntries(settings: settings)
         focusedIndex = shadowSettingsFocusIndex(stableIds: entries.map { $0.stableId }, target: focus)
         let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, initialScrollToItem: shadowSettingsInitialScroll(index: focusedIndex), animateChanges: true)
@@ -1723,7 +1717,7 @@ private func ayuGhostController(context: AccountContext, focus: ShadowSettingsSe
     )
     |> deliverOnMainQueue
     |> map { presentationData, settings -> (ItemListControllerState, (ItemListNodeState, Any)) in
-        let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Приватность"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
+        let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Призрак"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
         let entries = ayuGhostEntries(settings: settings)
         focusedIndex = shadowSettingsFocusIndex(stableIds: entries.map { $0.stableId }, target: focus)
         let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, initialScrollToItem: shadowSettingsInitialScroll(index: focusedIndex), animateChanges: true)

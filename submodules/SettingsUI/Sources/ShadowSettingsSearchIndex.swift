@@ -5,13 +5,13 @@ enum ShadowSettingsSearchDestination: Int32 {
 
     var title: String {
         switch self {
-        case .customization: return "Интерфейс"
-        case .spy: return "Архив и медиа"
-        case .ghost: return "Приватность и призрак"
+        case .customization: return "Кастомизация"
+        case .spy: return "Шпион"
+        case .ghost: return "Призрак"
         case .misc: return "Подмена профиля"
         case .backup: return "Резервная копия настроек"
-        case .filters: return "Фильтры сообщений"
-        case .pushDiagnostics: return "Диагностика push"
+        case .filters: return "Фильтры"
+        case .pushDiagnostics: return "Разное"
         }
     }
 }
