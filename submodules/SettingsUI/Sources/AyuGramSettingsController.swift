@@ -341,6 +341,46 @@ private enum ShadowHiddenAccountsEntry: ItemListNodeEntry {
     }
 }
 
+private struct ShadowActiveAccount {
+    let context: AccountContext
+    let peer: EnginePeer
+    let isCurrent: Bool
+    let sortOrder: Int32
+}
+
+private func shadowActiveAccounts(context: AccountContext) -> Signal<[ShadowActiveAccount], NoError> {
+    return context.sharedContext.activeAccountContexts
+    |> mapToSignal { primary, accounts, _ -> Signal<[ShadowActiveAccount], NoError> in
+        let primaryId = primary?.account.id
+        let accountSignals: [Signal<ShadowActiveAccount?, NoError>] = accounts.map { _, accountContext, sortOrder in
+            return accountContext.engine.data.subscribe(TelegramEngine.EngineData.Item.Peer.Peer(id: accountContext.account.peerId))
+            |> map { peer -> ShadowActiveAccount? in
+                guard let peer else {
+                    return nil
+                }
+                return ShadowActiveAccount(
+                    context: accountContext,
+                    peer: peer,
+                    isCurrent: accountContext.account.id == primaryId,
+                    sortOrder: sortOrder
+                )
+            }
+        }
+        guard !accountSignals.isEmpty else {
+            return .single([])
+        }
+        return combineLatest(accountSignals)
+        |> map { values -> [ShadowActiveAccount] in
+            return values.compactMap { $0 }.sorted { lhs, rhs in
+                if lhs.isCurrent != rhs.isCurrent {
+                    return lhs.isCurrent
+                }
+                return lhs.sortOrder < rhs.sortOrder
+            }
+        }
+    }
+}
+
 private func shadowHiddenAccountsController(context: AccountContext) -> ViewController {
     let arguments = ShadowHiddenAccountsArguments(updateHidden: { peerId, value in
         ShadowHiddenAccounts.setHidden(value, peerId: peerId)
@@ -348,21 +388,16 @@ private func shadowHiddenAccountsController(context: AccountContext) -> ViewCont
 
     let signal = combineLatest(queue: .mainQueue(),
         context.sharedContext.presentationData,
-        activeAccountsAndPeers(context: context),
+        shadowActiveAccounts(context: context),
         ShadowHiddenAccounts.signal()
     )
     |> deliverOnMainQueue
-    |> map { presentationData, primary, hiddenIds -> (ItemListControllerState, (ItemListNodeState, Any)) in
+    |> map { presentationData, accounts, hiddenIds -> (ItemListControllerState, (ItemListNodeState, Any)) in
         var entries: [ShadowHiddenAccountsEntry] = []
         var index: Int32 = 0
-        if let current = primary.0 {
-            let peerId = current.0.account.peerId
-            entries.append(.account(index, peerId, current.1.compactDisplayTitle, true, hiddenIds.contains(peerId.toInt64())))
-            index += 1
-        }
-        for account in primary.1 {
-            let peerId = account.0.account.peerId
-            entries.append(.account(index, peerId, account.1.compactDisplayTitle, false, hiddenIds.contains(peerId.toInt64())))
+        for account in accounts {
+            let peerId = account.context.account.peerId
+            entries.append(.account(index, peerId, account.peer.compactDisplayTitle, account.isCurrent, hiddenIds.contains(peerId.toInt64())))
             index += 1
         }
         entries.append(.info)
