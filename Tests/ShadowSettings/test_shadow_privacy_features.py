@@ -18,9 +18,20 @@ class ShadowPrivacyFeatures(unittest.TestCase):
     def test_explicit_read_keeps_selected_max_id(self):
         source = (CORE / "TelegramEngine/Messages/TelegramEngineMessages.swift").read_text()
         explicit = source.split("public func readMessageHistoryExplicitly", 1)[1].split("public func sendScheduledMessageNowInteractively", 1)[0]
-        self.assertIn("maxId: index.id.id", explicit)
+        self.assertIn("peerId: index.id.peerId, maxId: index.id.id", explicit)
+        self.assertIn("localMessageId: index.id", explicit)
         self.assertIn("messages.readDiscussion", explicit)
         self.assertNotIn("suppressReadReceipts", explicit)
+
+    def test_server_read_all_uses_server_boundary_and_reports_result(self):
+        engine = (CORE / "TelegramEngine/Messages/TelegramEngineMessages.swift").read_text()
+        action = (UI / "Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoScreenSettingsActions.swift").read_text()
+        read_all = engine.split("public func markAllChatsAsReadOnServerExplicitly", 1)[1].split("public func getRelativeUnreadChatListIndex", 1)[0]
+        self.assertIn("maxId: Int32.max - 1", read_all)
+        self.assertIn("let batchSize = 16", read_all)
+        self.assertIn("_internal_markAllChatsAsReadLocally", read_all)
+        self.assertIn('title: "Прочтение завершено"', action)
+        self.assertIn("result.failed", action)
 
     def test_main_settings_has_both_actions(self):
         source = (UI / "Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoSettingsItems.swift").read_text()
