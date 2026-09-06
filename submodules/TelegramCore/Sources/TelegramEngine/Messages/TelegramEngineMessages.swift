@@ -105,26 +105,30 @@ public extension TelegramEngine {
         // not depend on the background read-state synchronizer, so Ghost Mode
         // cannot suppress it or replace maxId with a later local boundary.
         public func readMessageHistoryExplicitly(index: MessageIndex, threadId: Int64? = nil) -> Signal<Bool, NoError> {
+            return self.readMessageHistoryExplicitly(peerId: index.id.peerId, maxId: index.id.id, threadId: threadId, localMessageId: index.id)
+        }
+
+        private func readMessageHistoryExplicitly(peerId: PeerId, maxId: Int32, threadId: Int64? = nil, localMessageId: MessageId? = nil) -> Signal<Bool, NoError> {
             let account = self.account
             return account.postbox.transaction { transaction -> Api.InputPeer? in
-                return transaction.getPeer(index.id.peerId).flatMap(apiInputPeer)
+                return transaction.getPeer(peerId).flatMap(apiInputPeer)
             }
             |> mapToSignal { inputPeer -> Signal<Bool, NoError> in
                 guard let inputPeer else {
                     return .single(false)
                 }
                 if let threadId {
-                    return account.network.request(Api.functions.messages.readDiscussion(peer: inputPeer, msgId: Int32(clamping: threadId), readMaxId: index.id.id))
+                    return account.network.request(Api.functions.messages.readDiscussion(peer: inputPeer, msgId: Int32(clamping: threadId), readMaxId: maxId))
                     |> map { _ in true }
                     |> `catch` { _ in .single(false) }
                 }
                 switch inputPeer {
                 case let .inputPeerChannel(data):
-                    return account.network.request(Api.functions.channels.readHistory(channel: .inputChannel(.init(channelId: data.channelId, accessHash: data.accessHash)), maxId: index.id.id))
+                    return account.network.request(Api.functions.channels.readHistory(channel: .inputChannel(.init(channelId: data.channelId, accessHash: data.accessHash)), maxId: maxId))
                     |> map { _ in true }
                     |> `catch` { _ in .single(false) }
                 default:
-                    return account.network.request(Api.functions.messages.readHistory(peer: inputPeer, maxId: index.id.id))
+                    return account.network.request(Api.functions.messages.readHistory(peer: inputPeer, maxId: maxId))
                     |> map { result -> Bool in
                         if case let .affectedMessages(data) = result {
                             account.stateManager.addUpdateGroups([.updatePts(pts: data.pts, ptsCount: data.ptsCount)])
@@ -136,8 +140,9 @@ public extension TelegramEngine {
             }
             |> mapToSignal { success -> Signal<Bool, NoError> in
                 guard success else { return .single(false) }
+                guard let localMessageId else { return .single(true) }
                 return account.postbox.transaction { transaction -> Bool in
-                    transaction.applyIncomingReadMaxId(index.id)
+                    transaction.applyIncomingReadMaxId(localMessageId)
                     return true
                 }
             }
@@ -960,25 +965,51 @@ public extension TelegramEngine {
             |> ignoreValues
         }
 
-        public func markAllChatsAsReadOnServerExplicitly() -> Signal<Never, NoError> {
-            return self.account.postbox.transaction { transaction -> [MessageIndex] in
+        public func markAllChatsAsReadOnServerExplicitly() -> Signal<(succeeded: Int, failed: Int), NoError> {
+            let account = self.account
+            return account.postbox.transaction { transaction -> [PeerId] in
                 var peerIds = Set<PeerId>()
                 for peerId in transaction.chatListGetAllPeerIds(groupId: .root) { peerIds.insert(peerId) }
                 for peerId in transaction.chatListGetAllPeerIds(groupId: Namespaces.PeerGroup.archive) { peerIds.insert(peerId) }
-                return peerIds.compactMap { peerId in
-                    guard peerId.namespace != Namespaces.Peer.SecretChat else { return nil }
-                    return transaction.getTopPeerMessageIndex(peerId: peerId)
-                }.sorted()
+                return peerIds.filter { $0.namespace != Namespaces.Peer.SecretChat }
             }
-            |> mapToSignal { [weak self] indices -> Signal<Never, NoError> in
-                guard let self else { return .complete() }
-                // Keep requests sequential to avoid flooding Telegram for large
-                // accounts. Each index was frozen by the transaction above.
-                var result: Signal<Never, NoError> = .complete()
-                for index in indices {
-                    result = result |> then(self.readMessageHistoryExplicitly(index: index) |> ignoreValues)
+            |> mapToSignal { [weak self] peerIds -> Signal<(succeeded: Int, failed: Int), NoError> in
+                guard let self else { return .single((0, peerIds.count)) }
+
+                // Read to the server maximum instead of the latest locally
+                // loaded message. Process a small batch in parallel, then move
+                // to the next one, so large accounts finish quickly without
+                // flooding Telegram with every dialog at once.
+                let batchSize = 16
+                var result: Signal<(succeeded: Int, failed: Int), NoError> = .single((0, 0))
+                var offset = 0
+                while offset < peerIds.count {
+                    let upperBound = min(offset + batchSize, peerIds.count)
+                    let batch = Array(peerIds[offset ..< upperBound])
+                    let batchResult = combineLatest(batch.map { peerId in
+                        return self.readMessageHistoryExplicitly(peerId: peerId, maxId: Int32.max - 1)
+                    })
+                    |> map { values -> (succeeded: Int, failed: Int) in
+                        let succeeded = values.reduce(0) { $0 + ($1 ? 1 : 0) }
+                        return (succeeded, values.count - succeeded)
+                    }
+                    result = result
+                    |> mapToSignal { current in
+                        return batchResult
+                        |> map { batch in
+                            return (current.succeeded + batch.succeeded, current.failed + batch.failed)
+                        }
+                    }
+                    offset = upperBound
                 }
                 return result
+                |> mapToSignal { totals in
+                    return account.postbox.transaction { transaction -> (succeeded: Int, failed: Int) in
+                        _internal_markAllChatsAsReadLocally(transaction: transaction, groupId: .root, filterPredicate: nil)
+                        _internal_markAllChatsAsReadLocally(transaction: transaction, groupId: Namespaces.PeerGroup.archive, filterPredicate: nil)
+                        return totals
+                    }
+                }
             }
         }
         

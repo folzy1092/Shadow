@@ -55,14 +55,38 @@ extension PeerInfoScreenNode {
         case .markAllReadLocally:
             let _ = self.context.engine.messages.markAllChatsAsReadLocally(items: [(.root, nil), (.archive, nil)]).startStandalone()
         case .markAllReadOnServer:
+            guard let controller = self.controller else {
+                return
+            }
             let accountName = self.data?.peer?.compactDisplayTitle ?? "текущего аккаунта"
-            self.controller?.present(textAlertController(context: self.context, updatedPresentationData: self.controller?.updatedPresentationData, title: "Прочитать на сервере?", text: "Прочтения будут отправлены для чатов аккаунта \(accountName). Это действие сработает и при включённом призраке.", actions: [
+            let confirmation = textAlertController(context: self.context, updatedPresentationData: controller.updatedPresentationData, title: "Прочитать на сервере?", text: "Прочтения будут отправлены для всех обычных чатов аккаунта \(accountName). Это действие работает и при включённом призраке.", actions: [
                 TextAlertAction(type: .genericAction, title: "Отмена", action: {}),
                 TextAlertAction(type: .defaultAction, title: "Прочитать", action: { [weak self] in
                     guard let self else { return }
-                    let _ = self.context.engine.messages.markAllChatsAsReadOnServerExplicitly().startStandalone()
+                    let progress = OverlayStatusController(theme: self.presentationData.theme, type: .loading(cancelled: nil))
+                    self.controller?.present(progress, in: .window(.root))
+                    self.activeActionDisposable.set((self.context.engine.messages.markAllChatsAsReadOnServerExplicitly()
+                    |> deliverOnMainQueue).startStrict(next: { [weak self, weak progress] result in
+                        progress?.dismiss()
+                        guard let self else { return }
+                        let text: String
+                        if result.failed == 0 {
+                            text = "Готово. Сервер подтвердил прочтение для \(result.succeeded) чатов."
+                        } else {
+                            text = "Сервер подтвердил \(result.succeeded) чатов. Не удалось обработать: \(result.failed). Проверьте соединение и повторите попытку."
+                        }
+                        let resultAlert = textAlertController(context: self.context, updatedPresentationData: self.controller?.updatedPresentationData, title: "Прочтение завершено", text: text, actions: [
+                            TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})
+                        ])
+                        Queue.mainQueue().after(0.1) { [weak self] in
+                            self?.controller?.present(resultAlert, in: .window(.root))
+                        }
+                    }))
                 })
-            ]), in: .window(.root))
+            ])
+            Queue.mainQueue().async { [weak controller] in
+                controller?.present(confirmation, in: .window(.root))
+            }
         case .profile:
             self.controller?.push(PeerInfoScreenImpl(
                 context: self.context,
