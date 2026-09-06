@@ -51,6 +51,13 @@ class ShadowPrivacyFeatures(unittest.TestCase):
         self.assertIn("suppressInputActivity(peerId: peerId", typing)
         self.assertTrue((SETTINGS_UI / "ShadowChatPrivacyController.swift").exists())
 
+    def test_settings_store_chat_rules_without_mixing_dictionary_keys_and_values(self):
+        settings = (CORE / "AyuGram/AyuGramSettings.swift").read_text()
+        self.assertIn("private struct ShadowChatPrivacyRuleRecord", settings)
+        self.assertIn('forKey: "chatPrivacyRulesV2"', settings)
+        self.assertIn("try container.encode(self.readReceipts", settings)
+        self.assertNotIn('try container.encode(self.chatPrivacyRules, forKey: "chatPrivacyRules")', settings)
+
     def test_filters_and_edit_comparison_have_visible_entries(self):
         hub = (SETTINGS_UI / "AyuGramSettingsController.swift").read_text()
         history = (SETTINGS_UI / "AyuArchiveChatContents.swift").read_text()
@@ -59,6 +66,30 @@ class ShadowPrivacyFeatures(unittest.TestCase):
         self.assertIn("Скрыто локальным фильтром", (UI / "Sources/ChatHistoryEntriesForView.swift").read_text())
         self.assertIn("ayuEditComparisonChatController", history)
         self.assertIn('text: "Сравнить правки"', menu)
+        self.assertIn("showEditComparisonAction", hub)
+        self.assertIn("ayuGramSettingsCurrent.showEditComparisonAction", menu)
+
+    def test_hidden_accounts_are_local_and_filtered_from_switcher(self):
+        storage = (CORE / "AyuGram/ShadowHiddenAccounts.swift").read_text()
+        hub = (SETTINGS_UI / "AyuGramSettingsController.swift").read_text()
+        settings_screen = (UI / "Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoScreen.swift").read_text()
+        self.assertIn("shadow.hiddenAccountPeerIds.v1", storage)
+        self.assertIn('title: "Скрытые аккаунты"', hub)
+        self.assertIn("ShadowHiddenAccounts.setHidden", hub)
+        self.assertIn("ShadowHiddenAccounts.signal()", settings_screen)
+        self.assertIn("!hiddenIds.contains", settings_screen)
+
+    def test_account_addition_has_no_client_premium_limit(self):
+        paths = [
+            SETTINGS_UI / "LogoutOptionsController.swift",
+            SETTINGS_UI / "DeleteAccountOptionsController.swift",
+            SETTINGS_UI / "Search/SettingsSearchableItems.swift",
+            UI / "Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoScreenSettingsActions.swift",
+        ]
+        for path in paths:
+            source = path.read_text()
+            self.assertNotIn("maximumAvailableAccounts", source, path)
+            self.assertNotIn("maximumNumberOfAccounts", source, path)
 
     def test_cleanup_and_restore_regressions(self):
         store = (CORE / "AyuGram/AyuForkStore.swift").read_text()

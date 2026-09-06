@@ -42,7 +42,12 @@ private final class ShadowMessageFiltersArguments {
 }
 
 public func shadowMessageFiltersController(context: AccountContext) -> ViewController {
+    // Keep the raw draft separate from the normalized stored phrases. Without
+    // this, every keystroke rebuilds the input from `messageFilterPhrases` and
+    // removes a trailing comma while the user is still typing the next phrase.
+    let draftText = ValuePromise<String?>(nil, ignoreRepeated: true)
     let setText: (String) -> Void = { text in
+        draftText.set(text)
         let phrases = text.split(separator: ",", omittingEmptySubsequences: true).map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
         let _ = updateAyuGramSettings(postbox: context.account.postbox) { current in
             var current = current
@@ -51,10 +56,11 @@ public func shadowMessageFiltersController(context: AccountContext) -> ViewContr
         }.startStandalone()
     }
     let arguments = ShadowMessageFiltersArguments(update: setText, clear: { setText("") })
-    let signal = combineLatest(queue: .mainQueue(), context.sharedContext.presentationData, ayuGramSettings(postbox: context.account.postbox))
+    let signal = combineLatest(queue: .mainQueue(), context.sharedContext.presentationData, ayuGramSettings(postbox: context.account.postbox), draftText.get())
     |> deliverOnMainQueue
-    |> map { presentationData, settings -> (ItemListControllerState, (ItemListNodeState, Any)) in
-        let entries: [ShadowMessageFiltersEntry] = [.input(settings.messageFilterPhrases.joined(separator: ", ")), .help, .clear]
+    |> map { presentationData, settings, draftText -> (ItemListControllerState, (ItemListNodeState, Any)) in
+        let text = draftText ?? settings.messageFilterPhrases.joined(separator: ", ")
+        let entries: [ShadowMessageFiltersEntry] = [.input(text), .help, .clear]
         let state = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Фильтры сообщений"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
         return (state, (ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, animateChanges: true), arguments))
     }

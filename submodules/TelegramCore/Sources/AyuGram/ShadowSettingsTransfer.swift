@@ -19,6 +19,7 @@ public enum ShadowSettingsTransfer {
     private static let booleanFields: [String: WritableKeyPath<AyuGramSettings, Bool>] = [
         "keepDeletedMessages": \.keepDeletedMessages,
         "saveEditHistory": \.saveEditHistory,
+        "showEditComparisonAction": \.showEditComparisonAction,
         "keepSelfDestructMedia": \.keepSelfDestructMedia,
         "ghostMode": \.ghostMode,
         "hideOnlineStatus": \.hideOnlineStatus,

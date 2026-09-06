@@ -1999,12 +1999,14 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
 
         // AyuGram: "Edit history" — show previous versions captured before edits.
         if messages.count == 1, let editHistory = message.attributes.first(where: { $0 is SavedMessageEditsAttribute }) as? SavedMessageEditsAttribute, !editHistory.versions.isEmpty {
-            actions.append(.action(ContextMenuActionItem(text: "Сравнить правки", icon: { theme in
-                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Edit"), color: theme.actionSheet.primaryTextColor)
-            }, action: { _, f in
-                f(.dismissWithoutContent)
-                controllerInteraction.navigationController()?.pushViewController(ayuEditComparisonChatController(context: context, message: message))
-            })))
+            if ayuGramSettingsCurrent.showEditComparisonAction {
+                actions.append(.action(ContextMenuActionItem(text: "Сравнить правки", icon: { theme in
+                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Edit"), color: theme.actionSheet.primaryTextColor)
+                }, action: { _, f in
+                    f(.dismissWithoutContent)
+                    controllerInteraction.navigationController()?.pushViewController(ayuEditComparisonChatController(context: context, message: message))
+                })))
+            }
             actions.append(.action(ContextMenuActionItem(text: "История изменений", icon: { theme in
                 return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Time"), color: theme.actionSheet.primaryTextColor)
             }, action: { _, f in
