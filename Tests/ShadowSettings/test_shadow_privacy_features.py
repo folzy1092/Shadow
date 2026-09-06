@@ -87,6 +87,8 @@ class ShadowPrivacyFeatures(unittest.TestCase):
         self.assertIn("shadow.hiddenAccountPeerIds.v1", storage)
         self.assertIn('title: "Скрытые аккаунты"', hub)
         self.assertIn("ShadowHiddenAccounts.setHidden", hub)
+        self.assertIn("context.sharedContext.activeAccountContexts", hub)
+        self.assertNotIn("activeAccountsAndPeers(context: context)", hub)
         self.assertIn("ShadowHiddenAccounts.signal()", settings_screen)
         self.assertIn("!hiddenIds.contains", settings_screen)
 
