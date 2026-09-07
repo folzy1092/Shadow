@@ -427,12 +427,13 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                     strongSelf.chatListDisplayNode.willScrollToTop()
                     strongSelf.chatListDisplayNode.effectiveContainerNode.currentItemNode.scrollToPosition(.top(adjustForTempInset: false))
                 case let .known(offset):
-                    let isFirstFilter = strongSelf.chatListDisplayNode.effectiveContainerNode.currentItemNode.chatListFilter == strongSelf.chatListDisplayNode.mainContainerNode.availableFilters.first?.filter
+                    let navigableFilters = strongSelf.chatListDisplayNode.mainContainerNode.navigableFilters
+                    let isFirstFilter = strongSelf.chatListDisplayNode.effectiveContainerNode.currentItemNode.chatListFilter == navigableFilters.first?.filter
                     
                     if offset <= ChatListNavigationBar.searchScrollHeight + 1.0 && strongSelf.chatListDisplayNode.inlineStackContainerNode != nil {
                         strongSelf.setInlineChatList(location: nil)
                     } else if offset <= ChatListNavigationBar.searchScrollHeight + 1.0 && !isFirstFilter {
-                        let firstFilter = strongSelf.chatListDisplayNode.effectiveContainerNode.availableFilters.first ?? .all
+                        let firstFilter = navigableFilters.first ?? .all
                         let targetTab: ChatListFilterTabEntryId
                         switch firstFilter {
                             case .all:
@@ -4059,6 +4060,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
             // remove it from the visible tabs — the pager's availableFilters (below)
             // still keeps its all-chats pane, so nothing downstream breaks. Keep it if
             // it would be the sole tab, so the strip never ends up empty.
+            var hideAllChatsFromSwipe = false
             if ayuHideAllChats {
                 let withoutAllChats = resolvedItems.filter { entry in
                     if case .all = entry {
@@ -4069,6 +4071,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                 }
                 if !withoutAllChats.isEmpty {
                     resolvedItems = withoutAllChats
+                    hideAllChatsFromSwipe = true
                 }
             }
 
@@ -4131,7 +4134,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
             if !hasAllChats {
                 availableFilters.insert(.all, at: 0)
             }
-            strongSelf.chatListDisplayNode.mainContainerNode.updateAvailableFilters(availableFilters, limit: filtersLimit)
+            strongSelf.chatListDisplayNode.mainContainerNode.updateAvailableFilters(availableFilters, limit: filtersLimit, hideAllChatsFromSwipe: hideAllChatsFromSwipe, disableStoryCameraSwipe: ayuGramSettingsValue.disableStoryCameraSwipe)
             
             if isPremium == nil && items.isEmpty {
                 strongSelf.mainReady.set(strongSelf.chatListDisplayNode.mainContainerNode.currentItemNode.ready)
@@ -4923,7 +4926,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         
         let openTab: (Int) -> Void = { [weak self] index in
             if let strongSelf = self {
-                let filters = strongSelf.chatListDisplayNode.mainContainerNode.availableFilters
+                let filters = strongSelf.chatListDisplayNode.mainContainerNode.navigableFilters
                 if index > filters.count - 1 {
                     return
                 }
@@ -6365,7 +6368,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                 })
             })))
             
-            if strongSelf.chatListDisplayNode.effectiveContainerNode.currentItemNode.chatListFilter != nil {
+            if strongSelf.chatListDisplayNode.effectiveContainerNode.currentItemNode.chatListFilter != nil && strongSelf.chatListDisplayNode.mainContainerNode.navigableFilters.contains(.all) {
                 items.append(.action(ContextMenuActionItem(text: strongSelf.presentationData.strings.ChatList_FolderAllChats, icon: { theme in
                     return nil
                 }, action: { c, f in

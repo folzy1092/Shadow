@@ -15,6 +15,7 @@ import TelegramPresentationData
 import PresentationDataUtils
 import PasswordSetupUI
 import InstantPageCache
+import ChatListUI
 
 extension PeerInfoScreenNode {
     func openSettings(section: PeerInfoSettingsSection) {
@@ -111,6 +112,15 @@ extension PeerInfoScreenNode {
                     self.context.sharedContext.navigateToChatController(NavigateToChatControllerParams(navigationController: navigationController, context: self.context, chatLocation: .peer(peer)))
                 }
             })
+        case .archive:
+            push(self.context.sharedContext.makeChatListController(
+                context: self.context,
+                location: .chatList(groupId: .archive),
+                controlsHistoryPreload: false,
+                hideNetworkActivityStatus: false,
+                previewing: false,
+                enableDebugActions: false
+            ))
         case .recentCalls:
             push(CallListController(context: context, mode: .navigation))
         case .devices:

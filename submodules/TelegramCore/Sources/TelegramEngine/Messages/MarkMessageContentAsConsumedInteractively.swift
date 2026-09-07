@@ -10,10 +10,13 @@ func _internal_markMessageContentAsConsumedInteractively(postbox: Postbox, messa
             // For cloud chats, opening such media normally reports the view to the
             // server (starting the expiry countdown and notifying the sender). When
             // enabled, we skip consuming entirely so the media stays viewable and the
-            // sender is never told it was opened. Secret chats are left untouched —
-            // their self-destruct is enforced by the protocol itself. `force` is set
-            // by the manual "Burn" action, which deliberately reports the view.
-            if !force, message.id.peerId.namespace != Namespaces.Peer.SecretChat, message.containsSecretMedia, currentAyuGramSettings(transaction: transaction).keepSelfDestructMedia {
+            // sender is never told it was opened. Secret chats have their own
+            // explicit opt-in because their expiry is handled by a separate local
+            // protocol path. `force` is set by the manual "Burn" action.
+            let settings = currentAyuGramSettings(transaction: transaction)
+            let keepSecretChatMedia = message.id.peerId.namespace == Namespaces.Peer.SecretChat && settings.keepDeletedSecretChatMessages
+            let keepCloudChatMedia = message.id.peerId.namespace != Namespaces.Peer.SecretChat && settings.keepSelfDestructMedia
+            if !force, message.containsSecretMedia, keepSecretChatMedia || keepCloudChatMedia {
                 return
             }
             var updateMessage = false
@@ -200,7 +203,13 @@ func markMessageContentAsConsumedRemotely(transaction: Transaction, mediaBox: Me
         // AyuGram: when keeping self-destruct media, never begin the expiry
         // countdown or swap cloud media for the "expired" placeholder, even if the
         // server or another device reports it as consumed.
-        let ayuKeepSelfDestructMedia = message.id.peerId.namespace != Namespaces.Peer.SecretChat && currentAyuGramSettings(transaction: transaction).keepSelfDestructMedia
+        let settings = currentAyuGramSettings(transaction: transaction)
+        let ayuKeepSelfDestructMedia: Bool
+        if message.id.peerId.namespace == Namespaces.Peer.SecretChat {
+            ayuKeepSelfDestructMedia = settings.keepDeletedSecretChatMessages
+        } else {
+            ayuKeepSelfDestructMedia = settings.keepSelfDestructMedia
+        }
 
         // AyuGram: back up the media into the private gallery before it is (possibly)
         // swapped for the "expired" placeholder further down. Runs even when the
@@ -295,4 +304,3 @@ func markMessageContentAsConsumedRemotely(transaction: Transaction, mediaBox: Me
         }
     }
 }
-

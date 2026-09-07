@@ -158,6 +158,7 @@ enum PeerInfoSettingsSection {
     case proxy
     case stories
     case savedMessages
+    case archive
     case recentCalls
     case devices
     case chatFolders

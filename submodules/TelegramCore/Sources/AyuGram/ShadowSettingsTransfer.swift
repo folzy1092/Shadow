@@ -18,6 +18,7 @@ private struct ShadowSettingsBackup: Codable {
 public enum ShadowSettingsTransfer {
     private static let booleanFields: [String: WritableKeyPath<AyuGramSettings, Bool>] = [
         "keepDeletedMessages": \.keepDeletedMessages,
+        "keepDeletedSecretChatMessages": \.keepDeletedSecretChatMessages,
         "saveEditHistory": \.saveEditHistory,
         "showEditComparisonAction": \.showEditComparisonAction,
         "keepSelfDestructMedia": \.keepSelfDestructMedia,
@@ -41,6 +42,7 @@ public enum ShadowSettingsTransfer {
         "showExactViewCounts": \.showExactViewCounts,
         "showForwardCount": \.showForwardCount,
         "hideAllChatsFolder": \.hideAllChatsFolder,
+        "disableStoryCameraSwipe": \.disableStoryCameraSwipe,
         "foldersAtBottom": \.foldersAtBottom,
         "hideBottomSearch": \.hideBottomSearch,
         "compactBottomBar": \.compactBottomBar,

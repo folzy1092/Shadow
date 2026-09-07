@@ -85,6 +85,10 @@ public struct AyuGramSettings: Codable, Equatable {
     public var messageFilterPhrases: [String] = []
     // Anti-deletion
     public var keepDeletedMessages: Bool
+    // Secret chats use a separate local deletion pipeline. Keep this opt-in so
+    // enabling anti-delete for cloud chats does not silently change secret-chat
+    // behaviour. The saved content never leaves this account's local Postbox.
+    public var keepDeletedSecretChatMessages: Bool
     public var saveEditHistory: Bool
     // Keep the comparison action out of every message menu until requested.
     public var showEditComparisonAction: Bool = false
@@ -173,6 +177,9 @@ public struct AyuGramSettings: Codable, Equatable {
     // CHATS
     // Completely hide the "All Chats" folder tab from the chat list.
     public var hideAllChatsFolder: Bool
+    // Disable the horizontal chat-list gesture that opens the story camera.
+    // Story creation buttons and every other camera entry point stay enabled.
+    public var disableStoryCameraSwipe: Bool
     // Move the chat-folder tab strip from below the search bar to a floating
     // panel above the bottom tab bar (Swiftgram-style). Independent of the
     // other two bottom-bar toggles below.
@@ -275,6 +282,7 @@ public struct AyuGramSettings: Codable, Equatable {
     public static var defaultSettings: AyuGramSettings {
         return AyuGramSettings(
             keepDeletedMessages: true,
+            keepDeletedSecretChatMessages: false,
             saveEditHistory: true,
             keepSelfDestructMedia: true,
             ghostMode: false,
@@ -297,6 +305,7 @@ public struct AyuGramSettings: Codable, Equatable {
             showExactViewCounts: false,
             showForwardCount: false,
             hideAllChatsFolder: false,
+            disableStoryCameraSwipe: false,
             foldersAtBottom: false,
             hideBottomSearch: false,
             compactBottomBar: false,
@@ -411,6 +420,7 @@ public struct AyuGramSettings: Codable, Equatable {
 
     public init(
         keepDeletedMessages: Bool,
+        keepDeletedSecretChatMessages: Bool,
         saveEditHistory: Bool,
         showEditComparisonAction: Bool = false,
         keepSelfDestructMedia: Bool,
@@ -434,6 +444,7 @@ public struct AyuGramSettings: Codable, Equatable {
         showExactViewCounts: Bool,
         showForwardCount: Bool,
         hideAllChatsFolder: Bool,
+        disableStoryCameraSwipe: Bool,
         foldersAtBottom: Bool,
         hideBottomSearch: Bool,
         compactBottomBar: Bool,
@@ -469,6 +480,7 @@ public struct AyuGramSettings: Codable, Equatable {
         messageFilterPhrases: [String] = []
     ) {
         self.keepDeletedMessages = keepDeletedMessages
+        self.keepDeletedSecretChatMessages = keepDeletedSecretChatMessages
         self.saveEditHistory = saveEditHistory
         self.showEditComparisonAction = showEditComparisonAction
         self.keepSelfDestructMedia = keepSelfDestructMedia
@@ -493,6 +505,7 @@ public struct AyuGramSettings: Codable, Equatable {
         self.showExactViewCounts = showExactViewCounts
         self.showForwardCount = showForwardCount
         self.hideAllChatsFolder = hideAllChatsFolder
+        self.disableStoryCameraSwipe = disableStoryCameraSwipe
         self.foldersAtBottom = foldersAtBottom
         self.hideBottomSearch = hideBottomSearch
         self.compactBottomBar = compactBottomBar
@@ -545,6 +558,7 @@ public struct AyuGramSettings: Codable, Equatable {
         }
         self.messageFilterPhrases = (try container.decodeIfPresent([String].self, forKey: "messageFilterPhrases")) ?? []
         self.keepDeletedMessages = ((try container.decodeIfPresent(Int32.self, forKey: "keepDeletedMessages")) ?? 1) != 0
+        self.keepDeletedSecretChatMessages = ((try container.decodeIfPresent(Int32.self, forKey: "keepDeletedSecretChatMessages")) ?? 0) != 0
         self.saveEditHistory = ((try container.decodeIfPresent(Int32.self, forKey: "saveEditHistory")) ?? 1) != 0
         self.showEditComparisonAction = ((try container.decodeIfPresent(Int32.self, forKey: "showEditComparisonAction")) ?? 0) != 0
         self.keepSelfDestructMedia = ((try container.decodeIfPresent(Int32.self, forKey: "keepSelfDestructMedia")) ?? 1) != 0
@@ -569,6 +583,7 @@ public struct AyuGramSettings: Codable, Equatable {
         self.showExactViewCounts = ((try container.decodeIfPresent(Int32.self, forKey: "showExactViewCounts")) ?? 0) != 0
         self.showForwardCount = ((try container.decodeIfPresent(Int32.self, forKey: "showForwardCount")) ?? 0) != 0
         self.hideAllChatsFolder = ((try container.decodeIfPresent(Int32.self, forKey: "hideAllChatsFolder")) ?? 0) != 0
+        self.disableStoryCameraSwipe = ((try container.decodeIfPresent(Int32.self, forKey: "disableStoryCameraSwipe")) ?? 0) != 0
         self.foldersAtBottom = ((try container.decodeIfPresent(Int32.self, forKey: "foldersAtBottom")) ?? 0) != 0
         self.hideBottomSearch = ((try container.decodeIfPresent(Int32.self, forKey: "hideBottomSearch")) ?? 0) != 0
         self.compactBottomBar = ((try container.decodeIfPresent(Int32.self, forKey: "compactBottomBar")) ?? 0) != 0
@@ -614,6 +629,7 @@ public struct AyuGramSettings: Codable, Equatable {
         try container.encode(privacyRecords, forKey: "chatPrivacyRulesV2")
         try container.encode(self.messageFilterPhrases, forKey: "messageFilterPhrases")
         try container.encode((self.keepDeletedMessages ? 1 : 0) as Int32, forKey: "keepDeletedMessages")
+        try container.encode((self.keepDeletedSecretChatMessages ? 1 : 0) as Int32, forKey: "keepDeletedSecretChatMessages")
         try container.encode((self.saveEditHistory ? 1 : 0) as Int32, forKey: "saveEditHistory")
         try container.encode((self.showEditComparisonAction ? 1 : 0) as Int32, forKey: "showEditComparisonAction")
         try container.encode((self.keepSelfDestructMedia ? 1 : 0) as Int32, forKey: "keepSelfDestructMedia")
@@ -638,6 +654,7 @@ public struct AyuGramSettings: Codable, Equatable {
         try container.encode((self.showExactViewCounts ? 1 : 0) as Int32, forKey: "showExactViewCounts")
         try container.encode((self.showForwardCount ? 1 : 0) as Int32, forKey: "showForwardCount")
         try container.encode((self.hideAllChatsFolder ? 1 : 0) as Int32, forKey: "hideAllChatsFolder")
+        try container.encode((self.disableStoryCameraSwipe ? 1 : 0) as Int32, forKey: "disableStoryCameraSwipe")
         try container.encode((self.foldersAtBottom ? 1 : 0) as Int32, forKey: "foldersAtBottom")
         try container.encode((self.hideBottomSearch ? 1 : 0) as Int32, forKey: "hideBottomSearch")
         try container.encode((self.compactBottomBar ? 1 : 0) as Int32, forKey: "compactBottomBar")

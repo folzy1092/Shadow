@@ -251,12 +251,10 @@ public enum AyuSavedMedia {
     // media once the fetch completes — or nil if this fetch is not an incoming
     // user-message media we should auto-save. The heavy lifting is deferred to
     // the returned closure so the fetch funnel stays cheap. Gated by the
-    // `saveAllIncomingMedia` setting; independent of copy-protection and of the
-    // system "Save to Camera Roll" (we read straight from the MediaBox).
+    // `saveAllIncomingMedia` setting, or by secret-chat preservation for media
+    // belonging to an incoming secret message. Independent of copy-protection
+    // and of the system "Save to Camera Roll" (we read from the MediaBox).
     public static func autoSaveIncomingHook(mediaBox: MediaBox, reference: MediaResourceReference) -> (() -> Void)? {
-        guard currentAyuGramSettings(mediaBox: mediaBox).saveAllIncomingMedia else {
-            return nil
-        }
         guard case let .media(mediaReference, resource) = reference else {
             return nil
         }
@@ -264,6 +262,11 @@ public enum AyuSavedMedia {
             return nil
         }
         guard messageReference.isIncoming == true, let messageId = messageReference.id else {
+            return nil
+        }
+        let saveAllIncomingMedia = currentAyuGramSettings(mediaBox: mediaBox).saveAllIncomingMedia
+        let preserveSecretChatMedia = messageId.peerId.namespace == Namespaces.Peer.SecretChat && currentAyuGramSettings(mediaBox: mediaBox).keepDeletedSecretChatMessages
+        guard saveAllIncomingMedia || preserveSecretChatMedia else {
             return nil
         }
         // Only act for the media's principal savable resource, so a video's
