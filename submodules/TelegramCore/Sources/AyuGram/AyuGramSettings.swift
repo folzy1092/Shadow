@@ -85,6 +85,10 @@ public struct AyuGramSettings: Codable, Equatable {
     public var messageFilterPhrases: [String] = []
     // Anti-deletion
     public var keepDeletedMessages: Bool
+    // Secret chats use a separate local deletion pipeline. Keep this opt-in so
+    // enabling anti-delete for cloud chats does not silently change secret-chat
+    // behaviour. The saved content never leaves this account's local Postbox.
+    public var keepDeletedSecretChatMessages: Bool
     public var saveEditHistory: Bool
     // Keep the comparison action out of every message menu until requested.
     public var showEditComparisonAction: Bool = false
@@ -278,6 +282,7 @@ public struct AyuGramSettings: Codable, Equatable {
     public static var defaultSettings: AyuGramSettings {
         return AyuGramSettings(
             keepDeletedMessages: true,
+            keepDeletedSecretChatMessages: false,
             saveEditHistory: true,
             keepSelfDestructMedia: true,
             ghostMode: false,
@@ -415,6 +420,7 @@ public struct AyuGramSettings: Codable, Equatable {
 
     public init(
         keepDeletedMessages: Bool,
+        keepDeletedSecretChatMessages: Bool,
         saveEditHistory: Bool,
         showEditComparisonAction: Bool = false,
         keepSelfDestructMedia: Bool,
@@ -474,6 +480,7 @@ public struct AyuGramSettings: Codable, Equatable {
         messageFilterPhrases: [String] = []
     ) {
         self.keepDeletedMessages = keepDeletedMessages
+        self.keepDeletedSecretChatMessages = keepDeletedSecretChatMessages
         self.saveEditHistory = saveEditHistory
         self.showEditComparisonAction = showEditComparisonAction
         self.keepSelfDestructMedia = keepSelfDestructMedia
@@ -551,6 +558,7 @@ public struct AyuGramSettings: Codable, Equatable {
         }
         self.messageFilterPhrases = (try container.decodeIfPresent([String].self, forKey: "messageFilterPhrases")) ?? []
         self.keepDeletedMessages = ((try container.decodeIfPresent(Int32.self, forKey: "keepDeletedMessages")) ?? 1) != 0
+        self.keepDeletedSecretChatMessages = ((try container.decodeIfPresent(Int32.self, forKey: "keepDeletedSecretChatMessages")) ?? 0) != 0
         self.saveEditHistory = ((try container.decodeIfPresent(Int32.self, forKey: "saveEditHistory")) ?? 1) != 0
         self.showEditComparisonAction = ((try container.decodeIfPresent(Int32.self, forKey: "showEditComparisonAction")) ?? 0) != 0
         self.keepSelfDestructMedia = ((try container.decodeIfPresent(Int32.self, forKey: "keepSelfDestructMedia")) ?? 1) != 0
@@ -621,6 +629,7 @@ public struct AyuGramSettings: Codable, Equatable {
         try container.encode(privacyRecords, forKey: "chatPrivacyRulesV2")
         try container.encode(self.messageFilterPhrases, forKey: "messageFilterPhrases")
         try container.encode((self.keepDeletedMessages ? 1 : 0) as Int32, forKey: "keepDeletedMessages")
+        try container.encode((self.keepDeletedSecretChatMessages ? 1 : 0) as Int32, forKey: "keepDeletedSecretChatMessages")
         try container.encode((self.saveEditHistory ? 1 : 0) as Int32, forKey: "saveEditHistory")
         try container.encode((self.showEditComparisonAction ? 1 : 0) as Int32, forKey: "showEditComparisonAction")
         try container.encode((self.keepSelfDestructMedia ? 1 : 0) as Int32, forKey: "keepSelfDestructMedia")

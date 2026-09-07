@@ -1192,6 +1192,7 @@ private final class BannerImagePickerDelegate: NSObject, UIImagePickerController
 
 private final class AyuSpyArguments {
     let updateKeepDeleted: (Bool) -> Void
+    let updateKeepDeletedSecretChats: (Bool) -> Void
     let updateSaveEditHistory: (Bool) -> Void
     let updateShowEditComparisonAction: (Bool) -> Void
     let updateKeepSelfDestructMedia: (Bool) -> Void
@@ -1208,6 +1209,7 @@ private final class AyuSpyArguments {
 
     init(
         updateKeepDeleted: @escaping (Bool) -> Void,
+        updateKeepDeletedSecretChats: @escaping (Bool) -> Void,
         updateSaveEditHistory: @escaping (Bool) -> Void,
         updateShowEditComparisonAction: @escaping (Bool) -> Void,
         updateKeepSelfDestructMedia: @escaping (Bool) -> Void,
@@ -1223,6 +1225,7 @@ private final class AyuSpyArguments {
         openForkStorage: @escaping () -> Void
     ) {
         self.updateKeepDeleted = updateKeepDeleted
+        self.updateKeepDeletedSecretChats = updateKeepDeletedSecretChats
         self.updateSaveEditHistory = updateSaveEditHistory
         self.updateShowEditComparisonAction = updateShowEditComparisonAction
         self.updateKeepSelfDestructMedia = updateKeepSelfDestructMedia
@@ -1250,6 +1253,7 @@ private enum AyuSpySection: Int32 {
 private enum AyuSpyEntry: ItemListNodeEntry {
     case deletedHeader
     case keepDeleted(Bool)
+    case keepDeletedSecretChats(Bool)
     case keepSelfDestructMedia(Bool)
     case deletedFooter
 
@@ -1279,7 +1283,7 @@ private enum AyuSpyEntry: ItemListNodeEntry {
 
     var section: ItemListSectionId {
         switch self {
-        case .deletedHeader, .keepDeleted, .keepSelfDestructMedia, .deletedFooter:
+        case .deletedHeader, .keepDeleted, .keepDeletedSecretChats, .keepSelfDestructMedia, .deletedFooter:
             return AyuSpySection.deleted.rawValue
         case .editsHeader, .saveEditHistory, .showEditComparisonAction, .editsFooter:
             return AyuSpySection.edits.rawValue
@@ -1296,28 +1300,29 @@ private enum AyuSpyEntry: ItemListNodeEntry {
         switch self {
         case .deletedHeader: return 0
         case .keepDeleted: return 1
-        case .keepSelfDestructMedia: return 2
-        case .deletedFooter: return 3
-        case .editsHeader: return 4
-        case .saveEditHistory: return 5
-        case .showEditComparisonAction: return 6
-        case .editsFooter: return 7
-        case .restrictedHeader: return 8
-        case .allowSaveRestrictedContent: return 9
-        case .restrictedFooter: return 10
-        case .storyPromptHeader: return 11
-        case .askBeforeStoryView: return 12
-        case .storyPromptFooter: return 13
-        case .savedMediaHeader: return 14
-        case .saveDestructingMedia: return 15
-        case .saveAllIncomingMedia: return 16
-        case .attachmentSizeLimit: return 17
-        case .attachmentAge: return 18
-        case .keepPinned: return 19
-        case .keepChannels: return 20
-        case .keepBots: return 21
-        case .forkStorage: return 22
-        case .savedMediaFooter: return 23
+        case .keepDeletedSecretChats: return 2
+        case .keepSelfDestructMedia: return 3
+        case .deletedFooter: return 4
+        case .editsHeader: return 5
+        case .saveEditHistory: return 6
+        case .showEditComparisonAction: return 7
+        case .editsFooter: return 8
+        case .restrictedHeader: return 9
+        case .allowSaveRestrictedContent: return 10
+        case .restrictedFooter: return 11
+        case .storyPromptHeader: return 12
+        case .askBeforeStoryView: return 13
+        case .storyPromptFooter: return 14
+        case .savedMediaHeader: return 15
+        case .saveDestructingMedia: return 16
+        case .saveAllIncomingMedia: return 17
+        case .attachmentSizeLimit: return 18
+        case .attachmentAge: return 19
+        case .keepPinned: return 20
+        case .keepChannels: return 21
+        case .keepBots: return 22
+        case .forkStorage: return 23
+        case .savedMediaFooter: return 24
         }
     }
 
@@ -1334,12 +1339,16 @@ private enum AyuSpyEntry: ItemListNodeEntry {
             return ItemListSwitchItem(presentationData: presentationData, title: "Сохранять удалённые", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 arguments.updateKeepDeleted(value)
             })
+        case let .keepDeletedSecretChats(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Сохранять удалённые в секретных чатах", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.updateKeepDeletedSecretChats(value)
+            })
         case let .keepSelfDestructMedia(value):
             return ItemListSwitchItem(presentationData: presentationData, title: "Сохранять «одноразовые»", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 arguments.updateKeepSelfDestructMedia(value)
             })
         case .deletedFooter:
-            return ItemListTextItem(presentationData: presentationData, text: .plain("Сообщения и медиа, которые удаляет собеседник, остаются в чате с меткой и временем удаления: текст, фото, видео, голосовые, видеосообщения и подписи. Ваши собственные удаления не затрагиваются. «Сохранять одноразовые» оставляет view-once / самоуничтожающиеся медиа доступными после просмотра и не сообщает отправителю, что вы их открыли. Работает во всех типах чатов, включая приватные каналы, защищённые и секретные чаты.\n\nУдалённые сообщения, медиа и файлы от ботов также сохраняются всегда. Переключатель «Исключить ботов» в разделе «Сохранённые вложения» влияет только на автоочистку локальной галереи и не отключает сохранение удалённого."), sectionId: self.section)
+            return ItemListTextItem(presentationData: presentationData, text: .plain("«Сохранять удалённые» работает в обычных облачных чатах. Для секретных чатов используется отдельный переключатель: он сохраняет входящие сообщения, подписи и уже загруженные медиа только на этом устройстве, удерживает их при удалении собеседником и при очистке истории, а также показывает их в архиве Shadow. Уже удалённое до включения восстановить нельзя.\n\n«Сохранять одноразовые» оставляет view-once / самоуничтожающиеся медиа облачных чатов доступными после просмотра. В секретных чатах одноразовые медиа сохраняются отдельной настройкой секретных чатов."), sectionId: self.section)
         case .editsHeader:
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "ИСТОРИЯ ИЗМЕНЕНИЙ", sectionId: self.section)
         case let .saveEditHistory(value):
@@ -1413,6 +1422,7 @@ private func ayuSpyEntries(settings: AyuGramSettings) -> [AyuSpyEntry] {
 
     entries.append(.deletedHeader)
     entries.append(.keepDeleted(settings.keepDeletedMessages))
+    entries.append(.keepDeletedSecretChats(settings.keepDeletedSecretChatMessages))
     entries.append(.keepSelfDestructMedia(settings.keepSelfDestructMedia))
     entries.append(.deletedFooter)
 
@@ -1451,6 +1461,9 @@ private func ayuSpyController(context: AccountContext, focus: ShadowSettingsSear
     let arguments = AyuSpyArguments(
         updateKeepDeleted: { value in
             ayuUpdateSettings(context: context) { var s = $0; s.keepDeletedMessages = value; return s }
+        },
+        updateKeepDeletedSecretChats: { value in
+            ayuUpdateSettings(context: context) { var s = $0; s.keepDeletedSecretChatMessages = value; return s }
         },
         updateSaveEditHistory: { value in
             ayuUpdateSettings(context: context) { var s = $0; s.saveEditHistory = value; return s }

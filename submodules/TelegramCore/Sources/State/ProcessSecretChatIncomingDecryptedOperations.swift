@@ -295,10 +295,21 @@ func processSecretChatIncomingDecryptedOperations(encryptionProvider: Encryption
                                                 }
                                             }
                                         }
-                                        _internal_deleteMessages(transaction: transaction, mediaBox: mediaBox, ids: filteredMessageIds)
+                                        if currentAyuGramSettings(transaction: transaction).keepDeletedSecretChatMessages {
+                                            let excludedIds = ayuGramMarkMessagesDeleted(transaction: transaction, mediaBox: mediaBox, ids: filteredMessageIds)
+                                            if !excludedIds.isEmpty {
+                                                _internal_deleteMessages(transaction: transaction, mediaBox: mediaBox, ids: excludedIds)
+                                            }
+                                        } else {
+                                            _internal_deleteMessages(transaction: transaction, mediaBox: mediaBox, ids: filteredMessageIds)
+                                        }
                                     }
                                 case .clearHistory:
-                                    _internal_clearHistory(transaction: transaction, mediaBox: mediaBox, peerId: peerId, threadId: nil, namespaces: .all)
+                                    if currentAyuGramSettings(transaction: transaction).keepDeletedSecretChatMessages {
+                                        ayuGramHandleSecretChatClearHistory(transaction: transaction, mediaBox: mediaBox, peerId: peerId)
+                                    } else {
+                                        _internal_clearHistory(transaction: transaction, mediaBox: mediaBox, peerId: peerId, threadId: nil, namespaces: .all)
+                                    }
                                 case let .markMessagesContentAsConsumed(globallyUniqueIds):
                                     var messageIds: [MessageId] = []
                                     for id in globallyUniqueIds {

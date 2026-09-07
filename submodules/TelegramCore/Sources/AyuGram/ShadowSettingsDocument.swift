@@ -27,7 +27,7 @@ public enum ShadowSettingValue: Equatable {
 public struct ShadowSettingsDocument: Codable, Equatable {
     public static let maximumBytes = 1024 * 1024
     public static let booleanKeys: Set<String> = [
-        "keepDeletedMessages", "saveEditHistory", "showEditComparisonAction", "keepSelfDestructMedia",
+        "keepDeletedMessages", "keepDeletedSecretChatMessages", "saveEditHistory", "showEditComparisonAction", "keepSelfDestructMedia",
         "ghostMode", "hideOnlineStatus", "hideTyping", "hideReadReceipts",
         "hideStoryViews", "askBeforeStoryView", "sendViaScheduled", "sendWithoutOnline",
         "showMessageSeconds", "editedIndicatorAsPencil", "regularEmojiFirst",
