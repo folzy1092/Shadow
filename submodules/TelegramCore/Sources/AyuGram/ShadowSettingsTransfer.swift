@@ -41,6 +41,7 @@ public enum ShadowSettingsTransfer {
         "showExactViewCounts": \.showExactViewCounts,
         "showForwardCount": \.showForwardCount,
         "hideAllChatsFolder": \.hideAllChatsFolder,
+        "disableStoryCameraSwipe": \.disableStoryCameraSwipe,
         "foldersAtBottom": \.foldersAtBottom,
         "hideBottomSearch": \.hideBottomSearch,
         "compactBottomBar": \.compactBottomBar,

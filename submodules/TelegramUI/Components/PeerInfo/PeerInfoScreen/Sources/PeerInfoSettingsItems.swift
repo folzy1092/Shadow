@@ -200,7 +200,10 @@ func settingsItems(data: PeerInfoScreenData?, context: AccountContext, presentat
     items[.shortcuts]!.append(PeerInfoScreenDisclosureItem(id: 1, text: presentationData.strings.Settings_SavedMessages, icon: PresentationResourcesSettings.savedMessages, action: {
         interaction.openSettings(.savedMessages)
     }))
-    items[.shortcuts]!.append(PeerInfoScreenDisclosureItem(id: 2, text: presentationData.strings.CallSettings_RecentCalls, icon: PresentationResourcesSettings.recentCalls, action: {
+    items[.shortcuts]!.append(PeerInfoScreenDisclosureItem(id: 2, text: "Открыть архив", icon: UIImage(bundleImageName: "Chat/Context Menu/Archive"), action: {
+        interaction.openSettings(.archive)
+    }))
+    items[.shortcuts]!.append(PeerInfoScreenDisclosureItem(id: 3, text: presentationData.strings.CallSettings_RecentCalls, icon: PresentationResourcesSettings.recentCalls, action: {
         interaction.openSettings(.recentCalls)
     }))
     
@@ -215,13 +218,13 @@ func settingsItems(data: PeerInfoScreenData?, context: AccountContext, presentat
         devicesLabel = ""
     }
     
-    items[.shortcuts]!.append(PeerInfoScreenDisclosureItem(id: 3, label: .text(devicesLabel), text: presentationData.strings.Settings_Devices, icon: PresentationResourcesSettings.devices, action: {
+    items[.shortcuts]!.append(PeerInfoScreenDisclosureItem(id: 4, label: .text(devicesLabel), text: presentationData.strings.Settings_Devices, icon: PresentationResourcesSettings.devices, action: {
         interaction.openSettings(.devices)
     }))
-    items[.shortcuts]!.append(PeerInfoScreenDisclosureItem(id: 4, text: presentationData.strings.Settings_ChatFolders, icon: PresentationResourcesSettings.chatFolders, action: {
+    items[.shortcuts]!.append(PeerInfoScreenDisclosureItem(id: 5, text: presentationData.strings.Settings_ChatFolders, icon: PresentationResourcesSettings.chatFolders, action: {
         interaction.openSettings(.chatFolders)
     }))
-    items[.shortcuts]!.append(PeerInfoScreenDisclosureItem(id: 5, text: "Shadow", icon: PresentationResourcesSettings.shadow, action: {
+    items[.shortcuts]!.append(PeerInfoScreenDisclosureItem(id: 6, text: "Shadow", icon: PresentationResourcesSettings.shadow, action: {
         interaction.openSettings(.ayugram)
     }))
     items[.shadowReads]!.append(PeerInfoScreenDisclosureItem(id: 0, text: "Прочитать локально", icon: UIImage(bundleImageName: "Chat/Context Menu/MarkAsRead"), action: {

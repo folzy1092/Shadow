@@ -217,7 +217,12 @@ func shadowSettingsSearchDestinationController(context: AccountContext, item: Sh
     case .misc: return ayuMiscController(context: context, focus: item)
     case .backup: return shadowSettingsBackupController(context: context, focus: item)
     case .filters: return shadowMessageFiltersController(context: context)
-    case .pushDiagnostics: return shadowPushDiagnosticsController(context: context)
+    case .pushDiagnostics:
+        if item.entryId == 0 {
+            return shadowPushDiagnosticsController(context: context)
+        } else {
+            return shadowMiscController(context: context)
+        }
     }
 }
 
@@ -252,7 +257,7 @@ public func ayuGramSettingsController(context: AccountContext) -> ViewController
             pushControllerImpl?(shadowHiddenAccountsController(context: context))
         },
         openPushDiagnostics: {
-            pushControllerImpl?(shadowPushDiagnosticsController(context: context))
+            pushControllerImpl?(shadowMiscController(context: context))
         }
     )
 

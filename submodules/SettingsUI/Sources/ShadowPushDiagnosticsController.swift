@@ -8,6 +8,89 @@ import TelegramPresentationData
 import ItemListUI
 import AccountContext
 
+private enum ShadowMiscSection: Int32 {
+    case gestures
+    case tools
+}
+
+private enum ShadowMiscEntry: ItemListNodeEntry {
+    case disableStoryCameraSwipe(Bool)
+    case cameraSwipeFooter
+    case pushDiagnostics
+
+    var section: ItemListSectionId {
+        switch self {
+        case .disableStoryCameraSwipe, .cameraSwipeFooter:
+            return ShadowMiscSection.gestures.rawValue
+        case .pushDiagnostics:
+            return ShadowMiscSection.tools.rawValue
+        }
+    }
+
+    var stableId: Int32 {
+        switch self {
+        case .disableStoryCameraSwipe: return 0
+        case .cameraSwipeFooter: return 1
+        case .pushDiagnostics: return 2
+        }
+    }
+
+    static func < (lhs: ShadowMiscEntry, rhs: ShadowMiscEntry) -> Bool {
+        return lhs.stableId < rhs.stableId
+    }
+
+    func item(presentationData: ItemListPresentationData, arguments: Any) -> ListViewItem {
+        let arguments = arguments as! ShadowMiscArguments
+        switch self {
+        case let .disableStoryCameraSwipe(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Отключить свайп к камере", value: value, sectionId: self.section, style: .blocks, updated: arguments.updateDisableStoryCameraSwipe)
+        case .cameraSwipeFooter:
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Отключает только жест, который открывает камеру истории из списка чатов. Кнопки камеры и создание историй продолжат работать."), sectionId: self.section)
+        case .pushDiagnostics:
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Диагностика push", label: "", sectionId: self.section, style: .blocks, action: arguments.openPushDiagnostics)
+        }
+    }
+}
+
+private final class ShadowMiscArguments {
+    let updateDisableStoryCameraSwipe: (Bool) -> Void
+    let openPushDiagnostics: () -> Void
+
+    init(updateDisableStoryCameraSwipe: @escaping (Bool) -> Void, openPushDiagnostics: @escaping () -> Void) {
+        self.updateDisableStoryCameraSwipe = updateDisableStoryCameraSwipe
+        self.openPushDiagnostics = openPushDiagnostics
+    }
+}
+
+public func shadowMiscController(context: AccountContext) -> ViewController {
+    var pushControllerImpl: ((ViewController) -> Void)?
+    let arguments = ShadowMiscArguments(updateDisableStoryCameraSwipe: { value in
+        let _ = updateAyuGramSettings(postbox: context.account.postbox, { settings in
+            var settings = settings
+            settings.disableStoryCameraSwipe = value
+            return settings
+        }).startStandalone()
+    }, openPushDiagnostics: {
+        pushControllerImpl?(shadowPushDiagnosticsController(context: context))
+    })
+
+    let signal = combineLatest(queue: .mainQueue(), context.sharedContext.presentationData, ayuGramSettings(postbox: context.account.postbox))
+    |> map { presentationData, settings -> (ItemListControllerState, (ItemListNodeState, Any)) in
+        let entries: [ShadowMiscEntry] = [
+            .disableStoryCameraSwipe(settings.disableStoryCameraSwipe),
+            .cameraSwipeFooter,
+            .pushDiagnostics
+        ]
+        let state = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Разное"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
+        return (state, (ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, animateChanges: false), arguments))
+    }
+    let controller = ItemListController(context: context, state: signal)
+    pushControllerImpl = { [weak controller] value in
+        (controller?.navigationController as? NavigationController)?.pushViewController(value)
+    }
+    return controller
+}
+
 private enum ShadowPushEntry: ItemListNodeEntry {
     case report(String)
     case token(String)

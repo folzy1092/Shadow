@@ -173,6 +173,9 @@ public struct AyuGramSettings: Codable, Equatable {
     // CHATS
     // Completely hide the "All Chats" folder tab from the chat list.
     public var hideAllChatsFolder: Bool
+    // Disable the horizontal chat-list gesture that opens the story camera.
+    // Story creation buttons and every other camera entry point stay enabled.
+    public var disableStoryCameraSwipe: Bool
     // Move the chat-folder tab strip from below the search bar to a floating
     // panel above the bottom tab bar (Swiftgram-style). Independent of the
     // other two bottom-bar toggles below.
@@ -297,6 +300,7 @@ public struct AyuGramSettings: Codable, Equatable {
             showExactViewCounts: false,
             showForwardCount: false,
             hideAllChatsFolder: false,
+            disableStoryCameraSwipe: false,
             foldersAtBottom: false,
             hideBottomSearch: false,
             compactBottomBar: false,
@@ -434,6 +438,7 @@ public struct AyuGramSettings: Codable, Equatable {
         showExactViewCounts: Bool,
         showForwardCount: Bool,
         hideAllChatsFolder: Bool,
+        disableStoryCameraSwipe: Bool,
         foldersAtBottom: Bool,
         hideBottomSearch: Bool,
         compactBottomBar: Bool,
@@ -493,6 +498,7 @@ public struct AyuGramSettings: Codable, Equatable {
         self.showExactViewCounts = showExactViewCounts
         self.showForwardCount = showForwardCount
         self.hideAllChatsFolder = hideAllChatsFolder
+        self.disableStoryCameraSwipe = disableStoryCameraSwipe
         self.foldersAtBottom = foldersAtBottom
         self.hideBottomSearch = hideBottomSearch
         self.compactBottomBar = compactBottomBar
@@ -569,6 +575,7 @@ public struct AyuGramSettings: Codable, Equatable {
         self.showExactViewCounts = ((try container.decodeIfPresent(Int32.self, forKey: "showExactViewCounts")) ?? 0) != 0
         self.showForwardCount = ((try container.decodeIfPresent(Int32.self, forKey: "showForwardCount")) ?? 0) != 0
         self.hideAllChatsFolder = ((try container.decodeIfPresent(Int32.self, forKey: "hideAllChatsFolder")) ?? 0) != 0
+        self.disableStoryCameraSwipe = ((try container.decodeIfPresent(Int32.self, forKey: "disableStoryCameraSwipe")) ?? 0) != 0
         self.foldersAtBottom = ((try container.decodeIfPresent(Int32.self, forKey: "foldersAtBottom")) ?? 0) != 0
         self.hideBottomSearch = ((try container.decodeIfPresent(Int32.self, forKey: "hideBottomSearch")) ?? 0) != 0
         self.compactBottomBar = ((try container.decodeIfPresent(Int32.self, forKey: "compactBottomBar")) ?? 0) != 0
@@ -638,6 +645,7 @@ public struct AyuGramSettings: Codable, Equatable {
         try container.encode((self.showExactViewCounts ? 1 : 0) as Int32, forKey: "showExactViewCounts")
         try container.encode((self.showForwardCount ? 1 : 0) as Int32, forKey: "showForwardCount")
         try container.encode((self.hideAllChatsFolder ? 1 : 0) as Int32, forKey: "hideAllChatsFolder")
+        try container.encode((self.disableStoryCameraSwipe ? 1 : 0) as Int32, forKey: "disableStoryCameraSwipe")
         try container.encode((self.foldersAtBottom ? 1 : 0) as Int32, forKey: "foldersAtBottom")
         try container.encode((self.hideBottomSearch ? 1 : 0) as Int32, forKey: "hideBottomSearch")
         try container.encode((self.compactBottomBar ? 1 : 0) as Int32, forKey: "compactBottomBar")
