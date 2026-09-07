@@ -36,7 +36,7 @@ class SecretChatPreservationContracts(unittest.TestCase):
         self.assertIn("ayuGramMarkMessagesDeleted", processor)
         self.assertIn("ayuGramHandleSecretChatClearHistory", processor)
         self.assertIn("Namespaces.Message.SecretIncoming", anti_delete)
-        self.assertIn("Namespaces.Message.SecretOutgoing", anti_delete)
+        self.assertNotIn("Namespaces.Message.SecretOutgoing", anti_delete)
         self.assertIn("ayuForkStoreRecordKeptDeleted", anti_delete)
 
     def test_downloaded_secret_media_is_copied_and_view_once_is_retained(self):

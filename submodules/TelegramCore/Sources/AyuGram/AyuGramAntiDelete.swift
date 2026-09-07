@@ -79,18 +79,16 @@ func ayuGramMarkMessagesDeleted(transaction: Transaction, mediaBox: MediaBox, id
     return excludedIds
 }
 
-// A remote "clear history" in a secret chat bypasses the cloud update path and
-// normally removes both secret namespaces at once. Preserve incoming content by
-// marking it through the same archive/index path as an individual deletion, and
-// still remove our own outgoing messages so Shadow never resurrects our deletes.
+// A remote "clear history" in a secret chat bypasses the cloud update path.
+// Telegram stores both directions in the shared SecretIncoming message
+// namespace and distinguishes them with the Incoming flag. Preserve incoming
+// content through the archive path and still remove our own outgoing messages.
 func ayuGramHandleSecretChatClearHistory(transaction: Transaction, mediaBox: MediaBox, peerId: PeerId) {
     var messageIds: [MessageId] = []
-    for namespace in [Namespaces.Message.SecretIncoming, Namespaces.Message.SecretOutgoing] {
-        transaction.scanTopMessages(peerId: peerId, namespace: namespace, limit: 1_000_000, { message in
-            messageIds.append(message.id)
-            return true
-        })
-    }
+    transaction.scanTopMessages(peerId: peerId, namespace: Namespaces.Message.SecretIncoming, limit: 1_000_000, { message in
+        messageIds.append(message.id)
+        return true
+    })
     guard !messageIds.isEmpty else {
         return
     }
