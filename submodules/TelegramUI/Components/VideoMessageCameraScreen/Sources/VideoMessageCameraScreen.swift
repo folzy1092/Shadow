@@ -326,6 +326,8 @@ private final class VideoMessageCameraScreenComponent: CombinedComponent {
         }
         
         private var lastFlipTimestamp: Double?
+        private var flipReconciliationId = 0
+
         func togglePosition() {
             guard let controller = self.getController(), let camera = controller.camera else {
                 return
@@ -335,18 +337,36 @@ private final class VideoMessageCameraScreenComponent: CombinedComponent {
                 return
             }
             self.lastFlipTimestamp = currentTimestamp
-            
-            let isFrontCamera = controller.cameraState.position == .back
+
+            let expectedPosition: Camera.Position = controller.cameraState.position == .back ? .front : .back
+            // The virtual ultra-wide context is rear-only. Restore Telegram's
+            // usual dual-camera context before a front-camera transition.
+            if expectedPosition == .front {
+                controller.node.setRoundVideoUltraWideActive(false)
+            }
+
             camera.togglePosition()
-                                    
             self.hapticFeedback.impact(.veryLight)
-            
-            self.updateScreenBrightness(isFrontCamera: isFrontCamera)
-            
-            if isFrontCamera {
+
+            self.updateScreenBrightness(isFrontCamera: expectedPosition == .front)
+
+            if expectedPosition == .front {
                 camera.setTorchActive(false)
             } else {
                 camera.setTorchActive(controller.cameraState.flashMode == .on)
+            }
+
+            // MultiCam occasionally publishes the old position just after a
+            // flip. Reconcile once, without an extra haptic or retry loop.
+            self.flipReconciliationId += 1
+            let reconciliationId = self.flipReconciliationId
+            Queue.mainQueue().after(0.7) { [weak self, weak controller, weak camera] in
+                guard let self, reconciliationId == self.flipReconciliationId,
+                      let controller, let camera,
+                      controller.cameraState.position != expectedPosition else {
+                    return
+                }
+                camera.togglePosition()
             }
         }
         
