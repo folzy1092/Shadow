@@ -12,14 +12,9 @@ import AlertUI
 
 // Shadow fork settings.
 //
-// The whole settings surface is organised around the three Shadow ideas, one
-// pushed sub-screen each:
-//   • Кастомизация — appearance and behaviour of the app itself.
-//   • Шпион        — keeping information Telegram would otherwise hide or delete.
-//   • Призрак      — using Telegram as invisibly as possible.
-// The entry point (`ayuGramSettingsController`) is a small hub that pushes those
-// three screens. Everything is in Russian. The visual style is the stock
-// Telegram settings style (blocks, switches, disclosure rows) — no custom UI.
+// The entry point (`ayuGramSettingsController`) groups settings by purpose:
+// privacy, archive/media, interface, accounts and service tools. Everything is
+// in Russian and uses Telegram's stock settings components.
 
 // The maximum-age steps for the saved-attachments auto-clean, in seconds
 // (0 = never). Kept in one place so picker and label stay in sync.
@@ -51,6 +46,15 @@ private func attachmentAgeLabel(_ value: Int32) -> String {
 // The maximum-size steps for the saved-attachments cache, in bytes (0 = ∞).
 private let attachmentSizeLimits: [Int64] = [0, 314572800, 1073741824, 2147483648, 5368709120, 6442450944, 12884901888]
 
+private func shadowBottomBarScrollLabel(_ mode: Int32) -> String {
+    switch mode {
+    case 1: return "Скрывать при прокрутке вниз"
+    case 2: return "Скрывать и показывать при остановке"
+    case 3: return "Скрывать при прокрутке вверх и вниз"
+    default: return "Всегда показывать"
+    }
+}
+
 private func attachmentSizeLabel(_ value: Int64) -> String {
     switch value {
     case 314572800:
@@ -73,21 +77,38 @@ private func attachmentSizeLabel(_ value: Int64) -> String {
 // MARK: - Hub
 
 private enum AyuHubSection: Int32 {
-    case sections
+    case search
+    case privacy
+    case interface
+    case accounts
+    case tools
     case info
 }
 
 private enum AyuHubEntry: ItemListNodeEntry {
+    case query(String)
+    case result(ShadowSettingsSearchItem)
+    case noResults
     case customization
     case spy
     case ghost
     case misc
+    case backup
+    case filters
+    case hiddenAccounts
+    case pushDiagnostics
     case infoFooter
 
     var section: ItemListSectionId {
         switch self {
-        case .customization, .spy, .ghost, .misc:
-            return AyuHubSection.sections.rawValue
+        case .query:
+            return AyuHubSection.search.rawValue
+        case .result:
+            return AyuHubSection.privacy.rawValue
+        case .noResults:
+            return AyuHubSection.info.rawValue
+        case .customization, .spy, .ghost, .filters, .misc, .hiddenAccounts, .backup, .pushDiagnostics:
+            return AyuHubSection.tools.rawValue
         case .infoFooter:
             return AyuHubSection.info.rawValue
         }
@@ -95,16 +116,27 @@ private enum AyuHubEntry: ItemListNodeEntry {
 
     var stableId: Int32 {
         switch self {
+        case .query: return -1
+        case let .result(item): return 100 + item.id
+        case .noResults: return 10
         case .customization:
             return 0
         case .spy:
             return 1
         case .ghost:
             return 2
-        case .misc:
+        case .filters:
             return 3
-        case .infoFooter:
+        case .misc:
             return 4
+        case .infoFooter:
+            return 9
+        case .backup:
+            return 6
+        case .hiddenAccounts:
+            return 5
+        case .pushDiagnostics:
+            return 7
         }
     }
 
@@ -115,6 +147,12 @@ private enum AyuHubEntry: ItemListNodeEntry {
     func item(presentationData: ItemListPresentationData, arguments: Any) -> ListViewItem {
         let arguments = arguments as! AyuHubArguments
         switch self {
+        case let .query(value):
+            return ItemListSingleLineInputItem(presentationData: presentationData, title: NSAttributedString(string: ""), text: value, placeholder: "Поиск настроек Shadow", type: .regular(capitalization: false, autocorrection: false), clearType: .always, sectionId: self.section, textUpdated: arguments.updateQuery, action: {})
+        case let .result(item):
+            return ItemListDisclosureItem(presentationData: presentationData, title: item.title, label: item.path + "\n" + item.description, labelStyle: .multilineDetailText, sectionId: self.section, style: .blocks, action: { arguments.openResult(item) })
+        case .noResults:
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Ничего не найдено. Попробуйте другое слово на русском или английском."), sectionId: self.section)
         case .customization:
             return ItemListDisclosureItem(presentationData: presentationData, title: "Кастомизация", label: "", sectionId: self.section, style: .blocks, action: {
                 arguments.openCustomization()
@@ -128,33 +166,75 @@ private enum AyuHubEntry: ItemListNodeEntry {
                 arguments.openGhost()
             })
         case .misc:
-            return ItemListDisclosureItem(presentationData: presentationData, title: "Разное", label: "", sectionId: self.section, style: .blocks, action: {
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Подмена профиля", label: "", sectionId: self.section, style: .blocks, action: {
                 arguments.openMisc()
             })
         case .infoFooter:
-            return ItemListTextItem(presentationData: presentationData, text: .plain("Кастомизация — внешний вид и поведение приложения. Шпион — сохранение информации, которую Telegram скрывает или удаляет. Призрак — максимально незаметное использование Telegram. Разное — визуальная подмена данных профиля для скриншотов."), sectionId: self.section)
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Скрытый аккаунт остаётся авторизованным и продолжает получать обновления, но не показывается в переключателе аккаунтов."), sectionId: self.section)
+        case .backup:
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Резервная копия настроек", label: "", sectionId: self.section, style: .blocks, action: arguments.openBackup)
+        case .filters:
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Фильтры", label: "", sectionId: self.section, style: .blocks, action: arguments.openFilters)
+        case .hiddenAccounts:
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Скрытие аккаунтов", label: "", sectionId: self.section, style: .blocks, action: arguments.openHiddenAccounts)
+        case .pushDiagnostics:
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Разное", label: "", sectionId: self.section, style: .blocks, action: arguments.openPushDiagnostics)
         }
     }
 }
 
 private final class AyuHubArguments {
+    let updateQuery: (String) -> Void
+    let openResult: (ShadowSettingsSearchItem) -> Void
     let openCustomization: () -> Void
     let openSpy: () -> Void
     let openGhost: () -> Void
     let openMisc: () -> Void
+    let openBackup: () -> Void
+    let openFilters: () -> Void
+    let openHiddenAccounts: () -> Void
+    let openPushDiagnostics: () -> Void
 
-    init(openCustomization: @escaping () -> Void, openSpy: @escaping () -> Void, openGhost: @escaping () -> Void, openMisc: @escaping () -> Void) {
+    init(updateQuery: @escaping (String) -> Void, openResult: @escaping (ShadowSettingsSearchItem) -> Void, openCustomization: @escaping () -> Void, openSpy: @escaping () -> Void, openGhost: @escaping () -> Void, openMisc: @escaping () -> Void, openBackup: @escaping () -> Void, openFilters: @escaping () -> Void, openHiddenAccounts: @escaping () -> Void, openPushDiagnostics: @escaping () -> Void) {
+        self.updateQuery = updateQuery
+        self.openResult = openResult
         self.openCustomization = openCustomization
         self.openSpy = openSpy
         self.openGhost = openGhost
         self.openMisc = openMisc
+        self.openBackup = openBackup
+        self.openFilters = openFilters
+        self.openHiddenAccounts = openHiddenAccounts
+        self.openPushDiagnostics = openPushDiagnostics
+    }
+}
+
+func shadowSettingsSearchDestinationController(context: AccountContext, item: ShadowSettingsSearchItem) -> ViewController {
+    switch item.destination {
+    case .customization: return ayuCustomizationController(context: context, focus: item)
+    case .spy: return ayuSpyController(context: context, focus: item)
+    case .ghost: return ayuGhostController(context: context, focus: item)
+    case .misc: return ayuMiscController(context: context, focus: item)
+    case .backup: return shadowSettingsBackupController(context: context, focus: item)
+    case .filters: return shadowMessageFiltersController(context: context)
+    case .pushDiagnostics:
+        if item.entryId == 0 {
+            return shadowPushDiagnosticsController(context: context)
+        } else {
+            return shadowMiscController(context: context)
+        }
     }
 }
 
 public func ayuGramSettingsController(context: AccountContext) -> ViewController {
     var pushControllerImpl: ((ViewController) -> Void)?
+    let query = ValuePromise<String>("", ignoreRepeated: true)
 
     let arguments = AyuHubArguments(
+        updateQuery: { query.set(String($0.prefix(256))) },
+        openResult: { item in
+            pushControllerImpl?(shadowSettingsSearchDestinationController(context: context, item: item))
+        },
         openCustomization: {
             pushControllerImpl?(ayuCustomizationController(context: context))
         },
@@ -166,14 +246,31 @@ public func ayuGramSettingsController(context: AccountContext) -> ViewController
         },
         openMisc: {
             pushControllerImpl?(ayuMiscController(context: context))
+        },
+        openBackup: {
+            pushControllerImpl?(shadowSettingsBackupController(context: context))
+        },
+        openFilters: {
+            pushControllerImpl?(shadowMessageFiltersController(context: context))
+        },
+        openHiddenAccounts: {
+            pushControllerImpl?(shadowHiddenAccountsController(context: context))
+        },
+        openPushDiagnostics: {
+            pushControllerImpl?(shadowMiscController(context: context))
         }
     )
 
-    let entries: [AyuHubEntry] = [.customization, .spy, .ghost, .misc, .infoFooter]
-
-    let signal = context.sharedContext.presentationData
+    let signal = combineLatest(queue: .mainQueue(), context.sharedContext.presentationData, query.get())
     |> deliverOnMainQueue
-    |> map { presentationData -> (ItemListControllerState, (ItemListNodeState, Any)) in
+    |> map { presentationData, query -> (ItemListControllerState, (ItemListNodeState, Any)) in
+        var entries: [AyuHubEntry] = [.query(query)]
+        if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            entries += [.customization, .spy, .ghost, .filters, .misc, .hiddenAccounts, .backup, .pushDiagnostics, .infoFooter]
+        } else {
+            let matches = ShadowSettingsSearchIndex.search(query)
+            entries += matches.isEmpty ? [.noResults] : matches.map { .result($0) }
+        }
         let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Shadow"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
         let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, animateChanges: false)
         return (controllerState, (listState, arguments))
@@ -181,9 +278,135 @@ public func ayuGramSettingsController(context: AccountContext) -> ViewController
 
     let controller = ItemListController(context: context, state: signal)
     pushControllerImpl = { [weak controller] c in
+        controller?.view.endEditing(true)
         (controller?.navigationController as? NavigationController)?.pushViewController(c)
     }
     return controller
+}
+
+// MARK: - Accounts
+
+private enum ShadowHiddenAccountsSection: Int32 {
+    case accounts
+    case info
+}
+
+private final class ShadowHiddenAccountsArguments {
+    let updateHidden: (PeerId, Bool) -> Void
+
+    init(updateHidden: @escaping (PeerId, Bool) -> Void) {
+        self.updateHidden = updateHidden
+    }
+}
+
+private enum ShadowHiddenAccountsEntry: ItemListNodeEntry {
+    case account(Int32, PeerId, String, Bool, Bool)
+    case info
+
+    var section: ItemListSectionId {
+        switch self {
+        case .account:
+            return ShadowHiddenAccountsSection.accounts.rawValue
+        case .info:
+            return ShadowHiddenAccountsSection.info.rawValue
+        }
+    }
+
+    var stableId: Int32 {
+        switch self {
+        case let .account(index, _, _, _, _):
+            return index
+        case .info:
+            return 10_000
+        }
+    }
+
+    static func <(lhs: ShadowHiddenAccountsEntry, rhs: ShadowHiddenAccountsEntry) -> Bool {
+        return lhs.stableId < rhs.stableId
+    }
+
+    func item(presentationData: ItemListPresentationData, arguments: Any) -> ListViewItem {
+        let arguments = arguments as! ShadowHiddenAccountsArguments
+        switch self {
+        case let .account(_, peerId, title, isCurrent, isHidden):
+            let suffix = isCurrent ? " · текущий" : ""
+            let userId = peerId.id._internalGetInt64Value()
+            return ItemListSwitchItem(presentationData: presentationData, title: "\(title) · ID \(userId)\(suffix)", value: isHidden, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.updateHidden(peerId, value)
+            })
+        case .info:
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Включённый переключатель скрывает аккаунт из списка и быстрого переключателя. Аккаунт не выходит из системы, продолжает синхронизацию и остаётся доступен на этом экране. Текущий аккаунт исчезнет из переключателя после перехода на другой."), sectionId: self.section)
+        }
+    }
+}
+
+private struct ShadowActiveAccount {
+    let context: AccountContext
+    let peer: EnginePeer
+    let isCurrent: Bool
+    let sortOrder: Int32
+}
+
+private func shadowActiveAccounts(context: AccountContext) -> Signal<[ShadowActiveAccount], NoError> {
+    return context.sharedContext.activeAccountContexts
+    |> mapToSignal { primary, accounts, _ -> Signal<[ShadowActiveAccount], NoError> in
+        let primaryId = primary?.account.id
+        let accountSignals: [Signal<ShadowActiveAccount?, NoError>] = accounts.map { _, accountContext, sortOrder in
+            return accountContext.engine.data.subscribe(TelegramEngine.EngineData.Item.Peer.Peer(id: accountContext.account.peerId))
+            |> map { peer -> ShadowActiveAccount? in
+                guard let peer else {
+                    return nil
+                }
+                return ShadowActiveAccount(
+                    context: accountContext,
+                    peer: peer,
+                    isCurrent: accountContext.account.id == primaryId,
+                    sortOrder: sortOrder
+                )
+            }
+        }
+        guard !accountSignals.isEmpty else {
+            return .single([])
+        }
+        return combineLatest(accountSignals)
+        |> map { values -> [ShadowActiveAccount] in
+            return values.compactMap { $0 }.sorted { lhs, rhs in
+                if lhs.isCurrent != rhs.isCurrent {
+                    return lhs.isCurrent
+                }
+                return lhs.sortOrder < rhs.sortOrder
+            }
+        }
+    }
+}
+
+private func shadowHiddenAccountsController(context: AccountContext) -> ViewController {
+    let arguments = ShadowHiddenAccountsArguments(updateHidden: { peerId, value in
+        ShadowHiddenAccounts.setHidden(value, peerId: peerId)
+    })
+
+    let signal = combineLatest(queue: .mainQueue(),
+        context.sharedContext.presentationData,
+        shadowActiveAccounts(context: context),
+        ShadowHiddenAccounts.signal()
+    )
+    |> deliverOnMainQueue
+    |> map { presentationData, accounts, hiddenIds -> (ItemListControllerState, (ItemListNodeState, Any)) in
+        var entries: [ShadowHiddenAccountsEntry] = []
+        var index: Int32 = 0
+        for account in accounts {
+            let peerId = account.context.account.peerId
+            entries.append(.account(index, peerId, account.peer.compactDisplayTitle, account.isCurrent, hiddenIds.contains(peerId.toInt64())))
+            index += 1
+        }
+        entries.append(.info)
+
+        let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Скрытые аккаунты"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
+        let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, animateChanges: true)
+        return (controllerState, (listState, arguments))
+    }
+
+    return ItemListController(context: context, state: signal)
 }
 
 // A small shared helper for the sub-controllers.
@@ -196,6 +419,9 @@ private func ayuUpdateSettings(context: AccountContext, _ f: @escaping (AyuGramS
 // MARK: - Кастомизация
 
 private final class AyuCustomizationArguments {
+    var openMessageScreenshot: () -> Void = {}
+    var updatePreferUsernameForNonContacts: (Bool) -> Void = { _ in }
+    var updatePreferUsernameForBots: (Bool) -> Void = { _ in }
     let updateShowMessageSeconds: (Bool) -> Void
     let updateEditedIndicatorAsPencil: (Bool) -> Void
     let updateEditedIndicatorText: (String) -> Void
@@ -207,14 +433,12 @@ private final class AyuCustomizationArguments {
     let updateWideChannelPosts: (Bool) -> Void
     let updateShowExactViewCounts: (Bool) -> Void
     let updateShowForwardCount: (Bool) -> Void
-    let updateRoundVideoBackCamera: (Bool) -> Void
-    let updateShowCameraTile: (Bool) -> Void
-    let updateCameraTileLivePreview: (Bool) -> Void
     let updateConfirmCalls: (Bool) -> Void
     let updateHideAllChatsFolder: (Bool) -> Void
     let updateFoldersAtBottom: (Bool) -> Void
     let updateHideBottomSearch: (Bool) -> Void
     let updateCompactBottomBar: (Bool) -> Void
+    let selectBottomBarScrollMode: () -> Void
     let updateShowProfileId: (Bool) -> Void
     let updateShowProfileDC: (Bool) -> Void
     let updateShowRegistrationDate: (Bool) -> Void
@@ -239,14 +463,12 @@ private final class AyuCustomizationArguments {
         updateWideChannelPosts: @escaping (Bool) -> Void,
         updateShowExactViewCounts: @escaping (Bool) -> Void,
         updateShowForwardCount: @escaping (Bool) -> Void,
-        updateRoundVideoBackCamera: @escaping (Bool) -> Void,
-        updateShowCameraTile: @escaping (Bool) -> Void,
-        updateCameraTileLivePreview: @escaping (Bool) -> Void,
         updateConfirmCalls: @escaping (Bool) -> Void,
         updateHideAllChatsFolder: @escaping (Bool) -> Void,
         updateFoldersAtBottom: @escaping (Bool) -> Void,
         updateHideBottomSearch: @escaping (Bool) -> Void,
         updateCompactBottomBar: @escaping (Bool) -> Void,
+        selectBottomBarScrollMode: @escaping () -> Void,
         updateShowProfileId: @escaping (Bool) -> Void,
         updateShowProfileDC: @escaping (Bool) -> Void,
         updateShowRegistrationDate: @escaping (Bool) -> Void,
@@ -270,14 +492,12 @@ private final class AyuCustomizationArguments {
         self.updateWideChannelPosts = updateWideChannelPosts
         self.updateShowExactViewCounts = updateShowExactViewCounts
         self.updateShowForwardCount = updateShowForwardCount
-        self.updateRoundVideoBackCamera = updateRoundVideoBackCamera
-        self.updateShowCameraTile = updateShowCameraTile
-        self.updateCameraTileLivePreview = updateCameraTileLivePreview
         self.updateConfirmCalls = updateConfirmCalls
         self.updateHideAllChatsFolder = updateHideAllChatsFolder
         self.updateFoldersAtBottom = updateFoldersAtBottom
         self.updateHideBottomSearch = updateHideBottomSearch
         self.updateCompactBottomBar = updateCompactBottomBar
+        self.selectBottomBarScrollMode = selectBottomBarScrollMode
         self.updateShowProfileId = updateShowProfileId
         self.updateShowProfileDC = updateShowProfileDC
         self.updateShowRegistrationDate = updateShowRegistrationDate
@@ -298,7 +518,6 @@ private enum AyuCustomizationSection: Int32 {
     case chats
     case bottomBar
     case profiles
-    case media
     case calls
     case githubConfig
     case banner
@@ -316,6 +535,9 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
     // so no new build-system wiring is needed — just surfacing existing data.
     case buildInfo
     case appearanceHeader
+    case messageScreenshot
+    case preferUsernameForNonContacts(Bool)
+    case preferUsernameForBots(Bool)
     case showMessageSeconds(Bool)
     case editedIndicatorAsPencil(Bool)
     case editedIndicatorText(String)
@@ -337,6 +559,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
     case foldersAtBottom(Bool)
     case hideBottomSearch(Bool)
     case compactBottomBar(Bool)
+    case bottomBarScrollMode(Int32)
     case bottomBarFooter
 
     case profilesHeader
@@ -345,12 +568,6 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
     case showRegistrationDate(Bool)
     case hideOwnPhoneNumber(Bool)
     case profilesFooter
-
-    case mediaHeader
-    case roundVideoBackCamera(Bool)
-    case showCameraTile(Bool)
-    case cameraTileLivePreview(Bool)
-    case mediaFooter
 
     case callsHeader
     case confirmCalls(Bool)
@@ -374,18 +591,18 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
 
     var section: ItemListSectionId {
         switch self {
+        case .messageScreenshot: return AyuCustomizationSection.appearance.rawValue
+        case .preferUsernameForNonContacts, .preferUsernameForBots: return AyuCustomizationSection.appearance.rawValue
         case .buildInfo:
             return AyuCustomizationSection.buildInfo.rawValue
         case .appearanceHeader, .showMessageSeconds, .editedIndicatorAsPencil, .editedIndicatorText, .deletedIndicatorText, .regularEmojiFirst, .doubleTapToEdit, .showExactLastSeen, .showExactLastSeenSeconds, .wideChannelPosts, .showExactViewCounts, .showForwardCount, .appearanceFooter:
             return AyuCustomizationSection.appearance.rawValue
         case .chatsHeader, .hideAllChatsFolder, .chatsFooter:
             return AyuCustomizationSection.chats.rawValue
-        case .bottomBarHeader, .foldersAtBottom, .hideBottomSearch, .compactBottomBar, .bottomBarFooter:
+        case .bottomBarHeader, .foldersAtBottom, .hideBottomSearch, .compactBottomBar, .bottomBarScrollMode, .bottomBarFooter:
             return AyuCustomizationSection.bottomBar.rawValue
         case .profilesHeader, .showProfileId, .showProfileDC, .showRegistrationDate, .hideOwnPhoneNumber, .profilesFooter:
             return AyuCustomizationSection.profiles.rawValue
-        case .mediaHeader, .roundVideoBackCamera, .showCameraTile, .cameraTileLivePreview, .mediaFooter:
-            return AyuCustomizationSection.media.rawValue
         case .callsHeader, .confirmCalls, .callsFooter:
             return AyuCustomizationSection.calls.rawValue
         case .githubConfigHeader, .syncGithub, .githubConfigFooter:
@@ -399,6 +616,9 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
 
     var stableId: Int32 {
         switch self {
+        case .messageScreenshot: return 93
+        case .preferUsernameForNonContacts: return 94
+        case .preferUsernameForBots: return 95
         case .buildInfo: return -1
         case .appearanceHeader: return 0
         case .showMessageSeconds: return 1
@@ -420,6 +640,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .foldersAtBottom: return 15
         case .hideBottomSearch: return 16
         case .compactBottomBar: return 17
+        case .bottomBarScrollMode: return 92
         case .bottomBarFooter: return 18
         case .profilesHeader: return 19
         case .showProfileId: return 20
@@ -427,11 +648,6 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .showRegistrationDate: return 22
         case .hideOwnPhoneNumber: return 23
         case .profilesFooter: return 24
-        case .mediaHeader: return 25
-        case .roundVideoBackCamera: return 26
-        case .showCameraTile: return 27
-        case .cameraTileLivePreview: return 28
-        case .mediaFooter: return 29
         case .callsHeader: return 30
         case .confirmCalls: return 31
         case .callsFooter: return 32
@@ -451,13 +667,34 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         }
     }
 
+    private var sortKey: (Int32, Int) {
+        switch self {
+        case .messageScreenshot: return (9, 1)
+        case .preferUsernameForNonContacts: return (9, 2)
+        case .preferUsernameForBots: return (9, 3)
+        case .editedIndicatorText: return (2, 1)
+        case .deletedIndicatorText: return (2, 2)
+        case .bottomBarScrollMode: return (17, 1)
+        default: return (self.stableId, 0)
+        }
+    }
+
     static func <(lhs: AyuCustomizationEntry, rhs: AyuCustomizationEntry) -> Bool {
-        return lhs.stableId < rhs.stableId
+        // Stable IDs do not encode insertion order for later-added controls.
+        return lhs.sortKey < rhs.sortKey
     }
 
     func item(presentationData: ItemListPresentationData, arguments: Any) -> ListViewItem {
         let arguments = arguments as! AyuCustomizationArguments
         switch self {
+        case .messageScreenshot:
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Скриншоты сообщений", label: "", sectionId: self.section, style: .blocks, action: arguments.openMessageScreenshot)
+        case let .preferUsernameForNonContacts(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "@username вместо имени незнакомых", value: value, sectionId: self.section, style: .blocks, updated: arguments.updatePreferUsernameForNonContacts)
+        case let .preferUsernameForBots(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Также для ботов", value: value, sectionId: self.section, style: .blocks, updated: arguments.updatePreferUsernameForBots)
+        case let .bottomBarScrollMode(mode):
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Скрытие нижней панели", label: shadowBottomBarScrollLabel(mode), labelStyle: .detailText, sectionId: self.section, style: .blocks, action: arguments.selectBottomBarScrollMode)
         case .buildInfo:
             let bundle = Bundle.main
             let bundleVersion = (bundle.infoDictionary?["CFBundleShortVersionString"] as? String) ?? ""
@@ -534,7 +771,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
                 arguments.updateCompactBottomBar(value)
             })
         case .bottomBarFooter:
-            return ItemListTextItem(presentationData: presentationData, text: .plain("«Папки снизу» показывают папки чатов над нижней панелью. «Убрать поиск снизу» скрывает нижнюю кнопку поиска, чтобы поиск не дублировался (верхняя строка поиска не затрагивается). «Уменьшить интерфейс снизу» делает нижнюю панель компактнее. Все три переключателя работают независимо."), sectionId: self.section)
+            return ItemListTextItem(presentationData: presentationData, text: .plain("«Папки снизу» показывают папки чатов над нижней панелью. «Убрать поиск снизу» скрывает нижнюю кнопку поиска, чтобы поиск не дублировался (верхняя строка поиска не затрагивается). «Уменьшить интерфейс снизу» делает нижнюю панель компактнее. Все три переключателя работают независимо. Режим «Скрывать при прокрутке вверх и вниз» возвращает панель после полной остановки списка, включая инерцию."), sectionId: self.section)
         case .profilesHeader:
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "ПРОФИЛЬ", sectionId: self.section)
         case let .showProfileId(value):
@@ -555,22 +792,6 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
             })
         case .profilesFooter:
             return ItemListTextItem(presentationData: presentationData, text: .plain("Показывать в профилях пользователей, ботов и каналов дополнительные поля: числовой ID (в формате Bot API, копируется по удержанию), дата-центр фото профиля и примерную дату регистрации. Дата регистрации приблизительная — Telegram не раскрывает точную.\n\n«Скрыть свой номер» полностью убирает плашку с вашим номером телефона в настройках/профиле."), sectionId: self.section)
-        case .mediaHeader:
-            return ItemListSectionHeaderItem(presentationData: presentationData, text: "МЕДИА", sectionId: self.section)
-        case let .roundVideoBackCamera(value):
-            return ItemListSwitchItem(presentationData: presentationData, title: "Кружки на заднюю камеру", value: value, sectionId: self.section, style: .blocks, updated: { value in
-                arguments.updateRoundVideoBackCamera(value)
-            })
-        case let .showCameraTile(value):
-            return ItemListSwitchItem(presentationData: presentationData, title: "Камера в галерее", value: value, sectionId: self.section, style: .blocks, updated: { value in
-                arguments.updateShowCameraTile(value)
-            })
-        case let .cameraTileLivePreview(value):
-            return ItemListSwitchItem(presentationData: presentationData, title: "Живой предпросмотр камеры", value: value, sectionId: self.section, style: .blocks, updated: { value in
-                arguments.updateCameraTileLivePreview(value)
-            })
-        case .mediaFooter:
-            return ItemListTextItem(presentationData: presentationData, text: .plain("Начинать запись видеосообщений («кружков») с задней камеры. Во время записи можно переключиться на фронтальную. «Камера в галерее» показывает плитку камеры первой ячейкой в галерее вложений. «Живой предпросмотр камеры» запускает в этой плитке видео с камеры вживую вместо статичной иконки."), sectionId: self.section)
         case .callsHeader:
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "ЗВОНКИ", sectionId: self.section)
         case let .confirmCalls(value):
@@ -641,6 +862,11 @@ private func ayuCustomizationEntries(settings: AyuGramSettings) -> [AyuCustomiza
     entries.append(.wideChannelPosts(settings.wideChannelPosts))
     entries.append(.showExactViewCounts(settings.showExactViewCounts))
     entries.append(.showForwardCount(settings.showForwardCount))
+    entries.append(.messageScreenshot)
+    entries.append(.preferUsernameForNonContacts(settings.preferUsernameForNonContacts))
+    if settings.preferUsernameForNonContacts {
+        entries.append(.preferUsernameForBots(settings.preferUsernameForBots))
+    }
     entries.append(.appearanceFooter)
 
     entries.append(.chatsHeader)
@@ -651,6 +877,7 @@ private func ayuCustomizationEntries(settings: AyuGramSettings) -> [AyuCustomiza
     entries.append(.foldersAtBottom(settings.foldersAtBottom))
     entries.append(.hideBottomSearch(settings.hideBottomSearch))
     entries.append(.compactBottomBar(settings.compactBottomBar))
+    entries.append(.bottomBarScrollMode(settings.bottomBarScrollMode))
     entries.append(.bottomBarFooter)
 
     entries.append(.profilesHeader)
@@ -659,12 +886,6 @@ private func ayuCustomizationEntries(settings: AyuGramSettings) -> [AyuCustomiza
     entries.append(.showRegistrationDate(settings.showRegistrationDate))
     entries.append(.hideOwnPhoneNumber(settings.hideOwnPhoneNumber))
     entries.append(.profilesFooter)
-
-    entries.append(.mediaHeader)
-    entries.append(.roundVideoBackCamera(settings.roundVideoUseBackCamera))
-    entries.append(.showCameraTile(settings.showCameraTile))
-    entries.append(.cameraTileLivePreview(settings.cameraTileLivePreview))
-    entries.append(.mediaFooter)
 
     entries.append(.callsHeader)
     entries.append(.confirmCalls(settings.confirmCalls))
@@ -693,7 +914,8 @@ private func ayuCustomizationEntries(settings: AyuGramSettings) -> [AyuCustomiza
     return entries
 }
 
-private func ayuCustomizationController(context: AccountContext) -> ViewController {
+private func ayuCustomizationController(context: AccountContext, focus: ShadowSettingsSearchItem? = nil) -> ViewController {
+    var focusedIndex: Int?
     var presentControllerImpl: ((ViewController, ViewControllerPresentationArguments?) -> Void)?
     var presentBannerImagePickerImpl: (() -> Void)?
     var presentProfileBackgroundImagePickerImpl: (() -> Void)?
@@ -732,15 +954,6 @@ private func ayuCustomizationController(context: AccountContext) -> ViewControll
         updateShowForwardCount: { value in
             ayuUpdateSettings(context: context) { var s = $0; s.showForwardCount = value; return s }
         },
-        updateRoundVideoBackCamera: { value in
-            ayuUpdateSettings(context: context) { var s = $0; s.roundVideoUseBackCamera = value; return s }
-        },
-        updateShowCameraTile: { value in
-            ayuUpdateSettings(context: context) { var s = $0; s.showCameraTile = value; return s }
-        },
-        updateCameraTileLivePreview: { value in
-            ayuUpdateSettings(context: context) { var s = $0; s.cameraTileLivePreview = value; return s }
-        },
         updateConfirmCalls: { value in
             ayuUpdateSettings(context: context) { var s = $0; s.confirmCalls = value; return s }
         },
@@ -755,6 +968,21 @@ private func ayuCustomizationController(context: AccountContext) -> ViewControll
         },
         updateCompactBottomBar: { value in
             ayuUpdateSettings(context: context) { var s = $0; s.compactBottomBar = value; return s }
+        },
+        selectBottomBarScrollMode: {
+            let data = context.sharedContext.currentPresentationData.with { $0 }
+            let sheet = ActionSheetController(presentationData: data)
+            let items: [ActionSheetItem] = (0...3).map { mode in
+                ActionSheetButtonItem(title: shadowBottomBarScrollLabel(Int32(mode)), action: { [weak sheet] in
+                    sheet?.dismissAnimated()
+                    ayuUpdateSettings(context: context) { var settings = $0; settings.bottomBarScrollMode = Int32(mode); return settings }
+                })
+            }
+            sheet.setItemGroups([
+                ActionSheetItemGroup(items: items),
+                ActionSheetItemGroup(items: [ActionSheetButtonItem(title: data.strings.Common_Cancel, action: { [weak sheet] in sheet?.dismissAnimated() })])
+            ])
+            presentControllerImpl?(sheet, nil)
         },
         updateShowProfileId: { value in
             ayuUpdateSettings(context: context) { var s = $0; s.showProfileId = value; return s }
@@ -810,11 +1038,16 @@ private func ayuCustomizationController(context: AccountContext) -> ViewControll
     |> deliverOnMainQueue
     |> map { presentationData, settings -> (ItemListControllerState, (ItemListNodeState, Any)) in
         let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Кастомизация"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
-        let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: ayuCustomizationEntries(settings: settings), style: .blocks, animateChanges: true)
+        let entries = ayuCustomizationEntries(settings: settings)
+        focusedIndex = shadowSettingsFocusIndex(stableIds: entries.map { $0.stableId }, target: focus)
+        let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, initialScrollToItem: shadowSettingsInitialScroll(index: focusedIndex), animateChanges: true)
         return (controllerState, (listState, arguments))
     }
 
     let controller = ItemListController(context: context, state: signal)
+    if focus != nil {
+        shadowSettingsInstallFocus(controller: controller, index: { focusedIndex }, color: context.sharedContext.currentPresentationData.with { $0 }.theme.list.itemAccentColor)
+    }
     presentControllerImpl = { [weak controller] c, a in
         controller?.present(c, in: .window(.root), with: a)
     }
@@ -860,6 +1093,15 @@ private func ayuCustomizationController(context: AccountContext) -> ViewControll
         picker.delegate = delegate
         controller.view.window?.rootViewController?.present(picker, animated: true)
     }
+    arguments.openMessageScreenshot = { [weak controller] in
+        controller?.push(shadowMessageScreenshotSettingsController(context: context))
+    }
+    arguments.updatePreferUsernameForBots = { value in
+        ayuUpdateSettings(context: context) { var s = $0; s.preferUsernameForBots = value; return s }
+    }
+    arguments.updatePreferUsernameForNonContacts = { value in
+        ayuUpdateSettings(context: context) { var s = $0; s.preferUsernameForNonContacts = value; return s }
+    }
     return controller
 }
 
@@ -896,7 +1138,9 @@ private final class BannerImagePickerDelegate: NSObject, UIImagePickerController
 
 private final class AyuSpyArguments {
     let updateKeepDeleted: (Bool) -> Void
+    let updateKeepDeletedSecretChats: (Bool) -> Void
     let updateSaveEditHistory: (Bool) -> Void
+    let updateShowEditComparisonAction: (Bool) -> Void
     let updateKeepSelfDestructMedia: (Bool) -> Void
     let updateAllowSaveRestrictedContent: (Bool) -> Void
     let updateAskBeforeStoryView: (Bool) -> Void
@@ -911,7 +1155,9 @@ private final class AyuSpyArguments {
 
     init(
         updateKeepDeleted: @escaping (Bool) -> Void,
+        updateKeepDeletedSecretChats: @escaping (Bool) -> Void,
         updateSaveEditHistory: @escaping (Bool) -> Void,
+        updateShowEditComparisonAction: @escaping (Bool) -> Void,
         updateKeepSelfDestructMedia: @escaping (Bool) -> Void,
         updateAllowSaveRestrictedContent: @escaping (Bool) -> Void,
         updateAskBeforeStoryView: @escaping (Bool) -> Void,
@@ -925,7 +1171,9 @@ private final class AyuSpyArguments {
         openForkStorage: @escaping () -> Void
     ) {
         self.updateKeepDeleted = updateKeepDeleted
+        self.updateKeepDeletedSecretChats = updateKeepDeletedSecretChats
         self.updateSaveEditHistory = updateSaveEditHistory
+        self.updateShowEditComparisonAction = updateShowEditComparisonAction
         self.updateKeepSelfDestructMedia = updateKeepSelfDestructMedia
         self.updateAllowSaveRestrictedContent = updateAllowSaveRestrictedContent
         self.updateAskBeforeStoryView = updateAskBeforeStoryView
@@ -951,11 +1199,13 @@ private enum AyuSpySection: Int32 {
 private enum AyuSpyEntry: ItemListNodeEntry {
     case deletedHeader
     case keepDeleted(Bool)
+    case keepDeletedSecretChats(Bool)
     case keepSelfDestructMedia(Bool)
     case deletedFooter
 
     case editsHeader
     case saveEditHistory(Bool)
+    case showEditComparisonAction(Bool)
     case editsFooter
 
     case restrictedHeader
@@ -979,9 +1229,9 @@ private enum AyuSpyEntry: ItemListNodeEntry {
 
     var section: ItemListSectionId {
         switch self {
-        case .deletedHeader, .keepDeleted, .keepSelfDestructMedia, .deletedFooter:
+        case .deletedHeader, .keepDeleted, .keepDeletedSecretChats, .keepSelfDestructMedia, .deletedFooter:
             return AyuSpySection.deleted.rawValue
-        case .editsHeader, .saveEditHistory, .editsFooter:
+        case .editsHeader, .saveEditHistory, .showEditComparisonAction, .editsFooter:
             return AyuSpySection.edits.rawValue
         case .restrictedHeader, .allowSaveRestrictedContent, .restrictedFooter:
             return AyuSpySection.restricted.rawValue
@@ -996,27 +1246,29 @@ private enum AyuSpyEntry: ItemListNodeEntry {
         switch self {
         case .deletedHeader: return 0
         case .keepDeleted: return 1
-        case .keepSelfDestructMedia: return 2
-        case .deletedFooter: return 3
-        case .editsHeader: return 4
-        case .saveEditHistory: return 5
-        case .editsFooter: return 6
-        case .restrictedHeader: return 7
-        case .allowSaveRestrictedContent: return 8
-        case .restrictedFooter: return 9
-        case .storyPromptHeader: return 10
-        case .askBeforeStoryView: return 11
-        case .storyPromptFooter: return 12
-        case .savedMediaHeader: return 13
-        case .saveDestructingMedia: return 14
-        case .saveAllIncomingMedia: return 15
-        case .attachmentSizeLimit: return 16
-        case .attachmentAge: return 17
-        case .keepPinned: return 18
-        case .keepChannels: return 19
-        case .keepBots: return 20
-        case .forkStorage: return 21
-        case .savedMediaFooter: return 22
+        case .keepDeletedSecretChats: return 2
+        case .keepSelfDestructMedia: return 3
+        case .deletedFooter: return 4
+        case .editsHeader: return 5
+        case .saveEditHistory: return 6
+        case .showEditComparisonAction: return 7
+        case .editsFooter: return 8
+        case .restrictedHeader: return 9
+        case .allowSaveRestrictedContent: return 10
+        case .restrictedFooter: return 11
+        case .storyPromptHeader: return 12
+        case .askBeforeStoryView: return 13
+        case .storyPromptFooter: return 14
+        case .savedMediaHeader: return 15
+        case .saveDestructingMedia: return 16
+        case .saveAllIncomingMedia: return 17
+        case .attachmentSizeLimit: return 18
+        case .attachmentAge: return 19
+        case .keepPinned: return 20
+        case .keepChannels: return 21
+        case .keepBots: return 22
+        case .forkStorage: return 23
+        case .savedMediaFooter: return 24
         }
     }
 
@@ -1033,20 +1285,28 @@ private enum AyuSpyEntry: ItemListNodeEntry {
             return ItemListSwitchItem(presentationData: presentationData, title: "Сохранять удалённые", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 arguments.updateKeepDeleted(value)
             })
+        case let .keepDeletedSecretChats(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Сохранять удалённые в секретных чатах", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.updateKeepDeletedSecretChats(value)
+            })
         case let .keepSelfDestructMedia(value):
             return ItemListSwitchItem(presentationData: presentationData, title: "Сохранять «одноразовые»", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 arguments.updateKeepSelfDestructMedia(value)
             })
         case .deletedFooter:
-            return ItemListTextItem(presentationData: presentationData, text: .plain("Сообщения и медиа, которые удаляет собеседник, остаются в чате с меткой и временем удаления: текст, фото, видео, голосовые, видеосообщения и подписи. Ваши собственные удаления не затрагиваются. «Сохранять одноразовые» оставляет view-once / самоуничтожающиеся медиа доступными после просмотра и не сообщает отправителю, что вы их открыли. Работает во всех типах чатов, включая приватные каналы, защищённые и секретные чаты.\n\nУдалённые сообщения, медиа и файлы от ботов также сохраняются всегда. Переключатель «Исключить ботов» в разделе «Сохранённые вложения» влияет только на автоочистку локальной галереи и не отключает сохранение удалённого."), sectionId: self.section)
+            return ItemListTextItem(presentationData: presentationData, text: .plain("«Сохранять удалённые» работает в обычных облачных чатах. Для секретных чатов используется отдельный переключатель: он сохраняет входящие сообщения, подписи и уже загруженные медиа только на этом устройстве, удерживает их при удалении собеседником и при очистке истории, а также показывает их в архиве Shadow. Уже удалённое до включения восстановить нельзя.\n\n«Сохранять одноразовые» оставляет view-once / самоуничтожающиеся медиа облачных чатов доступными после просмотра. В секретных чатах одноразовые медиа сохраняются отдельной настройкой секретных чатов."), sectionId: self.section)
         case .editsHeader:
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "ИСТОРИЯ ИЗМЕНЕНИЙ", sectionId: self.section)
         case let .saveEditHistory(value):
             return ItemListSwitchItem(presentationData: presentationData, title: "Сохранять историю правок", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 arguments.updateSaveEditHistory(value)
             })
+        case let .showEditComparisonAction(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Показывать «Сравнить правки»", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.updateShowEditComparisonAction(value)
+            })
         case .editsFooter:
-            return ItemListTextItem(presentationData: presentationData, text: .plain("При каждом изменении сообщения сохраняется предыдущая версия — старый текст, подписи и медиа. Историю можно открыть через контекстное меню сообщения: там показаны количество изменений, время каждой правки и все прежние версии."), sectionId: self.section)
+            return ItemListTextItem(presentationData: presentationData, text: .plain("При каждом изменении сообщения сохраняется предыдущая версия — старый текст, подписи и медиа. «История изменений» остаётся в контекстном меню. Включите отдельный переключатель, если хотите также видеть кнопку сравнения добавленного и удалённого текста."), sectionId: self.section)
         case .restrictedHeader:
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "ЗАЩИЩЁННЫЙ КОНТЕНТ", sectionId: self.section)
         case let .allowSaveRestrictedContent(value):
@@ -1108,11 +1368,13 @@ private func ayuSpyEntries(settings: AyuGramSettings) -> [AyuSpyEntry] {
 
     entries.append(.deletedHeader)
     entries.append(.keepDeleted(settings.keepDeletedMessages))
+    entries.append(.keepDeletedSecretChats(settings.keepDeletedSecretChatMessages))
     entries.append(.keepSelfDestructMedia(settings.keepSelfDestructMedia))
     entries.append(.deletedFooter)
 
     entries.append(.editsHeader)
     entries.append(.saveEditHistory(settings.saveEditHistory))
+    entries.append(.showEditComparisonAction(settings.showEditComparisonAction))
     entries.append(.editsFooter)
 
     entries.append(.restrictedHeader)
@@ -1137,7 +1399,8 @@ private func ayuSpyEntries(settings: AyuGramSettings) -> [AyuSpyEntry] {
     return entries
 }
 
-private func ayuSpyController(context: AccountContext) -> ViewController {
+private func ayuSpyController(context: AccountContext, focus: ShadowSettingsSearchItem? = nil) -> ViewController {
+    var focusedIndex: Int?
     var presentControllerImpl: ((ViewController, ViewControllerPresentationArguments?) -> Void)?
     var pushControllerImpl: ((ViewController) -> Void)?
 
@@ -1145,8 +1408,14 @@ private func ayuSpyController(context: AccountContext) -> ViewController {
         updateKeepDeleted: { value in
             ayuUpdateSettings(context: context) { var s = $0; s.keepDeletedMessages = value; return s }
         },
+        updateKeepDeletedSecretChats: { value in
+            ayuUpdateSettings(context: context) { var s = $0; s.keepDeletedSecretChatMessages = value; return s }
+        },
         updateSaveEditHistory: { value in
             ayuUpdateSettings(context: context) { var s = $0; s.saveEditHistory = value; return s }
+        },
+        updateShowEditComparisonAction: { value in
+            ayuUpdateSettings(context: context) { var s = $0; s.showEditComparisonAction = value; return s }
         },
         updateKeepSelfDestructMedia: { value in
             ayuUpdateSettings(context: context) { var s = $0; s.keepSelfDestructMedia = value; return s }
@@ -1224,11 +1493,16 @@ private func ayuSpyController(context: AccountContext) -> ViewController {
     |> deliverOnMainQueue
     |> map { presentationData, settings -> (ItemListControllerState, (ItemListNodeState, Any)) in
         let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Шпион"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
-        let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: ayuSpyEntries(settings: settings), style: .blocks, animateChanges: true)
+        let entries = ayuSpyEntries(settings: settings)
+        focusedIndex = shadowSettingsFocusIndex(stableIds: entries.map { $0.stableId }, target: focus)
+        let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, initialScrollToItem: shadowSettingsInitialScroll(index: focusedIndex), animateChanges: true)
         return (controllerState, (listState, arguments))
     }
 
     let controller = ItemListController(context: context, state: signal)
+    if focus != nil {
+        shadowSettingsInstallFocus(controller: controller, index: { focusedIndex }, color: context.sharedContext.currentPresentationData.with { $0 }.theme.list.itemAccentColor)
+    }
     presentControllerImpl = { [weak controller] c, a in
         controller?.present(c, in: .window(.root), with: a)
     }
@@ -1375,7 +1649,8 @@ private func ayuGhostEntries(settings: AyuGramSettings) -> [AyuGhostEntry] {
     ]
 }
 
-private func ayuGhostController(context: AccountContext) -> ViewController {
+private func ayuGhostController(context: AccountContext, focus: ShadowSettingsSearchItem? = nil) -> ViewController {
+    var focusedIndex: Int?
     let arguments = AyuGhostArguments(
         updateGhostMode: { value in
             ayuUpdateSettings(context: context) { var s = $0; s.ghostMode = value; return s }
@@ -1407,11 +1682,16 @@ private func ayuGhostController(context: AccountContext) -> ViewController {
     |> deliverOnMainQueue
     |> map { presentationData, settings -> (ItemListControllerState, (ItemListNodeState, Any)) in
         let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Призрак"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
-        let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: ayuGhostEntries(settings: settings), style: .blocks, animateChanges: true)
+        let entries = ayuGhostEntries(settings: settings)
+        focusedIndex = shadowSettingsFocusIndex(stableIds: entries.map { $0.stableId }, target: focus)
+        let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, initialScrollToItem: shadowSettingsInitialScroll(index: focusedIndex), animateChanges: true)
         return (controllerState, (listState, arguments))
     }
 
     let controller = ItemListController(context: context, state: signal)
+    if focus != nil {
+        shadowSettingsInstallFocus(controller: controller, index: { focusedIndex }, color: context.sharedContext.currentPresentationData.with { $0 }.theme.list.itemAccentColor)
+    }
     return controller
 }
 
@@ -1548,7 +1828,8 @@ private func ayuMiscEntries(settings: AyuGramSettings) -> [AyuMiscEntry] {
     return entries
 }
 
-private func ayuMiscController(context: AccountContext) -> ViewController {
+private func ayuMiscController(context: AccountContext, focus: ShadowSettingsSearchItem? = nil) -> ViewController {
+    var focusedIndex: Int?
     let arguments = AyuMiscArguments(
         updateSpoofIdEnabled: { value in
             ayuUpdateSettings(context: context) { var s = $0; s.spoofProfileIdEnabled = value; return s }
@@ -1576,11 +1857,16 @@ private func ayuMiscController(context: AccountContext) -> ViewController {
     )
     |> deliverOnMainQueue
     |> map { presentationData, settings -> (ItemListControllerState, (ItemListNodeState, Any)) in
-        let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Разное"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
-        let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: ayuMiscEntries(settings: settings), style: .blocks, animateChanges: true)
+        let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Подмена профиля"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
+        let entries = ayuMiscEntries(settings: settings)
+        focusedIndex = shadowSettingsFocusIndex(stableIds: entries.map { $0.stableId }, target: focus)
+        let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, initialScrollToItem: shadowSettingsInitialScroll(index: focusedIndex), animateChanges: true)
         return (controllerState, (listState, arguments))
     }
 
     let controller = ItemListController(context: context, state: signal)
+    if focus != nil {
+        shadowSettingsInstallFocus(controller: controller, index: { focusedIndex }, color: context.sharedContext.currentPresentationData.with { $0 }.theme.list.itemAccentColor)
+    }
     return controller
 }
