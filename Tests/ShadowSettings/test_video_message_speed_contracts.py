@@ -51,6 +51,8 @@ class VideoMessageSpeedContracts(unittest.TestCase):
         self.assertIn("setRoundVideoUltraWideActive", camera)
         self.assertIn("target < 1.0", camera)
         self.assertIn("Camera.isUltraWideCameraSupported()", camera)
+        self.assertIn("Queue.mainQueue().after(0.7)", camera)
+        self.assertIn("flipReconciliationId", camera)
         self.assertIn("max(0.5, device.minAvailableVideoZoomFactor)", low_level_camera)
 
     def test_preview_cycles_requested_rates_and_bakes_them_before_sending(self):
