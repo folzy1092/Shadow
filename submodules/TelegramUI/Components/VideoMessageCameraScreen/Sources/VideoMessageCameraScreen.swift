@@ -96,6 +96,10 @@ struct CameraState: Equatable {
     func updatedIsViewOnceEnabled(_ isViewOnceEnabled: Bool) -> CameraState {
         return CameraState(position: self.position, flashMode: self.flashMode, flashModeDidChange: self.flashModeDidChange, flashTint: self.flashTint, flashTintSize: self.flashTintSize, recording: self.recording, duration: self.duration, isDualCameraEnabled: self.isDualCameraEnabled, isViewOnceEnabled: isViewOnceEnabled)
     }
+
+    func updatedIsDualCameraEnabled(_ isDualCameraEnabled: Bool) -> CameraState {
+        return CameraState(position: self.position, flashMode: self.flashMode, flashModeDidChange: self.flashModeDidChange, flashTint: self.flashTint, flashTintSize: self.flashTintSize, recording: self.recording, duration: self.duration, isDualCameraEnabled: isDualCameraEnabled, isViewOnceEnabled: self.isViewOnceEnabled)
+    }
 }
 
 struct PreviewState: Equatable {
@@ -956,6 +960,7 @@ public class VideoMessageCameraScreen: ViewController {
         fileprivate var resultPreviewView: ResultPreviewView?
         
         private var cameraStateDisposable: Disposable?
+        private var roundVideoUltraWideActive = false
                 
         private let idleTimerExtensionDisposable = MetaDisposable()
         
@@ -1022,10 +1027,10 @@ public class VideoMessageCameraScreen: ViewController {
             self.previewContainerContentView.clipsToBounds = true
             self.previewContainerView.addSubview(self.previewContainerContentView)
                         
-            // A 0.5× round video requires a single virtual Dual/Triple
-            // capture device. The simultaneous-camera mode only exposes the
-            // regular wide module, so opt out of it while this feature is on.
-            let isDualCameraEnabled = Camera.isDualCameraSupported(forRoundVideo: true) && !ayuGramSettingsCurrent.roundVideoUltraWide
+            // Start in Telegram's normal simultaneous-camera mode. The
+            // virtual Dual/Triple device is enabled only after a recording
+            // gesture actually crosses below 1×.
+            let isDualCameraEnabled = Camera.isDualCameraSupported(forRoundVideo: true)
             // AyuGram: optionally start round-video capture on the rear camera.
             let isFrontPosition = !ayuGramSettingsCurrent.roundVideoUseBackCamera
             
@@ -1176,6 +1181,11 @@ public class VideoMessageCameraScreen: ViewController {
                     return
                 }
                 self.cameraState = self.cameraState.updatedPosition(position).updatedFlashMode(flashMode)
+
+                // Front cameras never use the extended range.
+                if position == .front {
+                    self.setRoundVideoUltraWideActive(false)
+                }
                 
                 if !self.cameraState.isDualCameraEnabled {
                     self.animatePositionChange()
