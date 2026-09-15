@@ -341,9 +341,7 @@ final class CameraDevice {
     }
 
     private func clampedZoomFactor(_ value: CGFloat, for device: AVCaptureDevice) -> CGFloat {
-        // Virtual Dual/Triple cameras expose their ultra-wide module below 1×
-        // (normally 0.5×). Do not force the minimum back to 1× here.
-        let minimum = max(0.5, device.minAvailableVideoZoomFactor)
+        let minimum = max(1.0, device.minAvailableVideoZoomFactor)
         let maximum = max(minimum, device.maxAvailableVideoZoomFactor)
         return min(maximum, max(minimum, value))
     }
