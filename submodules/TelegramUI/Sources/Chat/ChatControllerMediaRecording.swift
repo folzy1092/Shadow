@@ -217,21 +217,33 @@ extension ChatControllerImpl {
                             self.videoRecorder.set(.single(nil))
                         }
                         
-                        self.chatDisplayNode.setupSendActionOnViewUpdate({ [weak self] in
-                            if let self {
-                                self.chatDisplayNode.collapseInput()
-                                
-                                self.updateChatPresentationInterfaceState(animated: true, interactive: false, {
-                                    $0.updatedInterfaceState { $0.withUpdatedReplyMessageSubject(nil).withUpdatedSendMessageEffect(nil).withUpdatedMediaDraftState(nil).withUpdatedPostSuggestionState(nil) }
-                                })
-                            }
-                        }, usedCorrelationId ? correlationId : nil)
-                        
                         let messages = [message]
                         let effectiveSilentPosting = silentPosting ?? self.presentationInterfaceState.interfaceState.silentPosting
                         let transformedMessages = self.transformEnqueueMessages(messages, silentPosting: effectiveSilentPosting, scheduleTime: scheduleTime, repeatPeriod: repeatPeriod)
+                        let shouldClearGhostScheduledDraft: Bool
+                        if scheduleTime == nil, let peerId = self.chatLocation.peerId {
+                            shouldClearGhostScheduledDraft = AyuDelayedSend.willAutomaticallySchedule(messages: transformedMessages, peerId: peerId)
+                        } else {
+                            shouldClearGhostScheduledDraft = false
+                        }
+
+                        if !shouldClearGhostScheduledDraft {
+                            self.chatDisplayNode.setupSendActionOnViewUpdate({ [weak self] in
+                                if let self {
+                                    self.chatDisplayNode.collapseInput()
+
+                                    self.updateChatPresentationInterfaceState(animated: true, interactive: false, {
+                                        $0.updatedInterfaceState { $0.withUpdatedReplyMessageSubject(nil).withUpdatedSendMessageEffect(nil).withUpdatedMediaDraftState(nil).withUpdatedPostSuggestionState(nil) }
+                                    })
+                                }
+                            }, usedCorrelationId ? correlationId : nil)
+                        }
                         
                         self.sendMessages(transformedMessages)
+                        if shouldClearGhostScheduledDraft {
+                            self.videoRecorder.set(.single(nil))
+                            self.clearGhostScheduledDraft()
+                        }
                     }
                 )
                 controller.onResume = { [weak self] in
@@ -377,22 +389,35 @@ extension ChatControllerImpl {
                                 strongSelf.audioRecorder.set(.single(nil))
                             }
                             
-                            strongSelf.chatDisplayNode.setupSendActionOnViewUpdate({
-                                if let strongSelf = self {
-                                    strongSelf.chatDisplayNode.collapseInput()
-                                    
-                                    strongSelf.updateChatPresentationInterfaceState(animated: true, interactive: false, {
-                                        $0.updatedInterfaceState { $0.withUpdatedReplyMessageSubject(nil).withUpdatedSendMessageEffect(nil).withUpdatedPostSuggestionState(nil) }
-                                    })
-                                }
-                            }, usedCorrelationId ? correlationId : nil)
-                            
                             var attributes: [EngineMessage.Attribute] = []
                             if viewOnce {
                                 attributes.append(AutoremoveTimeoutMessageAttribute(timeout: viewOnceTimeout, countdownBeginTime: nil))
                             }
                             
-                            strongSelf.sendMessages([.message(text: "", attributes: attributes, inlineStickers: [:], mediaReference: .standalone(media: TelegramMediaFile(fileId: EngineMedia.Id(namespace: Namespaces.Media.LocalFile, id: randomId), partialReference: nil, resource: resource, previewRepresentations: [], videoThumbnails: [], immediateThumbnailData: nil, mimeType: "audio/ogg", size: Int64(data.compressedData.count), attributes: [.Audio(isVoice: true, duration: Int(data.duration), title: nil, performer: nil, waveform: waveformBuffer)], alternativeRepresentations: [])), threadId: strongSelf.chatLocation.threadId, replyToMessageId: strongSelf.presentationInterfaceState.interfaceState.replyMessageSubject?.subjectModel, replyToStoryId: nil, localGroupingKey: nil, correlationId: correlationId, bubbleUpEmojiOrStickersets: [])])
+                            let message: EnqueueMessage = .message(text: "", attributes: attributes, inlineStickers: [:], mediaReference: .standalone(media: TelegramMediaFile(fileId: EngineMedia.Id(namespace: Namespaces.Media.LocalFile, id: randomId), partialReference: nil, resource: resource, previewRepresentations: [], videoThumbnails: [], immediateThumbnailData: nil, mimeType: "audio/ogg", size: Int64(data.compressedData.count), attributes: [.Audio(isVoice: true, duration: Int(data.duration), title: nil, performer: nil, waveform: waveformBuffer)], alternativeRepresentations: [])), threadId: strongSelf.chatLocation.threadId, replyToMessageId: strongSelf.presentationInterfaceState.interfaceState.replyMessageSubject?.subjectModel, replyToStoryId: nil, localGroupingKey: nil, correlationId: correlationId, bubbleUpEmojiOrStickersets: [])
+                            let shouldClearGhostScheduledDraft: Bool
+                            if let peerId = strongSelf.chatLocation.peerId {
+                                shouldClearGhostScheduledDraft = AyuDelayedSend.willAutomaticallySchedule(messages: [message], peerId: peerId)
+                            } else {
+                                shouldClearGhostScheduledDraft = false
+                            }
+
+                            if !shouldClearGhostScheduledDraft {
+                                strongSelf.chatDisplayNode.setupSendActionOnViewUpdate({
+                                    if let strongSelf = self {
+                                        strongSelf.chatDisplayNode.collapseInput()
+
+                                        strongSelf.updateChatPresentationInterfaceState(animated: true, interactive: false, {
+                                            $0.updatedInterfaceState { $0.withUpdatedReplyMessageSubject(nil).withUpdatedSendMessageEffect(nil).withUpdatedPostSuggestionState(nil) }
+                                        })
+                                    }
+                                }, usedCorrelationId ? correlationId : nil)
+                            }
+
+                            strongSelf.sendMessages([message])
+                            if shouldClearGhostScheduledDraft {
+                                strongSelf.clearGhostScheduledDraft()
+                            }
                             
                             strongSelf.recorderFeedback?.tap()
                             strongSelf.recorderFeedback = nil
@@ -712,18 +737,6 @@ extension ChatControllerImpl {
                 return
             }
             
-            self.chatDisplayNode.setupSendActionOnViewUpdate({ [weak self] in
-                if let strongSelf = self {
-                    strongSelf.chatDisplayNode.collapseInput()
-                    
-                    strongSelf.updateChatPresentationInterfaceState(animated: true, interactive: false, {
-                        $0.updatedInterfaceState { $0.withUpdatedReplyMessageSubject(nil).withUpdatedMediaDraftState(nil).withUpdatedSendMessageEffect(nil).withUpdatedPostSuggestionState(nil) }
-                    })
-
-                    strongSelf.updateDownButtonVisibility()
-                }
-            }, nil)
-            
             var attributes: [EngineMessage.Attribute] = []
             if viewOnce {
                 attributes.append(AutoremoveTimeoutMessageAttribute(timeout: viewOnceTimeout, countdownBeginTime: nil))
@@ -756,11 +769,30 @@ extension ChatControllerImpl {
             guard let peerId = self.chatLocation.peerId else {
                 return
             }
+            let shouldClearGhostScheduledDraft = scheduleTime == nil && AyuDelayedSend.willAutomaticallySchedule(messages: transformedMessages, peerId: peerId)
+
+            if !shouldClearGhostScheduledDraft {
+                self.chatDisplayNode.setupSendActionOnViewUpdate({ [weak self] in
+                    if let strongSelf = self {
+                        strongSelf.chatDisplayNode.collapseInput()
+
+                        strongSelf.updateChatPresentationInterfaceState(animated: true, interactive: false, {
+                            $0.updatedInterfaceState { $0.withUpdatedReplyMessageSubject(nil).withUpdatedMediaDraftState(nil).withUpdatedSendMessageEffect(nil).withUpdatedPostSuggestionState(nil) }
+                        })
+
+                        strongSelf.updateDownButtonVisibility()
+                    }
+                }, nil)
+            }
             
             let _ = (enqueueMessages(account: self.context.account, peerId: peerId, messages: transformedMessages)
             |> deliverOnMainQueue).startStandalone(next: { [weak self] _ in
-                if let strongSelf = self, strongSelf.presentationInterfaceState.subject != .scheduledMessages {
-                    strongSelf.chatDisplayNode.historyNode.scrollToEndOfHistory()
+                if let strongSelf = self {
+                    if shouldClearGhostScheduledDraft {
+                        strongSelf.clearGhostScheduledDraft()
+                    } else if strongSelf.presentationInterfaceState.subject != .scheduledMessages {
+                        strongSelf.chatDisplayNode.historyNode.scrollToEndOfHistory()
+                    }
                 }
             })
             

@@ -9267,20 +9267,35 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                             return message.withUpdatedThreadId(overrideThreadId)
                         }
                     }
+
+                    let shouldClearGhostScheduledDraft: Bool
+                    if scheduleTime == nil, let peerId = strongSelf.chatLocation.peerId {
+                        shouldClearGhostScheduledDraft = AyuDelayedSend.willAutomaticallySchedule(messages: messages, peerId: peerId)
+                    } else {
+                        shouldClearGhostScheduledDraft = false
+                    }
                     
-                    strongSelf.chatDisplayNode.setupSendActionOnViewUpdate({
-                        if let strongSelf = self {
-                            strongSelf.chatDisplayNode.collapseInput()
+                    if !shouldClearGhostScheduledDraft {
+                        strongSelf.chatDisplayNode.setupSendActionOnViewUpdate({
+                            if let strongSelf = self {
+                                strongSelf.chatDisplayNode.collapseInput()
 
-                            strongSelf.updateChatPresentationInterfaceState(animated: true, interactive: false, {
-                                $0.updatedInterfaceState { $0.withUpdatedReplyMessageSubject(nil).withUpdatedSendMessageEffect(nil).withUpdatedPostSuggestionState(nil) }
-                            })
-                        }
-                        completionImpl?()
-                    }, usedCorrelationId)
+                                strongSelf.updateChatPresentationInterfaceState(animated: true, interactive: false, {
+                                    $0.updatedInterfaceState { $0.withUpdatedReplyMessageSubject(nil).withUpdatedSendMessageEffect(nil).withUpdatedPostSuggestionState(nil) }
+                                })
+                            }
+                            completionImpl?()
+                        }, usedCorrelationId)
+                    }
 
-                    addTransitionNodes()
+                    if !shouldClearGhostScheduledDraft {
+                        addTransitionNodes()
+                    }
                     strongSelf.sendMessages(messages.map { $0.withUpdatedReplyToMessageId(replyMessageSubject?.subjectModel) }, media: true)
+                    if shouldClearGhostScheduledDraft {
+                        strongSelf.clearGhostScheduledDraft()
+                        completionImpl?()
+                    }
                 }
                 
                 if let targetThreadId {
@@ -10470,6 +10485,28 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 return state
             }
         })
+    }
+
+    // Automatically delayed Ghost messages are written to ScheduledCloud, so
+    // the normal current-history acknowledgement never arrives. Clear every
+    // local composer surface explicitly after the message enters Telegram's
+    // enqueue pipeline.
+    func clearGhostScheduledDraft() {
+        self.chatDisplayNode.collapseInput()
+        self.clearInputText()
+        self.updateChatPresentationInterfaceState(animated: true, interactive: false, { state in
+            return state.updatedInterfaceState { interfaceState in
+                return interfaceState
+                    .withUpdatedReplyMessageSubject(nil)
+                    .withUpdatedMediaDraftState(nil)
+                    .withUpdatedSendMessageEffect(nil)
+                    .withUpdatedPostSuggestionState(nil)
+                    .withUpdatedForwardMessageIds(nil)
+                    .withUpdatedForwardOptionsState(nil)
+                    .withUpdatedComposeDisableUrlPreviews([])
+            }
+        })
+        self.updateDownButtonVisibility()
     }
     
     func updateSlowmodeStatus() {

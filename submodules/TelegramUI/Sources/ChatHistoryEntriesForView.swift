@@ -862,14 +862,17 @@ func chatHistoryEntriesForView(
                 let placeholder = message.withUpdatedText("Скрыто локальным фильтром").withUpdatedMedia([])
                 return [.MessageEntry(placeholder, presentation, isRead, location, selection, attributes)]
             case let .MessageGroupEntry(_, messages, presentation):
-                if !messages.contains(where: { shadowSettings.matchesMessageFilter(text: $0.0.text) }) {
+                // Telegram renders an album as several separate bubbles. Keeping
+                // the non-matching siblings leaked its media and left the group
+                // layout with mixed entry types, which could crash when opened.
+                // One matching caption hides the whole local album as one safe,
+                // media-free placeholder.
+                guard let hiddenItem = messages.first(where: { shadowSettings.matchesMessageFilter(text: $0.0.text) }) else {
                     return [entry]
                 }
-                return messages.map { item in
-                    let (message, isRead, selection, attributes, location) = item
-                    let displayed = shadowSettings.matchesMessageFilter(text: message.text) ? message.withUpdatedText("Скрыто локальным фильтром").withUpdatedMedia([]) : message
-                    return .MessageEntry(displayed, presentation, isRead, location, selection, attributes)
-                }
+                let (message, isRead, selection, attributes, location) = hiddenItem
+                let placeholder = message.withUpdatedText("Скрыто локальным фильтром").withUpdatedMedia([])
+                return [.MessageEntry(placeholder, presentation, isRead, location, selection, attributes)]
             default:
                 return [entry]
             }

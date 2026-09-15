@@ -111,6 +111,7 @@ enum CameraScreenTransition {
 }
 
 private let viewOnceButtonTag = GenericComponentViewTag()
+private let videoMessageSpeedButtonTag = GenericComponentViewTag()
 
 // These are deliberately discrete rather than a free-form rate: every value
 // has a predictable duration and can be safely baked into an outgoing round
@@ -135,6 +136,8 @@ private final class VideoMessageCameraScreenComponent: CombinedComponent {
     let isPreviewing: Bool
     let isMuted: Bool
     let totalDuration: Double
+    let roundVideoUltraWideEnabled: Bool
+    let roundVideoZoom: CGFloat
     let customVideoMessageSpeedEnabled: Bool
     let videoMessageSpeed: Double
     let getController: () -> VideoMessageCameraScreen?
@@ -154,6 +157,8 @@ private final class VideoMessageCameraScreenComponent: CombinedComponent {
         isPreviewing: Bool,
         isMuted: Bool,
         totalDuration: Double,
+        roundVideoUltraWideEnabled: Bool,
+        roundVideoZoom: CGFloat,
         customVideoMessageSpeedEnabled: Bool,
         videoMessageSpeed: Double,
         getController: @escaping () -> VideoMessageCameraScreen?,
@@ -172,6 +177,8 @@ private final class VideoMessageCameraScreenComponent: CombinedComponent {
         self.isPreviewing = isPreviewing
         self.isMuted = isMuted
         self.totalDuration = totalDuration
+        self.roundVideoUltraWideEnabled = roundVideoUltraWideEnabled
+        self.roundVideoZoom = roundVideoZoom
         self.customVideoMessageSpeedEnabled = customVideoMessageSpeedEnabled
         self.videoMessageSpeed = videoMessageSpeed
         self.getController = getController
@@ -206,6 +213,12 @@ private final class VideoMessageCameraScreenComponent: CombinedComponent {
             return false
         }
         if lhs.totalDuration != rhs.totalDuration {
+            return false
+        }
+        if lhs.roundVideoUltraWideEnabled != rhs.roundVideoUltraWideEnabled {
+            return false
+        }
+        if lhs.roundVideoZoom != rhs.roundVideoZoom {
             return false
         }
         if lhs.customVideoMessageSpeedEnabled != rhs.customVideoMessageSpeedEnabled {
@@ -547,6 +560,7 @@ private final class VideoMessageCameraScreenComponent: CombinedComponent {
         let flashButton = Child(CameraButton.self)
         
         let viewOnceButton = Child(PlainButtonComponent.self)
+        let ultraWideButton = Child(PlainButtonComponent.self)
         let speedButton = Child(PlainButtonComponent.self)
         let recordMoreButton = Child(PlainButtonComponent.self)
         
@@ -749,6 +763,49 @@ private final class VideoMessageCameraScreenComponent: CombinedComponent {
                         .disappear(.default(scale: true, alpha: true))
                     )
                 }
+
+                if component.roundVideoUltraWideEnabled, component.cameraState.position == .back {
+                    let zoomText = component.roundVideoZoom < 0.75 ? "0.5×" : "1×"
+                    let ultraWideButton = ultraWideButton.update(
+                        component: PlainButtonComponent(
+                            content: AnyComponent(
+                                ZStack([
+                                    AnyComponentWithIdentity(
+                                        id: "background",
+                                        component: AnyComponent(
+                                            GlassBackgroundComponent(
+                                                size: CGSize(width: 40.0, height: 40.0),
+                                                cornerRadius: 20.0,
+                                                isDark: environment.theme.overallDarkAppearance,
+                                                tintColor: .init(kind: .panel)
+                                            )
+                                        )
+                                    ),
+                                    AnyComponentWithIdentity(
+                                        id: "zoom",
+                                        component: AnyComponent(
+                                            MultilineTextComponent(
+                                                text: .plain(NSAttributedString(string: zoomText, font: Font.semibold(11.0), textColor: environment.theme.chat.inputPanel.panelControlColor))
+                                            )
+                                        )
+                                    )
+                                ])
+                            ),
+                            effectAlignment: .center,
+                            action: {
+                                component.getController()?.toggleRoundVideoUltraWide()
+                            },
+                            animateAlpha: false
+                        ),
+                        availableSize: availableSize,
+                        transition: context.transition
+                    )
+                    context.add(ultraWideButton
+                        .position(CGPoint(x: flipButton.size.width + sideInset + ultraWideButton.size.width / 2.0 + 11.0, y: availableSize.height - ultraWideButton.size.height / 2.0 - 59.0))
+                        .appear(.default(scale: true, alpha: true))
+                        .disappear(.default(scale: true, alpha: true))
+                    )
+                }
             }
             
             if showViewOnce {
@@ -828,7 +885,8 @@ private final class VideoMessageCameraScreenComponent: CombinedComponent {
                         action: {
                             component.getController()?.cycleVideoMessageSpeed()
                         },
-                        animateAlpha: false
+                        animateAlpha: false,
+                        tag: videoMessageSpeedButtonTag
                     ),
                     availableSize: availableSize,
                     transition: context.transition
@@ -1354,6 +1412,17 @@ public class VideoMessageCameraScreen: ViewController {
         
         override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
             let result = super.hitTest(point, with: event)
+
+            // The preview is deliberately a full-size touch target, but it used
+            // to claim the tap before the visible speed control could receive
+            // it. Check the tagged overlay first, including when the keyboard
+            // shifts the preview upward.
+            if let speedButton = self.componentHost.findTaggedView(tag: videoMessageSpeedButtonTag) {
+                let speedPoint = self.view.convert(point, to: speedButton)
+                if speedButton.bounds.contains(speedPoint) {
+                    return speedButton.hitTest(speedPoint, with: event) ?? speedButton
+                }
+            }
             
             if let resultPreviewView = self.resultPreviewView {
                 if resultPreviewView.bounds.contains(self.view.convert(point, to: resultPreviewView)) {
@@ -1635,6 +1704,8 @@ public class VideoMessageCameraScreen: ViewController {
                         isPreviewing: self.previewState != nil || self.transitioningToPreview,
                         isMuted: self.previewState?.isMuted ?? true,
                         totalDuration: self.previewState?.composition.duration.seconds ?? 0.0,
+                        roundVideoUltraWideEnabled: ayuGramSettingsCurrent.roundVideoUltraWide,
+                        roundVideoZoom: controller.roundVideoZoom,
                         customVideoMessageSpeedEnabled: ayuGramSettingsCurrent.customVideoMessageSpeed,
                         videoMessageSpeed: controller.videoMessageSpeed,
                         getController: { [weak self] in
@@ -1723,6 +1794,7 @@ public class VideoMessageCameraScreen: ViewController {
     private var audioSessionDisposable: Disposable?
     
     private let hapticFeedback = HapticFeedback()
+    fileprivate var roundVideoZoom: CGFloat = 1.0
     fileprivate var videoMessageSpeed: Double = 1.0
     
     private var validLayout: ContainerViewLayout?
@@ -1756,6 +1828,19 @@ public class VideoMessageCameraScreen: ViewController {
         self.videoMessageSpeed = shadowVideoMessageSpeedSteps[(currentIndex + 1) % shadowVideoMessageSpeedSteps.count]
         self.hapticFeedback.impact(.light)
         self.node.resultPreviewView?.playbackRate = Float(self.videoMessageSpeed)
+        self.node.requestUpdateLayout(transition: .spring(duration: 0.25))
+    }
+
+    // The back-camera context is a virtual Dual/Triple device on supported
+    // iPhones. Its 0.5 factor selects the actual ultra-wide module instead of
+    // digitally shrinking the regular camera image.
+    fileprivate func toggleRoundVideoUltraWide() {
+        guard ayuGramSettingsCurrent.roundVideoUltraWide, self.cameraState.position == .back else {
+            return
+        }
+        self.roundVideoZoom = self.roundVideoZoom < 0.75 ? 1.0 : 0.5
+        self.camera?.rampZoom(self.roundVideoZoom, rate: 8.0)
+        self.hapticFeedback.impact(.light)
         self.node.requestUpdateLayout(transition: .spring(duration: 0.25))
     }
     
