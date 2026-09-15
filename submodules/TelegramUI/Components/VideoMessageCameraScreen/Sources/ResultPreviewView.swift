@@ -26,12 +26,24 @@ final class ResultPreviewView: UIView {
             self.player.isMuted = self.isMuted
         }
     }
+    // `.varispeed` deliberately changes pitch with tempo. Shadow's custom
+    // round-video speed is meant to make accelerated voices higher and slow
+    // voices lower, matching the exported result the recipient receives.
+    var playbackRate: Float = 1.0 {
+        didSet {
+            self.player.currentItem?.audioTimePitchAlgorithm = .varispeed
+            if self.player.timeControlStatus != .paused {
+                self.player.rate = self.playbackRate
+            }
+        }
+    }
     
     init(composition: AVComposition) {
         self.composition = composition
         
         self.player = AVPlayer(playerItem: AVPlayerItem(asset: composition))
         self.player.isMuted = true
+        self.player.currentItem?.audioTimePitchAlgorithm = .varispeed
         
         self.playerLayer = AVPlayerLayer(player: self.player)
         
@@ -53,7 +65,7 @@ final class ResultPreviewView: UIView {
             self.onLoop()
         })
         
-        self.player.play()
+        self.player.playImmediately(atRate: self.playbackRate)
     }
     
     required public init?(coder: NSCoder) {
@@ -82,7 +94,7 @@ final class ResultPreviewView: UIView {
     }
     
     func play() {
-        self.player.play()
+        self.player.playImmediately(atRate: self.playbackRate)
     }
     
     func pause() {
@@ -113,7 +125,7 @@ final class ResultPreviewView: UIView {
                     self.targetTimePosition = nil
                     
                     if play {
-                        self.player.play()
+                        self.player.playImmediately(atRate: self.playbackRate)
                     }
                 } else {
                     self.updateVideoTimePosition()

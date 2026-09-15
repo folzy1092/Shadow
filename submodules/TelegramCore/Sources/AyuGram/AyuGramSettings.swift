@@ -200,6 +200,10 @@ public struct AyuGramSettings: Codable, Equatable {
     // Start round-video ("кружки") recording with the rear camera by default
     // instead of the front camera.
     public var roundVideoUseBackCamera: Bool
+    // Enable changing a recorded round video's speed before sending. The speed
+    // is baked into the outgoing video and audio, so recipients see the same
+    // result in every Telegram client.
+    public var customVideoMessageSpeed: Bool
 
     // Show the live-camera tile as the first cell of the default chat
     // attachment/gallery picker grid.
@@ -311,6 +315,7 @@ public struct AyuGramSettings: Codable, Equatable {
             compactBottomBar: false,
             allowSaveRestrictedContent: true,
             roundVideoUseBackCamera: false,
+            customVideoMessageSpeed: false,
             showCameraTile: true,
             cameraTileLivePreview: true,
             confirmCalls: false,
@@ -450,6 +455,7 @@ public struct AyuGramSettings: Codable, Equatable {
         compactBottomBar: Bool,
         allowSaveRestrictedContent: Bool,
         roundVideoUseBackCamera: Bool,
+        customVideoMessageSpeed: Bool,
         showCameraTile: Bool,
         cameraTileLivePreview: Bool,
         confirmCalls: Bool,
@@ -512,6 +518,7 @@ public struct AyuGramSettings: Codable, Equatable {
         self.bottomBarScrollMode = (0...3).contains(bottomBarScrollMode) ? bottomBarScrollMode : 0
         self.allowSaveRestrictedContent = allowSaveRestrictedContent
         self.roundVideoUseBackCamera = roundVideoUseBackCamera
+        self.customVideoMessageSpeed = customVideoMessageSpeed
         self.showCameraTile = showCameraTile
         self.cameraTileLivePreview = cameraTileLivePreview
         self.confirmCalls = confirmCalls
@@ -591,6 +598,7 @@ public struct AyuGramSettings: Codable, Equatable {
         self.bottomBarScrollMode = (0...3).contains(bottomBarScrollMode) ? bottomBarScrollMode : 0
         self.allowSaveRestrictedContent = ((try container.decodeIfPresent(Int32.self, forKey: "allowSaveRestrictedContent")) ?? 1) != 0
         self.roundVideoUseBackCamera = ((try container.decodeIfPresent(Int32.self, forKey: "roundVideoUseBackCamera")) ?? 0) != 0
+        self.customVideoMessageSpeed = ((try container.decodeIfPresent(Int32.self, forKey: "customVideoMessageSpeed")) ?? 0) != 0
         self.showCameraTile = ((try container.decodeIfPresent(Int32.self, forKey: "showCameraTile")) ?? 1) != 0
         self.cameraTileLivePreview = ((try container.decodeIfPresent(Int32.self, forKey: "cameraTileLivePreview")) ?? 1) != 0
         self.confirmCalls = ((try container.decodeIfPresent(Int32.self, forKey: "confirmCalls")) ?? 0) != 0
@@ -661,6 +669,7 @@ public struct AyuGramSettings: Codable, Equatable {
         try container.encode(self.bottomBarScrollMode, forKey: "bottomBarScrollMode")
         try container.encode((self.allowSaveRestrictedContent ? 1 : 0) as Int32, forKey: "allowSaveRestrictedContent")
         try container.encode((self.roundVideoUseBackCamera ? 1 : 0) as Int32, forKey: "roundVideoUseBackCamera")
+        try container.encode((self.customVideoMessageSpeed ? 1 : 0) as Int32, forKey: "customVideoMessageSpeed")
         try container.encode((self.showCameraTile ? 1 : 0) as Int32, forKey: "showCameraTile")
         try container.encode((self.cameraTileLivePreview ? 1 : 0) as Int32, forKey: "cameraTileLivePreview")
         try container.encode((self.confirmCalls ? 1 : 0) as Int32, forKey: "confirmCalls")
