@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+import AVFoundation
 import Display
 import AsyncDisplayKit
 import ComponentFlow
@@ -111,6 +112,18 @@ enum CameraScreenTransition {
 
 private let viewOnceButtonTag = GenericComponentViewTag()
 
+// These are deliberately discrete rather than a free-form rate: every value
+// has a predictable duration and can be safely baked into an outgoing round
+// video without producing an invalid Telegram media duration.
+private let shadowVideoMessageSpeedSteps: [Double] = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 3.0]
+
+private func shadowVideoMessageSpeedLabel(_ speed: Double) -> String {
+    if speed.rounded() == speed {
+        return "\(Int(speed))×"
+    }
+    return "\(speed)×"
+}
+
 private final class VideoMessageCameraScreenComponent: CombinedComponent {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
     
@@ -122,6 +135,8 @@ private final class VideoMessageCameraScreenComponent: CombinedComponent {
     let isPreviewing: Bool
     let isMuted: Bool
     let totalDuration: Double
+    let customVideoMessageSpeedEnabled: Bool
+    let videoMessageSpeed: Double
     let getController: () -> VideoMessageCameraScreen?
     let present: (ViewController) -> Void
     let push: (ViewController) -> Void
@@ -139,6 +154,8 @@ private final class VideoMessageCameraScreenComponent: CombinedComponent {
         isPreviewing: Bool,
         isMuted: Bool,
         totalDuration: Double,
+        customVideoMessageSpeedEnabled: Bool,
+        videoMessageSpeed: Double,
         getController: @escaping () -> VideoMessageCameraScreen?,
         present: @escaping (ViewController) -> Void,
         push: @escaping (ViewController) -> Void,
@@ -155,6 +172,8 @@ private final class VideoMessageCameraScreenComponent: CombinedComponent {
         self.isPreviewing = isPreviewing
         self.isMuted = isMuted
         self.totalDuration = totalDuration
+        self.customVideoMessageSpeedEnabled = customVideoMessageSpeedEnabled
+        self.videoMessageSpeed = videoMessageSpeed
         self.getController = getController
         self.present = present
         self.push = push
@@ -187,6 +206,12 @@ private final class VideoMessageCameraScreenComponent: CombinedComponent {
             return false
         }
         if lhs.totalDuration != rhs.totalDuration {
+            return false
+        }
+        if lhs.customVideoMessageSpeedEnabled != rhs.customVideoMessageSpeedEnabled {
+            return false
+        }
+        if lhs.videoMessageSpeed != rhs.videoMessageSpeed {
             return false
         }
         return true
@@ -522,6 +547,7 @@ private final class VideoMessageCameraScreenComponent: CombinedComponent {
         let flashButton = Child(CameraButton.self)
         
         let viewOnceButton = Child(PlainButtonComponent.self)
+        let speedButton = Child(PlainButtonComponent.self)
         let recordMoreButton = Child(PlainButtonComponent.self)
         
         let muteIcon = Child(ZStack<Empty>.self)
@@ -770,6 +796,50 @@ private final class VideoMessageCameraScreenComponent: CombinedComponent {
                     .disappear(.default(scale: true, alpha: true))
                 )
             }
+
+            if component.isPreviewing && component.customVideoMessageSpeedEnabled {
+                let speedText = shadowVideoMessageSpeedLabel(component.videoMessageSpeed)
+                let speedButton = speedButton.update(
+                    component: PlainButtonComponent(
+                        content: AnyComponent(
+                            ZStack([
+                                AnyComponentWithIdentity(
+                                    id: "background",
+                                    component: AnyComponent(
+                                        GlassBackgroundComponent(
+                                            size: CGSize(width: 40.0, height: 40.0),
+                                            cornerRadius: 20.0,
+                                            isDark: environment.theme.overallDarkAppearance,
+                                            tintColor: .init(kind: .panel)
+                                        )
+                                    )
+                                ),
+                                AnyComponentWithIdentity(
+                                    id: "speed",
+                                    component: AnyComponent(
+                                        MultilineTextComponent(
+                                            text: .plain(NSAttributedString(string: speedText, font: Font.semibold(11.0), textColor: environment.theme.chat.inputPanel.panelControlColor))
+                                        )
+                                    )
+                                )
+                            ])
+                        ),
+                        effectAlignment: .center,
+                        action: {
+                            component.getController()?.cycleVideoMessageSpeed()
+                        },
+                        animateAlpha: false
+                    ),
+                    availableSize: availableSize,
+                    transition: context.transition
+                )
+                let speedOffset = showViewOnce ? viewOnceOffset + 52.0 : 66.0
+                context.add(speedButton
+                    .position(CGPoint(x: availableSize.width - speedButton.size.width / 2.0 - sideInset, y: availableSize.height - speedButton.size.height / 2.0 - 8.0 - speedOffset))
+                    .appear(.default(scale: true, alpha: true))
+                    .disappear(.default(scale: true, alpha: true))
+                )
+            }
             
             if showRecordMore {
                 let recordMoreButton = recordMoreButton.update(
@@ -880,7 +950,7 @@ public class VideoMessageCameraScreen: ViewController {
         private var progressView: RecordingProgressView
         private let loadingView: LoadingEffectView
         
-        private var resultPreviewView: ResultPreviewView?
+        fileprivate var resultPreviewView: ResultPreviewView?
         
         private var cameraStateDisposable: Disposable?
                 
@@ -1565,6 +1635,8 @@ public class VideoMessageCameraScreen: ViewController {
                         isPreviewing: self.previewState != nil || self.transitioningToPreview,
                         isMuted: self.previewState?.isMuted ?? true,
                         totalDuration: self.previewState?.composition.duration.seconds ?? 0.0,
+                        customVideoMessageSpeedEnabled: ayuGramSettingsCurrent.customVideoMessageSpeed,
+                        videoMessageSpeed: controller.videoMessageSpeed,
                         getController: { [weak self] in
                             return self?.controller
                         },
@@ -1624,6 +1696,7 @@ public class VideoMessageCameraScreen: ViewController {
                     resultPreviewView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(self.resultTapped)))
                 }
                 resultPreviewView.frame = previewBounds
+                resultPreviewView.playbackRate = Float(controller.videoMessageSpeed)
             } else if let resultPreviewView = self.resultPreviewView {
                 self.resultPreviewView = nil
                 resultPreviewView.removeFromSuperview()
@@ -1650,6 +1723,7 @@ public class VideoMessageCameraScreen: ViewController {
     private var audioSessionDisposable: Disposable?
     
     private let hapticFeedback = HapticFeedback()
+    fileprivate var videoMessageSpeed: Double = 1.0
     
     private var validLayout: ContainerViewLayout?
     
@@ -1670,6 +1744,19 @@ public class VideoMessageCameraScreen: ViewController {
     fileprivate func updatePreviewState(_ f: (PreviewState?) -> PreviewState?, transition: ComponentTransition) {
         self.node.previewState = f(self.node.previewState)
         self.node.requestUpdateLayout(transition: transition)
+    }
+
+    // The preview uses AVPlayer varispeed and the send path exports the same
+    // rate into the media file. That intentionally changes voice pitch too.
+    fileprivate func cycleVideoMessageSpeed() {
+        guard ayuGramSettingsCurrent.customVideoMessageSpeed else {
+            return
+        }
+        let currentIndex = shadowVideoMessageSpeedSteps.firstIndex(where: { abs($0 - self.videoMessageSpeed) < 0.001 }) ?? 2
+        self.videoMessageSpeed = shadowVideoMessageSpeedSteps[(currentIndex + 1) % shadowVideoMessageSpeedSteps.count]
+        self.hapticFeedback.impact(.light)
+        self.node.resultPreviewView?.playbackRate = Float(self.videoMessageSpeed)
+        self.node.requestUpdateLayout(transition: .spring(duration: 0.25))
     }
     
     public final class RecordingStatus {
@@ -1881,13 +1968,13 @@ public class VideoMessageCameraScreen: ViewController {
                 return
             }
 
-            var videoPaths: [String] = []
+            var sourceVideoPaths: [String] = []
             var duration: Double = 0.0
             
-            var hasAdjustments = results.count > 1
+            var originalHasAdjustments = results.count > 1
             for result in results {
                 if case let .video(video) = result {
-                    videoPaths.append(video.videoPath)
+                    sourceVideoPaths.append(video.videoPath)
                     duration += video.duration
                 }
             }
@@ -1898,18 +1985,35 @@ public class VideoMessageCameraScreen: ViewController {
             }
             
             var startTime: Double = 0.0
-            let finalDuration: Double
+            let unscaledFinalDuration: Double
             if let trimRange = self.node.previewState?.trimRange {
                 startTime = trimRange.lowerBound
-                finalDuration = trimRange.upperBound - trimRange.lowerBound
-                if finalDuration != duration {
-                    hasAdjustments = true
+                unscaledFinalDuration = trimRange.upperBound - trimRange.lowerBound
+                if unscaledFinalDuration != duration {
+                    originalHasAdjustments = true
                 }
             } else {
-                finalDuration = duration
+                unscaledFinalDuration = duration
             }
             
             let dimensions = PixelDimensions(width: 400, height: 400)
+
+            let selectedSpeed = ayuGramSettingsCurrent.customVideoMessageSpeed ? self.videoMessageSpeed : 1.0
+            let speedPreparedVideo = shadowPrepareVideoMessageSpeed(
+                results: results,
+                trimRange: self.node.previewState?.trimRange,
+                speed: selectedSpeed
+            )
+
+            let _ = (speedPreparedVideo
+            |> deliverOnMainQueue).startStandalone(next: { [weak self] preparedVideo in
+                guard let self else {
+                    return
+                }
+                let usesBakedSpeed = preparedVideo != nil
+                let videoPaths = preparedVideo.map { [$0.path] } ?? sourceVideoPaths
+                let finalDuration = preparedVideo?.duration ?? unscaledFinalDuration
+                let hasAdjustments = usesBakedSpeed ? false : originalHasAdjustments
             
             let thumbnailImage: Signal<UIImage, NoError>
             if startTime > 0.0 {
@@ -1951,7 +2055,7 @@ public class VideoMessageCameraScreen: ViewController {
                     cropMirroring: false,
                     cropOrientation: nil,
                     gradientColors: nil,
-                    videoTrimRange: self.node.previewState?.trimRange,
+                    videoTrimRange: usesBakedSpeed ? nil : self.node.previewState?.trimRange,
                     videoBounce: false,
                     videoIsMuted: false,
                     videoIsFullHd: false,
@@ -1985,7 +2089,7 @@ public class VideoMessageCameraScreen: ViewController {
                 )
                 
                 var resourceAdjustments: VideoMediaResourceAdjustments? = nil
-                if let valuesData = try? JSONEncoder().encode(values) {
+                if !usesBakedSpeed, let valuesData = try? JSONEncoder().encode(values) {
                     let data = EngineMemoryBuffer(data: valuesData)
                     let digest = EngineMemoryBuffer(data: data.md5Digest())
                     resourceAdjustments = VideoMediaResourceAdjustments(data: data, digest: digest, isStory: false)
@@ -1998,7 +2102,7 @@ public class VideoMessageCameraScreen: ViewController {
                 } else {
                     liveUploadData = self.node.liveUploadInterface?.fileUpdated(true) as? LegacyLiveUploadInterfaceResult
                 }
-                if !hasAdjustments, let liveUploadData, let data = try? Data(contentsOf: URL(fileURLWithPath: video.videoPath)) {
+                if !hasAdjustments, !usesBakedSpeed, let liveUploadData, let data = try? Data(contentsOf: URL(fileURLWithPath: video.videoPath)) {
                     resource = LocalFileMediaResource(fileId: liveUploadData.id)
                     self.context.engine.resources.storeResourceData(id: EngineMediaResource.Id(resource.id), data: data, synchronous: true)
                 } else {
@@ -2044,6 +2148,7 @@ public class VideoMessageCameraScreen: ViewController {
                     correlationId: nil,
                     bubbleUpEmojiOrStickersets: []
                 ), silentPosting, scheduleTime, repeatPeriod)
+            })
             })
         })
     }
@@ -2178,6 +2283,82 @@ private func composition(with results: [VideoMessageCameraScreen.CaptureResult])
         }
     }
     return composition
+}
+
+private struct ShadowPreparedVideoMessage {
+    let path: String
+    let duration: Double
+}
+
+// Bake the selected rate into an MP4 before enqueueing it. AVMutableComposition
+// scales audio and video together; using a time-scaled audio track gives the
+// intended varispeed effect, including the higher/lower voice pitch.
+private func shadowPrepareVideoMessageSpeed(
+    results: [VideoMessageCameraScreen.CaptureResult],
+    trimRange: Range<Double>?,
+    speed: Double
+) -> Signal<ShadowPreparedVideoMessage?, NoError> {
+    guard abs(speed - 1.0) > 0.001 else {
+        return .single(nil)
+    }
+
+    let source = composition(with: results)
+    let sourceDuration = source.duration.seconds
+    guard sourceDuration.isFinite, sourceDuration > 0.0 else {
+        return .single(nil)
+    }
+
+    let start = max(0.0, min(trimRange?.lowerBound ?? 0.0, sourceDuration))
+    let end = max(start, min(trimRange?.upperBound ?? sourceDuration, sourceDuration))
+    let selectedDuration = end - start
+    guard selectedDuration > 0.0 else {
+        return .single(nil)
+    }
+
+    return Signal { subscriber in
+        let composition = AVMutableComposition()
+        let timeScale: CMTimeScale = 1000
+        do {
+            try composition.insertTimeRange(
+                CMTimeRange(start: CMTime(seconds: start, preferredTimescale: timeScale), duration: CMTime(seconds: selectedDuration, preferredTimescale: timeScale)),
+                of: source,
+                at: .zero
+            )
+        } catch {
+            subscriber.putNext(nil)
+            subscriber.putCompletion()
+            return EmptyDisposable
+        }
+
+        let outputDuration = CMTime(seconds: selectedDuration / speed, preferredTimescale: timeScale)
+        composition.scaleTimeRange(CMTimeRange(start: .zero, duration: composition.duration), toDuration: outputDuration)
+
+        guard let exportSession = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality) else {
+            subscriber.putNext(nil)
+            subscriber.putCompletion()
+            return EmptyDisposable
+        }
+
+        let path = (NSTemporaryDirectory() as NSString).appendingPathComponent("shadow-round-speed-\(UUID().uuidString).mp4")
+        let url = URL(fileURLWithPath: path)
+        try? FileManager.default.removeItem(at: url)
+        exportSession.outputURL = url
+        exportSession.outputFileType = .mp4
+        exportSession.shouldOptimizeForNetworkUse = false
+        exportSession.exportAsynchronously {
+            if exportSession.status == .completed {
+                subscriber.putNext(ShadowPreparedVideoMessage(path: path, duration: outputDuration.seconds))
+            } else {
+                try? FileManager.default.removeItem(at: url)
+                subscriber.putNext(nil)
+            }
+            subscriber.putCompletion()
+        }
+
+        return ActionDisposable {
+            exportSession.cancelExport()
+        }
+    }
 }
 
 private class BlurView: UIVisualEffectView {

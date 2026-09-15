@@ -55,6 +55,7 @@ enum ShadowSettingsSearchIndex {
         ShadowSettingsSearchItem(destination: .customization, entryId: 22, title: "Дата регистрации", description: "Приблизительная дата создания аккаунта", keywords: "registration date"),
         ShadowSettingsSearchItem(destination: .customization, entryId: 23, title: "Скрыть свой номер", description: "Убрать строку телефона из своего профиля", keywords: "hide phone number"),
         ShadowSettingsSearchItem(destination: .customization, entryId: 26, title: "Кружки на заднюю камеру", description: "Начинать запись с основной камеры", keywords: "round video back camera"),
+        ShadowSettingsSearchItem(destination: .customization, entryId: 97, title: "Кастомная скорость кружков", description: "Менять скорость и голос перед отправкой: 0.5×–3×", keywords: "round video кружок speed скорость 0.5 0.75 1.25 1.5 2 3 голос"),
         ShadowSettingsSearchItem(destination: .customization, entryId: 27, title: "Камера в галерее", description: "Показывать плитку камеры во вложениях", keywords: "camera gallery"),
         ShadowSettingsSearchItem(destination: .customization, entryId: 28, title: "Живой предпросмотр камеры", description: "Видео в плитке камеры", keywords: "live camera preview"),
         ShadowSettingsSearchItem(destination: .customization, entryId: 31, title: "Подтверждение звонков", description: "Защита от случайного звонка", keywords: "confirm calls"),
