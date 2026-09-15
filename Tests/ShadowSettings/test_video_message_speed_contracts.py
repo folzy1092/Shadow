@@ -8,6 +8,7 @@ CAMERA = ROOT / "submodules/TelegramUI/Components/VideoMessageCameraScreen/Sourc
 
 
 class VideoMessageCameraRollbackContracts(unittest.TestCase):
+    # This PR exists to run the full GitHub Actions validation for the rollback.
     def test_custom_round_video_controls_are_not_exposed(self):
         controller = (UI / "AyuGramSettingsController.swift").read_text()
         search = (UI / "ShadowSettingsSearchIndex.swift").read_text()
