@@ -1171,6 +1171,20 @@ public final class Camera {
             return false
         }
     }
+
+    /// The 0.5× path is valid only when the rear virtual device has an
+    /// ultra-wide constituent camera. Keep this separate from MultiCam support:
+    /// a device can support two simultaneous cameras without exposing 0.5×.
+    public static func isUltraWideCameraSupported() -> Bool {
+        guard #available(iOS 13.0, *) else {
+            return false
+        }
+        return !AVCaptureDevice.DiscoverySession(
+            deviceTypes: [.builtInUltraWideCamera],
+            mediaType: .video,
+            position: .back
+        ).devices.isEmpty
+    }
     
     public static var isIpad: Bool {
         return DeviceModel.current.isIpad
