@@ -1874,12 +1874,23 @@ public class VideoMessageCameraScreen: ViewController {
         self.node.requestUpdateLayout(transition: .spring(duration: 0.25))
     }
 
-    // The back-camera context is a virtual Dual/Triple device on supported
-    // iPhones. A value below 1× selects the physical ultra-wide module rather
-    // than digitally shrinking the regular camera image.
+    // Below 1× we temporarily use the rear virtual Dual/Triple device, which
+    // selects the real ultra-wide lens. At 1× we immediately restore the
+    // standard Telegram simultaneous-camera pipeline.
     fileprivate func updateRoundVideoZoom(_ value: CGFloat) {
-        let minimum: CGFloat = ayuGramSettingsCurrent.roundVideoUltraWide && self.cameraState.position == .back ? 0.5 : 1.0
-        self.roundVideoZoom = min(8.0, max(minimum, value))
+        let canUseUltraWide = ayuGramSettingsCurrent.roundVideoUltraWide
+            && self.cameraState.position == .back
+            && Camera.isUltraWideCameraSupported()
+        let minimum: CGFloat = canUseUltraWide ? 0.5 : 1.0
+        let target = min(8.0, max(minimum, value))
+
+        if target < 1.0 {
+            self.node.setRoundVideoUltraWideActive(true)
+        } else {
+            self.node.setRoundVideoUltraWideActive(false)
+        }
+
+        self.roundVideoZoom = target < 1.0 ? target : max(1.0, target)
         self.camera?.rampZoom(self.roundVideoZoom, rate: 16.0)
     }
     
@@ -2313,6 +2324,7 @@ public class VideoMessageCameraScreen: ViewController {
     
     public func discardVideo() {
         self.node.cancelRecording.invoke(Void())
+        self.node.setRoundVideoUltraWideActive(false)
         
         self.requestDismiss(animated: true)
     }
@@ -2359,6 +2371,7 @@ public class VideoMessageCameraScreen: ViewController {
         }
         
         self.node.dismissAllTooltips()
+        self.node.setRoundVideoUltraWideActive(false)
         
         self.node.camera?.stopCapture(invalidate: true)
         self.isDismissed = true
