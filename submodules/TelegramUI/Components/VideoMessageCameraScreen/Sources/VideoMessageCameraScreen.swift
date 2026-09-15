@@ -950,8 +950,7 @@ public class VideoMessageCameraScreen: ViewController {
             self.previewContainerView.addSubview(self.previewContainerContentView)
                         
             let isDualCameraEnabled = Camera.isDualCameraSupported(forRoundVideo: true)
-            // AyuGram: optionally start round-video capture on the rear camera.
-            let isFrontPosition = !ayuGramSettingsCurrent.roundVideoUseBackCamera
+            let isFrontPosition = true
             
             self.mainPreviewView = CameraSimplePreviewView(frame: .zero, main: true, roundVideo: true)
             self.additionalPreviewView = CameraSimplePreviewView(frame: .zero, main: false, roundVideo: true)
