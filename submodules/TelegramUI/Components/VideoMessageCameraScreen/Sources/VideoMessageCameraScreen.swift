@@ -970,7 +970,7 @@ public class VideoMessageCameraScreen: ViewController {
             }
             
             self.cameraState = CameraState(
-                position: isFrontPosition ? .front : .back,
+                position: .front,
                 flashMode: .off,
                 flashModeDidChange: false,
                 flashTint: .white,
