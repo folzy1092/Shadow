@@ -1224,6 +1224,35 @@ public class VideoMessageCameraScreen: ViewController {
             }
         }
         
+        func setRoundVideoUltraWideActive(_ active: Bool) {
+            guard active != self.roundVideoUltraWideActive else {
+                return
+            }
+            guard let controller = self.controller, let camera = self.camera else {
+                return
+            }
+            guard !active || (
+                ayuGramSettingsCurrent.roundVideoUltraWide
+                && self.cameraState.position == .back
+                && Camera.isUltraWideCameraSupported()
+            ) else {
+                return
+            }
+
+            self.roundVideoUltraWideActive = active
+            // false selects the single virtual Dual/Triple device. It is
+            // deliberately temporary: at 1× the original Telegram MultiCam
+            // pipeline is restored, keeping its native behaviour above 1×.
+            camera.setDualCameraEnabled(!active)
+            self.cameraState = self.cameraState.updatedIsDualCameraEnabled(!active)
+
+            if !active {
+                camera.rampZoom(1.0, rate: 16.0)
+            }
+            controller.roundVideoZoom = active ? max(0.5, controller.roundVideoZoom) : 1.0
+            self.requestUpdateLayout(transition: .immediate)
+        }
+
         @objc private func handlePinch(_ gestureRecognizer: UIPinchGestureRecognizer) {
             guard let controller = self.controller, self.isRecording else {
                 return
@@ -1396,6 +1425,9 @@ public class VideoMessageCameraScreen: ViewController {
             let _ = ApplicationSpecificNotice.incrementVideoMessagesPauseSuggestion(accountManager: self.context.sharedContext.accountManager, count: 3).startStandalone()
             
             self.pauseCameraCapture()
+            // A completed take never leaves its next opening in the virtual
+            // ultra-wide mode.
+            self.setRoundVideoUltraWideActive(false)
             
             self.results.append(result)
             self.resultsPipe.putNext(result)
