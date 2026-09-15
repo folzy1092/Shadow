@@ -47,12 +47,9 @@ class VideoMessageSpeedContracts(unittest.TestCase):
         self.assertIn('title: "0.5× на кружках"', search)
         self.assertIn("handleRecordingZoomPan", camera)
         self.assertIn("UIPanGestureRecognizer", camera)
-        self.assertIn("let isDualCameraEnabled = Camera.isDualCameraSupported(forRoundVideo: true)", camera)
-        self.assertIn("setRoundVideoUltraWideActive", camera)
-        self.assertIn("target < 1.0", camera)
-        self.assertIn("Camera.isUltraWideCameraSupported()", camera)
-        self.assertIn("Queue.mainQueue().after(0.7)", camera)
-        self.assertIn("flipReconciliationId", camera)
+        self.assertIn("Camera.isDualCameraSupported(forRoundVideo: true) && !ayuGramSettingsCurrent.roundVideoUltraWide", camera)
+        self.assertIn("let minimum: CGFloat = ayuGramSettingsCurrent.roundVideoUltraWide", camera)
+        self.assertNotIn("toggleRoundVideoUltraWide", camera)
         self.assertIn("max(0.5, device.minAvailableVideoZoomFactor)", low_level_camera)
 
     def test_preview_cycles_requested_rates_and_bakes_them_before_sending(self):
