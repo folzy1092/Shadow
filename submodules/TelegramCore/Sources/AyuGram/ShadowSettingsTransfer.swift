@@ -48,7 +48,6 @@ public enum ShadowSettingsTransfer {
         "compactBottomBar": \.compactBottomBar,
         "allowSaveRestrictedContent": \.allowSaveRestrictedContent,
         "roundVideoUseBackCamera": \.roundVideoUseBackCamera,
-        "roundVideoUltraWide": \.roundVideoUltraWide,
         "customVideoMessageSpeed": \.customVideoMessageSpeed,
         "showCameraTile": \.showCameraTile,
         "cameraTileLivePreview": \.cameraTileLivePreview,
@@ -66,11 +65,7 @@ public enum ShadowSettingsTransfer {
         "screenshotAvatars": \.messageScreenshot.showAvatars,
         "screenshotNames": \.messageScreenshot.showNames,
         "screenshotBadges": \.messageScreenshot.showBadges,
-        "screenshotTime": \.messageScreenshot.showTime,
-        "screenshotOwnName": \.messageScreenshot.showOwnName,
-        "screenshotPeerNames": \.messageScreenshot.showPeerNames,
-        "screenshotOwnAvatar": \.messageScreenshot.showOwnAvatar,
-        "screenshotPeerAvatars": \.messageScreenshot.showPeerAvatars
+        "screenshotTime": \.messageScreenshot.showTime
     ]
 
     public static func document(from settings: AyuGramSettings) throws -> ShadowSettingsDocument {

@@ -433,6 +433,10 @@ private final class AyuCustomizationArguments {
     let updateWideChannelPosts: (Bool) -> Void
     let updateShowExactViewCounts: (Bool) -> Void
     let updateShowForwardCount: (Bool) -> Void
+    let updateRoundVideoBackCamera: (Bool) -> Void
+    let updateCustomVideoMessageSpeed: (Bool) -> Void
+    let updateShowCameraTile: (Bool) -> Void
+    let updateCameraTileLivePreview: (Bool) -> Void
     let updateConfirmCalls: (Bool) -> Void
     let updateHideAllChatsFolder: (Bool) -> Void
     let updateFoldersAtBottom: (Bool) -> Void
@@ -463,6 +467,10 @@ private final class AyuCustomizationArguments {
         updateWideChannelPosts: @escaping (Bool) -> Void,
         updateShowExactViewCounts: @escaping (Bool) -> Void,
         updateShowForwardCount: @escaping (Bool) -> Void,
+        updateRoundVideoBackCamera: @escaping (Bool) -> Void,
+        updateCustomVideoMessageSpeed: @escaping (Bool) -> Void,
+        updateShowCameraTile: @escaping (Bool) -> Void,
+        updateCameraTileLivePreview: @escaping (Bool) -> Void,
         updateConfirmCalls: @escaping (Bool) -> Void,
         updateHideAllChatsFolder: @escaping (Bool) -> Void,
         updateFoldersAtBottom: @escaping (Bool) -> Void,
@@ -492,6 +500,10 @@ private final class AyuCustomizationArguments {
         self.updateWideChannelPosts = updateWideChannelPosts
         self.updateShowExactViewCounts = updateShowExactViewCounts
         self.updateShowForwardCount = updateShowForwardCount
+        self.updateRoundVideoBackCamera = updateRoundVideoBackCamera
+        self.updateCustomVideoMessageSpeed = updateCustomVideoMessageSpeed
+        self.updateShowCameraTile = updateShowCameraTile
+        self.updateCameraTileLivePreview = updateCameraTileLivePreview
         self.updateConfirmCalls = updateConfirmCalls
         self.updateHideAllChatsFolder = updateHideAllChatsFolder
         self.updateFoldersAtBottom = updateFoldersAtBottom
@@ -518,6 +530,8 @@ private enum AyuCustomizationSection: Int32 {
     case chats
     case bottomBar
     case profiles
+    case media
+    case customRoundVideos
     case calls
     case githubConfig
     case banner
@@ -569,6 +583,16 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
     case hideOwnPhoneNumber(Bool)
     case profilesFooter
 
+    case mediaHeader
+    case roundVideoBackCamera(Bool)
+    case showCameraTile(Bool)
+    case cameraTileLivePreview(Bool)
+    case mediaFooter
+
+    case customRoundVideosHeader
+    case customVideoMessageSpeed(Bool)
+    case customRoundVideosFooter
+
     case callsHeader
     case confirmCalls(Bool)
     case callsFooter
@@ -603,6 +627,10 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
             return AyuCustomizationSection.bottomBar.rawValue
         case .profilesHeader, .showProfileId, .showProfileDC, .showRegistrationDate, .hideOwnPhoneNumber, .profilesFooter:
             return AyuCustomizationSection.profiles.rawValue
+        case .mediaHeader, .roundVideoBackCamera, .showCameraTile, .cameraTileLivePreview, .mediaFooter:
+            return AyuCustomizationSection.media.rawValue
+        case .customRoundVideosHeader, .customVideoMessageSpeed, .customRoundVideosFooter:
+            return AyuCustomizationSection.customRoundVideos.rawValue
         case .callsHeader, .confirmCalls, .callsFooter:
             return AyuCustomizationSection.calls.rawValue
         case .githubConfigHeader, .syncGithub, .githubConfigFooter:
@@ -648,6 +676,14 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .showRegistrationDate: return 22
         case .hideOwnPhoneNumber: return 23
         case .profilesFooter: return 24
+        case .mediaHeader: return 25
+        case .roundVideoBackCamera: return 26
+        case .showCameraTile: return 27
+        case .cameraTileLivePreview: return 28
+        case .mediaFooter: return 29
+        case .customRoundVideosHeader: return 96
+        case .customVideoMessageSpeed: return 97
+        case .customRoundVideosFooter: return 98
         case .callsHeader: return 30
         case .confirmCalls: return 31
         case .callsFooter: return 32
@@ -792,6 +828,30 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
             })
         case .profilesFooter:
             return ItemListTextItem(presentationData: presentationData, text: .plain("Показывать в профилях пользователей, ботов и каналов дополнительные поля: числовой ID (в формате Bot API, копируется по удержанию), дата-центр фото профиля и примерную дату регистрации. Дата регистрации приблизительная — Telegram не раскрывает точную.\n\n«Скрыть свой номер» полностью убирает плашку с вашим номером телефона в настройках/профиле."), sectionId: self.section)
+        case .mediaHeader:
+            return ItemListSectionHeaderItem(presentationData: presentationData, text: "МЕДИА", sectionId: self.section)
+        case let .roundVideoBackCamera(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Кружки на заднюю камеру", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.updateRoundVideoBackCamera(value)
+            })
+        case let .showCameraTile(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Камера в галерее", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.updateShowCameraTile(value)
+            })
+        case let .cameraTileLivePreview(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Живой предпросмотр камеры", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.updateCameraTileLivePreview(value)
+            })
+        case .mediaFooter:
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Начинать запись видеосообщений («кружков») с задней камеры. Во время записи можно переключиться на фронтальную. «Камера в галерее» показывает плитку камеры первой ячейкой в галерее вложений. «Живой предпросмотр камеры» запускает в этой плитке видео с камеры вживую вместо статичной иконки."), sectionId: self.section)
+        case .customRoundVideosHeader:
+            return ItemListSectionHeaderItem(presentationData: presentationData, text: "КАСТОМНЫЕ КРУЖКИ", sectionId: self.section)
+        case let .customVideoMessageSpeed(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Кастомная скорость кружков", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.updateCustomVideoMessageSpeed(value)
+            })
+        case .customRoundVideosFooter:
+            return ItemListTextItem(presentationData: presentationData, text: .plain("После записи кружка над одноразовым просмотром появится стеклянная кнопка скорости. Нажимайте её, чтобы выбрать 0.5×, 0.75×, 1×, 1.25×, 1.5×, 2× или 3×. Скорость применяется к готовому видео и звуку перед отправкой: на ускорении голос становится выше, на замедлении — ниже."), sectionId: self.section)
         case .callsHeader:
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "ЗВОНКИ", sectionId: self.section)
         case let .confirmCalls(value):
@@ -887,6 +947,16 @@ private func ayuCustomizationEntries(settings: AyuGramSettings) -> [AyuCustomiza
     entries.append(.hideOwnPhoneNumber(settings.hideOwnPhoneNumber))
     entries.append(.profilesFooter)
 
+    entries.append(.mediaHeader)
+    entries.append(.roundVideoBackCamera(settings.roundVideoUseBackCamera))
+    entries.append(.showCameraTile(settings.showCameraTile))
+    entries.append(.cameraTileLivePreview(settings.cameraTileLivePreview))
+    entries.append(.mediaFooter)
+
+    entries.append(.customRoundVideosHeader)
+    entries.append(.customVideoMessageSpeed(settings.customVideoMessageSpeed))
+    entries.append(.customRoundVideosFooter)
+
     entries.append(.callsHeader)
     entries.append(.confirmCalls(settings.confirmCalls))
     entries.append(.callsFooter)
@@ -953,6 +1023,18 @@ private func ayuCustomizationController(context: AccountContext, focus: ShadowSe
         },
         updateShowForwardCount: { value in
             ayuUpdateSettings(context: context) { var s = $0; s.showForwardCount = value; return s }
+        },
+        updateRoundVideoBackCamera: { value in
+            ayuUpdateSettings(context: context) { var s = $0; s.roundVideoUseBackCamera = value; return s }
+        },
+        updateCustomVideoMessageSpeed: { value in
+            ayuUpdateSettings(context: context) { var s = $0; s.customVideoMessageSpeed = value; return s }
+        },
+        updateShowCameraTile: { value in
+            ayuUpdateSettings(context: context) { var s = $0; s.showCameraTile = value; return s }
+        },
+        updateCameraTileLivePreview: { value in
+            ayuUpdateSettings(context: context) { var s = $0; s.cameraTileLivePreview = value; return s }
         },
         updateConfirmCalls: { value in
             ayuUpdateSettings(context: context) { var s = $0; s.confirmCalls = value; return s }
