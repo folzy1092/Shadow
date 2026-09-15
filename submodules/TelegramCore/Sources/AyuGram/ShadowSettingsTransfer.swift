@@ -48,6 +48,8 @@ public enum ShadowSettingsTransfer {
         "compactBottomBar": \.compactBottomBar,
         "allowSaveRestrictedContent": \.allowSaveRestrictedContent,
         "roundVideoUseBackCamera": \.roundVideoUseBackCamera,
+        "roundVideoUltraWide": \.roundVideoUltraWide,
+        "customVideoMessageSpeed": \.customVideoMessageSpeed,
         "showCameraTile": \.showCameraTile,
         "cameraTileLivePreview": \.cameraTileLivePreview,
         "confirmCalls": \.confirmCalls,
