@@ -30,7 +30,7 @@ class VideoMessageSpeedContracts(unittest.TestCase):
         self.assertIn("s.customVideoMessageSpeed = value", controller)
         self.assertIn('title: "Кастомная скорость кружков"', search)
 
-    def test_ultra_wide_round_video_is_an_opt_in_hardware_switch(self):
+    def test_ultra_wide_round_video_is_an_opt_in_swipe_zoom_range(self):
         settings = (CORE / "AyuGramSettings.swift").read_text()
         document = (CORE / "ShadowSettingsDocument.swift").read_text()
         transfer = (CORE / "ShadowSettingsTransfer.swift").read_text()
@@ -45,8 +45,11 @@ class VideoMessageSpeedContracts(unittest.TestCase):
         self.assertIn('"roundVideoUltraWide": \\.roundVideoUltraWide', transfer)
         self.assertIn('title: "0.5× на кружках"', controller)
         self.assertIn('title: "0.5× на кружках"', search)
-        self.assertIn("toggleRoundVideoUltraWide", camera)
-        self.assertIn("self.camera?.rampZoom(self.roundVideoZoom", camera)
+        self.assertIn("handleRecordingZoomPan", camera)
+        self.assertIn("UIPanGestureRecognizer", camera)
+        self.assertIn("Camera.isDualCameraSupported(forRoundVideo: true) && !ayuGramSettingsCurrent.roundVideoUltraWide", camera)
+        self.assertIn("let minimum: CGFloat = ayuGramSettingsCurrent.roundVideoUltraWide", camera)
+        self.assertNotIn("toggleRoundVideoUltraWide", camera)
         self.assertIn("max(0.5, device.minAvailableVideoZoomFactor)", low_level_camera)
 
     def test_preview_cycles_requested_rates_and_bakes_them_before_sending(self):
