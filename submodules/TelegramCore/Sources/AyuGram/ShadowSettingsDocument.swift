@@ -34,7 +34,7 @@ public struct ShadowSettingsDocument: Codable, Equatable {
         "doubleTapToEdit", "showExactLastSeen", "showExactLastSeenSeconds",
         "wideChannelPosts", "showExactViewCounts", "showForwardCount", "preferUsernameForNonContacts", "preferUsernameForBots",
         "hideAllChatsFolder", "disableStoryCameraSwipe", "foldersAtBottom", "hideBottomSearch", "compactBottomBar",
-        "allowSaveRestrictedContent", "roundVideoUseBackCamera", "showCameraTile",
+        "allowSaveRestrictedContent", "roundVideoUseBackCamera", "roundVideoUltraWide", "customVideoMessageSpeed", "showCameraTile",
         "cameraTileLivePreview", "confirmCalls", "saveDestructingMedia",
         "saveAllIncomingMedia", "mediaAutoCleanKeepPinned", "mediaAutoCleanKeepChannels",
         "mediaAutoCleanKeepBots", "showProfileId", "showProfileDC",
