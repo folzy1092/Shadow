@@ -104,6 +104,8 @@ class MessageScreenshotContracts(unittest.TestCase):
         self.assertIn('UIImage(systemName: "gearshape")', preview)
         self.assertIn('private func updateOptions', preview)
         self.assertIn('generation == self.renderGeneration', preview)
+        self.assertIn('rootController.present(sheet, in: .window(.root))', preview)
+        self.assertNotIn('self.present(sheet, animated: true)', preview)
         self.assertIn('ayuExteraBadgeEmojiId(peerId: effectiveAuthor.id)', bubble)
 
 

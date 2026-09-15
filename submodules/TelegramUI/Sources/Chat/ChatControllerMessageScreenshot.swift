@@ -421,7 +421,13 @@ private final class ShadowMessageScreenshotPreview: UIViewController {
             ActionSheetItemGroup(items: items),
             ActionSheetItemGroup(items: [ActionSheetButtonItem(title: presentationData.strings.Common_Cancel, action: { [weak sheet] in sheet?.dismissAnimated() })])
         ])
-        self.present(sheet, animated: true)
+        // ActionSheetController is a Telegram Display controller, not a UIKit
+        // modal. Presenting it through UIViewController produced an empty
+        // sheet; the Telegram root installs its item nodes correctly.
+        guard let rootController = self.view.window?.rootViewController as? ViewController else {
+            return
+        }
+        rootController.present(sheet, in: .window(.root))
     }
 
     private func updateOptions(_ f: @escaping (inout ShadowMessageScreenshotSettings) -> Void) {
