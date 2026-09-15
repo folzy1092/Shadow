@@ -34,12 +34,13 @@ public struct ShadowSettingsDocument: Codable, Equatable {
         "doubleTapToEdit", "showExactLastSeen", "showExactLastSeenSeconds",
         "wideChannelPosts", "showExactViewCounts", "showForwardCount", "preferUsernameForNonContacts", "preferUsernameForBots",
         "hideAllChatsFolder", "disableStoryCameraSwipe", "foldersAtBottom", "hideBottomSearch", "compactBottomBar",
-        "allowSaveRestrictedContent", "roundVideoUseBackCamera", "customVideoMessageSpeed", "showCameraTile",
+        "allowSaveRestrictedContent", "roundVideoUseBackCamera", "roundVideoUltraWide", "customVideoMessageSpeed", "showCameraTile",
         "cameraTileLivePreview", "confirmCalls", "saveDestructingMedia",
         "saveAllIncomingMedia", "mediaAutoCleanKeepPinned", "mediaAutoCleanKeepChannels",
         "mediaAutoCleanKeepBots", "showProfileId", "showProfileDC",
         "showRegistrationDate", "hideOwnPhoneNumber",
-        "screenshotEnabled", "screenshotAvatars", "screenshotNames", "screenshotBadges", "screenshotTime"
+        "screenshotEnabled", "screenshotAvatars", "screenshotNames", "screenshotBadges", "screenshotTime",
+        "screenshotOwnName", "screenshotPeerNames", "screenshotOwnAvatar", "screenshotPeerAvatars"
     ]
     public static let textKeys: Set<String> = ["editedIndicatorText", "deletedIndicatorText"]
     public static let integerKeys: Set<String> = [

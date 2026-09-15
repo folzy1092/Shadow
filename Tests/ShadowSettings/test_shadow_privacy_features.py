@@ -87,6 +87,14 @@ class ShadowPrivacyFeatures(unittest.TestCase):
         self.assertIn("showEditComparisonAction", hub)
         self.assertIn("ayuGramSettingsCurrent.showEditComparisonAction", menu)
 
+    def test_filter_hides_a_whole_media_album_as_one_safe_placeholder(self):
+        source = (UI / "Sources/ChatHistoryEntriesForView.swift").read_text()
+        block = source.split("case let .MessageGroupEntry(_, messages, presentation):", 1)[1].split("case let .MessageEntry", 1)[0]
+        self.assertIn("guard let hiddenItem = messages.first", block)
+        self.assertIn('withUpdatedText("Скрыто локальным фильтром").withUpdatedMedia([])', block)
+        self.assertIn("return [.MessageEntry(placeholder", block)
+        self.assertNotIn("return messages.map", block)
+
     def test_hidden_accounts_are_local_and_filtered_from_switcher(self):
         storage = (CORE / "AyuGram/ShadowHiddenAccounts.swift").read_text()
         hub = (SETTINGS_UI / "AyuGramSettingsController.swift").read_text()

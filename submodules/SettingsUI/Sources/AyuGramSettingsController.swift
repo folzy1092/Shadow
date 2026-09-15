@@ -434,6 +434,7 @@ private final class AyuCustomizationArguments {
     let updateShowExactViewCounts: (Bool) -> Void
     let updateShowForwardCount: (Bool) -> Void
     let updateRoundVideoBackCamera: (Bool) -> Void
+    let updateRoundVideoUltraWide: (Bool) -> Void
     let updateCustomVideoMessageSpeed: (Bool) -> Void
     let updateShowCameraTile: (Bool) -> Void
     let updateCameraTileLivePreview: (Bool) -> Void
@@ -468,6 +469,7 @@ private final class AyuCustomizationArguments {
         updateShowExactViewCounts: @escaping (Bool) -> Void,
         updateShowForwardCount: @escaping (Bool) -> Void,
         updateRoundVideoBackCamera: @escaping (Bool) -> Void,
+        updateRoundVideoUltraWide: @escaping (Bool) -> Void,
         updateCustomVideoMessageSpeed: @escaping (Bool) -> Void,
         updateShowCameraTile: @escaping (Bool) -> Void,
         updateCameraTileLivePreview: @escaping (Bool) -> Void,
@@ -501,6 +503,7 @@ private final class AyuCustomizationArguments {
         self.updateShowExactViewCounts = updateShowExactViewCounts
         self.updateShowForwardCount = updateShowForwardCount
         self.updateRoundVideoBackCamera = updateRoundVideoBackCamera
+        self.updateRoundVideoUltraWide = updateRoundVideoUltraWide
         self.updateCustomVideoMessageSpeed = updateCustomVideoMessageSpeed
         self.updateShowCameraTile = updateShowCameraTile
         self.updateCameraTileLivePreview = updateCameraTileLivePreview
@@ -590,6 +593,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
     case mediaFooter
 
     case customRoundVideosHeader
+    case roundVideoUltraWide(Bool)
     case customVideoMessageSpeed(Bool)
     case customRoundVideosFooter
 
@@ -629,7 +633,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
             return AyuCustomizationSection.profiles.rawValue
         case .mediaHeader, .roundVideoBackCamera, .showCameraTile, .cameraTileLivePreview, .mediaFooter:
             return AyuCustomizationSection.media.rawValue
-        case .customRoundVideosHeader, .customVideoMessageSpeed, .customRoundVideosFooter:
+        case .customRoundVideosHeader, .roundVideoUltraWide, .customVideoMessageSpeed, .customRoundVideosFooter:
             return AyuCustomizationSection.customRoundVideos.rawValue
         case .callsHeader, .confirmCalls, .callsFooter:
             return AyuCustomizationSection.calls.rawValue
@@ -682,6 +686,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .cameraTileLivePreview: return 28
         case .mediaFooter: return 29
         case .customRoundVideosHeader: return 96
+        case .roundVideoUltraWide: return 99
         case .customVideoMessageSpeed: return 97
         case .customRoundVideosFooter: return 98
         case .callsHeader: return 30
@@ -846,12 +851,16 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
             return ItemListTextItem(presentationData: presentationData, text: .plain("Начинать запись видеосообщений («кружков») с задней камеры. Во время записи можно переключиться на фронтальную. «Камера в галерее» показывает плитку камеры первой ячейкой в галерее вложений. «Живой предпросмотр камеры» запускает в этой плитке видео с камеры вживую вместо статичной иконки."), sectionId: self.section)
         case .customRoundVideosHeader:
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "КАСТОМНЫЕ КРУЖКИ", sectionId: self.section)
+        case let .roundVideoUltraWide(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "0.5× на кружках", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.updateRoundVideoUltraWide(value)
+            })
         case let .customVideoMessageSpeed(value):
             return ItemListSwitchItem(presentationData: presentationData, title: "Кастомная скорость кружков", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 arguments.updateCustomVideoMessageSpeed(value)
             })
         case .customRoundVideosFooter:
-            return ItemListTextItem(presentationData: presentationData, text: .plain("После записи кружка над одноразовым просмотром появится стеклянная кнопка скорости. Нажимайте её, чтобы выбрать 0.5×, 0.75×, 1×, 1.25×, 1.5×, 2× или 3×. Скорость применяется к готовому видео и звуку перед отправкой: на ускорении голос становится выше, на замедлении — ниже."), sectionId: self.section)
+            return ItemListTextItem(presentationData: presentationData, text: .plain("«0.5× на кружках» добавляет кнопку переключения между обычной и сверхширокоугольной задней камерой перед записью. Работает на iPhone с модулем ultra-wide; на остальных моделях кнопка не влияет на камеру. После записи кружка над одноразовым просмотром появляется кнопка скорости: 0.5×, 0.75×, 1×, 1.25×, 1.5×, 2× или 3×. Скорость применяется к готовому видео и звуку перед отправкой: на ускорении голос становится выше, на замедлении — ниже."), sectionId: self.section)
         case .callsHeader:
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "ЗВОНКИ", sectionId: self.section)
         case let .confirmCalls(value):
@@ -954,6 +963,7 @@ private func ayuCustomizationEntries(settings: AyuGramSettings) -> [AyuCustomiza
     entries.append(.mediaFooter)
 
     entries.append(.customRoundVideosHeader)
+    entries.append(.roundVideoUltraWide(settings.roundVideoUltraWide))
     entries.append(.customVideoMessageSpeed(settings.customVideoMessageSpeed))
     entries.append(.customRoundVideosFooter)
 
@@ -1026,6 +1036,9 @@ private func ayuCustomizationController(context: AccountContext, focus: ShadowSe
         },
         updateRoundVideoBackCamera: { value in
             ayuUpdateSettings(context: context) { var s = $0; s.roundVideoUseBackCamera = value; return s }
+        },
+        updateRoundVideoUltraWide: { value in
+            ayuUpdateSettings(context: context) { var s = $0; s.roundVideoUltraWide = value; return s }
         },
         updateCustomVideoMessageSpeed: { value in
             ayuUpdateSettings(context: context) { var s = $0; s.customVideoMessageSpeed = value; return s }

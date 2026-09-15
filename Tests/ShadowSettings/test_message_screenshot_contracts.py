@@ -94,6 +94,18 @@ class MessageScreenshotContracts(unittest.TestCase):
         self.assertIn('screenshotSettingsDisposable.dispose()', source)
         self.assertIn('map { $0.messageScreenshot.enabled }', source)
 
+    def test_preview_gear_has_per_participant_privacy_and_supporter_badges(self):
+        preview = (ROOT / 'submodules/TelegramUI/Sources/Chat/ChatControllerMessageScreenshot.swift').read_text()
+        model = (ROOT / 'submodules/TelegramCore/Sources/AyuGram/ShadowMessageScreenshotSettings.swift').read_text()
+        bubble = (ROOT / 'submodules/TelegramUI/Components/Chat/ChatMessageBubbleItemNode/Sources/ChatMessageBubbleItemNode.swift').read_text()
+        for field in ('showOwnName', 'showPeerNames', 'showOwnAvatar', 'showPeerAvatars'):
+            self.assertIn('public var ' + field, model)
+            self.assertIn('options.' + field, preview)
+        self.assertIn('UIImage(systemName: "gearshape")', preview)
+        self.assertIn('private func updateOptions', preview)
+        self.assertIn('generation == self.renderGeneration', preview)
+        self.assertIn('ayuExteraBadgeEmojiId(peerId: effectiveAuthor.id)', bubble)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -2517,6 +2517,18 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             if item.presentationData.shadowScreenshot?.showBadges == false {
                 currentCredibilityIcon = nil
             }
+            // Screenshot rendering normally avoids the fork-specific title
+            // decorations used by live chat headers. Restore the supporter
+            // badge here so an AyuGram / exteraGram supporter is recognisable
+            // in the exported conversation too. This is deliberately after
+            // the generic badge switch: supporter status is an explicit part
+            // of the exported identity requested by the user.
+            if item.presentationData.shadowScreenshot != nil,
+               let effectiveAuthor,
+               let supporterEmojiId = ayuExteraBadgeEmojiId(peerId: effectiveAuthor.id) {
+                let color = authorNameColor ?? item.presentationData.theme.theme.chat.message.incoming.accentTextColor
+                currentCredibilityIcon = (.animation(content: .customEmoji(fileId: supporterEmojiId), size: CGSize(width: 20.0, height: 20.0), placeholderColor: incoming ? item.presentationData.theme.theme.chat.message.incoming.mediaPlaceholderColor : item.presentationData.theme.theme.chat.message.outgoing.mediaPlaceholderColor, themeColor: color.withMultipliedAlpha(0.4), loopMode: .count(2)), nil)
+            }
             if let rawAuthorNameColor = authorNameColor {
                 var dimColors = false
                 switch item.presentationData.theme.theme.name {

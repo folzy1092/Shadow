@@ -76,7 +76,7 @@ private final class ShadowMessageScreenshotPreview: UIViewController {
     private let messages: [EngineRawMessage]
     private let data: ChatPresentationData
     private let messageTheme: PresentationTheme
-    private let options: ShadowMessageScreenshotSettings
+    private var options: ShadowMessageScreenshotSettings
     private let scrollView = UIScrollView()
     private let content = ASDisplayNode()
     private var background: WallpaperBackgroundNode?
@@ -84,6 +84,8 @@ private final class ShadowMessageScreenshotPreview: UIViewController {
     private var preparedItems: [ChatMessageItemImpl] = []
     private var started = false
     private var ready = false
+    private var renderGeneration = 0
+    private var shareButton: UIBarButtonItem?
     private let width: CGFloat = 390.0
     private var contentHeight: CGFloat = 12.0
 
@@ -177,14 +179,22 @@ private final class ShadowMessageScreenshotPreview: UIViewController {
         self.title = "Скриншот сообщений"
         self.view.backgroundColor = self.data.theme.theme.list.blocksBackgroundColor
         self.navigationItem.leftBarButtonItem = UIBarButtonItem(title: "Закрыть", style: .plain, target: self, action: #selector(self.close))
-        self.navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .action, target: self, action: #selector(self.share))
-        self.navigationItem.rightBarButtonItem?.isEnabled = false
+        let shareButton = UIBarButtonItem(barButtonSystemItem: .action, target: self, action: #selector(self.share))
+        shareButton.isEnabled = false
+        self.shareButton = shareButton
+        let settingsButton = UIBarButtonItem(image: UIImage(systemName: "gearshape"), style: .plain, target: self, action: #selector(self.openSettings))
+        settingsButton.accessibilityLabel = "Настройки скриншота"
+        self.navigationItem.rightBarButtonItems = [shareButton, settingsButton]
         self.view.addSubview(self.scrollView)
         self.scrollView.addSubview(self.content.view)
         self.content.isUserInteractionEnabled = false
         self.content.clipsToBounds = true
         self.content.backgroundColor = self.data.theme.theme.chatList.backgroundColor
 
+        self.installBackground()
+    }
+
+    private func installBackground() {
         switch self.options.background {
         case .customColor:
             self.content.backgroundColor = shadowScreenshotUIColor(argb: self.options.customColorARGB)
@@ -210,12 +220,18 @@ private final class ShadowMessageScreenshotPreview: UIViewController {
         super.viewDidAppear(animated)
         guard !self.started else { return }
         self.started = true
+        self.beginRendering()
+    }
+
+    private func beginRendering() {
+        self.renderGeneration += 1
+        let generation = self.renderGeneration
         if self.options.background == .customImage && self.imageBackground == nil {
-            self.fail("Своя картинка не найдена. Выбери её в Кастомизации → Скриншоты сообщений.")
+            self.fail("Своя картинка не найдена. Выбери её в настройках скриншота.")
             return
         }
         guard self.prepareItems() else { return }
-        self.appendMessage(at: 0)
+        self.appendMessage(at: 0, generation: generation)
     }
 
     private func prepareItems() -> Bool {
@@ -227,7 +243,8 @@ private final class ShadowMessageScreenshotPreview: UIViewController {
             let author = self.author(of: message)
             let startsGroup = self.startsGroup(at: index, author: author)
             var rowOptions = self.options
-            rowOptions.showNames = self.options.showNames && startsGroup
+            let incoming = message.effectivelyIncoming(self.context.account.peerId)
+            rowOptions.showNames = self.options.showNames && startsGroup && (incoming ? self.options.showPeerNames : self.options.showOwnName)
 
             // Render-only copy. It does not touch Postbox, direction,
             // forwarding metadata, read status or message IDs.
@@ -253,12 +270,12 @@ private final class ShadowMessageScreenshotPreview: UIViewController {
         return true
     }
 
-    private func appendMessage(at index: Int) {
-        guard self.viewIfLoaded?.window != nil else { return }
+    private func appendMessage(at index: Int, generation: Int) {
+        guard generation == self.renderGeneration, self.viewIfLoaded?.window != nil else { return }
         guard index < self.messages.count else {
             self.contentHeight += 8.0
             self.ready = true
-            self.navigationItem.rightBarButtonItem?.isEnabled = true
+            self.shareButton?.isEnabled = true
             self.updateContentLayout()
             return
         }
@@ -276,19 +293,20 @@ private final class ShadowMessageScreenshotPreview: UIViewController {
         }
 
         var rowOptions = self.options
-        rowOptions.showNames = self.options.showNames && startsGroup
 
         // Match Telegram's canonical direction calculation instead of relying
         // only on the raw Incoming flag.
         let incoming = message.effectivelyIncoming(self.context.account.peerId)
-        let avatarWidth: CGFloat = self.options.showAvatars ? 42.0 : 0.0
+        rowOptions.showNames = self.options.showNames && startsGroup && (incoming ? self.options.showPeerNames : self.options.showOwnName)
+        let showAvatar = self.options.showAvatars && (incoming ? self.options.showPeerAvatars : self.options.showOwnAvatar)
+        let avatarWidth: CGFloat = showAvatar ? 42.0 : 0.0
         let item = self.preparedItems[index]
         let previousItem: ListViewItem? = index > 0 ? self.preparedItems[index - 1] : nil
         let nextItem: ListViewItem? = index + 1 < self.preparedItems.count ? self.preparedItems[index + 1] : nil
         let params = ListViewItemLayoutParams(width: self.width - avatarWidth - 8.0, leftInset: 0.0, rightInset: 0.0, availableHeight: 1000.0)
 
         item.nodeConfiguredForParams(async: { $0() }, params: params, synchronousLoads: true, previousItem: previousItem, nextItem: nextItem, completion: { [weak self] node, apply in
-            guard let self, self.viewIfLoaded?.window != nil else { return }
+            guard let self, generation == self.renderGeneration, self.viewIfLoaded?.window != nil else { return }
             apply().1(ListViewItemApply(isOnScreen: true))
             let rowTop = self.contentHeight
 
@@ -308,7 +326,7 @@ private final class ShadowMessageScreenshotPreview: UIViewController {
             }
 
             let headerHeight: CGFloat = header == nil ? 0.0 : 20.0
-            let height = max(endsGroup && self.options.showAvatars ? 32.0 : 1.0, node.contentSize.height + headerHeight)
+            let height = max(endsGroup && showAvatar ? 32.0 : 1.0, node.contentSize.height + headerHeight)
             guard ShadowMessageScreenshotSettings.renderScale(width: Double(self.width), height: Double(self.contentHeight + height + 20.0)) != nil else {
                 self.fail("Подборка слишком длинная. Выбери меньше сообщений.")
                 return
@@ -324,14 +342,14 @@ private final class ShadowMessageScreenshotPreview: UIViewController {
             node.isUserInteractionEnabled = false
             node.visibility = .visible(1.0, CGRect(origin: .zero, size: node.bounds.size))
             if !self.options.showTime { self.hideTime(in: node) }
-            if self.options.showAvatars && endsGroup {
+            if showAvatar && endsGroup {
                 self.appendAvatar(author: author, y: rowTop + height - 32.0, incoming: incoming)
             }
             self.contentHeight += height
             self.updateContentLayout()
 
             // Keep layout/render sequential and yield between messages.
-            DispatchQueue.main.async { [weak self] in self?.appendMessage(at: index + 1) }
+            DispatchQueue.main.async { [weak self] in self?.appendMessage(at: index + 1, generation: generation) }
         })
     }
 
@@ -366,13 +384,70 @@ private final class ShadowMessageScreenshotPreview: UIViewController {
 
     private func fail(_ text: String) {
         self.ready = false
-        self.navigationItem.rightBarButtonItem?.isEnabled = false
+        self.shareButton?.isEnabled = false
         let alert = UIAlertController(title: "Скриншот сообщений", message: text, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "ОК", style: .default))
         self.present(alert, animated: true)
     }
 
     @objc private func close() { self.dismiss(animated: true) }
+
+    @objc private func openSettings() {
+        let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
+        let sheet = ActionSheetController(presentationData: presentationData)
+        func title(_ text: String, visible: Bool) -> String {
+            return (visible ? "✓ " : "") + text
+        }
+        let options = self.options
+        let items: [ActionSheetItem] = [
+            ActionSheetButtonItem(title: title("Показывать своё имя", visible: options.showOwnName), action: { [weak self, weak sheet] in
+                sheet?.dismissAnimated()
+                self?.updateOptions { $0.showOwnName.toggle() }
+            }),
+            ActionSheetButtonItem(title: title("Показывать имена собеседников", visible: options.showPeerNames), action: { [weak self, weak sheet] in
+                sheet?.dismissAnimated()
+                self?.updateOptions { $0.showPeerNames.toggle() }
+            }),
+            ActionSheetButtonItem(title: title("Показывать свою аватарку", visible: options.showOwnAvatar), action: { [weak self, weak sheet] in
+                sheet?.dismissAnimated()
+                self?.updateOptions { $0.showOwnAvatar.toggle() }
+            }),
+            ActionSheetButtonItem(title: title("Показывать аватарки собеседников", visible: options.showPeerAvatars), action: { [weak self, weak sheet] in
+                sheet?.dismissAnimated()
+                self?.updateOptions { $0.showPeerAvatars.toggle() }
+            })
+        ]
+        sheet.setItemGroups([
+            ActionSheetItemGroup(items: items),
+            ActionSheetItemGroup(items: [ActionSheetButtonItem(title: presentationData.strings.Common_Cancel, action: { [weak sheet] in sheet?.dismissAnimated() })])
+        ])
+        self.present(sheet, animated: true)
+    }
+
+    private func updateOptions(_ f: @escaping (inout ShadowMessageScreenshotSettings) -> Void) {
+        f(&self.options)
+        self.preparedItems.removeAll()
+        self.contentHeight = 12.0
+        self.ready = false
+        self.shareButton?.isEnabled = false
+        self.background = nil
+        self.imageBackground = nil
+        for node in self.content.subnodes ?? [] {
+            node.removeFromSupernode()
+        }
+        for view in self.content.view.subviews {
+            view.removeFromSuperview()
+        }
+        self.installBackground()
+        self.updateContentLayout()
+        self.beginRendering()
+        let value = self.options
+        let _ = updateAyuGramSettings(postbox: self.context.account.postbox) { settings in
+            var settings = settings
+            settings.messageScreenshot = value
+            return settings
+        }.start()
+    }
 
     @objc private func share() {
         guard self.ready, let scale = ShadowMessageScreenshotSettings.renderScale(width: Double(self.width), height: Double(self.contentHeight)) else { return }
@@ -388,7 +463,7 @@ private final class ShadowMessageScreenshotPreview: UIViewController {
             self.content.layer.render(in: renderer.cgContext)
         }
         let share = UIActivityViewController(activityItems: [image], applicationActivities: nil)
-        share.popoverPresentationController?.barButtonItem = self.navigationItem.rightBarButtonItem
+        share.popoverPresentationController?.barButtonItem = self.shareButton
         self.present(share, animated: true)
     }
 }
