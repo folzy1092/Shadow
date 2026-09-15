@@ -96,6 +96,10 @@ struct CameraState: Equatable {
     func updatedIsViewOnceEnabled(_ isViewOnceEnabled: Bool) -> CameraState {
         return CameraState(position: self.position, flashMode: self.flashMode, flashModeDidChange: self.flashModeDidChange, flashTint: self.flashTint, flashTintSize: self.flashTintSize, recording: self.recording, duration: self.duration, isDualCameraEnabled: self.isDualCameraEnabled, isViewOnceEnabled: isViewOnceEnabled)
     }
+
+    func updatedIsDualCameraEnabled(_ isDualCameraEnabled: Bool) -> CameraState {
+        return CameraState(position: self.position, flashMode: self.flashMode, flashModeDidChange: self.flashModeDidChange, flashTint: self.flashTint, flashTintSize: self.flashTintSize, recording: self.recording, duration: self.duration, isDualCameraEnabled: isDualCameraEnabled, isViewOnceEnabled: self.isViewOnceEnabled)
+    }
 }
 
 struct PreviewState: Equatable {
@@ -503,6 +507,7 @@ private final class VideoMessageCameraScreenComponent: CombinedComponent {
                         ))
                     )
                     controller.updateCameraState({ $0.updatedRecording(.none) }, transition: .spring(duration: 0.4))
+                    controller.restoreRoundVideoDefaultCamera()
                 }
             }))
             
@@ -1022,10 +1027,9 @@ public class VideoMessageCameraScreen: ViewController {
             self.previewContainerContentView.clipsToBounds = true
             self.previewContainerView.addSubview(self.previewContainerContentView)
                         
-            // A 0.5× round video requires a single virtual Dual/Triple
-            // capture device. The simultaneous-camera mode only exposes the
-            // regular wide module, so opt out of it while this feature is on.
-            let isDualCameraEnabled = Camera.isDualCameraSupported(forRoundVideo: true) && !ayuGramSettingsCurrent.roundVideoUltraWide
+            // Keep Telegram's original simultaneous-camera setup. It gives
+            // the normal 1×+ zoom path exactly the same behavior as before.
+            let isDualCameraEnabled = Camera.isDualCameraSupported(forRoundVideo: true)
             // AyuGram: optionally start round-video capture on the rear camera.
             let isFrontPosition = !ayuGramSettingsCurrent.roundVideoUseBackCamera
             
@@ -1195,13 +1199,16 @@ public class VideoMessageCameraScreen: ViewController {
         }
         
         @objc private func handlePinch(_ gestureRecognizer: UIPinchGestureRecognizer) {
-            guard let controller = self.controller, self.isRecording else {
+            guard let camera = self.camera else {
                 return
             }
             switch gestureRecognizer.state {
             case .changed:
-                controller.updateRoundVideoZoom(controller.roundVideoZoom * gestureRecognizer.scale)
+                // Preserve Telegram's original zoom handling above 1×.
+                camera.setZoomDelta(gestureRecognizer.scale)
                 gestureRecognizer.scale = 1.0
+            case .ended, .cancelled:
+                camera.rampZoom(1.0, rate: 8.0)
             default:
                 break
             }
@@ -1225,12 +1232,15 @@ public class VideoMessageCameraScreen: ViewController {
             }
             switch gestureRecognizer.state {
             case .began:
-                self.recordingZoomStart = controller.roundVideoZoom
+                self.recordingZoomStart = controller.isRoundVideoUltraWideActive ? controller.roundVideoZoom : 1.0
             case .changed:
                 let start = self.recordingZoomStart ?? controller.roundVideoZoom
-                // 130 pt down from 1× reaches 0.5×; the inverse motion zooms in.
+                // This gesture only extends Telegram's 1× minimum. Above it,
+                // the standard camera zoom remains completely untouched.
                 let target = start - gestureRecognizer.translation(in: self.view).y / 260.0
-                controller.updateRoundVideoZoom(target)
+                if controller.isRoundVideoUltraWideActive || target < 1.0 {
+                    controller.updateRoundVideoZoom(target)
+                }
             case .ended, .cancelled, .failed:
                 self.recordingZoomStart = nil
             default:
@@ -1776,6 +1786,8 @@ public class VideoMessageCameraScreen: ViewController {
     
     private let hapticFeedback = HapticFeedback()
     fileprivate var roundVideoZoom: CGFloat = 1.0
+    fileprivate private(set) var isRoundVideoUltraWideActive = false
+    private var roundVideoUltraWideReplacedDualCamera = false
     fileprivate var videoMessageSpeed: Double = 1.0
     
     private var validLayout: ContainerViewLayout?
@@ -1812,13 +1824,44 @@ public class VideoMessageCameraScreen: ViewController {
         self.node.requestUpdateLayout(transition: .spring(duration: 0.25))
     }
 
-    // The back-camera context is a virtual Dual/Triple device on supported
-    // iPhones. A value below 1× selects the physical ultra-wide module rather
-    // than digitally shrinking the regular camera image.
+    // Keep the original dual-camera pipeline for the entire normal range.
+    // Only crossing below 1× temporarily changes to the virtual back camera,
+    // where iOS can select the physical ultra-wide module.
     fileprivate func updateRoundVideoZoom(_ value: CGFloat) {
-        let minimum: CGFloat = ayuGramSettingsCurrent.roundVideoUltraWide && self.cameraState.position == .back ? 0.5 : 1.0
-        self.roundVideoZoom = min(8.0, max(minimum, value))
-        self.camera?.rampZoom(self.roundVideoZoom, rate: 16.0)
+        guard ayuGramSettingsCurrent.roundVideoUltraWide, self.cameraState.position == .back else {
+            self.restoreRoundVideoDefaultCamera()
+            return
+        }
+
+        if value < 1.0 {
+            self.roundVideoZoom = max(0.5, value)
+            if !self.isRoundVideoUltraWideActive {
+                self.isRoundVideoUltraWideActive = true
+                self.roundVideoUltraWideReplacedDualCamera = self.cameraState.isDualCameraEnabled
+                if self.roundVideoUltraWideReplacedDualCamera {
+                    self.camera?.setDualCameraEnabled(false)
+                    self.updateCameraState({ $0.updatedIsDualCameraEnabled(false) }, transition: .immediate)
+                }
+            }
+            self.camera?.rampZoom(self.roundVideoZoom, rate: 8.0)
+        } else {
+            self.restoreRoundVideoDefaultCamera()
+        }
+    }
+
+    fileprivate func restoreRoundVideoDefaultCamera() {
+        guard self.isRoundVideoUltraWideActive else {
+            return
+        }
+        self.isRoundVideoUltraWideActive = false
+        self.roundVideoZoom = 1.0
+        if self.roundVideoUltraWideReplacedDualCamera {
+            self.roundVideoUltraWideReplacedDualCamera = false
+            self.camera?.setDualCameraEnabled(true)
+            self.updateCameraState({ $0.updatedIsDualCameraEnabled(true) }, transition: .immediate)
+        } else {
+            self.camera?.rampZoom(1.0, rate: 8.0)
+        }
     }
     
     public final class RecordingStatus {
