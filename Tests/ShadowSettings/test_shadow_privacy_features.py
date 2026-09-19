@@ -145,6 +145,17 @@ class ShadowPrivacyFeatures(unittest.TestCase):
         self.assertIn("messagesRemoved", media)
         self.assertIn("max(current.ghostLastSeenTimestamp", transfer)
 
+    def test_history_range_trim_restores_already_kept_deleted_messages(self):
+        anti_delete = (CORE / "AyuGram/AyuGramAntiDelete.swift").read_text()
+        state = (ROOT / "submodules/TelegramCore/Sources/State/AccountStateManagementUtils.swift").read_text()
+
+        self.assertIn("func ayuGramKeptDeletedMessagesInRange", anti_delete)
+        self.assertIn("message.attributes.contains(where: { $0 is DeletedMessageAttribute })", anti_delete)
+        trim = state.split("case let .UpdateMinAvailableMessage(id):", 1)[1].split("case let .UpdatePeerChatInclusion", 1)[0]
+        self.assertIn("ayuGramKeptDeletedMessagesInRange", trim)
+        self.assertIn("transaction.addMessages(keptDeletedMessages, location: .Random)", trim)
+        self.assertIn("keptResourceIdSet.contains", trim)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -4490,10 +4490,31 @@ func replayFinalState(
                 if let message = transaction.getMessage(id) {
                     updatePeerChatInclusionWithMinTimestamp(transaction: transaction, id: id.peerId, minTimestamp: message.timestamp, forceRootGroupIfNotExists: false)
                 }
+                // A range trim often follows a DeleteMessages update. Restore only
+                // messages that anti-delete already marked, otherwise the second
+                // update makes a visible ghost and its archive entry vanish.
+                let keptDeletedMessages = ayuGramKeptDeletedMessagesInRange(
+                    transaction: transaction,
+                    peerId: id.peerId,
+                    namespace: id.namespace,
+                    minId: 1,
+                    maxId: id.id
+                )
+                var keptResourceIds: [MediaResourceId] = []
+                for message in keptDeletedMessages {
+                    for media in message.media {
+                        addMessageMediaResourceIdsToRemove(media: media, resourceIds: &keptResourceIds)
+                    }
+                }
+                let keptResourceIdSet = Set(keptResourceIds)
                 var resourceIds: [MediaResourceId] = []
                 transaction.deleteMessagesInRange(peerId: id.peerId, namespace: id.namespace, minId: 1, maxId: id.id, forEachMedia: { media in
                     addMessageMediaResourceIdsToRemove(media: media, resourceIds: &resourceIds)
                 })
+                if !keptDeletedMessages.isEmpty {
+                    let _ = transaction.addMessages(keptDeletedMessages, location: .Random)
+                }
+                resourceIds.removeAll(where: { keptResourceIdSet.contains($0) })
                 if !resourceIds.isEmpty {
                     let _ = mediaBox.removeCachedResources(Array(Set(resourceIds)), force: true).start()
                 }

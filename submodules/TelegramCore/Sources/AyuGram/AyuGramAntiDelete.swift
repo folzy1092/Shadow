@@ -79,6 +79,33 @@ func ayuGramMarkMessagesDeleted(transaction: Transaction, mediaBox: MediaBox, id
     return excludedIds
 }
 
+
+// A later `UpdateMinAvailableMessage` can arrive right after an ordinary
+// delete update. Telegram uses it to trim a history range and its stock path
+// would otherwise remove the same locally-kept ghost a second time. Only
+// restore messages already marked by anti-delete; this is not a history
+// backfill and never resurrects ordinary old messages.
+func ayuGramKeptDeletedMessagesInRange(
+    transaction: Transaction,
+    peerId: PeerId,
+    namespace: MessageId.Namespace,
+    minId: MessageId.Id,
+    maxId: MessageId.Id
+) -> [Message] {
+    let refs = ayuForkStore(transaction: transaction).keptDeleted
+    var messages: [Message] = []
+    for ref in refs where ref.peer == peerId.toInt64() && ref.namespace == namespace && ref.id >= minId && ref.id <= maxId {
+        guard let message = transaction.getMessage(ref.messageId) else {
+            continue
+        }
+        guard message.attributes.contains(where: { $0 is DeletedMessageAttribute }) else {
+            continue
+        }
+        messages.append(message)
+    }
+    return messages
+}
+
 // A remote "clear history" in a secret chat bypasses the cloud update path.
 // Telegram stores both directions in the shared SecretIncoming message
 // namespace and distinguishes them with the Incoming flag. Preserve incoming
