@@ -91,9 +91,9 @@ func ayuGramKeptDeletedMessagesInRange(
     namespace: MessageId.Namespace,
     minId: MessageId.Id,
     maxId: MessageId.Id
-) -> [Message] {
+) -> [StoreMessage] {
     let refs = ayuForkStore(transaction: transaction).keptDeleted
-    var messages: [Message] = []
+    var messages: [StoreMessage] = []
     for ref in refs where ref.peer == peerId.toInt64() && ref.namespace == namespace && ref.id >= minId && ref.id <= maxId {
         guard let message = transaction.getMessage(ref.messageId) else {
             continue
@@ -101,7 +101,26 @@ func ayuGramKeptDeletedMessagesInRange(
         guard message.attributes.contains(where: { $0 is DeletedMessageAttribute }) else {
             continue
         }
-        messages.append(message)
+        let storeForwardInfo = message.forwardInfo.flatMap { info in
+            StoreMessageForwardInfo(authorId: info.author?.id, sourceId: info.source?.id, sourceMessageId: info.sourceMessageId, date: info.date, authorSignature: info.authorSignature, psaType: info.psaType, flags: info.flags)
+        }
+        messages.append(StoreMessage(
+            id: message.id,
+            customStableId: nil,
+            globallyUniqueId: message.globallyUniqueId,
+            groupingKey: message.groupingKey,
+            threadId: message.threadId,
+            timestamp: message.timestamp,
+            flags: StoreMessageFlags(message.flags),
+            tags: message.tags,
+            globalTags: message.globalTags,
+            localTags: message.localTags,
+            forwardInfo: storeForwardInfo,
+            authorId: message.author?.id,
+            text: message.text,
+            attributes: message.attributes,
+            media: message.media
+        ))
     }
     return messages
 }
