@@ -70,6 +70,11 @@ private enum ScreenshotSettingEntry: ItemListNodeEntry {
     case names(Bool)
     case badges(Bool)
     case time(Bool)
+    case reactions(Bool)
+    case ownName(Bool)
+    case peerNames(Bool)
+    case ownAvatar(Bool)
+    case peerAvatars(Bool)
     case info
 
     var section: ItemListSectionId { return 0 }
@@ -84,7 +89,12 @@ private enum ScreenshotSettingEntry: ItemListNodeEntry {
         case .names: return 5
         case .badges: return 6
         case .time: return 7
-        case .info: return 8
+        case .reactions: return 8
+        case .ownName: return 9
+        case .peerNames: return 10
+        case .ownAvatar: return 11
+        case .peerAvatars: return 12
+        case .info: return 13
         }
     }
 
@@ -119,6 +129,26 @@ private enum ScreenshotSettingEntry: ItemListNodeEntry {
             title = "Время и статус сообщения"
             value = flag
             path = \.showTime
+        case let .reactions(flag):
+            title = "Реакции"
+            value = flag
+            path = \.showReactions
+        case let .ownName(flag):
+            title = "Своё имя"
+            value = flag
+            path = \.showOwnName
+        case let .peerNames(flag):
+            title = "Имена собеседников"
+            value = flag
+            path = \.showPeerNames
+        case let .ownAvatar(flag):
+            title = "Своя аватарка"
+            value = flag
+            path = \.showOwnAvatar
+        case let .peerAvatars(flag):
+            title = "Аватарки собеседников"
+            value = flag
+            path = \.showPeerAvatars
         case let .background(background):
             return ItemListDisclosureItem(
                 presentationData: presentationData,
@@ -346,6 +376,11 @@ func shadowMessageScreenshotSettingsController(context: AccountContext) -> ViewC
             .names(options.showNames),
             .badges(options.showBadges),
             .time(options.showTime),
+            .reactions(options.showReactions),
+            .ownName(options.showOwnName),
+            .peerNames(options.showPeerNames),
+            .ownAvatar(options.showOwnAvatar),
+            .peerAvatars(options.showPeerAvatars),
             .info
         ]
         let presentation = ItemListPresentationData(data)

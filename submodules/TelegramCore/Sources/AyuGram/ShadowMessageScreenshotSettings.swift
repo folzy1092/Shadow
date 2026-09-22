@@ -23,6 +23,11 @@ public struct ShadowMessageScreenshotSettings: Codable, Equatable {
     public var showNames: Bool = true
     public var showBadges: Bool = true
     public var showTime: Bool = true
+    public var showReactions: Bool = true
+    public var showOwnName: Bool = true
+    public var showPeerNames: Bool = true
+    public var showOwnAvatar: Bool = true
+    public var showPeerAvatars: Bool = true
 
     public init() {
     }
@@ -35,6 +40,11 @@ public struct ShadowMessageScreenshotSettings: Codable, Equatable {
         case showNames
         case showBadges
         case showTime
+        case showReactions
+        case showOwnName
+        case showPeerNames
+        case showOwnAvatar
+        case showPeerAvatars
     }
 
     public init(from decoder: Decoder) throws {
@@ -71,6 +81,11 @@ public struct ShadowMessageScreenshotSettings: Codable, Equatable {
         self.showNames = try c.decodeIfPresent(Bool.self, forKey: .showNames) ?? true
         self.showBadges = try c.decodeIfPresent(Bool.self, forKey: .showBadges) ?? true
         self.showTime = try c.decodeIfPresent(Bool.self, forKey: .showTime) ?? true
+        self.showReactions = try c.decodeIfPresent(Bool.self, forKey: .showReactions) ?? true
+        self.showOwnName = try c.decodeIfPresent(Bool.self, forKey: .showOwnName) ?? true
+        self.showPeerNames = try c.decodeIfPresent(Bool.self, forKey: .showPeerNames) ?? true
+        self.showOwnAvatar = try c.decodeIfPresent(Bool.self, forKey: .showOwnAvatar) ?? true
+        self.showPeerAvatars = try c.decodeIfPresent(Bool.self, forKey: .showPeerAvatars) ?? true
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -87,6 +102,11 @@ public struct ShadowMessageScreenshotSettings: Codable, Equatable {
         try c.encode(self.showNames, forKey: .showNames)
         try c.encode(self.showBadges, forKey: .showBadges)
         try c.encode(self.showTime, forKey: .showTime)
+        try c.encode(self.showReactions, forKey: .showReactions)
+        try c.encode(self.showOwnName, forKey: .showOwnName)
+        try c.encode(self.showPeerNames, forKey: .showPeerNames)
+        try c.encode(self.showOwnAvatar, forKey: .showOwnAvatar)
+        try c.encode(self.showPeerAvatars, forKey: .showPeerAvatars)
     }
 
     // Fixed, account-local path. Never accept a path from an imported settings file.

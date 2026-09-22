@@ -79,12 +79,19 @@ class MessageScreenshotContracts(unittest.TestCase):
         source = (ROOT / 'submodules/TelegramUI/Sources/Chat/ChatControllerMessageScreenshot.swift').read_text()
         self.assertIn('self.context.engine.stickers.availableReactions()', source)
         self.assertIn('availableReactions: self.availableReactions', source)
+        self.assertIn('gearshape', source)
+        self.assertIn('Показывать реакции', source)
         self.assertIn('accountPeer: self.accountPeer?._asPeer()', source)
         self.assertNotIn('availableReactions: nil, accountPeer: nil', source)
 
         footer = (ROOT / 'submodules/TelegramUI/Components/Chat/ChatMessageReactionsFooterContentNode/Sources/ChatMessageReactionsFooterContentNode.swift').read_text()
         self.assertIn('message.associatedMedia[mediaId] as? TelegramMediaFile', footer)
         self.assertIn('centerAnimation = file', footer)
+        bubble = (ROOT / 'submodules/TelegramUI/Components/Chat/ChatMessageBubbleItemNode/Sources/ChatMessageBubbleItemNode.swift').read_text()
+        self.assertIn('shadowScreenshot?.showReactions != false', bubble)
+        settings = (ROOT / 'submodules/TelegramCore/Sources/AyuGram/ShadowMessageScreenshotSettings.swift').read_text()
+        for key in ('showReactions', 'showOwnName', 'showPeerNames', 'showOwnAvatar', 'showPeerAvatars'):
+            self.assertIn(key, settings)
 
     def test_camera_is_adjacent_to_incognito_and_reacts_to_setting(self):
         source = (ROOT / 'submodules/TelegramUI/Components/Chat/ChatMessageSelectionInputPanelNode/Sources/ChatMessageSelectionInputPanelNode.swift').read_text()

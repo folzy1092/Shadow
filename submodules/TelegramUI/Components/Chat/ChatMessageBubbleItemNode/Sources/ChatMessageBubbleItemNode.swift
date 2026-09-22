@@ -3690,7 +3690,8 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         }
         
         var reactionButtonsSizeAndApply: (CGSize, (ListViewItemUpdateAnimation) -> ChatMessageReactionButtonsNode)?
-        if let reactionButtonsFinalize = reactionButtonsFinalize {
+        if let reactionButtonsFinalize = reactionButtonsFinalize,
+           item.presentationData.shadowScreenshot?.showReactions != false {
             var maxContentWidth = maxContentWidth
             if hasInstantVideo {
                 maxContentWidth = min(310.0, baseWidth - 84.0)
