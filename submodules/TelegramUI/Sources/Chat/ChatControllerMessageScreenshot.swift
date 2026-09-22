@@ -248,7 +248,19 @@ private final class ShadowMessageScreenshotPreview: UIViewController {
 
             // Render-only copy. It does not touch Postbox, direction,
             // forwarding metadata, read status or message IDs.
-            let renderMessage = message.author == nil ? (author.map { message.withUpdatedAuthor($0._asPeer()) } ?? message) : message
+            var renderMessage = message.author == nil ? (author.map { message.withUpdatedAuthor($0._asPeer()) } ?? message) : message
+            if !self.options.showReactions {
+                // The preview template builds native content before it receives
+                // shadowScreenshot options. Remove every reaction source on this
+                // render-only copy so inline, footer and custom reactions all vanish.
+                renderMessage = renderMessage.withUpdatedAttributes(
+                    renderMessage.attributes.filter {
+                        !($0 is ReactionsMessageAttribute ||
+                          $0 is PendingReactionsMessageAttribute ||
+                          $0 is PendingStarsReactionsMessageAttribute)
+                    }
+                )
+            }
             guard let template = self.context.sharedContext.makeChatMessagePreviewItem(context: self.context, messages: [renderMessage], theme: self.messageTheme, strings: self.data.strings, wallpaper: wallpaper, fontSize: self.data.fontSize, chatBubbleCorners: self.data.chatBubbleCorners, dateTimeFormat: self.data.dateTimeFormat, nameOrder: self.data.nameDisplayOrder, forcedResourceStatus: nil, tapMessage: nil, clickThroughMessage: nil, backgroundNode: self.background, availableReactions: self.availableReactions, accountPeer: self.accountPeer?._asPeer(), isCentered: false, isPreview: false, isStandalone: true, rank: nil, rankRole: nil) as? ChatMessageItemImpl else {
                 self.fail("Не удалось подготовить сообщение.")
                 return false
@@ -393,52 +405,23 @@ private final class ShadowMessageScreenshotPreview: UIViewController {
     @objc private func close() { self.dismiss(animated: true) }
 
     @objc private func openSettings() {
-        let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
-        let sheet = ActionSheetController(presentationData: presentationData)
-        func title(_ text: String, visible: Bool) -> String {
-            return (visible ? "✓ " : "") + text
+        let menu = UIAlertController(title: "Настройки скриншота", message: nil, preferredStyle: .actionSheet)
+        func addToggle(_ title: String, visible: Bool, change: @escaping (inout ShadowMessageScreenshotSettings) -> Void) {
+            menu.addAction(UIAlertAction(title: (visible ? "✓ " : "") + title, style: .default, handler: { [weak self] _ in
+                self?.updateOptions(change)
+            }))
         }
         let options = self.options
-        let items: [ActionSheetItem] = [
-            ActionSheetButtonItem(title: title("Показывать реакции", visible: options.showReactions), action: { [weak self, weak sheet] in
-                sheet?.dismissAnimated()
-                self?.updateOptions { $0.showReactions.toggle() }
-            }),
-            ActionSheetButtonItem(title: title("Показывать своё имя", visible: options.showOwnName), action: { [weak self, weak sheet] in
-                sheet?.dismissAnimated()
-                self?.updateOptions { $0.showOwnName.toggle() }
-            }),
-            ActionSheetButtonItem(title: title("Показывать имена собеседников", visible: options.showPeerNames), action: { [weak self, weak sheet] in
-                sheet?.dismissAnimated()
-                self?.updateOptions { $0.showPeerNames.toggle() }
-            }),
-            ActionSheetButtonItem(title: title("Показывать свою аватарку", visible: options.showOwnAvatar), action: { [weak self, weak sheet] in
-                sheet?.dismissAnimated()
-                self?.updateOptions { $0.showOwnAvatar.toggle() }
-            }),
-            ActionSheetButtonItem(title: title("Показывать аватарки собеседников", visible: options.showPeerAvatars), action: { [weak self, weak sheet] in
-                sheet?.dismissAnimated()
-                self?.updateOptions { $0.showPeerAvatars.toggle() }
-            }),
-            ActionSheetButtonItem(title: title("Показывать значки рядом с именем", visible: options.showBadges), action: { [weak self, weak sheet] in
-                sheet?.dismissAnimated()
-                self?.updateOptions { $0.showBadges.toggle() }
-            }),
-            ActionSheetButtonItem(title: title("Показывать время и статус", visible: options.showTime), action: { [weak self, weak sheet] in
-                sheet?.dismissAnimated()
-                self?.updateOptions { $0.showTime.toggle() }
-            })
-        ]
-        sheet.setItemGroups([
-            ActionSheetItemGroup(items: items),
-            ActionSheetItemGroup(items: [ActionSheetButtonItem(title: presentationData.strings.Common_Cancel, action: { [weak sheet] in sheet?.dismissAnimated() })])
-        ])
-        // ActionSheetController is a Telegram Display controller. UIKit presentation
-        // creates the dimmed sheet but never installs its ActionSheet item nodes.
-        guard let rootController = self.view.window?.rootViewController as? ViewController else {
-            return
-        }
-        rootController.present(sheet, in: .window(.root))
+        addToggle("Показывать реакции", visible: options.showReactions) { $0.showReactions.toggle() }
+        addToggle("Показывать своё имя", visible: options.showOwnName) { $0.showOwnName.toggle() }
+        addToggle("Показывать имена собеседников", visible: options.showPeerNames) { $0.showPeerNames.toggle() }
+        addToggle("Показывать свою аватарку", visible: options.showOwnAvatar) { $0.showOwnAvatar.toggle() }
+        addToggle("Показывать аватарки собеседников", visible: options.showPeerAvatars) { $0.showPeerAvatars.toggle() }
+        addToggle("Показывать значки рядом с именем", visible: options.showBadges) { $0.showBadges.toggle() }
+        addToggle("Показывать время и статус", visible: options.showTime) { $0.showTime.toggle() }
+        menu.addAction(UIAlertAction(title: "Отмена", style: .cancel))
+        menu.popoverPresentationController?.barButtonItem = self.navigationItem.rightBarButtonItems?.last
+        self.present(menu, animated: true)
     }
 
     private func updateOptions(_ f: @escaping (inout ShadowMessageScreenshotSettings) -> Void) {

@@ -81,7 +81,11 @@ class MessageScreenshotContracts(unittest.TestCase):
         self.assertIn('availableReactions: self.availableReactions', source)
         self.assertIn('gearshape', source)
         self.assertIn('Показывать реакции', source)
-        self.assertIn('rootController.present(sheet, in: .window(.root))', source)
+        self.assertIn('self.present(menu, animated: true)', source)
+        self.assertIn('menu.popoverPresentationController?.barButtonItem', source)
+        for reaction_attribute in ('ReactionsMessageAttribute', 'PendingReactionsMessageAttribute', 'PendingStarsReactionsMessageAttribute'):
+            self.assertIn('$0 is ' + reaction_attribute, source)
+        self.assertIn('renderMessage.withUpdatedAttributes(', source)
         self.assertIn('accountPeer: self.accountPeer?._asPeer()', source)
         self.assertNotIn('availableReactions: nil, accountPeer: nil', source)
 
