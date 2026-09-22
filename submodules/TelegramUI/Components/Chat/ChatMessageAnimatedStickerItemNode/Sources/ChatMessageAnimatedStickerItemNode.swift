@@ -1436,7 +1436,7 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
                 reactions = mergedMessageReactions(attributes: item.message.attributes, isTags: item.message.areReactionsTags(accountPeerId: item.context.account.peerId)) ?? ReactionsMessageAttribute(canViewList: false, isTags: false, reactions: [], recentPeers: [], topPeers: [])
             }
             var reactionButtonsFinalize: ((CGFloat) -> (CGSize, (_ animation: ListViewItemUpdateAnimation) -> ChatMessageReactionButtonsNode))?
-            if !reactions.reactions.isEmpty {
+            if !reactions.reactions.isEmpty && item.presentationData.shadowScreenshot?.showReactions != false {
                 let totalInset = params.leftInset + layoutConstants.bubble.edgeInset * 2.0 + avatarInset + layoutConstants.bubble.contentInsets.left * 2.0 + params.rightInset
                 
                 let maxReactionsWidth = params.width - totalInset

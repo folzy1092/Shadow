@@ -34,6 +34,7 @@ class ScreenshotLayoutContracts(unittest.TestCase):
         self.assertIn('rowOptions.showNames = self.options.showNames && startsGroup', source)
         self.assertIn('let endsGroup = self.endsGroup(at: index)', source)
         self.assertIn('self.options.showAvatars && endsGroup', source)
+        self.assertIn('rootController.present(sheet, in: .window(.root))', source)
         self.assertIn('previous.threadId', source)
         self.assertIn('startsGroup ? 10.0 : 2.0', source)
         self.assertIn('if !self.options.showTime { self.hideTime(in: node) }', source)

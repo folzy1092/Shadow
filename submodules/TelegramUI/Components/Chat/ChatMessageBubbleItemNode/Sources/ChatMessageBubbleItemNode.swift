@@ -126,7 +126,8 @@ private func contentNodeMessagesAndClassesForItem(_ item: ChatMessageItem) -> ([
     var previousItemIsFile = false
     var hasFiles = false
     
-    var needReactions = true
+    let hideScreenshotReactions = item.presentationData.shadowScreenshot?.showReactions == false
+    var needReactions = !hideScreenshotReactions
     
     let hideAllAdditionalInfo = item.presentationData.isPreview
     
@@ -478,7 +479,7 @@ private func contentNodeMessagesAndClassesForItem(_ item: ChatMessageItem) -> ([
         }
     }
     
-    if !reactionsAreInline && !hideAllAdditionalInfo, let reactionsAttribute = mergedMessageReactions(attributes: firstMessage.attributes, isTags: firstMessage.areReactionsTags(accountPeerId: item.context.account.peerId)), !reactionsAttribute.reactions.isEmpty {
+    if !reactionsAreInline && !hideAllAdditionalInfo && !hideScreenshotReactions, let reactionsAttribute = mergedMessageReactions(attributes: firstMessage.attributes, isTags: firstMessage.areReactionsTags(accountPeerId: item.context.account.peerId)), !reactionsAttribute.reactions.isEmpty {
         if result.last?.1 == ChatMessageTextBubbleContentNode.self {
         } else {
             if result.last?.1 == ChatMessagePollBubbleContentNode.self ||
@@ -2382,7 +2383,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         } else {
             bubbleReactions = ReactionsMessageAttribute(canViewList: false, isTags: false, reactions: [], recentPeers: [], topPeers: [])
         }
-        if !bubbleReactions.reactions.isEmpty && !item.presentationData.isPreview {
+        if !bubbleReactions.reactions.isEmpty && !item.presentationData.isPreview && item.presentationData.shadowScreenshot?.showReactions != false {
             if bubbleIncoming {
                 bottomNodeMergeStatus = .Left
             } else {

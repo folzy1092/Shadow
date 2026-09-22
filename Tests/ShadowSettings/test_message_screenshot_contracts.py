@@ -81,6 +81,7 @@ class MessageScreenshotContracts(unittest.TestCase):
         self.assertIn('availableReactions: self.availableReactions', source)
         self.assertIn('gearshape', source)
         self.assertIn('Показывать реакции', source)
+        self.assertIn('rootController.present(sheet, in: .window(.root))', source)
         self.assertIn('accountPeer: self.accountPeer?._asPeer()', source)
         self.assertNotIn('availableReactions: nil, accountPeer: nil', source)
 
@@ -88,6 +89,8 @@ class MessageScreenshotContracts(unittest.TestCase):
         self.assertIn('message.associatedMedia[mediaId] as? TelegramMediaFile', footer)
         self.assertIn('centerAnimation = file', footer)
         bubble = (ROOT / 'submodules/TelegramUI/Components/Chat/ChatMessageBubbleItemNode/Sources/ChatMessageBubbleItemNode.swift').read_text()
+        self.assertIn('hideScreenshotReactions', bubble)
+        self.assertIn('!hideScreenshotReactions, let reactionsAttribute', bubble)
         self.assertIn('shadowScreenshot?.showReactions != false', bubble)
         settings = (ROOT / 'submodules/TelegramCore/Sources/AyuGram/ShadowMessageScreenshotSettings.swift').read_text()
         for key in ('showReactions', 'showOwnName', 'showPeerNames', 'showOwnAvatar', 'showPeerAvatars'):

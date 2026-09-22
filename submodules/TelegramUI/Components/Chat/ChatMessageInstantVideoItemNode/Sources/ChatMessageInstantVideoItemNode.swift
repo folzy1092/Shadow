@@ -611,7 +611,7 @@ public class ChatMessageInstantVideoItemNode: ChatMessageItemView, ASGestureReco
             }
             
             var reactionButtonsFinalize: ((CGFloat) -> (CGSize, (_ animation: ListViewItemUpdateAnimation) -> ChatMessageReactionButtonsNode))?
-            if !reactions.reactions.isEmpty {
+            if !reactions.reactions.isEmpty && item.presentationData.shadowScreenshot?.showReactions != false {
                 let totalInset = params.leftInset + layoutConstants.bubble.edgeInset * 2.0 + avatarInset + layoutConstants.bubble.contentInsets.left + params.rightInset + layoutConstants.bubble.contentInsets.right
                 
                 let maxReactionsWidth = params.width - totalInset - 8.0
