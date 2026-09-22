@@ -33,6 +33,39 @@ struct ChatHistoryEntriesForViewState {
     }
 }
 
+
+// Local filtering is a rendering transformation. The replacement must not keep
+// forwarding metadata, media attributes, grouped-media state, or media links:
+// message nodes can otherwise select a video/forward layout for an empty body.
+private func shadowFilteredPlaceholder(_ message: Message) -> Message {
+    return Message(
+        stableId: message.stableId,
+        stableVersion: message.stableVersion,
+        id: message.id,
+        globallyUniqueId: message.globallyUniqueId,
+        groupingKey: nil,
+        groupInfo: nil,
+        threadId: message.threadId,
+        timestamp: message.timestamp,
+        flags: message.flags,
+        tags: message.tags,
+        globalTags: message.globalTags,
+        localTags: message.localTags,
+        customTags: message.customTags,
+        forwardInfo: nil,
+        author: message.author,
+        text: "Скрыто локальным фильтром",
+        attributes: [],
+        media: [],
+        peers: message.peers,
+        associatedMessages: SimpleDictionary<MessageId, Message>(),
+        associatedMessageIds: [],
+        associatedMedia: [:],
+        associatedThreadInfo: nil,
+        associatedStories: [:]
+    )
+}
+
 func chatHistoryEntriesForView(
     currentState: ChatHistoryEntriesForViewState,
     context: AccountContext,
@@ -859,7 +892,7 @@ func chatHistoryEntriesForView(
             switch entry {
             case let .MessageEntry(message, presentation, isRead, location, selection, attributes):
                 guard shadowSettings.matchesMessageFilter(text: message.text) else { return [entry] }
-                let placeholder = message.withUpdatedText("Скрыто локальным фильтром").withUpdatedMedia([])
+                let placeholder = shadowFilteredPlaceholder(message)
                 return [.MessageEntry(placeholder, presentation, isRead, location, selection, attributes)]
             case let .MessageGroupEntry(_, messages, presentation):
                 // Telegram renders an album as several separate bubbles. Keeping
@@ -871,7 +904,7 @@ func chatHistoryEntriesForView(
                     return [entry]
                 }
                 let (message, isRead, selection, attributes, location) = hiddenItem
-                let placeholder = message.withUpdatedText("Скрыто локальным фильтром").withUpdatedMedia([])
+                let placeholder = shadowFilteredPlaceholder(message)
                 return [.MessageEntry(placeholder, presentation, isRead, location, selection, attributes)]
             default:
                 return [entry]

@@ -91,9 +91,12 @@ class ShadowPrivacyFeatures(unittest.TestCase):
         source = (UI / "Sources/ChatHistoryEntriesForView.swift").read_text()
         block = source.split("case let .MessageGroupEntry(_, messages, presentation):", 1)[1].split("case let .MessageEntry", 1)[0]
         self.assertIn("guard let hiddenItem = messages.first", block)
-        self.assertIn('withUpdatedText("Скрыто локальным фильтром").withUpdatedMedia([])', block)
+        self.assertIn("shadowFilteredPlaceholder(message)", block)
         self.assertIn("return [.MessageEntry(placeholder", block)
         self.assertNotIn("return messages.map", block)
+        self.assertIn("private func shadowFilteredPlaceholder", source)
+        for safe_field in ("groupingKey: nil", "forwardInfo: nil", "attributes: []", "media: []", "associatedMedia: [:]"):
+            self.assertIn(safe_field, source)
 
     def test_hidden_accounts_are_local_and_filtered_from_switcher(self):
         storage = (CORE / "AyuGram/ShadowHiddenAccounts.swift").read_text()

@@ -342,7 +342,7 @@ private final class ShadowMessageScreenshotPreview: UIViewController {
             node.isUserInteractionEnabled = false
             node.visibility = .visible(1.0, CGRect(origin: .zero, size: node.bounds.size))
             if !self.options.showTime { self.hideTime(in: node) }
-            if showAvatar && endsGroup {
+            if self.options.showAvatars && endsGroup && (incoming ? self.options.showPeerAvatars : self.options.showOwnAvatar) {
                 self.appendAvatar(author: author, y: rowTop + height - 32.0, incoming: incoming)
             }
             self.contentHeight += height
