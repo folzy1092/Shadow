@@ -73,7 +73,7 @@ private final class ShadowMessageScreenshotPreview: UIViewController {
     private let context: AccountContext
     private let accountPeer: EnginePeer?
     private let availableReactions: AvailableReactions?
-    private let messages: [EngineRawMessage]
+    private let messageRows: [[EngineRawMessage]]
     private let data: ChatPresentationData
     private let messageTheme: PresentationTheme
     private var options: ShadowMessageScreenshotSettings
@@ -93,7 +93,9 @@ private final class ShadowMessageScreenshotPreview: UIViewController {
         self.context = context
         self.accountPeer = accountPeer
         self.availableReactions = availableReactions
-        self.messages = messages
+        self.messageRows = ShadowMessageScreenshotGrouping.albumRows(messages, groupingKey: { $0.groupingKey }, sameConversation: {
+            $0.id.peerId == $1.id.peerId && $0.threadId == $1.threadId
+        })
         self.data = data
         self.messageTheme = Self.desktopBubbleTheme(data.theme.theme)
         self.options = options
@@ -131,8 +133,8 @@ private final class ShadowMessageScreenshotPreview: UIViewController {
 
     private func startsGroup(at index: Int, author: EnginePeer?) -> Bool {
         guard index > 0 else { return true }
-        let message = self.messages[index]
-        let previous = self.messages[index - 1]
+        let message = self.messageRows[index][0]
+        let previous = self.messageRows[index - 1][0]
         let sameConversation = message.id.peerId == previous.id.peerId && message.threadId == previous.threadId
             && !message.media.contains(where: { $0 is TelegramMediaAction })
             && !previous.media.contains(where: { $0 is TelegramMediaAction })
@@ -140,8 +142,8 @@ private final class ShadowMessageScreenshotPreview: UIViewController {
     }
 
     private func endsGroup(at index: Int) -> Bool {
-        guard index + 1 < self.messages.count else { return true }
-        return self.startsGroup(at: index + 1, author: self.author(of: self.messages[index + 1]))
+        guard index + 1 < self.messageRows.count else { return true }
+        return self.startsGroup(at: index + 1, author: self.author(of: self.messageRows[index + 1][0]))
     }
 
     private func screenshotWallpaper() -> TelegramWallpaper {
@@ -236,10 +238,11 @@ private final class ShadowMessageScreenshotPreview: UIViewController {
 
     private func prepareItems() -> Bool {
         var items: [ChatMessageItemImpl] = []
-        items.reserveCapacity(self.messages.count)
+        items.reserveCapacity(self.messageRows.count)
         let wallpaper = self.screenshotWallpaper()
 
-        for (index, message) in self.messages.enumerated() {
+        for (index, row) in self.messageRows.enumerated() {
+            let message = row[0]
             let author = self.author(of: message)
             let startsGroup = self.startsGroup(at: index, author: author)
             var rowOptions = self.options
@@ -248,20 +251,19 @@ private final class ShadowMessageScreenshotPreview: UIViewController {
 
             // Render-only copy. It does not touch Postbox, direction,
             // forwarding metadata, read status or message IDs.
-            var renderMessage = message.author == nil ? (author.map { message.withUpdatedAuthor($0._asPeer()) } ?? message) : message
-            if !self.options.showReactions {
-                // The preview template builds native content before it receives
-                // shadowScreenshot options. Remove every reaction source on this
-                // render-only copy so inline, footer and custom reactions all vanish.
-                renderMessage = renderMessage.withUpdatedAttributes(
-                    renderMessage.attributes.filter {
+            let renderMessages = row.map { original -> EngineRawMessage in
+                var result = original.author == nil ? (self.author(of: original).map { original.withUpdatedAuthor($0._asPeer()) } ?? original) : original
+                if !self.options.showReactions {
+                    // Strip reaction attributes on every photo in the album.
+                    result = result.withUpdatedAttributes(result.attributes.filter {
                         !($0 is ReactionsMessageAttribute ||
                           $0 is PendingReactionsMessageAttribute ||
                           $0 is PendingStarsReactionsMessageAttribute)
-                    }
-                )
+                    })
+                }
+                return result
             }
-            guard let template = self.context.sharedContext.makeChatMessagePreviewItem(context: self.context, messages: [renderMessage], theme: self.messageTheme, strings: self.data.strings, wallpaper: wallpaper, fontSize: self.data.fontSize, chatBubbleCorners: self.data.chatBubbleCorners, dateTimeFormat: self.data.dateTimeFormat, nameOrder: self.data.nameDisplayOrder, forcedResourceStatus: nil, tapMessage: nil, clickThroughMessage: nil, backgroundNode: self.background, availableReactions: self.availableReactions, accountPeer: self.accountPeer?._asPeer(), isCentered: false, isPreview: false, isStandalone: true, rank: nil, rankRole: nil) as? ChatMessageItemImpl else {
+            guard let template = self.context.sharedContext.makeChatMessagePreviewItem(context: self.context, messages: renderMessages, theme: self.messageTheme, strings: self.data.strings, wallpaper: wallpaper, fontSize: self.data.fontSize, chatBubbleCorners: self.data.chatBubbleCorners, dateTimeFormat: self.data.dateTimeFormat, nameOrder: self.data.nameDisplayOrder, forcedResourceStatus: nil, tapMessage: nil, clickThroughMessage: nil, backgroundNode: self.background, availableReactions: self.availableReactions, accountPeer: self.accountPeer?._asPeer(), isCentered: false, isPreview: false, isStandalone: true, rank: nil, rankRole: nil) as? ChatMessageItemImpl else {
                 self.fail("Не удалось подготовить сообщение.")
                 return false
             }
@@ -284,7 +286,7 @@ private final class ShadowMessageScreenshotPreview: UIViewController {
 
     private func appendMessage(at index: Int, generation: Int) {
         guard generation == self.renderGeneration, self.viewIfLoaded?.window != nil else { return }
-        guard index < self.messages.count else {
+        guard index < self.messageRows.count else {
             self.contentHeight += 8.0
             self.ready = true
             self.shareButton?.isEnabled = true
@@ -296,7 +298,7 @@ private final class ShadowMessageScreenshotPreview: UIViewController {
             return
         }
 
-        let message = self.messages[index]
+        let message = self.messageRows[index][0]
         let author = self.author(of: message)
         let startsGroup = self.startsGroup(at: index, author: author)
         let endsGroup = self.endsGroup(at: index)

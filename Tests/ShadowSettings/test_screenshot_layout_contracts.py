@@ -26,7 +26,7 @@ class ScreenshotLayoutContracts(unittest.TestCase):
         self.assertIn('private let accountPeer: EnginePeer?', source)
         self.assertIn('if !message.flags.contains(.Incoming)', source)
         self.assertIn('return self.accountPeer', source)
-        self.assertIn('message.withUpdatedAuthor($0._asPeer())', source)
+        self.assertIn('original.withUpdatedAuthor($0._asPeer())', source)
         self.assertNotIn('withUpdatedFlags', source)
 
     def test_grouping_keeps_per_message_time_and_avatar_on_group_end(self):
