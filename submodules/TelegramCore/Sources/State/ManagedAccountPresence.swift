@@ -92,21 +92,20 @@ private final class AccountPresenceManagerImpl {
     private func updatePresence(_ isOnline: Bool) {
         let request: Signal<Api.Bool, MTRpcError>
         self.onlineTimer?.invalidate()
-        // AyuGram: re-assert presence on a timer in BOTH directions. Upstream only
-        // re-armed the online keep-alive; we also keep re-sending "offline" so a
-        // hidden online status can never resurface between updates. Under Ghost
-        // Mode, shorten the period so this timer acts as a backstop in case the
-        // event-driven reassert (ayuReassertOfflineAfterSendIfNeeded, fired from
-        // PendingMessageManager right after a send RPC completes) is ever missed.
-        let timerPeriod: Double = ayuGramSettingsCurrent.ghostMode ? 5.0 : 30.0
-        let timer = SignalKitTimer(timeout: timerPeriod, repeat: false, completion: { [weak self] in
-            guard let strongSelf = self else {
-                return
-            }
-            strongSelf.updatePresence(isOnline)
-        }, queue: self.queue)
-        self.onlineTimer = timer
-        timer.start()
+        // Keep-alive is only needed while advertising online presence. Repeating
+        // updateStatus(offline) in Ghost Mode sends a request every five seconds
+        // and can itself refresh the authorization's activity timestamp shown in
+        // Devices. The transition to offline and the post-send reassert above
+        // still send an explicit offline request when needed.
+        if isOnline {
+            let timer = SignalKitTimer(timeout: 30.0, repeat: false, completion: { [weak self] in
+                self?.updatePresence(true)
+            }, queue: self.queue)
+            self.onlineTimer = timer
+            timer.start()
+        } else {
+            self.onlineTimer = nil
+        }
         if isOnline {
             request = self.network.request(Api.functions.account.updateStatus(offline: .boolFalse))
         } else {

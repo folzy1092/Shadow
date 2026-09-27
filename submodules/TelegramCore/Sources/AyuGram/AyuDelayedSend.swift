@@ -4,10 +4,9 @@ import SwiftSignalKit
 
 // Shadow fork: an "immediately re-assert offline" trigger. Sending a message
 // makes the server flip the account online as a side effect of the send RPC; the
-// aggressive-offline timer in ManagedAccountPresence only re-sends "offline"
-// every 30s (5s under Ghost Mode), so without this the user can look online for
-// that whole period after a send. The presence manager subscribes to this pipe
-// and re-sends "offline" at once when it fires.
+// presence manager does not repeatedly send "offline" while hidden, so without
+// this the user could remain online after a send. The presence manager subscribes
+// to this pipe and re-sends "offline" when it fires.
 public let ayuOfflineReassertPipe = ValuePipe<Void>()
 
 public func ayuTriggerOfflineReassert() {
@@ -21,7 +20,7 @@ public func ayuTriggerOfflineReassert() {
 // racing the real RPC dispatch (which can be delayed arbitrarily by media
 // upload, transaction commit, or queueing behind other pending sends) — a send
 // that went out later than +5s left the account online with no further
-// correction until the next periodic timer tick. Hooking the actual RPC
+// correction after the send. Hooking the actual RPC
 // completion removes the guesswork: our "offline" call is now guaranteed to be
 // queued strictly after the send RPC's own online side effect, so it always
 // corrects it (at the cost of one network round trip's worth of residual blip,

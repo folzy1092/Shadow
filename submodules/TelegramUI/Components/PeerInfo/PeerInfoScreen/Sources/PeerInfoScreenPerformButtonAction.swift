@@ -488,7 +488,7 @@ extension PeerInfoScreenNode {
                 }
                 if canOpenShadowRules {
                     items.append(.action(ContextMenuActionItem(text: "Правила Shadow", icon: { theme in
-                        generateTintedImage(image: PresentationResourcesSettings.security, color: theme.contextMenu.primaryColor)
+                        generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Privacy"), color: theme.contextMenu.primaryColor)
                     }, action: { [weak self] _, f in
                         f(.dismissWithoutContent)
                         guard let self, let peer = self.data?.peer else {
