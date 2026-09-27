@@ -1598,6 +1598,7 @@ private func ayuSpyController(context: AccountContext, focus: ShadowSettingsSear
 
 private final class AyuGhostArguments {
     let updateGhostMode: (Bool) -> Void
+    let selectAccountMode: () -> Void
     let updateHideOnline: (Bool) -> Void
     let updateHideTyping: (Bool) -> Void
     let updateHideReadReceipts: (Bool) -> Void
@@ -1607,6 +1608,7 @@ private final class AyuGhostArguments {
 
     init(
         updateGhostMode: @escaping (Bool) -> Void,
+        selectAccountMode: @escaping () -> Void,
         updateHideOnline: @escaping (Bool) -> Void,
         updateHideTyping: @escaping (Bool) -> Void,
         updateHideReadReceipts: @escaping (Bool) -> Void,
@@ -1615,6 +1617,7 @@ private final class AyuGhostArguments {
         updateSendWithoutOnline: @escaping (Bool) -> Void
     ) {
         self.updateGhostMode = updateGhostMode
+        self.selectAccountMode = selectAccountMode
         self.updateHideOnline = updateHideOnline
         self.updateHideTyping = updateHideTyping
         self.updateHideReadReceipts = updateHideReadReceipts
@@ -1632,6 +1635,7 @@ private enum AyuGhostSection: Int32 {
 private enum AyuGhostEntry: ItemListNodeEntry {
     case ghostHeader
     case ghostMode(Bool)
+    case accountMode(ShadowGhostAccountMode)
     case hideOnline(Bool)
     case hideTyping(Bool)
     case hideReadReceipts(Bool)
@@ -1645,7 +1649,7 @@ private enum AyuGhostEntry: ItemListNodeEntry {
 
     var section: ItemListSectionId {
         switch self {
-        case .ghostHeader, .ghostMode, .hideOnline, .hideTyping, .hideReadReceipts, .hideStoryViews, .ghostFooter:
+        case .ghostHeader, .ghostMode, .accountMode, .hideOnline, .hideTyping, .hideReadReceipts, .hideStoryViews, .ghostFooter:
             return AyuGhostSection.ghost.rawValue
         case .sendingHeader, .sendViaScheduled, .sendWithoutOnline, .sendingFooter:
             return AyuGhostSection.sending.rawValue
@@ -1656,6 +1660,7 @@ private enum AyuGhostEntry: ItemListNodeEntry {
         switch self {
         case .ghostHeader: return 0
         case .ghostMode: return 1
+        case .accountMode: return 11
         case .hideOnline: return 2
         case .hideTyping: return 3
         case .hideReadReceipts: return 4
@@ -1669,6 +1674,8 @@ private enum AyuGhostEntry: ItemListNodeEntry {
     }
 
     static func <(lhs: AyuGhostEntry, rhs: AyuGhostEntry) -> Bool {
+        if case .accountMode = lhs { return rhs.stableId > 1 }
+        if case .accountMode = rhs { return lhs.stableId <= 1 }
         return lhs.stableId < rhs.stableId
     }
 
@@ -1680,6 +1687,17 @@ private enum AyuGhostEntry: ItemListNodeEntry {
         case let .ghostMode(value):
             return ItemListSwitchItem(presentationData: presentationData, title: "Режим призрака", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 arguments.updateGhostMode(value)
+            })
+        case let .accountMode(value):
+            let label: String
+            switch value {
+            case .manual: label = "Вручную"
+            case .alwaysOn: label = "Всегда включён"
+            case .alwaysOff: label = "Всегда выключен"
+            case .followPrevious: label = "Как в предыдущем аккаунте"
+            }
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Для этого аккаунта", label: label, sectionId: self.section, style: .blocks, action: {
+                arguments.selectAccountMode()
             })
         case let .hideOnline(value):
             return ItemListSwitchItem(presentationData: presentationData, title: "Не показывать онлайн", value: value, sectionId: self.section, style: .blocks, updated: { value in
@@ -1719,6 +1737,7 @@ private func ayuGhostEntries(settings: AyuGramSettings) -> [AyuGhostEntry] {
     return [
         .ghostHeader,
         .ghostMode(settings.ghostMode),
+        .accountMode(settings.ghostAccountMode),
         .hideOnline(settings.hideOnlineStatus),
         .hideTyping(settings.hideTyping),
         .hideReadReceipts(settings.hideReadReceipts),
@@ -1733,9 +1752,28 @@ private func ayuGhostEntries(settings: AyuGramSettings) -> [AyuGhostEntry] {
 
 private func ayuGhostController(context: AccountContext, focus: ShadowSettingsSearchItem? = nil) -> ViewController {
     var focusedIndex: Int?
+    var presentControllerImpl: ((ViewController, ViewControllerPresentationArguments?) -> Void)?
     let arguments = AyuGhostArguments(
         updateGhostMode: { value in
-            ayuUpdateSettings(context: context) { var s = $0; s.ghostMode = value; return s }
+            ayuUpdateSettings(context: context) { var s = $0; s.ghostMode = value; s.ghostAccountMode = .manual; return s }
+        },
+        selectAccountMode: {
+            let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+            let actionSheet = ActionSheetController(presentationData: presentationData)
+            let choices: [(String, ShadowGhostAccountMode)] = [
+                ("Вручную", .manual),
+                ("Всегда включён", .alwaysOn),
+                ("Всегда выключен", .alwaysOff),
+                ("Как в предыдущем аккаунте", .followPrevious)
+            ]
+            let items: [ActionSheetItem] = choices.map { title, mode in
+                ActionSheetButtonItem(title: title, action: { [weak actionSheet] in
+                    actionSheet?.dismissAnimated()
+                    ayuUpdateSettings(context: context) { var s = $0; s.ghostAccountMode = mode; if mode == .alwaysOn { s.ghostMode = true }; if mode == .alwaysOff { s.ghostMode = false }; return s }
+                })
+            }
+            actionSheet.setItemGroups([ActionSheetItemGroup(items: items)])
+            presentControllerImpl?(actionSheet, nil)
         },
         updateHideOnline: { value in
             ayuUpdateSettings(context: context) { var s = $0; s.hideOnlineStatus = value; return s }
@@ -1771,6 +1809,9 @@ private func ayuGhostController(context: AccountContext, focus: ShadowSettingsSe
     }
 
     let controller = ItemListController(context: context, state: signal)
+    presentControllerImpl = { [weak controller] c, a in
+        controller?.present(c, in: .window(.root), with: a)
+    }
     if focus != nil {
         shadowSettingsInstallFocus(controller: controller, index: { focusedIndex }, color: context.sharedContext.currentPresentationData.with { $0 }.theme.list.itemAccentColor)
     }

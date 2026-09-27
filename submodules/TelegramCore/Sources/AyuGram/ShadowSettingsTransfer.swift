@@ -78,6 +78,7 @@ public enum ShadowSettingsTransfer {
         values["mediaAutoCleanInterval"] = .integer(Int64(settings.mediaAutoCleanInterval))
         values["attachmentSizeLimit"] = .integer(settings.attachmentSizeLimit)
         values["bottomBarScrollMode"] = .integer(Int64(settings.bottomBarScrollMode))
+        values["ghostAccountMode"] = .integer(Int64(settings.ghostAccountMode.rawValue))
         values["screenshotBackground"] = .integer(Int64(settings.messageScreenshot.background.rawValue))
         values["screenshotCustomColorARGB"] = .integer(Int64(settings.messageScreenshot.customColorARGB))
         return try ShadowSettingsDocument(settings: values)
@@ -109,6 +110,10 @@ public enum ShadowSettingsTransfer {
                 case "mediaAutoCleanInterval": updated.mediaAutoCleanInterval = Int32(number)
                 case "attachmentSizeLimit": updated.attachmentSizeLimit = number
                 case "bottomBarScrollMode": updated.bottomBarScrollMode = Int32(number)
+                case "ghostAccountMode":
+                    if let raw = Int32(exactly: number), let mode = ShadowGhostAccountMode(rawValue: raw) {
+                        updated.ghostAccountMode = mode
+                    }
                 case "screenshotBackground": screenshotBackgroundRaw = Int32(number)
                 case "screenshotCustomColorARGB": screenshotCustomColorARGB = Int32(number)
                 default: break

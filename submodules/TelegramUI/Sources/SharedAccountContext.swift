@@ -1785,18 +1785,40 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         }
         self.switchingData = (settingsController as? (ViewController & SettingsController), chatListController as? ChatListController, chatsBadge)
         
-        let _ = self.accountManager.transaction({ transaction -> Bool in
-            if transaction.getCurrent()?.0 != id {
-                transaction.setCurrentId(id)
-                return true
-            } else {
+        // Resolve the destination's policy before making it primary. In
+        // particular, followPrevious copies the mode of the account we are
+        // leaving, while forced choices also update the master gate before
+        // the destination's presence stream can advertise online.
+        let previousGhost = self.activeAccountsValue?.primary.map { currentAyuGramSettings(accountId: $0.account.id).ghostMode } ?? false
+        let completeSwitch: () -> Void = { [weak self] in
+            guard let self else { return }
+            let _ = self.accountManager.transaction({ transaction -> Bool in
+                if transaction.getCurrent()?.0 != id {
+                    transaction.setCurrentId(id)
+                    return true
+                }
                 return false
-            }
-        }).start(next: { value in
-            if !value {
-                self.switchingData = (nil, nil, nil)
-            }
-        })
+            }).start(next: { [weak self] value in
+                if !value {
+                    self?.switchingData = (nil, nil, nil)
+                }
+            })
+        }
+        if let destination = self.activeAccountsValue?.accounts.first(where: { $0.0 == id })?.1 {
+            let _ = (updateAyuGramSettings(postbox: destination.account.postbox, { settings in
+                var settings = settings
+                switch settings.ghostAccountMode {
+                case .manual: break
+                case .alwaysOn: settings.ghostMode = true
+                case .alwaysOff: settings.ghostMode = false
+                case .followPrevious: settings.ghostMode = previousGhost
+                }
+                return settings
+            })
+            |> deliverOnMainQueue).start(completed: completeSwitch)
+        } else {
+            completeSwitch()
+        }
     }
     
     public func openSearch(filter: ChatListSearchFilter, query: String?) {

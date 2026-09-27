@@ -43,7 +43,7 @@ public struct ShadowSettingsDocument: Codable, Equatable {
     ]
     public static let textKeys: Set<String> = ["editedIndicatorText", "deletedIndicatorText"]
     public static let integerKeys: Set<String> = [
-        "mediaAutoCleanInterval", "attachmentSizeLimit", "bottomBarScrollMode",
+        "mediaAutoCleanInterval", "attachmentSizeLimit", "bottomBarScrollMode", "ghostAccountMode",
         "screenshotBackground", "screenshotCustomColorARGB"
     ]
     private static let ageIntervals: Set<Int64> = [0, 86400, 259200, 604800, 1209600, 2592000, 7776000, 15552000, 31536000]

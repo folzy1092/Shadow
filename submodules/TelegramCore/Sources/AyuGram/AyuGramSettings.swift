@@ -20,6 +20,13 @@ public enum ShadowChatPrivacyValue: Int32, Codable, Equatable {
     case hide = 2
 }
 
+public enum ShadowGhostAccountMode: Int32, Codable, Equatable {
+    case manual = 0
+    case alwaysOn = 1
+    case alwaysOff = 2
+    case followPrevious = 3
+}
+
 public struct ShadowChatPrivacyRule: Codable, Equatable {
     public var readReceipts: ShadowChatPrivacyValue
     public var inputActivity: ShadowChatPrivacyValue
@@ -101,6 +108,8 @@ public struct AyuGramSettings: Codable, Equatable {
     // below is `ghostMode && <granular flag>`. The recording / uploading /
     // consumed gates have no granular toggle and follow Ghost Mode directly.
     public var ghostMode: Bool
+    // How this account selects its master switch when it becomes active.
+    public var ghostAccountMode: ShadowGhostAccountMode = .manual
     // Presence hiding
     public var hideOnlineStatus: Bool
     // Timestamp of the last server-confirmed online -> offline transition.
@@ -570,6 +579,7 @@ public struct AyuGramSettings: Codable, Equatable {
         self.showEditComparisonAction = ((try container.decodeIfPresent(Int32.self, forKey: "showEditComparisonAction")) ?? 0) != 0
         self.keepSelfDestructMedia = ((try container.decodeIfPresent(Int32.self, forKey: "keepSelfDestructMedia")) ?? 1) != 0
         self.ghostMode = ((try container.decodeIfPresent(Int32.self, forKey: "ghostMode")) ?? 0) != 0
+        self.ghostAccountMode = ShadowGhostAccountMode(rawValue: (try container.decodeIfPresent(Int32.self, forKey: "ghostAccountMode")) ?? 0) ?? .manual
         self.hideOnlineStatus = ((try container.decodeIfPresent(Int32.self, forKey: "hideOnlineStatus")) ?? 0) != 0
         self.ghostLastSeenTimestamp = max(0, (try container.decodeIfPresent(Int32.self, forKey: "ghostLastSeenTimestamp")) ?? 0)
         self.hideTyping = ((try container.decodeIfPresent(Int32.self, forKey: "hideTyping")) ?? 0) != 0
@@ -642,6 +652,7 @@ public struct AyuGramSettings: Codable, Equatable {
         try container.encode((self.showEditComparisonAction ? 1 : 0) as Int32, forKey: "showEditComparisonAction")
         try container.encode((self.keepSelfDestructMedia ? 1 : 0) as Int32, forKey: "keepSelfDestructMedia")
         try container.encode((self.ghostMode ? 1 : 0) as Int32, forKey: "ghostMode")
+        try container.encode(self.ghostAccountMode.rawValue, forKey: "ghostAccountMode")
         try container.encode((self.hideOnlineStatus ? 1 : 0) as Int32, forKey: "hideOnlineStatus")
         try container.encode(self.ghostLastSeenTimestamp, forKey: "ghostLastSeenTimestamp")
         try container.encode((self.hideTyping ? 1 : 0) as Int32, forKey: "hideTyping")

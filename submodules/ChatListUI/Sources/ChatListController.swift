@@ -7362,6 +7362,7 @@ private final class ChatListLocationContext {
                         let _ = updateAyuGramSettings(postbox: ghostContext.account.postbox, { settings in
                             var settings = settings
                             settings.ghostMode = !settings.ghostMode
+                            settings.ghostAccountMode = .manual
                             return settings
                         }).startStandalone()
                     }
