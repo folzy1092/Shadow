@@ -395,7 +395,6 @@ public final class ChatMessageSelectionInputPanelNode: ChatInputPanelNode {
 
     @objc private func screenshotButtonPressed() {
         guard self.screenshotEnabled, !self.selectedMessages.isEmpty, !self.peerMedia else { return }
-        guard !(self.presentationInterfaceState?.renderedPeer?.peer is TelegramSecretChat) else { return }
         self.interfaceInteraction?.screenshotSelectedMessages()
     }
     
@@ -543,7 +542,7 @@ public final class ChatMessageSelectionInputPanelNode: ChatInputPanelNode {
                 self.update(transition: .immediate)
             }))
         }
-        self.screenshotButton.isHidden = !self.screenshotEnabled || self.peerMedia || interfaceState.renderedPeer?.peer is TelegramSecretChat
+        self.screenshotButton.isHidden = !self.screenshotEnabled || self.peerMedia
         
         var leftInset = leftInset + 8.0
         var rightInset = rightInset + 8.0

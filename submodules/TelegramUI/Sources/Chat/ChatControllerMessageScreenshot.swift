@@ -47,13 +47,9 @@ extension ChatControllerImpl {
             self.shadowScreenshotPreparing = false
             guard settings.messageScreenshot.enabled, self.viewIfLoaded?.window != nil else { return }
             guard messages.count == ids.count else { self.shadowScreenshotError("Часть сообщений больше недоступна. Выдели сообщения заново."); return }
-            // The export must not open view-once media or bypass secret-chat protection.
-            guard !messages.contains(where: { message in
-                message.id.peerId.namespace == Namespaces.Peer.SecretChat || message.attributes.contains(where: { $0 is AutoremoveTimeoutMessageAttribute || $0 is AutoclearTimeoutMessageAttribute })
-            }) else { self.shadowScreenshotError("Секретные и исчезающие сообщения не включаются в скриншот."); return }
-            guard settings.allowSaveRestrictedContent || !messages.contains(where: { $0.isCopyProtected() || $0.peers[$0.id.peerId]?.isCopyProtectionEnabled == true }) else {
-                self.shadowScreenshotError("В этом чате запрещено сохранение контента."); return
-            }
+            // Render messages that are still available locally, including secret,
+            // expiring and copy-protected messages. This path only builds a local
+            // preview; it never requests an expired/view-once payload from Telegram.
             guard var presenter = self.view.window?.rootViewController else { return }
             while let next = presenter.presentedViewController { presenter = next }
             let state = self.presentationInterfaceState

@@ -15,8 +15,9 @@ class MessageScreenshotContracts(unittest.TestCase):
         self.assertNotIn('markMessage', source)
         self.assertIn('downloads.cellular.enabled = false', source)
         self.assertIn('downloads.wifi.enabled = false', source)
-        self.assertIn('AutoclearTimeoutMessageAttribute', source)
         self.assertIn('messages.count == ids.count', source)
+        self.assertNotIn('Секретные и исчезающие сообщения не включаются в скриншот', source)
+        self.assertNotIn('В этом чате запрещено сохранение контента', source)
         self.assertIn('popoverPresentationController?.barButtonItem', source)
 
     def test_renderer_prepares_real_neighbors_for_native_merge(self):
@@ -107,6 +108,16 @@ class MessageScreenshotContracts(unittest.TestCase):
         self.assertIn('$0 === self.incognitoForwardButton', source)
         self.assertIn('screenshotSettingsDisposable.dispose()', source)
         self.assertIn('map { $0.messageScreenshot.enabled }', source)
+        self.assertNotIn('interfaceState.renderedPeer?.peer is TelegramSecretChat', source.split('self.screenshotButton.isHidden =', 1)[1].split('\n', 1)[0])
+
+    def test_chat_capture_is_not_blocked_by_secret_or_copy_protection(self):
+        chat = (ROOT / 'submodules/TelegramUI/Sources/ChatControllerNode.swift').read_text()
+        self.assertIn('let isSecret = self.chatLocation.peerId?.isVerificationCodes == true', chat)
+        self.assertIn('HistoryNodeContainer(isSecret: chatLocation.peerId?.isVerificationCodes == true)', chat)
+        media = (ROOT / 'submodules/TelegramUI/Components/Chat/ChatMessageInteractiveMediaNode/Sources/ChatMessageInteractiveMediaNode.swift').read_text()
+        self.assertIn('strongSelf.imageNode.captureProtected = isExtendedMedia', media)
+        gallery = (ROOT / 'submodules/GalleryUI/Sources/GalleryController.swift').read_text()
+        self.assertNotIn('captureProtected: message.isCopyProtected()', gallery)
 
 
 if __name__ == '__main__':

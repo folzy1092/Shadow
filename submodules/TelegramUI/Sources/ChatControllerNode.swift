@@ -493,7 +493,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         
         self.floatingTopicsPanelContainer = ChatControllerTitlePanelNodeContainer()
         
-        setLayerDisableScreenshots(self.titleAccessoryPanelContainer.layer, chatLocation.peerId?.namespace == Namespaces.Peer.SecretChat)
+        setLayerDisableScreenshots(self.titleAccessoryPanelContainer.layer, false)
         
         self.inputContextPanelContainer = ChatControllerTitlePanelNodeContainer()
         self.inputContextOverTextPanelContainer = ChatControllerTitlePanelNodeContainer()
@@ -783,7 +783,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             return getMessageTransitionNode?()
         })
 
-        self.historyNodeContainer = HistoryNodeContainer(isSecret: chatLocation.peerId?.namespace == Namespaces.Peer.SecretChat)
+        self.historyNodeContainer = HistoryNodeContainer(isSecret: chatLocation.peerId?.isVerificationCodes == true)
         
         self.historyNodeContainer.contentNode.addSubnode(self.historyNode)
 
@@ -1205,7 +1205,9 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             }
         }
         
-        let isSecret = self.chatPresentationInterfaceState.copyProtectionEnabled || self.chatLocation.peerId?.namespace == Namespaces.Peer.SecretChat || self.chatLocation.peerId?.isVerificationCodes == true
+        // Shadow permits capturing the chat itself, including secret chats and
+        // protected conversations. Keep the login-code chat's safety behavior.
+        let isSecret = self.chatLocation.peerId?.isVerificationCodes == true
         if self.historyNodeContainer.isSecret != isSecret {
             #if DEBUG
             self.historyNodeContainer.isSecret = false
