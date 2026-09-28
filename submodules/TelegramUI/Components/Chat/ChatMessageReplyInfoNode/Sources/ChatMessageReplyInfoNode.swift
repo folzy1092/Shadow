@@ -807,9 +807,7 @@ public class ChatMessageReplyInfoNode: ASDisplayNode {
                     imageNode.removeFromSupernode()
                     node.imageNode = nil
                 }
-                if let message = arguments.message {
-                    node.imageNode?.captureProtected = false
-                }
+                node.imageNode?.captureProtected = false
                 
                 titleNode.frame = CGRect(origin: CGPoint(x: leftInset - textInsets.left - 2.0, y: spacing - textInsets.top + 1.0), size: titleLayout.size)
                 
