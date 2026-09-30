@@ -28,6 +28,7 @@ def main():
         ], check=True)
         sources = [
             ROOT / 'submodules/Postbox/Sources/Coding.swift',
+            ROOT / 'submodules/Postbox/Sources/PostboxLogging.swift',
             ROOT / 'submodules/Postbox/Sources/ValueBoxKey.swift',
         ]
         for kind in ('Encoder', 'Decoder'):
