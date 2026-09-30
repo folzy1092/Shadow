@@ -2327,6 +2327,10 @@ public final class SharedAccountContextImpl: SharedAccountContext {
     public func makeProxySettingsController(context: AccountContext) -> ViewController {
         return proxySettingsController(context: context)
     }
+
+    public func makeGhostSettingsController(context: AccountContext) -> ViewController {
+        return ayuGhostSettingsController(context: context)
+    }
     
     public func makeLocalizationListController(context: AccountContext) -> ViewController {
         return LocalizationListController(context: context)

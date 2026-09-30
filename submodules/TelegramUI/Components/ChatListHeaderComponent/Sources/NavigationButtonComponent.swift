@@ -64,11 +64,18 @@ public final class NavigationButtonComponent: Component {
         
         private var component: NavigationButtonComponent?
         private var theme: PresentationTheme?
+        private var longPressRecognizer: UILongPressGestureRecognizer?
         
         override init(frame: CGRect) {
             super.init(frame: frame)
             
             self.addTarget(self, action: #selector(self.pressed), for: .touchUpInside)
+
+            let longPressRecognizer = UILongPressGestureRecognizer(target: self, action: #selector(self.longPressed(_:)))
+            longPressRecognizer.isEnabled = false
+            longPressRecognizer.cancelsTouchesInView = true
+            self.addGestureRecognizer(longPressRecognizer)
+            self.longPressRecognizer = longPressRecognizer
             
             self.highligthedChanged = { [weak self] highlighted in
                 guard let self else {
@@ -97,6 +104,12 @@ public final class NavigationButtonComponent: Component {
         
         @objc private func pressed() {
             self.component?.pressed(self)
+        }
+
+        @objc private func longPressed(_ gesture: UILongPressGestureRecognizer) {
+            if gesture.state == .began {
+                self.component?.contextAction?(self, nil)
+            }
         }
         
         func update(component: NavigationButtonComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<NavigationButtonComponentEnvironment>, transition: ComponentTransition) -> CGSize {
@@ -128,6 +141,8 @@ public final class NavigationButtonComponent: Component {
             case let .proxy(status):
                 proxyStatus = status
             }
+
+            self.longPressRecognizer?.isEnabled = component.contextAction != nil && !isMore
             
             var size = CGSize(width: 0.0, height: availableSize.height)
             

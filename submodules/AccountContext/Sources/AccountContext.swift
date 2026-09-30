@@ -1438,6 +1438,7 @@ public protocol SharedAccountContext: AnyObject {
     func makeContactMultiselectionController(_ params: ContactMultiselectionControllerParams) -> ContactMultiselectionController
     func makePeerSelectionController(_ params: PeerSelectionControllerParams) -> PeerSelectionController
     func makeProxySettingsController(context: AccountContext) -> ViewController
+    func makeGhostSettingsController(context: AccountContext) -> ViewController
     func makeLocalizationListController(context: AccountContext) -> ViewController
     func makeCreateGroupController(context: AccountContext, peerIds: [EnginePeer.Id], initialTitle: String?, mode: CreateGroupMode, completion: ((EnginePeer.Id, @escaping () -> Void) -> Void)?) -> ViewController
     func makeCreateChannelController(context: AccountContext, completion: @escaping (EnginePeer.Id, @escaping () -> Void) -> Void) -> ViewController

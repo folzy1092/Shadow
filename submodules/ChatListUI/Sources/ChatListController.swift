@@ -7361,6 +7361,12 @@ private final class ChatListLocationContext {
                             settings.ghostMode = !settings.ghostMode
                             return settings
                         }).startStandalone()
+                    },
+                    contextAction: { [weak self] _, _ in
+                        guard let self, let parentController = self.parentController else {
+                            return
+                        }
+                        (parentController.navigationController as? NavigationController)?.pushViewController(self.context.sharedContext.makeGhostSettingsController(context: self.context))
                     }
                 )))
             } else {
