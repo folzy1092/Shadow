@@ -12,6 +12,13 @@ struct PushDiagnosticsTests {
             precondition(result.diagnosticDescription.contains(error))
         }
         precondition(NotificationTokenRegistrationResult.rpcError(code: 400, description: "TOKEN_WAS_INVALIDATED").requiresTokenInvalidation)
+        for attempt in 0 ..< 3 {
+            precondition(NotificationTokenRegistrationResult.acknowledged(false).retryDelay(attempt: attempt) == Double(1 << (attempt + 1)))
+        }
+        precondition(NotificationTokenRegistrationResult.acknowledged(false).retryDelay(attempt: 3) == nil)
+        precondition(NotificationTokenRegistrationResult.acknowledged(true).retryDelay(attempt: 0) == nil)
+        precondition(NotificationTokenRegistrationResult.rpcError(code: 400, description: "TOKEN_INVALID").retryDelay(attempt: 0) == nil)
+        precondition(NotificationTokenRegistrationResult.rpcError(code: 500, description: "TIMEOUT").retryDelay(attempt: 3) == 60)
         let store = ShadowPushDiagnostics.shared
         precondition(store.snapshot(accountId: 1).token == nil)
         store.apnsRegistrationCalled()

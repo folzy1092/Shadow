@@ -82,6 +82,12 @@ func managedAutoremoveMessageOperations(network: Network, postbox: Postbox, isRe
                     Logger.shared.log("Autoremove", "Performing autoremove for \(entry.messageId), isRemove: \(isRemove)")
 
                     if let message = transaction.getMessage(entry.messageId) {
+                        let settings = currentAyuGramSettings(transaction: transaction)
+                        if message.id.peerId.namespace == Namespaces.Peer.SecretChat && message.flags.contains(.Incoming) && settings.keepDeletedSecretChatMessages {
+                            let _ = ayuGramMarkMessagesDeleted(transaction: transaction, mediaBox: postbox.mediaBox, ids: [message.id])
+                            transaction.clearTimestampBasedAttribute(id: entry.messageId, tag: tag)
+                            return
+                        }
                         // AyuGram: last-chance local backup before the media is
                         // removed or swapped for the "expired" placeholder. Hard-links
                         // the still-cached resource files into the private gallery so

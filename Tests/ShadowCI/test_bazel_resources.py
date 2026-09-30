@@ -68,7 +68,7 @@ class BazelResourceTests(unittest.TestCase):
 
     def test_workflow_keeps_main_trigger_and_separate_cache_save(self):
         workflow = (ROOT / ".github/workflows/build.yml").read_text(encoding="utf-8")
-        self.assertIn("branches: [ master, main ]", workflow)
+        self.assertRegex(workflow, r"branches: \[ master, main(?:, [^\]]+)? \]")
         self.assertIn("actions/cache/restore@v4", workflow)
         self.assertIn("actions/cache/save@v4", workflow)
         self.assertIn("steps.build.outcome == 'failure'", workflow)

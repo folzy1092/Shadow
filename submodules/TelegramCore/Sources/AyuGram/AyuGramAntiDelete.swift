@@ -25,8 +25,8 @@ func ayuGramMarkMessagesDeleted(transaction: Transaction, mediaBox: MediaBox, id
     var excludedIds: [MessageId] = []
     for id in ids {
         guard let message = transaction.getMessage(id) else {
-            // No local copy to inspect — keep default behaviour (retain).
-            filteredIds.append(id)
+            // Nothing to retain. Do not grow the archive index with missing IDs.
+            excludedIds.append(id)
             continue
         }
         // Skip our own outgoing messages.
@@ -66,6 +66,7 @@ func ayuGramMarkMessagesDeleted(transaction: Transaction, mediaBox: MediaBox, id
                 return .skip
             }
             var attributes = currentMessage.attributes
+            attributes.removeAll(where: { $0 is AutoremoveTimeoutMessageAttribute || $0 is AutoclearTimeoutMessageAttribute })
             attributes.append(DeletedMessageAttribute(date: markDate))
             let storeForwardInfo = currentMessage.forwardInfo.flatMap { info in
                 StoreMessageForwardInfo(authorId: info.author?.id, sourceId: info.source?.id, sourceMessageId: info.sourceMessageId, date: info.date, authorSignature: info.authorSignature, psaType: info.psaType, flags: info.flags)
@@ -82,16 +83,26 @@ func ayuGramMarkMessagesDeleted(transaction: Transaction, mediaBox: MediaBox, id
 
 // A later `UpdateMinAvailableMessage` can arrive right after an ordinary
 // delete update. Telegram uses it to trim a history range and its stock path
-// would otherwise remove the same locally-kept ghost a second time. Only
-// restore messages already marked by anti-delete; this is not a history
-// backfill and never resurrects ordinary old messages.
+// would otherwise remove the locally-kept copy. Capture eligible cached
+// messages before trimming, including when the range arrives first.
+// Messages never received by this client cannot be recovered.
 func ayuGramKeptDeletedMessagesInRange(
     transaction: Transaction,
+    mediaBox: MediaBox,
     peerId: PeerId,
     namespace: MessageId.Namespace,
     minId: MessageId.Id,
     maxId: MessageId.Id
 ) -> [StoreMessage] {
+    // Capture local copies even if the range trim arrives before delete updates.
+    if currentAyuGramSettings(transaction: transaction).keepDeletedMessages {
+        var ids: [MessageId] = []
+        transaction.scanTopMessages(peerId: peerId, namespace: namespace, limit: 1_000_000, { message in
+            if message.id.id >= minId && message.id.id <= maxId { ids.append(message.id) }
+            return true
+        })
+        let _ = ayuGramMarkMessagesDeleted(transaction: transaction, mediaBox: mediaBox, ids: ids)
+    }
     let refs = ayuForkStore(transaction: transaction).keptDeleted
     var messages: [StoreMessage] = []
     for ref in refs where ref.peer == peerId.toInt64() && ref.namespace == namespace && ref.id >= minId && ref.id <= maxId {
@@ -123,6 +134,15 @@ func ayuGramKeptDeletedMessagesInRange(
         ))
     }
     return messages
+}
+
+func ayuGramDeleteMessagesRemotely(transaction: Transaction, mediaBox: MediaBox, ids: [MessageId]) {
+    let settings = currentAyuGramSettings(transaction: transaction)
+    let protected = ids.filter { $0.peerId.namespace == Namespaces.Peer.SecretChat ? settings.keepDeletedSecretChatMessages : settings.keepDeletedMessages }
+    let protectedIds = Set(protected)
+    let excluded = ayuGramMarkMessagesDeleted(transaction: transaction, mediaBox: mediaBox, ids: protected)
+    let remove = ids.filter { !protectedIds.contains($0) } + excluded
+    if !remove.isEmpty { _internal_deleteMessages(transaction: transaction, mediaBox: mediaBox, ids: remove) }
 }
 
 // A remote "clear history" in a secret chat bypasses the cloud update path.

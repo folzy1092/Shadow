@@ -2850,6 +2850,10 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         return PeerInfoStoryGridScreen(context: context, peerId: peerId, scope: .saved, excludeIds: excludeIds, selectionModeCompletion: completion)
     }
     
+    public func makeShadowGhostSettingsController(context: AccountContext) -> ViewController {
+        return ayuGhostController(context: context)
+    }
+
     public func makeArchiveSettingsController(context: AccountContext) -> ViewController {
         return archiveSettingsController(context: context)
     }

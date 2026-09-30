@@ -13,6 +13,21 @@ struct MessageScreenshotTests {
         precondition(defaults.customColorARGB == ShadowMessageScreenshotSettings.legacyBlackARGB)
         precondition(ShadowMessageScreenshotSettings.Background.allCases.count == 3)
 
+        precondition(!defaults.anonymize && defaults.anonymizeOwn && defaults.anonymizeOthers && defaults.anonymizedPeerIds.isEmpty)
+        var scope = defaults
+        scope.anonymize = true
+        scope.anonymizeOthers = false
+        scope.anonymizedPeerIds = [2]
+        precondition(scope.anonymizes(peerId: 1, accountPeerId: 1))
+        precondition(scope.anonymizes(peerId: 2, accountPeerId: 1))
+        precondition(!scope.anonymizes(peerId: 3, accountPeerId: 1))
+        scope.anonymizeOwn = false
+        precondition(!scope.anonymizes(peerId: 1, accountPeerId: 1))
+        scope.anonymizeOthers = true
+        precondition(scope.anonymizes(peerId: 3, accountPeerId: 1))
+        scope.anonymize = false
+        precondition(!scope.anonymizes(peerId: 2, accountPeerId: 1))
+
         // Legacy raw 2 without a color field meant white.
         let legacyWhite = try JSONDecoder().decode(
             ShadowMessageScreenshotSettings.self,
@@ -50,6 +65,10 @@ struct MessageScreenshotTests {
         original.customColorARGB = customARGB
         original.showNames = false
         original.enabled = false
+        original.anonymize = true
+        original.anonymizeOwn = false
+        original.anonymizeOthers = false
+        original.anonymizedPeerIds = [2, Int64.max - 1]
         let encoded = try JSONEncoder().encode(original)
         let restored = try JSONDecoder().decode(ShadowMessageScreenshotSettings.self, from: encoded)
         precondition(restored == original)

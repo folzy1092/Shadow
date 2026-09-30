@@ -19,7 +19,7 @@ public extension PreferencesKeys {
     }()
 }
 
-public struct AyuForkMsgRef: Codable, Equatable {
+public struct AyuForkMsgRef: Codable, Equatable, Hashable {
     public let peer: Int64
     public let namespace: Int32
     public let id: Int32
@@ -71,7 +71,8 @@ private func updateAyuForkStore(transaction: Transaction, _ f: (AyuForkStore) ->
 }
 
 private func appendUnique(_ list: inout [AyuForkMsgRef], _ refs: [AyuForkMsgRef]) {
-    for ref in refs where !list.contains(ref) {
+    var seen = Set(list)
+    for ref in refs where seen.insert(ref).inserted {
         list.append(ref)
     }
 }
@@ -127,6 +128,7 @@ public func ayuForkStoreClearKeptDeleted(postbox: Postbox) -> Signal<Never, NoEr
         let ids = store.keptDeleted.map { $0.messageId }
         if !ids.isEmpty {
             _internal_deleteMessages(transaction: transaction, mediaBox: postbox.mediaBox, ids: ids)
+            AyuSavedMedia.removeMessageMedia(basePath: postbox.mediaBox.basePath, messageIds: ids)
         }
         updateAyuForkStore(transaction: transaction) { current in
             var current = current
@@ -182,6 +184,7 @@ func ayuForkStorePruneKeptDeleted(transaction: Transaction, mediaBox: MediaBox, 
     }
     if !expiredIds.isEmpty {
         _internal_deleteMessages(transaction: transaction, mediaBox: mediaBox, ids: expiredIds)
+        AyuSavedMedia.removeMessageMedia(basePath: mediaBox.basePath, messageIds: expiredIds)
     }
     if remaining.count != store.keptDeleted.count {
         updateAyuForkStore(transaction: transaction) { current in
@@ -200,6 +203,9 @@ public func ayuForkStoreClearEditHistory(postbox: Postbox) -> Signal<Never, NoEr
         for ref in store.editHistory {
             let messageId = ref.messageId
             if let message = transaction.getMessage(messageId), message.attributes.contains(where: { $0 is SavedMessageEditsAttribute }) {
+                let candidates = Set(message.attributes.compactMap { $0 as? SavedMessageEditsAttribute }.flatMap { $0.versions }.compactMap { $0.mediaFileName })
+                let keeping = Set([AyuSavedMedia.principalFileName(peerId: messageId.peerId, messageId: messageId, mediaList: message.media)].compactMap { $0 })
+                AyuSavedMedia.removeEditHistoryMedia(basePath: postbox.mediaBox.basePath, candidates: candidates, keeping: keeping)
                 transaction.updateMessage(messageId, update: { currentMessage in
                     var attributes = currentMessage.attributes
                     attributes.removeAll(where: { $0 is SavedMessageEditsAttribute })

@@ -41,6 +41,10 @@ public enum AyuSavedMedia {
     public static func ensureDirectory(basePath: String) -> String {
         let path = directory(basePath: basePath)
         let _ = try? FileManager.default.createDirectory(atPath: path, withIntermediateDirectories: true, attributes: nil)
+        var url = URL(fileURLWithPath: path, isDirectory: true)
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        try? url.setResourceValues(values)
         return path
     }
 
@@ -182,7 +186,7 @@ public enum AyuSavedMedia {
 
     // Recover the owning peer id from a saved file name (for the whitelist).
     public static func peerId(fromFileName name: String) -> Int64? {
-        guard name.hasPrefix(filePrefix + "_") else {
+        guard name.hasPrefix(filePrefix + "_"), !name.hasSuffix(ShadowSavedMediaFiles.metadataSuffix) else {
             return nil
         }
         let components = name.components(separatedBy: "_")
@@ -199,50 +203,42 @@ public enum AyuSavedMedia {
     // if linking is not possible. Skips resources that are not fully downloaded
     // and files that already exist. Returns the number of newly saved files.
     @discardableResult
-    public static func saveMessageMedia(mediaBox: MediaBox, message: Message) -> Int {
-        return saveMedia(mediaBox: mediaBox, peerId: message.id.peerId, messageId: message.id, mediaList: message.effectiveMedia)
+    public static func saveMessageMedia(mediaBox: MediaBox, message: Message, purpose: String = "retained") -> Int {
+        return saveMedia(mediaBox: mediaBox, peerId: message.id.peerId, messageId: message.id, mediaList: message.effectiveMedia, purpose: purpose)
     }
 
     @discardableResult
-    public static func saveMedia(mediaBox: MediaBox, peerId: PeerId, messageId: MessageId?, mediaList: [Media]) -> Int {
-        var savable: [SavableResource] = []
-        for media in mediaList {
-            savable.append(contentsOf: savableResources(from: media))
-        }
-        if savable.isEmpty {
-            return 0
-        }
-
-        var sources: [(source: String, destinationName: String)] = []
-        for entry in savable {
-            guard let sourcePath = mediaBox.completedResourcePath(entry.resource) else {
-                continue
+    public static func saveMedia(mediaBox: MediaBox, peerId: PeerId, messageId: MessageId?, mediaList: [Media], purpose: String = "retained") -> Int {
+        return ShadowSavedMediaFiles.synchronized {
+            savedResourceIndexes[mediaBox.basePath] = nil
+            var savable: [SavableResource] = []
+            for media in mediaList {
+                savable.append(contentsOf: savableResources(from: media))
             }
-            let name = fileName(peerId: peerId, messageId: messageId, resource: entry.resource, fileExtension: entry.fileExtension)
-            sources.append((sourcePath, name))
-        }
-        if sources.isEmpty {
-            return 0
-        }
-
-        let directoryPath = ensureDirectory(basePath: mediaBox.basePath)
-        var savedCount = 0
-        for item in sources {
-            let destinationPath = directoryPath + "/" + item.destinationName
-            if FileManager.default.fileExists(atPath: destinationPath) {
-                continue
+            if savable.isEmpty {
+                return 0
             }
-            // Prefer a hard link; fall back to a copy on failure.
-            do {
-                try FileManager.default.linkItem(atPath: item.source, toPath: destinationPath)
-                savedCount += 1
-            } catch {
-                if (try? FileManager.default.copyItem(atPath: item.source, toPath: destinationPath)) != nil {
-                    savedCount += 1
+
+            var sources: [(source: String, destinationName: String, resourceId: String)] = []
+            for entry in savable {
+                guard let sourcePath = mediaBox.completedResourcePath(entry.resource) else {
+                    continue
                 }
+                let name = fileName(peerId: peerId, messageId: messageId, resource: entry.resource, fileExtension: entry.fileExtension)
+                sources.append((sourcePath, name, entry.resource.id.stringRepresentation))
             }
+            if sources.isEmpty {
+                return 0
+            }
+
+            let directoryPath = ensureDirectory(basePath: mediaBox.basePath)
+            var savedCount = 0
+            for item in sources {
+                let destinationPath = directoryPath + "/" + item.destinationName
+                if ShadowSavedMediaFiles.save(source: item.source, destination: destinationPath, resourceId: item.resourceId, purpose: purpose) { savedCount += 1 }
+            }
+            return savedCount
         }
-        return savedCount
     }
 
     // MARK: - Auto-save of all incoming media (3b)
@@ -264,9 +260,11 @@ public enum AyuSavedMedia {
         guard messageReference.isIncoming == true, let messageId = messageReference.id else {
             return nil
         }
-        let saveAllIncomingMedia = currentAyuGramSettings(mediaBox: mediaBox).saveAllIncomingMedia
-        let preserveSecretChatMedia = messageId.peerId.namespace == Namespaces.Peer.SecretChat && currentAyuGramSettings(mediaBox: mediaBox).keepDeletedSecretChatMessages
-        guard saveAllIncomingMedia || preserveSecretChatMedia else {
+        let settings = currentAyuGramSettings(mediaBox: mediaBox)
+        let saveAllIncomingMedia = settings.saveAllIncomingMedia
+        let preserveSecretChatMedia = messageId.peerId.namespace == Namespaces.Peer.SecretChat && settings.keepDeletedSecretChatMessages
+        let saveDestructingMedia = settings.saveDestructingMedia && messageReference.isSecret == true
+        guard saveAllIncomingMedia || preserveSecretChatMedia || saveDestructingMedia else {
             return nil
         }
         // Only act for the media's principal savable resource, so a video's
@@ -279,6 +277,54 @@ public enum AyuSavedMedia {
         return {
             Queue.concurrentDefaultQueue().async {
                 let _ = saveMedia(mediaBox: mediaBox, peerId: peerId, messageId: messageId, mediaList: [media])
+            }
+        }
+    }
+
+    private static var savedResourceIndexes: [String: (date: Double, paths: [String: String], legacy: [Entry])] = [:]
+
+    static func savedResourceCopy(basePath: String, resourceId: String) -> MediaResourceDataFetchCopyLocalItem? {
+        return ShadowSavedMediaFiles.synchronized {
+            let now = Date().timeIntervalSince1970
+            if savedResourceIndexes[basePath].map({ now - $0.date >= 0 && now - $0.date < 15.0 }) != true {
+                var paths: [String: String] = [:]
+                var legacy: [Entry] = []
+                for entry in entries(basePath: basePath) {
+                    if let id = ShadowSavedMediaFiles.metadata(path: entry.path).resourceId { paths[id] = entry.path }
+                    else { legacy.append(entry) }
+                }
+                if savedResourceIndexes.count >= 16 { savedResourceIndexes.removeAll() }
+                savedResourceIndexes[basePath] = (now, paths, legacy)
+            }
+            if let path = savedResourceIndexes[basePath]?.paths[resourceId], FileManager.default.fileExists(atPath: path) {
+                return AyuSavedResourceCopy(path: path)
+            }
+            // Never guess a resource whose legacy filename loses information.
+            guard sanitize(resourceId) == resourceId else { return nil }
+            let suffix = "_" + resourceId
+            let matches = (savedResourceIndexes[basePath]?.legacy ?? []).filter { ($0.name as NSString).deletingPathExtension.hasSuffix(suffix) }
+            guard matches.count == 1, let entry = matches.first, FileManager.default.fileExists(atPath: entry.path) else { return nil }
+            let _ = ShadowSavedMediaFiles.metadata(path: entry.path, resourceId: resourceId)
+            savedResourceIndexes[basePath]?.paths[resourceId] = entry.path
+            return AyuSavedResourceCopy(path: entry.path)
+        }
+    }
+
+    static func removeEditHistoryMedia(basePath: String, candidates: Set<String>, keeping: Set<String>) {
+        ShadowSavedMediaFiles.synchronized {
+            savedResourceIndexes[basePath] = nil
+            for name in candidates.subtracting(keeping) where name.hasPrefix(filePrefix + "_") && (name as NSString).lastPathComponent == name {
+                let _ = ShadowSavedMediaFiles.removeIfOnlyEditHistory(path: directory(basePath: basePath) + "/" + name)
+            }
+        }
+    }
+
+    static func removeMessageMedia(basePath: String, messageIds: [MessageId]) {
+        ShadowSavedMediaFiles.synchronized {
+            savedResourceIndexes[basePath] = nil
+            let prefixes = Set(messageIds.map { "\(filePrefix)_\($0.peerId.toInt64())_\($0.namespace)_\($0.id)" })
+            for entry in entries(basePath: basePath) where prefixes.contains(entry.name.split(separator: "_", maxSplits: 4).prefix(4).joined(separator: "_")) {
+                let _ = ShadowSavedMediaFiles.remove(path: entry.path)
             }
         }
     }
@@ -296,25 +342,27 @@ public enum AyuSavedMedia {
     }
 
     public static func entries(basePath: String) -> [Entry] {
-        let path = directory(basePath: basePath)
-        let fileManager = FileManager.default
-        guard let names = try? fileManager.contentsOfDirectory(atPath: path) else {
-            return []
-        }
-        var result: [Entry] = []
-        for name in names {
-            guard name.hasPrefix(filePrefix + "_") else {
-                continue
+        return ShadowSavedMediaFiles.synchronized {
+            let path = directory(basePath: basePath)
+            let fileManager = FileManager.default
+            guard let names = try? fileManager.contentsOfDirectory(atPath: path) else {
+                return []
             }
-            let full = path + "/" + name
-            guard let attributes = try? fileManager.attributesOfItem(atPath: full) else {
-                continue
+            var result: [Entry] = []
+            for name in names {
+                guard name.hasPrefix(filePrefix + "_"), !name.hasSuffix(ShadowSavedMediaFiles.metadataSuffix) else {
+                    continue
+                }
+                let full = path + "/" + name
+                guard let attributes = try? fileManager.attributesOfItem(atPath: full), attributes[.type] as? FileAttributeType == .typeRegular else {
+                    continue
+                }
+                let size = (attributes[.size] as? NSNumber)?.int64Value ?? 0
+                let modified = ShadowSavedMediaFiles.metadata(path: full).savedAt
+                result.append(Entry(path: full, name: name, peerId: peerId(fromFileName: name), size: size, modified: modified))
             }
-            let size = (attributes[.size] as? NSNumber)?.int64Value ?? 0
-            let modified = (attributes[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0.0
-            result.append(Entry(path: full, name: name, peerId: peerId(fromFileName: name), size: size, modified: modified))
+            return result
         }
-        return result
     }
 
     public static func totalSize(basePath: String) -> Int64 {
@@ -343,7 +391,6 @@ public enum AyuSavedMedia {
     public static func saveBanner(basePath: String, jpegData: Data) -> Bool {
         let path = bannerPath(basePath: basePath)
         do {
-            try? FileManager.default.removeItem(atPath: path)
             try jpegData.write(to: URL(fileURLWithPath: path), options: .atomic)
             return true
         } catch {
@@ -382,7 +429,6 @@ public enum AyuSavedMedia {
     public static func saveProfileBackground(basePath: String, jpegData: Data) -> Bool {
         let path = profileBackgroundPath(basePath: basePath)
         do {
-            try? FileManager.default.removeItem(atPath: path)
             try jpegData.write(to: URL(fileURLWithPath: path), options: .atomic)
             return true
         } catch {
@@ -404,14 +450,16 @@ public enum AyuSavedMedia {
     // Remove everything in the gallery. Returns freed bytes.
     @discardableResult
     public static func clearAll(basePath: String) -> Int64 {
-        let fileManager = FileManager.default
-        var freed: Int64 = 0
-        for entry in entries(basePath: basePath) {
-            if (try? fileManager.removeItem(atPath: entry.path)) != nil {
-                freed += entry.size
+        return ShadowSavedMediaFiles.synchronized {
+            savedResourceIndexes[basePath] = nil
+            var freed: Int64 = 0
+            for entry in entries(basePath: basePath) {
+                if ShadowSavedMediaFiles.remove(path: entry.path) {
+                    freed += entry.size
+                }
             }
+            return freed
         }
-        return freed
     }
 
     // Delete gallery files older than `maxAge` seconds, skipping any file whose
@@ -419,22 +467,24 @@ public enum AyuSavedMedia {
     // reference time (unix). Returns the number of files removed.
     @discardableResult
     public static func cleanup(basePath: String, maxAge: Int32, keepPeerIds: Set<Int64>, now: Double) -> Int {
-        guard maxAge > 0 else {
-            return 0
-        }
-        let fileManager = FileManager.default
-        var removed = 0
-        for entry in entries(basePath: basePath) {
-            if let peerId = entry.peerId, keepPeerIds.contains(peerId) {
-                continue
+        return ShadowSavedMediaFiles.synchronized {
+            savedResourceIndexes[basePath] = nil
+            guard maxAge > 0 else {
+                return 0
             }
-            if now - entry.modified >= Double(maxAge) {
-                if (try? fileManager.removeItem(atPath: entry.path)) != nil {
-                    removed += 1
+            var removed = 0
+            for entry in entries(basePath: basePath) {
+                if let peerId = entry.peerId, keepPeerIds.contains(peerId) {
+                    continue
+                }
+                if now - entry.modified >= Double(maxAge) {
+                    if ShadowSavedMediaFiles.remove(path: entry.path) {
+                        removed += 1
+                    }
                 }
             }
+            return removed
         }
-        return removed
     }
 
     // Trim the gallery so its total size does not exceed `maxBytes`, always
@@ -445,31 +495,33 @@ public enum AyuSavedMedia {
     // large.
     @discardableResult
     public static func cleanupBySize(basePath: String, maxBytes: Int64, keepPeerIds: Set<Int64>) -> Int {
-        guard maxBytes > 0 else {
-            return 0
-        }
-        let all = entries(basePath: basePath)
-        var total: Int64 = all.reduce(0) { $0 + $1.size }
-        if total <= maxBytes {
-            return 0
-        }
-        // Oldest first.
-        let ordered = all.sorted { $0.modified < $1.modified }
-        let fileManager = FileManager.default
-        var removed = 0
-        for entry in ordered {
+        return ShadowSavedMediaFiles.synchronized {
+            savedResourceIndexes[basePath] = nil
+            guard maxBytes > 0 else {
+                return 0
+            }
+            let all = entries(basePath: basePath)
+            var total: Int64 = all.reduce(0) { $0 + $1.size }
             if total <= maxBytes {
-                break
+                return 0
             }
-            if let peerId = entry.peerId, keepPeerIds.contains(peerId) {
-                continue
+            // Oldest first.
+            let ordered = all.sorted { $0.modified < $1.modified }
+            var removed = 0
+            for entry in ordered {
+                if total <= maxBytes {
+                    break
+                }
+                if let peerId = entry.peerId, keepPeerIds.contains(peerId) {
+                    continue
+                }
+                if ShadowSavedMediaFiles.remove(path: entry.path) {
+                    total -= entry.size
+                    removed += 1
+                }
             }
-            if (try? fileManager.removeItem(atPath: entry.path)) != nil {
-                total -= entry.size
-                removed += 1
-            }
+            return removed
         }
-        return removed
     }
 }
 
@@ -587,4 +639,10 @@ public func ayuRunMediaCleanupNow(postbox: Postbox) -> Signal<(ageRemoved: Int, 
         }
         |> runOn(Queue.concurrentDefaultQueue())
     }
+}
+
+private final class AyuSavedResourceCopy: MediaResourceDataFetchCopyLocalItem {
+    let path: String
+    init(path: String) { self.path = path }
+    func copyTo(url: URL) -> Bool { return ShadowSavedMediaFiles.copy(source: self.path, destination: url) }
 }

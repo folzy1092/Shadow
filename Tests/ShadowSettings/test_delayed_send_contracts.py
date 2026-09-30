@@ -15,7 +15,7 @@ class DelayedSendContracts(unittest.TestCase):
     def test_ui_and_transform_share_one_eligibility_gate(self):
         self.assertIn("public static func willAutomaticallySchedule", CORE)
         transform = CORE.split("public static func transform", 1)[1]
-        self.assertIn("guard willAutomaticallySchedule(messages: messages, peerId: peerId)", transform)
+        self.assertIn("guard willAutomaticallySchedule(messages: messages, peerId: peerId, settings: settings)", transform)
 
     def test_existing_send_semantics_are_not_overridden(self):
         gate = CORE.split("public static func willAutomaticallySchedule", 1)[1].split("private static func messageHasMedia", 1)[0]

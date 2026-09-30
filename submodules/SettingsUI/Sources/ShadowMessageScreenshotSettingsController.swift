@@ -63,6 +63,7 @@ private func screenshotColorHex(_ argb: Int32) -> String {
 
 private enum ScreenshotSettingEntry: ItemListNodeEntry {
     case enabled(Bool)
+    case anonymize(Bool)
     case background(ShadowMessageScreenshotSettings.Background)
     case color(Int32)
     case image
@@ -95,6 +96,7 @@ private enum ScreenshotSettingEntry: ItemListNodeEntry {
         case .ownAvatar: return 11
         case .peerAvatars: return 12
         case .info: return 13
+        case .anonymize: return 14
         }
     }
 
@@ -109,6 +111,10 @@ private enum ScreenshotSettingEntry: ItemListNodeEntry {
         let path: WritableKeyPath<ShadowMessageScreenshotSettings, Bool>
 
         switch self {
+        case let .anonymize(flag):
+            title = "Анонимный скриншот"
+            value = flag
+            path = \.anonymize
         case let .enabled(flag):
             title = "Кнопка скриншота при выделении"
             value = flag
@@ -181,7 +187,7 @@ private enum ScreenshotSettingEntry: ItemListNodeEntry {
         case .info:
             return ItemListTextItem(
                 presentationData: presentationData,
-                text: .plain("Выдели сообщения и нажми камеру рядом с анонимной пересылкой. Откроется предпросмотр одного изображения. Видео и анимации попадут в него статичным кадром. Недоступное медиа останется заглушкой. Настройки отдельны для каждого аккаунта."),
+                text: .plain("Выдели сообщения и нажми камеру рядом с анонимной пересылкой. Откроется предпросмотр одного изображения. Видео и анимации попадут в него статичным кадром. Недоступное медиа останется заглушкой. Настройки отдельны для каждого аккаунта. В шестерёнке предпросмотра можно скрыть себя, всех собеседников или выбранных участников. Анонимизация скрывает имена, аватарки и известные идентификаторы в тексте. Лица и надписи внутри фото и видео остаются видны."),
                 sectionId: 0
             )
         }
@@ -381,7 +387,8 @@ func shadowMessageScreenshotSettingsController(context: AccountContext) -> ViewC
             .peerNames(options.showPeerNames),
             .ownAvatar(options.showOwnAvatar),
             .peerAvatars(options.showPeerAvatars),
-            .info
+            .info,
+            .anonymize(options.anonymize)
         ]
         let presentation = ItemListPresentationData(data)
         return (

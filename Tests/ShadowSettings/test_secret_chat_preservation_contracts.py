@@ -44,7 +44,8 @@ class SecretChatPreservationContracts(unittest.TestCase):
         consumed = (CORE / "TelegramEngine/Messages/MarkMessageContentAsConsumedInteractively.swift").read_text()
 
         self.assertIn("preserveSecretChatMedia", saved_media)
-        self.assertIn("currentAyuGramSettings(mediaBox: mediaBox).keepDeletedSecretChatMessages", saved_media)
+        self.assertIn("let settings = currentAyuGramSettings(mediaBox: mediaBox)", saved_media)
+        self.assertIn("settings.keepDeletedSecretChatMessages", saved_media)
         self.assertIn("keepSecretChatMedia", consumed)
         self.assertIn("ayuKeepSelfDestructMedia = settings.keepDeletedSecretChatMessages", consumed)
 

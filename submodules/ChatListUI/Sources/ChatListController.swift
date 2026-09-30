@@ -7365,6 +7365,10 @@ private final class ChatListLocationContext {
                             settings.ghostAccountMode = .manual
                             return settings
                         }).startStandalone()
+                    },
+                    contextAction: { [weak self] _, _ in
+                        guard let self, let parentController = self.parentController else { return }
+                        parentController.push(ghostContext.sharedContext.makeShadowGhostSettingsController(context: ghostContext))
                     }
                 )))
             } else {

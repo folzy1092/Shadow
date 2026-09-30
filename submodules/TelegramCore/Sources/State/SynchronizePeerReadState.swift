@@ -228,18 +228,23 @@ private func validatePeerReadState(network: Network, postbox: Postbox, stateMana
 
 private func pushPeerReadState(network: Network, postbox: Postbox, stateManager: AccountStateManager, peerId: PeerId, readState: PeerReadState) -> Signal<PeerReadState, PeerReadStateValidationError> {
     if peerId.namespace == Namespaces.Peer.SecretChat {
-        return inputSecretChat(postbox: postbox, peerId: peerId)
-        |> mapToSignal { inputPeer -> Signal<PeerReadState, PeerReadStateValidationError> in
-            switch readState {
-            case .idBased:
-                return .single(readState)
-            case let .indexBased(maxIncomingReadIndex, _, _, _):
-                return network.request(Api.functions.messages.readEncryptedHistory(peer: inputPeer, maxDate: maxIncomingReadIndex.timestamp))
-                    |> mapError { _ in
-                        return PeerReadStateValidationError.retry
-                    }
-                |> mapToSignal { _ -> Signal<PeerReadState, PeerReadStateValidationError> in
+        return postbox.transaction { currentAyuGramSettings(transaction: $0).suppressReadReceipts(peerId: peerId) }
+        |> castError(PeerReadStateValidationError.self)
+        |> mapToSignal { suppressed -> Signal<PeerReadState, PeerReadStateValidationError> in
+            if suppressed { return .single(readState) }
+            return inputSecretChat(postbox: postbox, peerId: peerId)
+            |> mapToSignal { inputPeer -> Signal<PeerReadState, PeerReadStateValidationError> in
+                switch readState {
+                case .idBased:
                     return .single(readState)
+                case let .indexBased(maxIncomingReadIndex, _, _, _):
+                    return network.request(Api.functions.messages.readEncryptedHistory(peer: inputPeer, maxDate: maxIncomingReadIndex.timestamp))
+                        |> mapError { _ in
+                            return PeerReadStateValidationError.retry
+                        }
+                    |> mapToSignal { _ -> Signal<PeerReadState, PeerReadStateValidationError> in
+                        return .single(readState)
+                    }
                 }
             }
         }

@@ -222,7 +222,7 @@ extension ChatControllerImpl {
                         let transformedMessages = self.transformEnqueueMessages(messages, silentPosting: effectiveSilentPosting, scheduleTime: scheduleTime, repeatPeriod: repeatPeriod)
                         let shouldClearGhostScheduledDraft: Bool
                         if scheduleTime == nil, let peerId = self.chatLocation.peerId {
-                            shouldClearGhostScheduledDraft = AyuDelayedSend.willAutomaticallySchedule(messages: transformedMessages, peerId: peerId)
+                            shouldClearGhostScheduledDraft = AyuDelayedSend.willAutomaticallySchedule(messages: transformedMessages, peerId: peerId, settings: currentAyuGramSettings(accountId: self.context.account.id))
                         } else {
                             shouldClearGhostScheduledDraft = false
                         }
@@ -397,7 +397,7 @@ extension ChatControllerImpl {
                             let message: EnqueueMessage = .message(text: "", attributes: attributes, inlineStickers: [:], mediaReference: .standalone(media: TelegramMediaFile(fileId: EngineMedia.Id(namespace: Namespaces.Media.LocalFile, id: randomId), partialReference: nil, resource: resource, previewRepresentations: [], videoThumbnails: [], immediateThumbnailData: nil, mimeType: "audio/ogg", size: Int64(data.compressedData.count), attributes: [.Audio(isVoice: true, duration: Int(data.duration), title: nil, performer: nil, waveform: waveformBuffer)], alternativeRepresentations: [])), threadId: strongSelf.chatLocation.threadId, replyToMessageId: strongSelf.presentationInterfaceState.interfaceState.replyMessageSubject?.subjectModel, replyToStoryId: nil, localGroupingKey: nil, correlationId: correlationId, bubbleUpEmojiOrStickersets: [])
                             let shouldClearGhostScheduledDraft: Bool
                             if let peerId = strongSelf.chatLocation.peerId {
-                                shouldClearGhostScheduledDraft = AyuDelayedSend.willAutomaticallySchedule(messages: [message], peerId: peerId)
+                                shouldClearGhostScheduledDraft = AyuDelayedSend.willAutomaticallySchedule(messages: [message], peerId: peerId, settings: currentAyuGramSettings(accountId: strongSelf.context.account.id))
                             } else {
                                 shouldClearGhostScheduledDraft = false
                             }
@@ -769,7 +769,7 @@ extension ChatControllerImpl {
             guard let peerId = self.chatLocation.peerId else {
                 return
             }
-            let shouldClearGhostScheduledDraft = scheduleTime == nil && AyuDelayedSend.willAutomaticallySchedule(messages: transformedMessages, peerId: peerId)
+            let shouldClearGhostScheduledDraft = scheduleTime == nil && AyuDelayedSend.willAutomaticallySchedule(messages: transformedMessages, peerId: peerId, settings: currentAyuGramSettings(accountId: self.context.account.id))
 
             if !shouldClearGhostScheduledDraft {
                 self.chatDisplayNode.setupSendActionOnViewUpdate({ [weak self] in

@@ -40,7 +40,7 @@ func ayuBuildEditHistoryVersions(mediaBox: MediaBox, previousMessage: Message, n
     var mediaFileName: String?
     var mediaKind: String?
     if mediaChanged, previousMediaId != nil {
-        AyuSavedMedia.saveMessageMedia(mediaBox: mediaBox, message: previousMessage)
+        AyuSavedMedia.saveMessageMedia(mediaBox: mediaBox, message: previousMessage, purpose: "editHistory")
         mediaFileName = AyuSavedMedia.principalFileName(peerId: previousMessage.id.peerId, messageId: previousMessage.id, mediaList: previousMessage.media)
         mediaKind = AyuSavedMedia.mediaKind(for: previousMessage.media)
     }
@@ -52,7 +52,11 @@ func ayuBuildEditHistoryVersions(mediaBox: MediaBox, previousMessage: Message, n
     let date = Int32(CFAbsoluteTimeGetCurrent() + NSTimeIntervalSince1970)
     versions.append(SavedMessageEditVersion(text: previousMessage.text, date: date, mediaFileName: mediaFileName, mediaKind: mediaKind))
     if versions.count > 20 {
+        let dropped = Set(versions.prefix(versions.count - 20).compactMap { $0.mediaFileName })
         versions.removeFirst(versions.count - 20)
+        var keeping = Set(versions.compactMap { $0.mediaFileName })
+        if let name = AyuSavedMedia.principalFileName(peerId: previousMessage.id.peerId, messageId: previousMessage.id, mediaList: newMedia) { keeping.insert(name) }
+        AyuSavedMedia.removeEditHistoryMedia(basePath: mediaBox.basePath, candidates: dropped, keeping: keeping)
     }
     return versions
 }
