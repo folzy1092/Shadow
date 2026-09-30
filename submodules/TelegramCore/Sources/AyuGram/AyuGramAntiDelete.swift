@@ -61,13 +61,17 @@ func ayuGramMarkMessagesDeleted(transaction: Transaction, mediaBox: MediaBox, id
         if let message = transaction.getMessage(id) {
             AyuSavedMedia.saveMessageMedia(mediaBox: mediaBox, message: message)
         }
+        transaction.clearTimestampBasedAttribute(id: id, tag: 0)
+        transaction.clearTimestampBasedAttribute(id: id, tag: 1)
         transaction.updateMessage(id) { currentMessage -> PostboxUpdateMessage in
-            if currentMessage.attributes.contains(where: { $0 is DeletedMessageAttribute }) {
+            let alreadyKept = currentMessage.attributes.contains(where: { $0 is DeletedMessageAttribute })
+            let hasTimeout = currentMessage.attributes.contains(where: { $0 is AutoremoveTimeoutMessageAttribute || $0 is AutoclearTimeoutMessageAttribute })
+            if alreadyKept && !hasTimeout {
                 return .skip
             }
             var attributes = currentMessage.attributes
             attributes.removeAll(where: { $0 is AutoremoveTimeoutMessageAttribute || $0 is AutoclearTimeoutMessageAttribute })
-            attributes.append(DeletedMessageAttribute(date: markDate))
+            if !alreadyKept { attributes.append(DeletedMessageAttribute(date: markDate)) }
             let storeForwardInfo = currentMessage.forwardInfo.flatMap { info in
                 StoreMessageForwardInfo(authorId: info.author?.id, sourceId: info.source?.id, sourceMessageId: info.sourceMessageId, date: info.date, authorSignature: info.authorSignature, psaType: info.psaType, flags: info.flags)
             }

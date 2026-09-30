@@ -133,6 +133,8 @@ public func ayuForkStoreClearKeptDeleted(postbox: Postbox) -> Signal<Never, NoEr
         updateAyuForkStore(transaction: transaction) { current in
             var current = current
             current.keptDeleted = []
+            let cleared = Set(store.keptDeleted)
+            current.editHistory.removeAll(where: { cleared.contains($0) })
             return current
         }
     }
@@ -190,6 +192,8 @@ func ayuForkStorePruneKeptDeleted(transaction: Transaction, mediaBox: MediaBox, 
         updateAyuForkStore(transaction: transaction) { current in
             var current = current
             current.keptDeleted = remaining
+            let removed = Set(store.keptDeleted).subtracting(remaining)
+            current.editHistory.removeAll(where: { removed.contains($0) })
             return current
         }
     }

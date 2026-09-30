@@ -162,7 +162,22 @@ func managedSecretChatOutgoingOperations(auxiliaryMethods: AccountAuxiliaryMetho
                                 case let .readMessagesContent(layer, actionGloballyUniqueId, globallyUniqueIds):
                                     return postbox.transaction { currentAyuGramSettings(transaction: $0).effectiveHideConsumed }
                                     |> mapToSignal { suppressed in
-                                        let action: SecretMessageAction = suppressed ? .noop(layer: layer, actionGloballyUniqueId: actionGloballyUniqueId) : .readMessageContents(layer: layer, actionGloballyUniqueId: actionGloballyUniqueId, globallyUniqueIds: globallyUniqueIds)
+                                        let action: SecretMessageAction
+                                        if suppressed {
+                                            switch layer {
+                                            case .layer8:
+                                                // Layer 8 has no sequence numbers or noop.
+                                                return postbox.transaction { transaction -> Void in
+                                                    let _ = transaction.operationLogRemoveEntry(peerId: entry.peerId, tag: OperationLogTags.SecretOutgoing, tagLocalIndex: entry.tagLocalIndex)
+                                                }
+                                            case .layer46: action = .noop(layer: .layer46, actionGloballyUniqueId: actionGloballyUniqueId)
+                                            case .layer73: action = .noop(layer: .layer73, actionGloballyUniqueId: actionGloballyUniqueId)
+                                            case .layer101: action = .noop(layer: .layer101, actionGloballyUniqueId: actionGloballyUniqueId)
+                                            case .layer144: action = .noop(layer: .layer144, actionGloballyUniqueId: actionGloballyUniqueId)
+                                            }
+                                        } else {
+                                            action = .readMessageContents(layer: layer, actionGloballyUniqueId: actionGloballyUniqueId, globallyUniqueIds: globallyUniqueIds)
+                                        }
                                         return sendServiceActionMessage(postbox: postbox, network: network, peerId: entry.peerId, action: action, tagLocalIndex: entry.tagLocalIndex, wasDelivered: operation.delivered)
                                     }
                                 case let .setMessageAutoremoveTimeout(layer, actionGloballyUniqueId, timeout, messageId):
