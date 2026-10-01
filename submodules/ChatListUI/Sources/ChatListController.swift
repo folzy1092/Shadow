@@ -7248,7 +7248,12 @@ private final class ChatListLocationContext {
                     self.rightButton = AnyComponentWithIdentity(id: "shadowLock", component: AnyComponent(NavigationButtonComponent(
                         content: .icon(imageName: "sf:lock"),
                         pressed: { [weak self] _ in
-                            self?.parentController?.shadowToggleLockForSelectedChats(selectedPeerIds)
+                            // The header keeps the first closure for an unchanged icon, so
+                            // read the selection at press time, not when the button was made.
+                            guard let parent = self?.parentController else {
+                                return
+                            }
+                            parent.shadowToggleLockForSelectedChats(parent.shadowCurrentSelectedPeerIds())
                         }
                     )))
                 }
@@ -7259,7 +7264,10 @@ private final class ChatListLocationContext {
                     self.storyButton = AnyComponentWithIdentity(id: "shadowSpace", component: AnyComponent(NavigationButtonComponent(
                         content: .icon(imageName: "sf:eye.slash"),
                         pressed: { [weak self] _ in
-                            self?.parentController?.shadowChooseSpaceForSelectedChats(selectedPeerIds)
+                            guard let parent = self?.parentController else {
+                                return
+                            }
+                            parent.shadowChooseSpaceForSelectedChats(parent.shadowCurrentSelectedPeerIds())
                         }
                     )))
                 }
@@ -7672,6 +7680,11 @@ private func shadowFilteredStorySubscriptions(context: AccountContext, _ signal:
 }
 
 extension ChatListControllerImpl {
+    // Shadow: the chats selected in edit mode right now.
+    func shadowCurrentSelectedPeerIds() -> Set<EnginePeer.Id> {
+        return self.chatListDisplayNode.effectiveContainerNode.currentItemNode.currentState.selectedPeerIds
+    }
+
     // Shadow: the eye-slash button in edit mode — pick the space for the selected chats.
     func shadowChooseSpaceForSelectedChats(_ peerIds: Set<EnginePeer.Id>) {
         let context = self.context

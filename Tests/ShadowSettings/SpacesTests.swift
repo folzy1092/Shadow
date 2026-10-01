@@ -26,7 +26,13 @@ struct SpacesTests {
         check(!store.isHidden(accountPeerId: 1, peerId: 10), "Second-only visible in second")
         check(store.isHidden(accountPeerId: 1, peerId: 20), "Main-only hidden in second")
         check(!store.isHidden(accountPeerId: 1, peerId: 30), "Everywhere visible in second")
+        store.setSecondSpaceExclusive(true)
+        check(store.isHidden(accountPeerId: 1, peerId: 30), "Exclusive second space hides everywhere-chats")
+        check(!store.isHidden(accountPeerId: 1, peerId: 10), "Exclusive second space keeps second-only chats")
         store.setActiveSpace(.main)
+        check(!store.isHidden(accountPeerId: 1, peerId: 30), "Exclusive mode does not affect the main space")
+        check(ShadowSpaceStore(defaults: defaults).secondSpaceExclusive, "Exclusive mode persists")
+        store.setSecondSpaceExclusive(false)
 
         let reloaded = ShadowSpaceStore(defaults: defaults)
         check(reloaded.visibility(accountPeerId: 1, peerId: 10) == .secondOnly, "Visibility persists")

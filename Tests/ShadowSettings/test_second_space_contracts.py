@@ -65,6 +65,12 @@ class SecondSpaceContracts(unittest.TestCase):
         screen = read("SettingsUI/Sources/ShadowSecondSpaceController.swift")
         self.assertIn("ShadowSpaceStore.validationError(code: first, format: format, mainCode: mainCode)", screen)
         self.assertIn("shadowRemoveSecondSpace(account: context.account)", screen)
+        self.assertIn("store.setSecondSpaceExclusive(value)", screen)
+        store = read("TelegramCore/Sources/AyuGram/ShadowSpaces.swift")
+        self.assertIn("if self.activeSpaceValue == .second && self.secondSpaceExclusiveValue {", store)
+        controller_src = read("ChatListUI/Sources/ChatListController.swift")
+        # Edit-mode buttons read the selection when pressed (the header keeps the first closure).
+        self.assertEqual(controller_src.count("parent.shadowCurrentSelectedPeerIds()"), 2)
         # In the main space the list never reveals second-space chats.
         self.assertIn(".filter { $0.value.isVisible(in: space) || space == .second }", screen)
 

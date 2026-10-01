@@ -61,6 +61,7 @@ public final class ShadowSpaceStore {
         static let visibility = "shadow.spaces.visibility.v1"
         static let code = "shadow.spaces.code.v1"
         static let savedMute = "shadow.spaces.savedMute.v1"
+        static let exclusive = "shadow.spaces.secondExclusive.v1"
     }
 
     private let defaults: UserDefaults
@@ -69,10 +70,28 @@ public final class ShadowSpaceStore {
     // accountPeerId -> peerId -> raw visibility; mirrors UserDefaults so the
     // chat list can query it per row without decoding.
     private var visibilityCache: [Int64: [Int64: Int]]
+    // When on, the second space shows only "only second" chats: every other
+    // chat (including "everywhere" and new ones) stays in the main space.
+    private var secondSpaceExclusiveValue: Bool
 
     public init(defaults: UserDefaults) {
         self.defaults = defaults
         self.visibilityCache = ShadowSpaceStore.decodeVisibility(defaults.dictionary(forKey: Key.visibility))
+        self.secondSpaceExclusiveValue = defaults.bool(forKey: Key.exclusive)
+    }
+
+    public var secondSpaceExclusive: Bool {
+        self.lock.lock()
+        defer { self.lock.unlock() }
+        return self.secondSpaceExclusiveValue
+    }
+
+    public func setSecondSpaceExclusive(_ value: Bool) {
+        self.lock.lock()
+        self.secondSpaceExclusiveValue = value
+        self.defaults.set(value, forKey: Key.exclusive)
+        self.lock.unlock()
+        self.notifyChanged()
     }
 
     private func notifyChanged() {
@@ -165,8 +184,9 @@ public final class ShadowSpaceStore {
     public func isHidden(accountPeerId: Int64, peerId: Int64) -> Bool {
         self.lock.lock()
         defer { self.lock.unlock() }
-        guard let raw = self.visibilityCache[accountPeerId]?[peerId], let visibility = Visibility(rawValue: raw) else {
-            return false
+        let visibility = self.visibilityCache[accountPeerId]?[peerId].flatMap(Visibility.init(rawValue:)) ?? .everywhere
+        if self.activeSpaceValue == .second && self.secondSpaceExclusiveValue {
+            return visibility != .secondOnly
         }
         return !visibility.isVisible(in: self.activeSpaceValue)
     }
@@ -271,7 +291,9 @@ public final class ShadowSpaceStore {
         self.lock.lock()
         self.defaults.removeObject(forKey: Key.code)
         self.defaults.removeObject(forKey: Key.visibility)
+        self.defaults.removeObject(forKey: Key.exclusive)
         self.visibilityCache = [:]
+        self.secondSpaceExclusiveValue = false
         self.activeSpaceValue = .main
         self.lock.unlock()
         self.notifyChanged()

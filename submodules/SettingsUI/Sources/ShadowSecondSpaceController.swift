@@ -15,6 +15,7 @@ import AccountContext
 private enum ShadowSecondSpaceSection: Int32 {
     case status
     case code
+    case mode
     case chats
 }
 
@@ -25,6 +26,8 @@ private enum ShadowSecondSpaceEntry: ItemListNodeEntry {
     case leave
     case removeCode
     case codeFooter(String)
+    case exclusive(Bool)
+    case exclusiveFooter
     case chatsHeader
     case addChat
     case chat(index: Int, peerId: EnginePeer.Id, title: String, visibility: ShadowSpaceStore.Visibility)
@@ -36,6 +39,8 @@ private enum ShadowSecondSpaceEntry: ItemListNodeEntry {
             return ShadowSecondSpaceSection.status.rawValue
         case .setCode, .leave, .removeCode, .codeFooter:
             return ShadowSecondSpaceSection.code.rawValue
+        case .exclusive, .exclusiveFooter:
+            return ShadowSecondSpaceSection.mode.rawValue
         case .chatsHeader, .addChat, .chat, .chatsFooter:
             return ShadowSecondSpaceSection.chats.rawValue
         }
@@ -52,6 +57,8 @@ private enum ShadowSecondSpaceEntry: ItemListNodeEntry {
         case .codeFooter: return 5
         case .chatsHeader: return 6
         case .addChat: return 7
+        case .exclusive: return 8
+        case .exclusiveFooter: return 9
         case let .chat(index, _, _, _): return 100 + Int32(index)
         case .chatsFooter: return 100_000
         }
@@ -66,8 +73,10 @@ private enum ShadowSecondSpaceEntry: ItemListNodeEntry {
         case .leave: return 3
         case .removeCode: return 4
         case .codeFooter: return 5
-        case .chatsHeader: return 6
-        case .addChat: return 7
+        case .exclusive: return 6
+        case .exclusiveFooter: return 7
+        case .chatsHeader: return 8
+        case .addChat: return 9
         case let .chat(index, _, _, _): return 100 + Int32(index)
         case .chatsFooter: return 100_000
         }
@@ -79,7 +88,9 @@ private enum ShadowSecondSpaceEntry: ItemListNodeEntry {
             return a == b
         case let (.setCode(a1, a2), .setCode(b1, b2)):
             return a1 == b1 && a2 == b2
-        case (.leave, .leave), (.removeCode, .removeCode), (.chatsHeader, .chatsHeader), (.addChat, .addChat):
+        case let (.exclusive(a), .exclusive(b)):
+            return a == b
+        case (.leave, .leave), (.removeCode, .removeCode), (.exclusiveFooter, .exclusiveFooter), (.chatsHeader, .chatsHeader), (.addChat, .addChat):
             return true
         case let (.chat(a1, a2, a3, a4), .chat(b1, b2, b3, b4)):
             return a1 == b1 && a2 == b2 && a3 == b3 && a4 == b4
@@ -107,8 +118,14 @@ private enum ShadowSecondSpaceEntry: ItemListNodeEntry {
             return ItemListActionItem(presentationData: presentationData, title: "Удалить второй код", kind: .destructive, alignment: .natural, sectionId: self.section, style: .blocks, action: arguments.removeCode)
         case let .codeFooter(text):
             return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
+        case let .exclusive(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Во втором — только его чаты", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.setExclusive(value)
+            })
+        case .exclusiveFooter:
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Включено: во втором пространстве видны только чаты «Только второе», все остальные (и новые) остаются в основном. Выключено: во втором видны и обычные чаты («Везде»)."), sectionId: self.section)
         case .chatsHeader:
-            return ItemListSectionHeaderItem(presentationData: presentationData, text: "ЧАТЫ", sectionId: self.section)
+            return ItemListSectionHeaderItem(presentationData: presentationData, text: "ЧАТЫ С ОСОБОЙ ВИДИМОСТЬЮ", sectionId: self.section)
         case .addChat:
             return ItemListActionItem(presentationData: presentationData, title: "Добавить чат", kind: .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: arguments.addChat)
         case let .chat(_, peerId, title, visibility):
@@ -127,6 +144,7 @@ private final class ShadowSecondSpaceArguments {
     let removeCode: () -> Void
     let addChat: () -> Void
     let changeChat: (EnginePeer.Id, String) -> Void
+    var setExclusive: (Bool) -> Void = { _ in }
 
     init(setCode: @escaping () -> Void, leave: @escaping () -> Void, removeCode: @escaping () -> Void, addChat: @escaping () -> Void, changeChat: @escaping (EnginePeer.Id, String) -> Void) {
         self.setCode = setCode
@@ -298,12 +316,21 @@ func shadowSecondSpaceController(context: AccountContext, focus: ShadowSettingsS
         chooseVisibility([peerId], title)
     })
 
+    arguments.setExclusive = { value in
+        store.setSecondSpaceExclusive(value)
+    }
+
     let customPeers: Signal<[(EnginePeer.Id, String, ShadowSpaceStore.Visibility)], NoError> = revision.get()
     |> map { _ -> [(Int64, ShadowSpaceStore.Visibility)] in
         let space = store.activeSpace
         return store.customVisibilities(accountPeerId: accountPeerId)
         .filter { $0.value.isVisible(in: space) || space == .second }
-        .sorted(by: { $0.key < $1.key })
+        .sorted(by: { lhs, rhs in
+            if (lhs.value == .secondOnly) != (rhs.value == .secondOnly) {
+                return lhs.value == .secondOnly
+            }
+            return lhs.key < rhs.key
+        })
         .map { ($0.key, $0.value) }
     }
     |> mapToSignal { items -> Signal<[(EnginePeer.Id, String, ShadowSpaceStore.Visibility)], NoError> in
@@ -339,12 +366,14 @@ func shadowSecondSpaceController(context: AccountContext, focus: ShadowSettingsS
             entries.append(.codeFooter("Нужен включённый код-пароль Telegram: Настройки → Конфиденциальность → Код-пароль."))
         }
         if store.hasCode {
+            entries.append(.exclusive(store.secondSpaceExclusive))
+            entries.append(.exclusiveFooter)
             entries.append(.chatsHeader)
             entries.append(.addChat)
             for (index, item) in customPeers.enumerated() {
                 entries.append(.chat(index: index, peerId: item.0, title: item.1, visibility: item.2))
             }
-            entries.append(.chatsFooter(inSecond ? "Чаты «только второе» не видны в основном пространстве и не присылают уведомлений. Изменить видимость можно и долгим нажатием на чат или кнопкой с перечёркнутым глазом в режиме «Изменить»." : "Здесь показаны только чаты основного пространства. Чаты второго пространства видны, когда оно открыто."))
+            entries.append(.chatsFooter(inSecond ? "Здесь все чаты, у которых видимость не «Везде»: сначала «Только второе», потом «Только основное». Чаты «Только второе» не видны в основном пространстве и не присылают уведомлений. Чаты «Только основное» не видны во втором. Изменить видимость можно и долгим нажатием на чат или перечёркнутым глазом в режиме «Изменить»." : "Из основного пространства здесь видны только чаты «Только основное», чтобы список не выдавал второе. Полный список — во втором пространстве."))
         }
         focusedIndex = shadowSettingsFocusIndex(stableIds: entries.map { $0.stableId }, target: focus)
         let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Второе пространство"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
