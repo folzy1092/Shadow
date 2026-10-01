@@ -2186,7 +2186,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
             if self.previewing {
                 self.storiesReady.set(.single(true))
             } else {
-                self.storySubscriptionsDisposable = (self.context.engine.messages.storySubscriptions(isHidden: self.location == .chatList(groupId: .archive))
+                self.storySubscriptionsDisposable = (shadowFilteredStorySubscriptions(context: self.context, self.context.engine.messages.storySubscriptions(isHidden: self.location == .chatList(groupId: .archive)))
                 |> deliverOnMainQueue).startStrict(next: { [weak self] rawStorySubscriptions in
                     guard let self else {
                         return
@@ -2246,7 +2246,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                 })
                 
                 if case .chatList(.root) = self.location {
-                    self.storyArchiveSubscriptionsDisposable = (self.context.engine.messages.storySubscriptions(isHidden: true)
+                    self.storyArchiveSubscriptionsDisposable = (shadowFilteredStorySubscriptions(context: self.context, self.context.engine.messages.storySubscriptions(isHidden: true))
                     |> deliverOnMainQueue).startStrict(next: { [weak self] rawStoryArchiveSubscriptions in
                         guard let self else {
                             return
@@ -7630,4 +7630,22 @@ public func resolveChatListNavigationTarget(navigationController: NavigationCont
     }
     
     return nil
+}
+
+// Shadow: "Скрыть истории" replaces the story subscriptions with an empty list,
+// so the chat list header (and the archive row) never shows the story strip.
+// Stories stay reachable from profiles.
+private func shadowFilteredStorySubscriptions(context: AccountContext, _ signal: Signal<EngineStorySubscriptions, NoError>) -> Signal<EngineStorySubscriptions, NoError> {
+    let hidden = ayuGramSettings(postbox: context.account.postbox)
+    |> map { settings -> Bool in
+        return settings.hideStoriesBar
+    }
+    |> distinctUntilChanged
+    return combineLatest(signal, hidden)
+    |> map { subscriptions, hidden -> EngineStorySubscriptions in
+        if hidden {
+            return EngineStorySubscriptions(accountItem: nil, items: [], hasMoreToken: nil)
+        }
+        return subscriptions
+    }
 }

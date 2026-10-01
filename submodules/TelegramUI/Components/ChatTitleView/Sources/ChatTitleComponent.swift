@@ -487,9 +487,9 @@ public final class ChatTitleComponent: Component {
                                 titleCredibilityIcon = .fake
                             } else if peer.isScam {
                                 titleCredibilityIcon = .scam
-                            } else if !hidePeerStatus, let emojiStatus = peer.emojiStatus {
+                            } else if !hidePeerStatus, !currentAyuGramSettings(accountId: component.context.account.id).hidePremiumBadges, let emojiStatus = peer.emojiStatus {
                                 titleStatusIcon = .emojiStatus(emojiStatus)
-                            } else if peer.isPremium && !premiumConfiguration.isPremiumDisabled {
+                            } else if !currentAyuGramSettings(accountId: component.context.account.id).hidePremiumBadges && peer.isPremium && !premiumConfiguration.isPremiumDisabled {
                                 titleCredibilityIcon = .premium
                             }
                             

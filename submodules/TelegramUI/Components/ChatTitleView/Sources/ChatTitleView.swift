@@ -316,9 +316,9 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
                                         titleCredibilityIcon = .fake
                                     } else if peer.isScam {
                                         titleCredibilityIcon = .scam
-                                    } else if !hidePeerStatus, let emojiStatus = peer.emojiStatus {
+                                    } else if !hidePeerStatus, !currentAyuGramSettings(accountId: self.context.account.id).hidePremiumBadges, let emojiStatus = peer.emojiStatus {
                                         titleStatusIcon = .emojiStatus(emojiStatus)
-                                    } else if peer.isPremium && !premiumConfiguration.isPremiumDisabled {
+                                    } else if !currentAyuGramSettings(accountId: self.context.account.id).hidePremiumBadges && peer.isPremium && !premiumConfiguration.isPremiumDisabled {
                                         titleCredibilityIcon = .premium
                                     }
                                     

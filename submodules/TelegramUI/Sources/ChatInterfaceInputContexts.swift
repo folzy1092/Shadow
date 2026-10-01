@@ -201,7 +201,9 @@ func inputTextPanelStateForChatPresentationInterfaceState(_ chatPresentationInte
                 } else {
                     let premiumConfiguration = PremiumConfiguration.with(appConfiguration: context.currentAppConfiguration.with { $0 })
                     var showPremiumGift = false
-                    if !premiumConfiguration.isPremiumDisabled && chatPresentationInterfaceState.disallowedGifts != TelegramDisallowedGifts.All {
+                    // Shadow: "Скрыть кнопку подарка".
+                    let shadowHideGiftButton = currentAyuGramSettings(accountId: context.account.id).hideGiftButton
+                    if !shadowHideGiftButton && !premiumConfiguration.isPremiumDisabled && chatPresentationInterfaceState.disallowedGifts != TelegramDisallowedGifts.All {
                         if chatPresentationInterfaceState.alwaysShowGiftButton {
                             showPremiumGift = true
                         } else if chatPresentationInterfaceState.hasBirthdayToday {

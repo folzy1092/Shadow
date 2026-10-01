@@ -97,6 +97,7 @@ private enum AyuHubEntry: ItemListNodeEntry {
     case filters
     case hiddenAccounts
     case pushDiagnostics
+    case cleanInterface
     case infoFooter
 
     var section: ItemListSectionId {
@@ -107,7 +108,7 @@ private enum AyuHubEntry: ItemListNodeEntry {
             return AyuHubSection.privacy.rawValue
         case .noResults:
             return AyuHubSection.info.rawValue
-        case .customization, .spy, .ghost, .filters, .misc, .hiddenAccounts, .backup, .pushDiagnostics:
+        case .customization, .spy, .ghost, .filters, .misc, .hiddenAccounts, .backup, .pushDiagnostics, .cleanInterface:
             return AyuHubSection.tools.rawValue
         case .infoFooter:
             return AyuHubSection.info.rawValue
@@ -129,8 +130,10 @@ private enum AyuHubEntry: ItemListNodeEntry {
             return 3
         case .misc:
             return 4
+        case .cleanInterface:
+            return 11
         case .infoFooter:
-            return 9
+            return 20
         case .backup:
             return 6
         case .hiddenAccounts:
@@ -179,6 +182,8 @@ private enum AyuHubEntry: ItemListNodeEntry {
             return ItemListDisclosureItem(presentationData: presentationData, title: "Скрытие аккаунтов", label: "", sectionId: self.section, style: .blocks, action: arguments.openHiddenAccounts)
         case .pushDiagnostics:
             return ItemListDisclosureItem(presentationData: presentationData, title: "Разное", label: "", sectionId: self.section, style: .blocks, action: arguments.openPushDiagnostics)
+        case .cleanInterface:
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Чистый интерфейс", label: "", sectionId: self.section, style: .blocks, action: { arguments.openFeature(.cleanInterface) })
         }
     }
 }
@@ -194,6 +199,7 @@ private final class AyuHubArguments {
     let openFilters: () -> Void
     let openHiddenAccounts: () -> Void
     let openPushDiagnostics: () -> Void
+    var openFeature: (ShadowSettingsSearchDestination) -> Void = { _ in }
 
     init(updateQuery: @escaping (String) -> Void, openResult: @escaping (ShadowSettingsSearchItem) -> Void, openCustomization: @escaping () -> Void, openSpy: @escaping () -> Void, openGhost: @escaping () -> Void, openMisc: @escaping () -> Void, openBackup: @escaping () -> Void, openFilters: @escaping () -> Void, openHiddenAccounts: @escaping () -> Void, openPushDiagnostics: @escaping () -> Void) {
         self.updateQuery = updateQuery
@@ -223,6 +229,7 @@ func shadowSettingsSearchDestinationController(context: AccountContext, item: Sh
         } else {
             return shadowMiscController(context: context)
         }
+    case .cleanInterface: return shadowCleanInterfaceController(context: context, focus: item)
     }
 }
 
@@ -261,12 +268,21 @@ public func ayuGramSettingsController(context: AccountContext) -> ViewController
         }
     )
 
+    arguments.openFeature = { destination in
+        switch destination {
+        case .cleanInterface:
+            pushControllerImpl?(shadowCleanInterfaceController(context: context))
+        default:
+            break
+        }
+    }
+
     let signal = combineLatest(queue: .mainQueue(), context.sharedContext.presentationData, query.get())
     |> deliverOnMainQueue
     |> map { presentationData, query -> (ItemListControllerState, (ItemListNodeState, Any)) in
         var entries: [AyuHubEntry] = [.query(query)]
         if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            entries += [.customization, .spy, .ghost, .filters, .misc, .hiddenAccounts, .backup, .pushDiagnostics, .infoFooter]
+            entries += [.customization, .spy, .ghost, .filters, .misc, .hiddenAccounts, .backup, .pushDiagnostics, .cleanInterface, .infoFooter]
         } else {
             let matches = ShadowSettingsSearchIndex.search(query)
             entries += matches.isEmpty ? [.noResults] : matches.map { .result($0) }

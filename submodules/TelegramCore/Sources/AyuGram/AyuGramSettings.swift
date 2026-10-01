@@ -90,6 +90,17 @@ public struct AyuGramSettings: Codable, Equatable {
     // Account-scoped overrides keyed by the stable peer id string.
     public var chatPrivacyRules: [String: ShadowChatPrivacyRule] = [:]
     public var messageFilterPhrases: [String] = []
+    // Clean interface (all off by default).
+    public var hideStoriesBar: Bool = false
+    public var hideGiftButton: Bool = false
+    public var hidePremiumBadges: Bool = false
+    public var hideSponsoredMessages: Bool = false
+    // On-device transcription of voice messages for accounts without Premium.
+    public var localVoiceTranscription: Bool = true
+    // Local quick reply templates inserted into the composer.
+    public var quickReplyTemplates: [String] = []
+    public static let quickReplyTemplatesLimit = 50
+    public static let quickReplyTemplateMaxLength = 4096
     // Anti-deletion
     public var keepDeletedMessages: Bool
     // Secret chats use a separate local deletion pipeline. Keep this opt-in so
@@ -573,6 +584,12 @@ public struct AyuGramSettings: Codable, Equatable {
             self.chatPrivacyRules = [:]
         }
         self.messageFilterPhrases = (try container.decodeIfPresent([String].self, forKey: "messageFilterPhrases")) ?? []
+        self.hideStoriesBar = ((try container.decodeIfPresent(Int32.self, forKey: "hideStoriesBar")) ?? 0) != 0
+        self.hideGiftButton = ((try container.decodeIfPresent(Int32.self, forKey: "hideGiftButton")) ?? 0) != 0
+        self.hidePremiumBadges = ((try container.decodeIfPresent(Int32.self, forKey: "hidePremiumBadges")) ?? 0) != 0
+        self.hideSponsoredMessages = ((try container.decodeIfPresent(Int32.self, forKey: "hideSponsoredMessages")) ?? 0) != 0
+        self.localVoiceTranscription = ((try container.decodeIfPresent(Int32.self, forKey: "localVoiceTranscription")) ?? 1) != 0
+        self.quickReplyTemplates = (try container.decodeIfPresent([String].self, forKey: "quickReplyTemplates")) ?? []
         self.keepDeletedMessages = ((try container.decodeIfPresent(Int32.self, forKey: "keepDeletedMessages")) ?? 1) != 0
         self.keepDeletedSecretChatMessages = ((try container.decodeIfPresent(Int32.self, forKey: "keepDeletedSecretChatMessages")) ?? 0) != 0
         self.saveEditHistory = ((try container.decodeIfPresent(Int32.self, forKey: "saveEditHistory")) ?? 1) != 0
@@ -646,6 +663,12 @@ public struct AyuGramSettings: Codable, Equatable {
             .sorted { $0.peerId < $1.peerId }
         try container.encode(privacyRecords, forKey: "chatPrivacyRulesV2")
         try container.encode(self.messageFilterPhrases, forKey: "messageFilterPhrases")
+        try container.encode((self.hideStoriesBar ? 1 : 0) as Int32, forKey: "hideStoriesBar")
+        try container.encode((self.hideGiftButton ? 1 : 0) as Int32, forKey: "hideGiftButton")
+        try container.encode((self.hidePremiumBadges ? 1 : 0) as Int32, forKey: "hidePremiumBadges")
+        try container.encode((self.hideSponsoredMessages ? 1 : 0) as Int32, forKey: "hideSponsoredMessages")
+        try container.encode((self.localVoiceTranscription ? 1 : 0) as Int32, forKey: "localVoiceTranscription")
+        try container.encode(self.quickReplyTemplates, forKey: "quickReplyTemplates")
         try container.encode((self.keepDeletedMessages ? 1 : 0) as Int32, forKey: "keepDeletedMessages")
         try container.encode((self.keepDeletedSecretChatMessages ? 1 : 0) as Int32, forKey: "keepDeletedSecretChatMessages")
         try container.encode((self.saveEditHistory ? 1 : 0) as Int32, forKey: "saveEditHistory")

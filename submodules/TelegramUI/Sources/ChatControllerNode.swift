@@ -772,7 +772,9 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 break
             }
         }
-        if let displayAdPeer {
+        // Shadow: "Скрыть рекламу в каналах" — never create the ads context, so
+        // sponsored messages are neither fetched nor shown nor reported as seen.
+        if let displayAdPeer, !currentAyuGramSettings(accountId: context.account.id).hideSponsoredMessages {
             self.adMessagesContext = context.engine.messages.adMessages(peerId: displayAdPeer, activateManually: true)
         } else {
             self.adMessagesContext = nil
