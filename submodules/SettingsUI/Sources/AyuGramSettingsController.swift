@@ -111,6 +111,7 @@ private enum AyuHubEntry: ItemListNodeEntry {
     case quickReplies
     case chatLocks
     case secondSpace
+    case crashReports(Int)
     case infoFooter
     case checkUpdates(label: String, enabled: Bool)
 
@@ -126,7 +127,7 @@ private enum AyuHubEntry: ItemListNodeEntry {
             return AyuHubSection.privacy.rawValue
         case .noResults:
             return AyuHubSection.info.rawValue
-        case .customization, .spy, .ghost, .filters, .misc, .hiddenAccounts, .backup, .pushDiagnostics, .quickReplies, .chatLocks, .secondSpace:
+        case .customization, .spy, .ghost, .filters, .misc, .hiddenAccounts, .backup, .pushDiagnostics, .quickReplies, .chatLocks, .secondSpace, .crashReports:
             return AyuHubSection.tools.rawValue
         case .infoFooter:
             return AyuHubSection.info.rawValue
@@ -156,6 +157,8 @@ private enum AyuHubEntry: ItemListNodeEntry {
             return 13
         case .secondSpace:
             return 14
+        case .crashReports:
+            return 15
         case .infoFooter:
             return 20
         case .backup:
@@ -212,6 +215,8 @@ private enum AyuHubEntry: ItemListNodeEntry {
             return ItemListDisclosureItem(presentationData: presentationData, title: "Замки чатов", label: "", sectionId: self.section, style: .blocks, action: { arguments.openFeature(.chatLocks) })
         case .secondSpace:
             return ItemListDisclosureItem(presentationData: presentationData, title: "Второе пространство", label: "", sectionId: self.section, style: .blocks, action: { arguments.openFeature(.secondSpace) })
+        case let .crashReports(count):
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Отчёты о вылетах", label: "\(count)", sectionId: self.section, style: .blocks, action: { arguments.openCrashReports() })
         case let .updateBanner(title, text):
             return ItemListInfoItem(presentationData: presentationData, title: title, text: .markdown(text), style: .blocks, sectionId: self.section, linkAction: { action in
                 if case let .tap(url) = action {
@@ -245,6 +250,7 @@ private final class AyuHubArguments {
     var checkUpdates: () -> Void = {}
     var dismissUpdateBanner: () -> Void = {}
     var openUrl: (String) -> Void = { _ in }
+    var openCrashReports: () -> Void = {}
 
     init(updateQuery: @escaping (String) -> Void, openResult: @escaping (ShadowSettingsSearchItem) -> Void, openCustomization: @escaping () -> Void, openSpy: @escaping () -> Void, openGhost: @escaping () -> Void, openMisc: @escaping () -> Void, openBackup: @escaping () -> Void, openFilters: @escaping () -> Void, openHiddenAccounts: @escaping () -> Void, openPushDiagnostics: @escaping () -> Void) {
         self.updateQuery = updateQuery
@@ -282,6 +288,7 @@ func shadowSettingsSearchDestinationController(context: AccountContext, item: Sh
 
 public func ayuGramSettingsController(context: AccountContext) -> ViewController {
     var pushControllerImpl: ((ViewController) -> Void)?
+    var presentControllerImpl: ((ViewController, ViewControllerPresentationArguments?) -> Void)?
     let query = ValuePromise<String>("", ignoreRepeated: true)
 
     let arguments = AyuHubArguments(
@@ -330,6 +337,44 @@ public func ayuGramSettingsController(context: AccountContext) -> ViewController
 
     let updateState = ValuePromise<ShadowHubUpdateState>(.idle, ignoreRepeated: true)
     let bannerDismissed = ValuePromise<Bool>(false, ignoreRepeated: true)
+    // Shadow: bumped when crash reports are sent or deleted.
+    let crashRevision = ValuePromise<Int>(0, ignoreRepeated: false)
+    var crashRevisionValue = 0
+    arguments.openCrashReports = {
+        let reports = ShadowCrashReports.shared.reports()
+        guard !reports.isEmpty else {
+            return
+        }
+        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+        let actionSheet = ActionSheetController(presentationData: presentationData)
+        actionSheet.setItemGroups([
+            ActionSheetItemGroup(items: [
+                ActionSheetTextItem(title: "Приложение падало \(reports.count) раз(а). Отправьте отчёты разработчику — в них нет переписки, только технические данные.", parseMarkdown: false),
+                ActionSheetButtonItem(title: "Отправить в чат…", color: .accent, action: { [weak actionSheet] in
+                    actionSheet?.dismissAnimated()
+                    let picker = context.sharedContext.makePeerSelectionController(PeerSelectionControllerParams(context: context, filter: [.onlyWriteable, .excludeDisabled], hasContactSelector: false, title: "Кому отправить"))
+                    picker.peerSelected = { [weak picker] peer, _ in
+                        picker?.dismiss()
+                        shadowSendCrashReports(context: context, peerId: peer.id, reports: reports, completion: {
+                            crashRevisionValue += 1
+                            crashRevision.set(crashRevisionValue)
+                        })
+                    }
+                    pushControllerImpl?(picker)
+                }),
+                ActionSheetButtonItem(title: "Удалить отчёты", color: .destructive, action: { [weak actionSheet] in
+                    actionSheet?.dismissAnimated()
+                    ShadowCrashReports.shared.removeAll()
+                    crashRevisionValue += 1
+                    crashRevision.set(crashRevisionValue)
+                })
+            ]),
+            ActionSheetItemGroup(items: [ActionSheetButtonItem(title: presentationData.strings.Common_Cancel, color: .accent, font: .bold, action: { [weak actionSheet] in
+                actionSheet?.dismissAnimated()
+            })])
+        ])
+        presentControllerImpl?(actionSheet, nil)
+    }
     arguments.checkUpdates = {
         updateState.set(.checking)
         bannerDismissed.set(false)
@@ -344,9 +389,9 @@ public func ayuGramSettingsController(context: AccountContext) -> ViewController
         context.sharedContext.applicationBindings.openUrl(url)
     }
 
-    let signal = combineLatest(queue: .mainQueue(), context.sharedContext.presentationData, query.get(), updateState.get(), bannerDismissed.get())
+    let signal = combineLatest(queue: .mainQueue(), context.sharedContext.presentationData, query.get(), updateState.get(), bannerDismissed.get(), crashRevision.get())
     |> deliverOnMainQueue
-    |> map { presentationData, query, updateState, bannerDismissed -> (ItemListControllerState, (ItemListNodeState, Any)) in
+    |> map { presentationData, query, updateState, bannerDismissed, _ -> (ItemListControllerState, (ItemListNodeState, Any)) in
         var entries: [AyuHubEntry] = []
         var checkLabel = ""
         var checkEnabled = true
@@ -399,6 +444,10 @@ public func ayuGramSettingsController(context: AccountContext) -> ViewController
         entries.append(.query(query))
         if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             entries += [.customization, .spy, .ghost, .filters, .misc, .hiddenAccounts, .backup, .pushDiagnostics, .quickReplies, .chatLocks, .secondSpace, .infoFooter, .checkUpdates(label: checkLabel, enabled: checkEnabled)]
+            let crashCount = ShadowCrashReports.shared.reports().count
+            if crashCount > 0 {
+                entries.insert(.crashReports(crashCount), at: entries.firstIndex(where: { if case .infoFooter = $0 { return true } else { return false } }) ?? entries.count)
+            }
         } else {
             let matches = ShadowSettingsSearchIndex.search(query)
             entries += matches.isEmpty ? [.noResults] : matches.map { .result($0) }
@@ -412,6 +461,9 @@ public func ayuGramSettingsController(context: AccountContext) -> ViewController
     pushControllerImpl = { [weak controller] c in
         controller?.view.endEditing(true)
         (controller?.navigationController as? NavigationController)?.pushViewController(c)
+    }
+    presentControllerImpl = { [weak controller] c, a in
+        controller?.present(c, in: .window(.root), with: a)
     }
     return controller
 }
@@ -2393,4 +2445,31 @@ private final class ShadowSystemColorPicker: NSObject, UIColorPickerViewControll
         self.completion(viewController.selectedColor)
         ShadowSystemColorPicker.active = nil
     }
+}
+
+// Shadow: sends crash reports (JSON from MetricKit) as files to a chat, then deletes them.
+private func shadowSendCrashReports(context: AccountContext, peerId: EnginePeer.Id, reports: [ShadowCrashReports.Report], completion: @escaping () -> Void) {
+    var messages: [EnqueueMessage] = []
+    let info = "Shadow \(ShadowUpdateCheck.installedVersion) (\(ShadowUpdateCheck.installedBuild.map { "\($0)" } ?? "?")), iOS \(UIDevice.current.systemVersion)"
+    for (index, report) in reports.enumerated() {
+        guard let data = try? Data(contentsOf: report.url) else {
+            continue
+        }
+        let resource = LocalFileMediaResource(fileId: Int64.random(in: Int64.min ... Int64.max))
+        context.engine.resources.storeResourceData(id: EngineMediaResource.Id(resource.id), data: data)
+        let file = TelegramMediaFile(fileId: EngineMedia.Id(namespace: Namespaces.Media.LocalFile, id: Int64.random(in: Int64.min ... Int64.max)), partialReference: nil, resource: resource, previewRepresentations: [], videoThumbnails: [], immediateThumbnailData: nil, mimeType: "application/json", size: Int64(data.count), attributes: [.FileName(fileName: report.url.lastPathComponent)], alternativeRepresentations: [])
+        messages.append(.message(text: index == 0 ? info : "", attributes: [], inlineStickers: [:], mediaReference: .standalone(media: file), threadId: nil, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: []))
+    }
+    guard !messages.isEmpty else {
+        return
+    }
+    let _ = (enqueueMessages(account: context.account, peerId: peerId, messages: messages)
+    |> deliverOnMainQueue).startStandalone(next: { ids in
+        if ids.contains(where: { $0 != nil }) {
+            for report in reports {
+                ShadowCrashReports.shared.remove(report)
+            }
+        }
+        completion()
+    })
 }

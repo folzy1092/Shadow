@@ -322,6 +322,8 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
     private var recaptchaClientsBySiteKey: [String: Promise<RecaptchaClient>] = [:]
         
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        // Shadow: collect crash reports delivered by MetricKit (spec 7.9).
+        ShadowCrashReporter.start()
         precondition(!testIsLaunched)
         testIsLaunched = true
         

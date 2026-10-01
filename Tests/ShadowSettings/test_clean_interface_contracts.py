@@ -153,6 +153,15 @@ class CleanInterfaceContracts(unittest.TestCase):
         hub = read("SettingsUI/Sources/AyuGramSettingsController.swift")
         self.assertIn("pushControllerImpl?(shadowSavedStoriesController(context: context))", hub)
 
+    def test_crash_reports(self):
+        delegate = read("TelegramUI/Sources/AppDelegate.swift")
+        self.assertIn("ShadowCrashReporter.start()", delegate)
+        reporter = read("TelegramUI/Sources/ShadowCrashReporter.swift")
+        self.assertIn("crash.jsonRepresentation()", reporter)
+        hub = read("SettingsUI/Sources/AyuGramSettingsController.swift")
+        self.assertIn("shadowSendCrashReports(context: context, peerId: peer.id", hub)
+        self.assertIn("'crash-reports'", (ROOT / "build-system/ci/test_shadow_foundation.py").read_text())
+
     def test_unlimited_pinned_chats(self):
         toggle = read("TelegramCore/Sources/TelegramEngine/Peers/TogglePeerChatPinned.swift")
         self.assertIn("if !shadowUnlimited, count > limitCount", toggle)
