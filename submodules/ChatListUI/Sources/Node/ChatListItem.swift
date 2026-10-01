@@ -2623,6 +2623,8 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
             }
             
             let contentData: ContentData
+            // Shadow: the chat (or, in the Saved Messages list, Saved Messages itself) is locked.
+            var shadowIsLocked = false
             
             var hideAuthor = false
             switch contentPeer {
@@ -2658,7 +2660,8 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                     }
                     
                     // Shadow: a locked chat shows its last message as a spoiler.
-                    if ShadowChatLockStore.shared.isLocked(accountPeerId: item.context.account.peerId.toInt64(), peerId: itemPeer.peerId.toInt64()) {
+                    shadowIsLocked = shadowChatListItemIsLocked(item: item, peerId: itemPeer.peerId)
+                    if shadowIsLocked {
                         messageText = foldLineBreaks(messageText)
                         let length = (messageText as NSString).length
                         spoilers = length > 0 ? [NSRange(location: 0, length: length)] : nil
@@ -2856,6 +2859,11 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         case .video:
                             attributedText = NSAttributedString(string: item.presentationData.strings.Message_VideoMessage, font: textFont, textColor: theme.messageTextColor)
                         }
+                    } else if inlineAuthorPrefix == nil, shadowIsLocked, draftState != nil {
+                        // Shadow: a locked chat never shows its draft text.
+                        hasDraft = true
+                        authorAttributedString = NSAttributedString(string: item.presentationData.strings.DialogList_Draft, font: textFont, textColor: theme.messageDraftTextColor)
+                        attributedText = NSAttributedString(string: "•••", font: textFont, textColor: theme.messageTextColor)
                     } else if inlineAuthorPrefix == nil, let draftState = draftState {
                         hasDraft = true
                         let draftText = stringWithAppliedEntities(draftState.text, entities: draftState.entities, baseColor: theme.messageTextColor, linkColor: theme.messageTextColor, baseFont: textFont, linkFont: textFont, boldFont: textFont, italicFont: textFont, boldItalicFont: textFont, fixedFont: textFont, blockQuoteFont: textFont, message: nil)
@@ -3119,7 +3127,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                             displayMediaPreviews = false
                         } else if let _ = message.peers[message.id.peerId] as? TelegramSecretChat {
                             displayMediaPreviews = false
-                        } else if ShadowChatLockStore.shared.isLocked(accountPeerId: item.context.account.peerId.toInt64(), peerId: message.id.peerId.toInt64()) {
+                        } else if shadowIsLocked || ShadowChatLockStore.shared.isLocked(accountPeerId: item.context.account.peerId.toInt64(), peerId: message.id.peerId.toInt64()) {
                             // Shadow: no media thumbnails for a locked chat.
                             displayMediaPreviews = false
                         }
@@ -6011,4 +6019,18 @@ private class StarView: UIView {
         self.outline.frame = self.bounds
         self.foreground.frame = self.bounds
     }
+}
+
+// Shadow: true when this row's chat is locked (ShadowChatLockStore). Rows of the
+// Saved Messages list (one per source chat) belong to Saved Messages itself.
+private func shadowChatListItemIsLocked(item: ChatListItem, peerId: EnginePeer.Id) -> Bool {
+    let store = ShadowChatLockStore.shared
+    let accountPeerId = item.context.account.peerId.toInt64()
+    if store.isLocked(accountPeerId: accountPeerId, peerId: peerId.toInt64()) {
+        return true
+    }
+    if case .savedMessagesChats = item.chatListLocation, store.isLocked(accountPeerId: accountPeerId, peerId: accountPeerId) {
+        return true
+    }
+    return false
 }

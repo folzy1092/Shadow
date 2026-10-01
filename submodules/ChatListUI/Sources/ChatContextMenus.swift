@@ -381,7 +381,9 @@ private func shadowStockChatContextMenuItems(context: AccountContext, peerId: En
                             }
                         }
                         
-                        let archiveEnabled = !isSavedMessages && peerId != EnginePeer.Id(namespace: Namespaces.Peer.CloudUser, id: EnginePeer.Id.Id._internalFromInt64Value(777000)) && peerId == context.account.peerId
+                        // Shadow: upstream 12.9.2 compares with the account's own id here, so
+                        // "Archive" never appears; the fork shows it for every other chat.
+                        let archiveEnabled = !isSavedMessages && peerId != EnginePeer.Id(namespace: Namespaces.Peer.CloudUser, id: EnginePeer.Id.Id._internalFromInt64Value(777000)) && peerId != context.account.peerId
                         if let group = peerGroup {
                             if archiveEnabled {
                                 let isArchived = group == .archive
@@ -1065,9 +1067,11 @@ func chatContextMenuItems(context: AccountContext, peerId: EnginePeer.Id, promoI
     return shadowStockChatContextMenuItems(context: context, peerId: peerId, promoInfo: promoInfo, source: source, chatListController: chatListController, joined: joined)
     |> map { items -> [ContextMenuItem] in
         // The Full disguise (ShadowDisguise) keeps the stock menu.
-        if items.isEmpty || peerId == context.account.peerId || ShadowDisguise.shared.isFull {
+        // Saved Messages can be locked too; only the space choice is not offered for it.
+        if items.isEmpty || ShadowDisguise.shared.isFull {
             return items
         }
+        let isSavedMessages = peerId == context.account.peerId
         let strings = context.sharedContext.currentPresentationData.with { $0 }.strings
         let isLocked = ShadowChatLockStore.shared.isLocked(accountPeerId: context.account.peerId.toInt64(), peerId: peerId.toInt64())
         let lockItem: ContextMenuItem = .action(ContextMenuActionItem(text: isLocked ? "Снять защиту" : "Защитить чат", icon: { theme in
@@ -1108,10 +1112,14 @@ func chatContextMenuItems(context: AccountContext, peerId: EnginePeer.Id, promoI
         }))
         if let pinIndex {
             items.insert(lockItem, at: pinIndex + 1)
-            items.insert(spaceItem, at: pinIndex + 2)
+            if !isSavedMessages {
+                items.insert(spaceItem, at: pinIndex + 2)
+            }
         } else {
             items.append(lockItem)
-            items.append(spaceItem)
+            if !isSavedMessages {
+                items.append(spaceItem)
+            }
         }
         return items
     }

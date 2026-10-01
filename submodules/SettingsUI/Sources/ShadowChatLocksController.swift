@@ -240,6 +240,9 @@ func shadowChatLocksController(context: AccountContext, focus: ShadowSettingsSea
         |> map { peers -> [(EnginePeer.Id, String)] in
             let presentationData = context.sharedContext.currentPresentationData.with { $0 }
             return peerIds.map { peerId in
+                if peerId == context.account.peerId {
+                    return (peerId, presentationData.strings.Conversation_SavedMessages)
+                }
                 let title = peers[peerId].flatMap { $0 }?.displayTitle(strings: presentationData.strings, displayOrder: presentationData.nameDisplayOrder) ?? "Чат \(peerId.id._internalGetInt64Value())"
                 return (peerId, title)
             }

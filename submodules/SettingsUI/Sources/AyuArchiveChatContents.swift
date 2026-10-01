@@ -104,6 +104,7 @@ final class AyuArchiveChatContents: ChatCustomContentsProtocol {
 // новое удаление или правка, список обновится сам.
 private func ayuArchiveMessages(context: AccountContext, peerId: PeerId?) -> Signal<[Message], NoError> {
     let postbox = context.account.postbox
+    let accountPeerId = context.account.peerId.toInt64()
     return postbox.preferencesView(keys: [PreferencesKeys.ayuForkStore])
     |> mapToSignal { _ -> Signal<[Message], NoError> in
         return postbox.transaction { transaction -> [Message] in
@@ -116,6 +117,11 @@ private func ayuArchiveMessages(context: AccountContext, peerId: PeerId?) -> Sig
                 // виден — собираем id из его публичных полей.
                 let id = MessageId(peerId: PeerId(ref.peer), namespace: ref.namespace, id: ref.id)
                 if let peerId, id.peerId != peerId {
+                    continue
+                }
+                // Shadow: kept messages of a locked chat (or Saved Messages) never
+                // show up here: the archive must not bypass the chat lock.
+                if ShadowChatLockStore.shared.isLocked(accountPeerId: accountPeerId, peerId: id.peerId.toInt64()) {
                     continue
                 }
                 if seen.contains(id) {

@@ -8155,8 +8155,17 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     // itself leaves the navigation stack, the next entry asks again.
     override public func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
-        let stillInStack = (self.navigationController as? NavigationController)?.viewControllers.contains(where: { $0 === self }) ?? false
-        if !stillInStack, let peerId = self.chatLocation.peerId {
+        let stack = (self.navigationController as? NavigationController)?.viewControllers ?? []
+        let stillInStack = stack.contains(where: { $0 === self })
+        // Another screen of the same chat is still open below (Saved Messages
+        // with one of its source chats, a forum with a topic): keep it unlocked.
+        let sameChatStillOpen = stack.contains(where: { controller in
+            guard let chat = controller as? ChatControllerImpl, chat !== self else {
+                return false
+            }
+            return chat.chatLocation.peerId != nil && chat.chatLocation.peerId == self.chatLocation.peerId
+        })
+        if !stillInStack, !sameChatStillOpen, let peerId = self.chatLocation.peerId {
             ShadowChatLockStore.shared.relock(accountPeerId: self.context.account.peerId.toInt64(), peerId: peerId.toInt64())
         }
     }

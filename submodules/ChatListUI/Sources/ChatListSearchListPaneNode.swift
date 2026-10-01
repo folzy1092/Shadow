@@ -3478,6 +3478,10 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                     case let .localPeerId(peerId), let .globalPeerId(peerId):
                         return !ShadowSpaceStore.shared.isHidden(accountPeerId: shadowAccountPeerId, peerId: peerId.toInt64())
                     case let .messageId(messageId, _):
+                        // Shadow: messages of a locked chat (or Saved Messages) are never shown in search.
+                        if ShadowChatLockStore.shared.isLocked(accountPeerId: shadowAccountPeerId, peerId: messageId.peerId.toInt64()) {
+                            return false
+                        }
                         return !ShadowSpaceStore.shared.isHidden(accountPeerId: shadowAccountPeerId, peerId: messageId.peerId.toInt64())
                     default:
                         return true

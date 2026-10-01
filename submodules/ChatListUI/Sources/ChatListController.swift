@@ -7742,7 +7742,8 @@ extension ChatListControllerImpl {
         let context = self.context
         let store = ShadowChatLockStore.shared
         let accountPeerId = context.account.peerId.toInt64()
-        let candidates = peerIds.filter { $0 != context.account.peerId }.sorted(by: { $0.toInt64() < $1.toInt64() })
+        // Saved Messages can be locked like any chat.
+        let candidates = peerIds.sorted(by: { $0.toInt64() < $1.toInt64() })
         guard let first = candidates.first else {
             return
         }

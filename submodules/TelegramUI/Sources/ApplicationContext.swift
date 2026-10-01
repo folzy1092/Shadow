@@ -122,6 +122,7 @@ final class AuthorizedApplicationContext {
     private let permissionsDisposable = MetaDisposable()
     private let appUpdateInfoDisposable = MetaDisposable()
     private let shadowIntruderDisposable = MetaDisposable()
+    private var shadowChatLockPreviewsObserver: NSObjectProtocol?
     
     private var inAppNotificationSettings: InAppNotificationSettings?
     
@@ -194,6 +195,14 @@ final class AuthorizedApplicationContext {
             
             strongSelf.notificationController.updateIsTemporaryHidden(hasContext)
         }
+        
+        // Shadow: pushes of locked chats carry no text (ShadowChatLockPreviews).
+        let shadowEngine = self.context.engine
+        let shadowAccountPeerId = self.context.account.peerId
+        ShadowChatLockPreviews.sync(engine: shadowEngine, accountPeerId: shadowAccountPeerId)
+        self.shadowChatLockPreviewsObserver = NotificationCenter.default.addObserver(forName: ShadowChatLockStore.didChangeNotification, object: nil, queue: .main, using: { _ in
+            ShadowChatLockPreviews.sync(engine: shadowEngine, accountPeerId: shadowAccountPeerId)
+        })
         
         // Shadow: wrong-password photos are sent to Saved Messages once the app
         // is unlocked (spec 7.2).
@@ -430,6 +439,11 @@ final class AuthorizedApplicationContext {
                                 if EnginePeer(chatPeer).restrictionText(platform: "ios", contentSettings: strongSelf.context.currentContentSettings.with { $0 }) != nil {
                                     return
                                 }
+                            }
+                            
+                            // Shadow: no in-app banner (text, sender, media) for a locked chat.
+                            if ShadowChatLockStore.shared.isLocked(accountPeerId: strongSelf.context.account.peerId.toInt64(), peerId: firstMessage.id.peerId.toInt64()) {
+                                return
                             }
                             
                             if inAppNotificationSettings.displayPreviews {
@@ -849,6 +863,9 @@ final class AuthorizedApplicationContext {
         self.context.account.shouldBeServiceTaskMaster.set(.single(.never))
         self.loggedOutDisposable.dispose()
         self.shadowIntruderDisposable.dispose()
+        if let shadowChatLockPreviewsObserver = self.shadowChatLockPreviewsObserver {
+            NotificationCenter.default.removeObserver(shadowChatLockPreviewsObserver)
+        }
         self.inAppNotificationSettingsDisposable.dispose()
         self.notificationMessagesDisposable.dispose()
         self.termsOfServiceUpdatesDisposable.dispose()

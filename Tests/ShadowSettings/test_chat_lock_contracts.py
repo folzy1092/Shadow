@@ -79,7 +79,8 @@ class ChatLockContracts(unittest.TestCase):
 
     def test_chat_list_spoiler_and_menu(self):
         item = read("ChatListUI/Sources/Node/ChatListItem.swift")
-        self.assertEqual(item.count("ShadowChatLockStore.shared.isLocked"), 2)
+        self.assertIn("private func shadowChatListItemIsLocked(item: ChatListItem, peerId: EnginePeer.Id) -> Bool", item)
+        self.assertIn("shadowIsLocked = shadowChatListItemIsLocked(item: item, peerId: itemPeer.peerId)", item)
         self.assertIn("spoilers = length > 0 ? [NSRange(location: 0, length: length)] : nil", item)
         menus = read("ChatListUI/Sources/ChatContextMenus.swift")
         self.assertIn("private func shadowStockChatContextMenuItems(", menus)

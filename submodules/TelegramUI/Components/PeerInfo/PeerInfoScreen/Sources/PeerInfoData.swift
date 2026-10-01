@@ -596,7 +596,56 @@ public func hasAvailablePeerInfoMediaPanes(context: AccountContext, peerId: Peer
     }
 }
 
+// Shadow: while a chat is locked (ShadowChatLockStore) its profile shows no
+// shared media, files, links, voice or saved messages — opening the profile
+// (from a gift, a group member list, a link…) must not bypass the lock. The
+// panes come back once the chat is unlocked and hide again when it relocks.
+private func shadowChatLockChanges() -> Signal<Void, NoError> {
+    return Signal { subscriber in
+        subscriber.putNext(Void())
+        let token = NotificationCenter.default.addObserver(forName: ShadowChatLockStore.didChangeNotification, object: nil, queue: nil, using: { _ in
+            subscriber.putNext(Void())
+        })
+        return ActionDisposable {
+            NotificationCenter.default.removeObserver(token)
+        }
+    }
+}
+
+private func shadowFilterLockedPanes(_ panes: [PeerInfoPaneKey]?, accountPeerId: EnginePeer.Id, peerId: EnginePeer.Id) -> [PeerInfoPaneKey]? {
+    guard let panes else {
+        return nil
+    }
+    let store = ShadowChatLockStore.shared
+    let chatLocked = store.requiresUnlock(accountPeerId: accountPeerId.toInt64(), peerId: peerId.toInt64())
+    let savedMessagesLocked = store.requiresUnlock(accountPeerId: accountPeerId.toInt64(), peerId: accountPeerId.toInt64())
+    if !chatLocked && !savedMessagesLocked {
+        return panes
+    }
+    return panes.filter { pane in
+        switch pane {
+        case .media, .files, .music, .voice, .links, .gifs, .polls:
+            return !chatLocked
+        case .savedMessages, .savedMessagesChats:
+            return !chatLocked && !savedMessagesLocked
+        default:
+            return true
+        }
+    }
+}
+
 private func peerInfoAvailableMediaPanes(context: AccountContext, peerId: PeerId, chatLocation: ChatLocation, isMyProfile: Bool, chatLocationContextHolder: Atomic<ChatLocationContextHolder?>, sharedMediaFromForumTopic: (EnginePeer.Id, Int64)?) -> Signal<[PeerInfoPaneKey]?, NoError> {
+    let panes: Signal<[PeerInfoPaneKey]?, NoError> = peerInfoAvailableMediaPanesUnfiltered(context: context, peerId: peerId, chatLocation: chatLocation, isMyProfile: isMyProfile, chatLocationContextHolder: chatLocationContextHolder, sharedMediaFromForumTopic: sharedMediaFromForumTopic)
+    let accountPeerId = context.account.peerId
+    let lockedPeerId = sharedMediaFromForumTopic?.0 ?? peerId
+    return combineLatest(panes, shadowChatLockChanges())
+    |> map { panes, _ -> [PeerInfoPaneKey]? in
+        return shadowFilterLockedPanes(panes, accountPeerId: accountPeerId, peerId: lockedPeerId)
+    }
+    |> distinctUntilChanged
+}
+
+private func peerInfoAvailableMediaPanesUnfiltered(context: AccountContext, peerId: PeerId, chatLocation: ChatLocation, isMyProfile: Bool, chatLocationContextHolder: Atomic<ChatLocationContextHolder?>, sharedMediaFromForumTopic: (EnginePeer.Id, Int64)?) -> Signal<[PeerInfoPaneKey]?, NoError> {
     var peerId = peerId
     var chatLocation = chatLocation
     var chatLocationContextHolder = chatLocationContextHolder
