@@ -98,6 +98,21 @@ class CleanInterfaceContracts(unittest.TestCase):
         self.assertIn("[Скачать IPA]", hub)
         self.assertFalse((SUB / "SettingsUI/Sources/ShadowUpdatesController.swift").exists())
 
+    def test_changelog_file_and_banner(self):
+        import json
+        log = json.loads((ROOT / "shadow-changelog.json").read_text())
+        builds = [entry["build"] for entry in log["entries"]]
+        self.assertEqual(builds, sorted(builds, reverse=True))
+        for entry in log["entries"]:
+            self.assertTrue(entry["items"])
+        manifest = json.loads((ROOT / "shadow-update.json").read_text())
+        # The announced build must have release notes.
+        self.assertIn(manifest["build"], builds)
+        check = read("TelegramCore/Sources/AyuGram/ShadowUpdateCheck.swift")
+        self.assertIn("master/shadow-changelog.json", check)
+        hub = read("SettingsUI/Sources/AyuGramSettingsController.swift")
+        self.assertIn("for entry in release.changelog {", hub)
+
     def test_unlimited_pinned_chats(self):
         toggle = read("TelegramCore/Sources/TelegramEngine/Peers/TogglePeerChatPinned.swift")
         self.assertIn("if !shadowUnlimited, count > limitCount", toggle)

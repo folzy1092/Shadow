@@ -67,6 +67,17 @@ struct UpdateCheckTests {
         let insecure = ShadowUpdateCheck.parseManifest(Data("{\"build\":5,\"url\":\"http://example.com\"}".utf8))
         check(insecure?.pageURL == ShadowUpdateCheck.releasesPageURL, "Only https download pages")
 
+        let changelogJSON = """
+        {"entries":[{"build":34700,"date":"2026-10-01","items":["Второе пространство"," "]},{"build":34703,"date":"2026-10-01","items":["Замок на несколько чатов"]},{"build":34690,"items":["Старое"]},{"build":0,"items":["Мусор"]},{"build":34705,"items":[]}]}
+        """
+        let entries = ShadowUpdateCheck.parseChangelog(Data(changelogJSON.utf8))
+        check(entries.map { $0.build } == [34703, 34700, 34690], "Changelog parsed newest first, empty entries dropped")
+        check(entries[1].items == ["Второе пространство"], "Blank items dropped")
+        let missed = ShadowUpdateCheck.changes(installedBuild: 34695, announcedBuild: 34703, entries: entries)
+        check(missed.map { $0.build } == [34703, 34700], "Every skipped build is listed")
+        check(ShadowUpdateCheck.changes(installedBuild: 34703, announcedBuild: 34703, entries: entries).isEmpty, "Nothing for the installed build")
+        check(ShadowUpdateCheck.parseChangelog(Data("[]".utf8)).isEmpty, "Malformed changelog")
+
         print("Shadow update check: \(count) checks passed")
     }
 }

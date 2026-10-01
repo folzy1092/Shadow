@@ -50,6 +50,12 @@ class ChatLockContracts(unittest.TestCase):
         self.assertLess(nav.index("ShadowChatLockUI.authenticate("), nav.index("navigateToChatControllerImpl(params)"))
         self.assertIn("guard success else {\n                    return\n                }", nav)
 
+    def test_leaving_a_chat_relocks_it(self):
+        controller = read("TelegramUI/Sources/ChatController.swift")
+        hook = controller.split("override public func viewDidDisappear(_ animated: Bool) {", 1)[1].split("\n    }\n", 1)[0]
+        self.assertIn("ShadowChatLockStore.shared.relock(", hook)
+        self.assertIn("if !stillInStack", hook)
+
     def test_unlocking_requires_authentication(self):
         ui = read("TelegramUI/Sources/ShadowChatLockUI.swift")
         unlock = ui.split("static func unlockChatPermanently", 1)[1].split("\n    }\n", 1)[0]

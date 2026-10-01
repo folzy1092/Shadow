@@ -24,6 +24,20 @@ public enum ShadowUpdateCheck {
     public static let manifestURL = URL(string: "https://raw.githubusercontent.com/folzy1092/Shadow/master/shadow-update.json")!
     public static let latestReleaseURL = URL(string: "https://api.github.com/repos/folzy1092/Shadow/releases/latest")!
     public static let releasesPageURL = URL(string: "https://github.com/folzy1092/Shadow/releases")!
+    // Per-build release notes in Russian, newest first (see shadow-changelog.json).
+    public static let changelogURL = URL(string: "https://raw.githubusercontent.com/folzy1092/Shadow/master/shadow-changelog.json")!
+
+    public struct ChangelogEntry: Equatable {
+        public let build: Int
+        public let date: String
+        public let items: [String]
+
+        public init(build: Int, date: String, items: [String]) {
+            self.build = build
+            self.date = date
+            self.items = items
+        }
+    }
 
     // CI attaches the IPA to every release under this fixed name.
     public static func ipaURL(build: Int) -> URL {
@@ -40,6 +54,8 @@ public enum ShadowUpdateCheck {
         public let downloadURL: URL?
         // The installed build is below the manifest's minimum_build.
         public let isRequired: Bool
+        // Changes of every build newer than the installed one, newest first.
+        public var changelog: [ChangelogEntry] = []
 
         public init(build: Int, title: String, pageURL: URL, publishedAt: Date?, notes: String, downloadURL: URL? = nil, isRequired: Bool = false) {
             self.build = build
@@ -132,6 +148,33 @@ public enum ShadowUpdateCheck {
         return self.status(installedBuild: installedBuild, latest: release)
     }
 
+    // {"entries": [{"build": 34703, "date": "2026-10-01", "items": ["…"]}, …]}
+    public static func parseChangelog(_ data: Data) -> [ChangelogEntry] {
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let entries = object["entries"] as? [[String: Any]] else {
+            return []
+        }
+        var result: [ChangelogEntry] = []
+        for entry in entries {
+            guard let build = entry["build"] as? Int, build > 0 else {
+                continue
+            }
+            let items = ((entry["items"] as? [String]) ?? []).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+            if items.isEmpty {
+                continue
+            }
+            result.append(ChangelogEntry(build: build, date: (entry["date"] as? String) ?? "", items: items))
+        }
+        return result.sorted(by: { $0.build > $1.build })
+    }
+
+    // Entries newer than the installed build and not newer than the announced one.
+    public static func changes(installedBuild: Int?, announcedBuild: Int, entries: [ChangelogEntry]) -> [ChangelogEntry] {
+        return entries.filter { entry in
+            entry.build <= announcedBuild && entry.build > (installedBuild ?? 0)
+        }
+    }
+
     public static func parseLatestRelease(_ data: Data) -> Release? {
         guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let tag = object["tag_name"] as? String,
@@ -208,8 +251,21 @@ public enum ShadowUpdateCheck {
         fetch(manifestURL) { data, statusCode, error in
             if error == nil, let statusCode, (200 ..< 300).contains(statusCode), let data, let manifest = parseManifest(data) {
                 let result = status(installedBuild: installedBuild, manifest: manifest)
-                DispatchQueue.main.async {
-                    completion(result)
+                guard case var .available(release) = result else {
+                    DispatchQueue.main.async {
+                        completion(result)
+                    }
+                    return
+                }
+                // Attach what changed since the installed build; the update is
+                // still reported if the changelog cannot be fetched.
+                fetch(changelogURL) { data, statusCode, error in
+                    if error == nil, let statusCode, (200 ..< 300).contains(statusCode), let data {
+                        release.changelog = changes(installedBuild: installedBuild, announcedBuild: release.build, entries: parseChangelog(data))
+                    }
+                    DispatchQueue.main.async {
+                        completion(.available(release))
+                    }
                 }
             } else {
                 checkReleases(completion: completion)

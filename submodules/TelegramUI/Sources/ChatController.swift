@@ -8150,6 +8150,17 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         }
     }
     
+    // Shadow: a locked chat is unlocked only while its screen is open (screens
+    // pushed on top of it, like the profile, keep it open). Once the chat
+    // itself leaves the navigation stack, the next entry asks again.
+    override public func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        let stillInStack = (self.navigationController as? NavigationController)?.viewControllers.contains(where: { $0 === self }) ?? false
+        if !stillInStack, let peerId = self.chatLocation.peerId {
+            ShadowChatLockStore.shared.relock(accountPeerId: self.context.account.peerId.toInt64(), peerId: peerId.toInt64())
+        }
+    }
+
     override public func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         

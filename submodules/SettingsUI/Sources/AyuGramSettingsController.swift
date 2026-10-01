@@ -370,9 +370,22 @@ public func ayuGramSettingsController(context: AccountContext) -> ViewController
                 if !bannerDismissed {
                     let link = (release.downloadURL ?? release.pageURL).absoluteString
                     var text = "\(release.title)\n[Скачать IPA](\(link))"
-                    let notes = release.notes.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if !notes.isEmpty {
-                        text = "\(release.title)\n\(String(notes.prefix(400)))\n[Скачать IPA](\(link))"
+                    if !release.changelog.isEmpty {
+                        // Every build newer than the installed one, so skipped updates are covered too.
+                        var changes = ""
+                        for entry in release.changelog {
+                            changes += "\nСборка \(entry.build)" + (entry.date.isEmpty ? "" : " · \(entry.date)") + ":\n"
+                            changes += entry.items.map { "• \($0)" }.joined(separator: "\n") + "\n"
+                        }
+                        if changes.count > 1500 {
+                            changes = String(changes.prefix(1500)) + "…\n"
+                        }
+                        text = "\(release.title)\n\(changes)\n[Скачать IPA](\(link))"
+                    } else {
+                        let notes = release.notes.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if !notes.isEmpty {
+                            text = "\(release.title)\n\(String(notes.prefix(400)))\n[Скачать IPA](\(link))"
+                        }
                     }
                     entries.append(.updateBanner(title: release.isRequired ? "Обязательное обновление" : "Доступно обновление", text: text))
                 }

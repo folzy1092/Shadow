@@ -103,6 +103,16 @@ public final class ShadowChatLockStore {
         self.cancelReset()
     }
 
+    // Called when a chat screen closes: every entry asks for Face ID / the password again.
+    public func relock(accountPeerId: Int64, peerId: Int64) {
+        self.lock.lock()
+        let removed = self.unlocked.remove(ShadowChatLockStore.sessionKey(accountPeerId: accountPeerId, peerId: peerId)) != nil
+        self.lock.unlock()
+        if removed {
+            self.notifyChanged()
+        }
+    }
+
     // Called when the app goes to background.
     public func relockAll() {
         self.lock.lock()
