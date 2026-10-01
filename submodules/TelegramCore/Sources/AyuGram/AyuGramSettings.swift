@@ -879,7 +879,10 @@ public func currentAyuGramSettings(mediaBox: MediaBox) -> AyuGramSettings {
     ayuGramSettingsStateLock.lock()
     defer { ayuGramSettingsStateLock.unlock() }
     guard let accountId = ayuGramSettingsMediaAccounts[mediaBox.basePath] else {
-        return shadowDisguiseMasked(AyuGramSettings.defaultSettings)
+        if ShadowDisguise.shared.isFull {
+            return AyuGramSettings.vanillaSettings
+        }
+        return AyuGramSettings.defaultSettings
     }
     return shadowDisguiseMasked(cachedAyuGramSettings(accountId: accountId))
 }
