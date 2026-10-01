@@ -170,21 +170,27 @@ private func shadowSecondSpacePasscodeInfo(_ data: PostboxAccessChallengeData) -
 private enum ShadowSecondSpaceCodePrompt {
     static func present(context: AccountContext, title: String, message: String?, format: ShadowSpaceStore.CodeFormat, completion: @escaping (String?) -> Void) {
         let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        let okAction = UIAlertAction(title: "OK", style: .default, handler: { [weak alert] _ in
+            completion(alert?.textFields?.first?.text ?? "")
+        })
         alert.addTextField { field in
             field.isSecureTextEntry = true
             field.placeholder = "Код"
             field.autocorrectionType = .no
             field.autocapitalizationType = .none
-            if case .digits = format {
+            if case let .digits(length) = format {
+                // Same length as the Telegram passcode: digits only, no more than
+                // `length` of them, and OK only once the code is complete.
                 field.keyboardType = .numberPad
+                field.placeholder = "\(length) цифр"
+                okAction.isEnabled = false
+                ShadowCodeFieldLimiter.install(on: field, length: length, okAction: okAction)
             }
         }
         alert.addAction(UIAlertAction(title: "Отмена", style: .cancel, handler: { _ in
             completion(nil)
         }))
-        alert.addAction(UIAlertAction(title: "OK", style: .default, handler: { [weak alert] _ in
-            completion(alert?.textFields?.first?.text ?? "")
-        }))
+        alert.addAction(okAction)
         DispatchQueue.main.async {
             context.sharedContext.mainWindow?.presentNative(alert)
         }
@@ -395,4 +401,32 @@ func shadowSecondSpaceController(context: AccountContext, focus: ShadowSettingsS
         shadowSettingsInstallFocus(controller: controller, index: { focusedIndex }, color: context.sharedContext.currentPresentationData.with { $0 }.theme.list.itemAccentColor)
     }
     return controller
+}
+
+// Shadow: keeps a numeric code field to `length` ASCII digits while typing
+// (pasted or extra input is trimmed) and enables OK only at full length.
+private final class ShadowCodeFieldLimiter: NSObject {
+    private static var associationKey: UInt8 = 0
+    private let length: Int
+    private weak var okAction: UIAlertAction?
+
+    private init(length: Int, okAction: UIAlertAction) {
+        self.length = length
+        self.okAction = okAction
+        super.init()
+    }
+
+    static func install(on field: UITextField, length: Int, okAction: UIAlertAction) {
+        let limiter = ShadowCodeFieldLimiter(length: length, okAction: okAction)
+        field.addTarget(limiter, action: #selector(ShadowCodeFieldLimiter.textChanged(_:)), for: .editingChanged)
+        objc_setAssociatedObject(field, &ShadowCodeFieldLimiter.associationKey, limiter, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+    }
+
+    @objc private func textChanged(_ field: UITextField) {
+        let digits = String(ShadowSpaceStore.normalize(field.text ?? "").filter { $0.isASCII && $0.isNumber }.prefix(self.length))
+        if field.text != digits {
+            field.text = digits
+        }
+        self.okAction?.isEnabled = digits.count == self.length
+    }
 }

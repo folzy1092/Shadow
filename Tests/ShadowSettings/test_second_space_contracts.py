@@ -71,6 +71,8 @@ class SecondSpaceContracts(unittest.TestCase):
         controller_src = read("ChatListUI/Sources/ChatListController.swift")
         # Edit-mode buttons read the selection when pressed (the header keeps the first closure).
         self.assertEqual(controller_src.count("parent.shadowCurrentSelectedPeerIds()"), 2)
+        self.assertIn("ShadowCodeFieldLimiter.install(on: field, length: length, okAction: okAction)", screen)
+        self.assertIn(".prefix(self.length)", screen)
         # In the main space the list never reveals second-space chats.
         self.assertIn(".filter { $0.value.isVisible(in: space) || space == .second }", screen)
 
