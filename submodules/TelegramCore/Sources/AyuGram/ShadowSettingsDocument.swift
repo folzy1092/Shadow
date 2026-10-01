@@ -39,7 +39,7 @@ public struct ShadowSettingsDocument: Codable, Equatable {
         "saveAllIncomingMedia", "mediaAutoCleanKeepPinned", "mediaAutoCleanKeepChannels",
         "mediaAutoCleanKeepBots", "showProfileId", "showProfileDC",
         "showRegistrationDate", "hideOwnPhoneNumber",
-        "screenshotEnabled", "screenshotAvatars", "screenshotNames", "screenshotBadges", "screenshotTime"
+        "screenshotAnonymize", "screenshotAnonymizeOwn", "screenshotAnonymizeOthers", "screenshotEnabled", "screenshotAvatars", "screenshotNames", "screenshotBadges", "screenshotTime"
     ]
     public static let textKeys: Set<String> = ["editedIndicatorText", "deletedIndicatorText"]
     public static let integerKeys: Set<String> = [

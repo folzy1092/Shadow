@@ -9270,7 +9270,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
 
                     let shouldClearGhostScheduledDraft: Bool
                     if scheduleTime == nil, let peerId = strongSelf.chatLocation.peerId {
-                        shouldClearGhostScheduledDraft = AyuDelayedSend.willAutomaticallySchedule(messages: messages, peerId: peerId)
+                        shouldClearGhostScheduledDraft = AyuDelayedSend.willAutomaticallySchedule(messages: messages, peerId: peerId, settings: currentAyuGramSettings(accountId: strongSelf.context.account.id))
                     } else {
                         shouldClearGhostScheduledDraft = false
                     }

@@ -10,24 +10,30 @@ import SwiftSignalKit
 // a heavy per-message author index.
 
 private let ayuLastSeenLock = NSLock()
-private var ayuLastSeenCache: [PeerId: (timestamp: Int32?, computedAt: Double)] = [:]
+private struct AyuLastSeenCacheKey: Hashable {
+    let accountPath: String
+    let peerId: PeerId
+}
+private var ayuLastSeenCache: [AyuLastSeenCacheKey: (timestamp: Int32?, computedAt: Double)] = [:]
 private let ayuLastSeenTTL: Double = 600.0
 // Bound the scan so opening a profile can never turn into a full-database walk.
 private let ayuLastSeenMaxGroups = 40
 private let ayuLastSeenTailCount = 30
 
-private func ayuLastSeenCacheRead(_ peerId: PeerId, now: Double) -> (value: Int32?, fresh: Bool)? {
+private func ayuLastSeenCacheRead(_ key: AyuLastSeenCacheKey, now: Double) -> (value: Int32?, fresh: Bool)? {
     ayuLastSeenLock.lock()
     defer { ayuLastSeenLock.unlock() }
-    if let entry = ayuLastSeenCache[peerId] {
-        return (entry.timestamp, now - entry.computedAt < ayuLastSeenTTL)
+    if let entry = ayuLastSeenCache[key] {
+        return (entry.timestamp, now >= entry.computedAt && now - entry.computedAt < ayuLastSeenTTL)
     }
     return nil
 }
 
-private func ayuLastSeenCacheWrite(_ peerId: PeerId, _ value: Int32?, now: Double) {
+private func ayuLastSeenCacheWrite(_ key: AyuLastSeenCacheKey, _ value: Int32?, now: Double) {
     ayuLastSeenLock.lock()
-    ayuLastSeenCache[peerId] = (value, now)
+    ayuLastSeenCache = ayuLastSeenCache.filter { now >= $0.value.computedAt && now - $0.value.computedAt < ayuLastSeenTTL }
+    if ayuLastSeenCache.count >= 512 { ayuLastSeenCache.removeAll(keepingCapacity: true) }
+    ayuLastSeenCache[key] = (value, now)
     ayuLastSeenLock.unlock()
 }
 
@@ -47,8 +53,8 @@ private func ayuScanApproximateLastActivity(transaction: Transaction, peerId: Pe
         // entries are ascending by index; walk newest-first and take the first
         // one this peer authored.
         for entry in view.entries.reversed() {
-            if entry.message.author?.id == peerId {
-                if best == nil || entry.message.timestamp > best! {
+            if entry.message.author?.id == peerId && entry.message.forwardInfo == nil && !entry.message.flags.contains(.WasScheduled) {
+                if entry.message.timestamp > (best ?? Int32.min) {
                     best = entry.message.timestamp
                 }
                 break
@@ -79,13 +85,14 @@ private func ayuScanApproximateLastActivity(transaction: Transaction, peerId: Pe
 // is throttled by the TTL across opens.
 public func ayuApproximateLastActivity(postbox: Postbox, peerId: PeerId) -> Signal<Int32?, NoError> {
     let now = Date().timeIntervalSince1970
-    if let cached = ayuLastSeenCacheRead(peerId, now: now), cached.fresh {
+    let key = AyuLastSeenCacheKey(accountPath: postbox.mediaBox.basePath, peerId: peerId)
+    if let cached = ayuLastSeenCacheRead(key, now: now), cached.fresh {
         return .single(cached.value)
     }
-    let initial: Int32? = ayuLastSeenCacheRead(peerId, now: now)?.value
+    let initial: Int32? = ayuLastSeenCacheRead(key, now: now)?.value
     let scan = postbox.transaction { transaction -> Int32? in
         let result = ayuScanApproximateLastActivity(transaction: transaction, peerId: peerId)
-        ayuLastSeenCacheWrite(peerId, result, now: Date().timeIntervalSince1970)
+        ayuLastSeenCacheWrite(key, result, now: Date().timeIntervalSince1970)
         return result
     }
     return .single(initial)

@@ -24,6 +24,10 @@ public struct TabBarScrollState {
 
     public mutating func reset() {
         self.isHidden = false
+        self.interruptGesture()
+    }
+
+    public mutating func interruptGesture() {
         self.previousTranslation = nil
         self.accumulated = 0.0
     }

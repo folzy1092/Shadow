@@ -1519,9 +1519,7 @@ public final class PendingMessageManager {
                 return sendMessageRequest
                 // Shadow fork: correct any online blip only after the send RPC's
                 // round trip has actually finished — see ayuReassertOfflineAfterSendIfNeeded.
-                |> afterDisposed {
-                    ayuReassertOfflineAfterSendIfNeeded()
-                }
+                |> ayuOfflineReassertAfterRequest(postbox: postbox, network: network)
                 |> deliverOn(queue)
                 |> mapToSignal { result -> Signal<Void, MTRpcError> in
                     if let strongSelf = self {
@@ -2206,9 +2204,7 @@ public final class PendingMessageManager {
                 return sendMessageRequest
                 // Shadow fork: correct any online blip only after the send RPC's
                 // round trip has actually finished — see ayuReassertOfflineAfterSendIfNeeded.
-                |> afterDisposed {
-                    ayuReassertOfflineAfterSendIfNeeded()
-                }
+                |> ayuOfflineReassertAfterRequest(postbox: postbox, network: network)
                 |> deliverOn(queue)
                 |> mapToSignal { result -> Signal<Void, MTRpcError> in
                     guard let strongSelf = self else {

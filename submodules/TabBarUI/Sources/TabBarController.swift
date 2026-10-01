@@ -166,11 +166,16 @@ open class TabBarControllerImpl: ViewController, TabBarController {
         
         super.init(navigationBarPresentationData: nil)
 
-        for name in [UIApplication.willResignActiveNotification, UIApplication.didBecomeActiveNotification, UIResponder.keyboardWillShowNotification] {
+        for name in [UIApplication.willResignActiveNotification, UIApplication.didBecomeActiveNotification] {
             self.scrollVisibilityObservers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
-                self?.resetScrollVisibility(transition: .immediate)
+                guard let self else { return }
+                self.scrollState.interruptGesture()
+                self.applyScrollVisibility(transition: .immediate)
             })
         }
+        self.scrollVisibilityObservers.append(NotificationCenter.default.addObserver(forName: UIResponder.keyboardWillShowNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.resetScrollVisibility(transition: .immediate)
+        })
         
         self.scrollToTop = { [weak self] in
             guard let strongSelf = self else {

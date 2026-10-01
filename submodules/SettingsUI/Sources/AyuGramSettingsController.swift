@@ -1750,7 +1750,11 @@ private func ayuGhostEntries(settings: AyuGramSettings) -> [AyuGhostEntry] {
     ]
 }
 
-private func ayuGhostController(context: AccountContext, focus: ShadowSettingsSearchItem? = nil) -> ViewController {
+public func ayuGhostController(context: AccountContext) -> ViewController {
+    return ayuGhostController(context: context, focus: nil)
+}
+
+private func ayuGhostController(context: AccountContext, focus: ShadowSettingsSearchItem?) -> ViewController {
     var focusedIndex: Int?
     var presentControllerImpl: ((ViewController, ViewControllerPresentationArguments?) -> Void)?
     let arguments = AyuGhostArguments(

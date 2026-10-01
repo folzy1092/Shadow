@@ -6,6 +6,18 @@ public enum NotificationTokenRegistrationResult: Equatable {
     case rpcError(code: Int32, description: String)
     case notRequired
 
+    public func retryDelay(attempt: Int) -> Double? {
+        switch self {
+        case .acknowledged(false):
+            return attempt < 3 ? Double(1 << (max(0, attempt) + 1)) : nil
+        case let .rpcError(code, _):
+            guard !self.requiresTokenInvalidation, code >= 500 else { return nil }
+            return attempt < 3 ? Double(1 << (max(0, attempt) + 1)) : 60.0
+        default:
+            return nil
+        }
+    }
+
     public var requiresTokenInvalidation: Bool {
         if case let .rpcError(_, description) = self {
             return description == "TOKEN_WAS_INVALIDATED"

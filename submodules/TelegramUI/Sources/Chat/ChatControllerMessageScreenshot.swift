@@ -73,6 +73,7 @@ private final class ShadowMessageScreenshotPreview: UIViewController {
     private let data: ChatPresentationData
     private let messageTheme: PresentationTheme
     private var options: ShadowMessageScreenshotSettings
+    private var anonymizer: ShadowScreenshotMessageAnonymizer
     private let scrollView = UIScrollView()
     private let content = ASDisplayNode()
     private var background: WallpaperBackgroundNode?
@@ -95,6 +96,7 @@ private final class ShadowMessageScreenshotPreview: UIViewController {
         self.data = data
         self.messageTheme = Self.desktopBubbleTheme(data.theme.theme)
         self.options = options
+        self.anonymizer = ShadowScreenshotMessageAnonymizer(messages: messages, accountPeer: accountPeer?._asPeer(), accountPeerId: context.account.peerId, options: options)
         super.init(nibName: nil, bundle: nil)
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -233,6 +235,7 @@ private final class ShadowMessageScreenshotPreview: UIViewController {
     }
 
     private func prepareItems() -> Bool {
+        self.anonymizer = ShadowScreenshotMessageAnonymizer(messages: self.messageRows.flatMap { $0 }, accountPeer: self.accountPeer?._asPeer(), accountPeerId: self.context.account.peerId, options: self.options)
         var items: [ChatMessageItemImpl] = []
         items.reserveCapacity(self.messageRows.count)
         let wallpaper = self.screenshotWallpaper()
@@ -242,13 +245,15 @@ private final class ShadowMessageScreenshotPreview: UIViewController {
             let author = self.author(of: message)
             let startsGroup = self.startsGroup(at: index, author: author)
             var rowOptions = self.options
+            if self.anonymizer.hides(author?._asPeer()) { rowOptions.showBadges = false }
             let incoming = message.effectivelyIncoming(self.context.account.peerId)
             rowOptions.showNames = self.options.showNames && startsGroup && (incoming ? self.options.showPeerNames : self.options.showOwnName)
 
-            // Render-only copy. It does not touch Postbox, direction,
-            // forwarding metadata, read status or message IDs.
+            // Render-only copy; persistent messages, direction, read status
+            // and message IDs stay unchanged.
             let renderMessages = row.map { original -> EngineRawMessage in
                 var result = original.author == nil ? (self.author(of: original).map { original.withUpdatedAuthor($0._asPeer()) } ?? original) : original
+                if self.options.anonymize { result = self.anonymizer.message(result) }
                 if !self.options.showReactions {
                     // Strip reaction attributes on every photo in the album.
                     result = result.withUpdatedAttributes(result.attributes.filter {
@@ -259,7 +264,7 @@ private final class ShadowMessageScreenshotPreview: UIViewController {
                 }
                 return result
             }
-            guard let template = self.context.sharedContext.makeChatMessagePreviewItem(context: self.context, messages: renderMessages, theme: self.messageTheme, strings: self.data.strings, wallpaper: wallpaper, fontSize: self.data.fontSize, chatBubbleCorners: self.data.chatBubbleCorners, dateTimeFormat: self.data.dateTimeFormat, nameOrder: self.data.nameDisplayOrder, forcedResourceStatus: nil, tapMessage: nil, clickThroughMessage: nil, backgroundNode: self.background, availableReactions: self.availableReactions, accountPeer: self.accountPeer?._asPeer(), isCentered: false, isPreview: false, isStandalone: true, rank: nil, rankRole: nil) as? ChatMessageItemImpl else {
+            guard let template = self.context.sharedContext.makeChatMessagePreviewItem(context: self.context, messages: renderMessages, theme: self.messageTheme, strings: self.data.strings, wallpaper: wallpaper, fontSize: self.data.fontSize, chatBubbleCorners: self.data.chatBubbleCorners, dateTimeFormat: self.data.dateTimeFormat, nameOrder: self.data.nameDisplayOrder, forcedResourceStatus: nil, tapMessage: nil, clickThroughMessage: nil, backgroundNode: self.background, availableReactions: self.availableReactions, accountPeer: self.accountPeer.map { self.options.anonymize ? self.anonymizer.anonymousPeer($0._asPeer()) : $0._asPeer() }, isCentered: false, isPreview: false, isStandalone: true, rank: nil, rankRole: nil) as? ChatMessageItemImpl else {
                 self.fail("Не удалось подготовить сообщение.")
                 return false
             }
@@ -308,7 +313,7 @@ private final class ShadowMessageScreenshotPreview: UIViewController {
         // only on the raw Incoming flag.
         let incoming = message.effectivelyIncoming(self.context.account.peerId)
         rowOptions.showNames = self.options.showNames && startsGroup && (incoming ? self.options.showPeerNames : self.options.showOwnName)
-        let showAvatar = self.options.showAvatars && (incoming ? self.options.showPeerAvatars : self.options.showOwnAvatar)
+        let showAvatar = !self.anonymizer.hides(author?._asPeer()) && self.options.showAvatars && (incoming ? self.options.showPeerAvatars : self.options.showOwnAvatar)
         let avatarWidth: CGFloat = showAvatar ? 42.0 : 0.0
         let item = self.preparedItems[index]
         let previousItem: ListViewItem? = index > 0 ? self.preparedItems[index - 1] : nil
@@ -327,7 +332,7 @@ private final class ShadowMessageScreenshotPreview: UIViewController {
                 let label = UILabel()
                 label.font = Font.semibold(14.0)
                 label.textColor = self.messageTheme.chat.message.incoming.accentTextColor
-                label.text = author.compactDisplayTitle
+                label.text = self.anonymizer.hides(author._asPeer()) ? self.anonymizer.label(for: author._asPeer()) : author.compactDisplayTitle
                 label.lineBreakMode = .byTruncatingTail
                 label.textAlignment = incoming ? .left : .right
                 let headerX: CGFloat = incoming ? avatarWidth + 8.0 : 8.0
@@ -352,7 +357,7 @@ private final class ShadowMessageScreenshotPreview: UIViewController {
             node.isUserInteractionEnabled = false
             node.visibility = .visible(1.0, CGRect(origin: .zero, size: node.bounds.size))
             if !self.options.showTime { self.hideTime(in: node) }
-            if self.options.showAvatars && endsGroup && (incoming ? self.options.showPeerAvatars : self.options.showOwnAvatar) {
+            if !self.anonymizer.hides(author?._asPeer()) && self.options.showAvatars && endsGroup && (incoming ? self.options.showPeerAvatars : self.options.showOwnAvatar) {
                 self.appendAvatar(author: author, y: rowTop + height - 32.0, incoming: incoming)
             }
             self.contentHeight += height
@@ -410,6 +415,14 @@ private final class ShadowMessageScreenshotPreview: UIViewController {
             }))
         }
         let options = self.options
+        addToggle("Анонимный скриншот", visible: options.anonymize) { $0.anonymize.toggle() }
+        if options.anonymize {
+            addToggle("Скрыть себя", visible: options.anonymizeOwn) { $0.anonymizeOwn.toggle() }
+            addToggle("Скрыть всех собеседников", visible: options.anonymizeOthers) { $0.anonymizeOthers.toggle() }
+            menu.addAction(UIAlertAction(title: "Выбрать участников…", style: .default, handler: { [weak self, weak menu] _ in
+                menu?.dismiss(animated: true, completion: { [weak self] in self?.selectAnonymousParticipants() })
+            }))
+        }
         addToggle("Показывать реакции", visible: options.showReactions) { $0.showReactions.toggle() }
         addToggle("Показывать своё имя", visible: options.showOwnName) { $0.showOwnName.toggle() }
         addToggle("Показывать имена собеседников", visible: options.showPeerNames) { $0.showPeerNames.toggle() }
@@ -418,6 +431,24 @@ private final class ShadowMessageScreenshotPreview: UIViewController {
         addToggle("Показывать значки рядом с именем", visible: options.showBadges) { $0.showBadges.toggle() }
         addToggle("Показывать время и статус", visible: options.showTime) { $0.showTime.toggle() }
         menu.addAction(UIAlertAction(title: "Отмена", style: .cancel))
+        menu.popoverPresentationController?.barButtonItem = self.navigationItem.rightBarButtonItems?.last
+        self.present(menu, animated: true)
+    }
+
+    private func selectAnonymousParticipants() {
+        let menu = UIAlertController(title: "Скрыть выбранных участников", message: "Выбор участника отключает скрытие всех собеседников. Остальные останутся видимы. Лица и надписи внутри фото и видео не скрываются.", preferredStyle: .actionSheet)
+        for peer in self.anonymizer.participants where peer.id != self.context.account.peerId {
+            let selected = self.options.anonymizedPeerIds.contains(peer.id.toInt64())
+            menu.addAction(UIAlertAction(title: (selected ? "✓ " : "") + EnginePeer(peer).compactDisplayTitle, style: .default, handler: { [weak self] _ in
+                self?.updateOptions { options in
+                    options.anonymizeOthers = false
+                    let id = peer.id.toInt64()
+                    if selected { options.anonymizedPeerIds.removeAll(where: { $0 == id }) }
+                    else if !options.anonymizedPeerIds.contains(id) { options.anonymizedPeerIds.append(id) }
+                }
+            }))
+        }
+        menu.addAction(UIAlertAction(title: "Готово", style: .cancel))
         menu.popoverPresentationController?.barButtonItem = self.navigationItem.rightBarButtonItems?.last
         self.present(menu, animated: true)
     }

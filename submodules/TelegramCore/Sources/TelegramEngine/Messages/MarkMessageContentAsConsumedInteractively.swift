@@ -16,6 +16,10 @@ func _internal_markMessageContentAsConsumedInteractively(postbox: Postbox, messa
             let settings = currentAyuGramSettings(transaction: transaction)
             let keepSecretChatMedia = message.id.peerId.namespace == Namespaces.Peer.SecretChat && settings.keepDeletedSecretChatMessages
             let keepCloudChatMedia = message.id.peerId.namespace != Namespaces.Peer.SecretChat && settings.keepSelfDestructMedia
+            if force, message.containsSecretMedia, keepSecretChatMedia {
+                _internal_deleteMessages(transaction: transaction, mediaBox: postbox.mediaBox, ids: [message.id])
+                return
+            }
             if !force, message.containsSecretMedia, keepSecretChatMedia || keepCloudChatMedia {
                 return
             }
@@ -28,7 +32,7 @@ func _internal_markMessageContentAsConsumedInteractively(postbox: Postbox, messa
                         updatedAttributes[i] = ConsumableContentMessageAttribute(consumed: true)
                         updateMessage = true
                         
-                        if message.id.peerId.namespace == Namespaces.Peer.SecretChat {
+                        if message.id.peerId.namespace == Namespaces.Peer.SecretChat && !settings.effectiveHideConsumed {
                             if let state = transaction.getPeerChatState(message.id.peerId) as? SecretChatState {
                                 var layer: SecretChatLayer?
                                 switch state.embeddedState {
@@ -50,7 +54,7 @@ func _internal_markMessageContentAsConsumedInteractively(postbox: Postbox, messa
                                     }
                                 }
                             }
-                        } else {
+                        } else if message.id.peerId.namespace != Namespaces.Peer.SecretChat {
                             // AyuGram: silent listening / watching. When Ghost Mode is on,
                             // the voice / round-video message is still marked consumed
                             // locally (done just above, so it never shows as "unplayed" on
@@ -63,8 +67,10 @@ func _internal_markMessageContentAsConsumedInteractively(postbox: Postbox, messa
                         }
                     }
                 } else if let attribute = updatedAttributes[i] as? ConsumablePersonalMentionMessageAttribute, !attribute.consumed {
-                    transaction.setPendingMessageAction(type: .consumeUnseenPersonalMessage, id: messageId, action: ConsumePersonalMessageAction())
-                    updatedAttributes[i] = ConsumablePersonalMentionMessageAttribute(consumed: attribute.consumed, pending: true)
+                    let suppressed = settings.effectiveHideConsumed
+                    if !suppressed { transaction.setPendingMessageAction(type: .consumeUnseenPersonalMessage, id: messageId, action: ConsumePersonalMessageAction()) }
+                    updatedAttributes[i] = ConsumablePersonalMentionMessageAttribute(consumed: suppressed, pending: !suppressed)
+                    updateMessage = true
                 }
             }
             
@@ -93,7 +99,7 @@ func _internal_markMessageContentAsConsumedInteractively(postbox: Postbox, messa
                                 }
                             }
                             
-                            if let state = state, let layer = layer, let globallyUniqueId = message.globallyUniqueId {
+                            if !settings.effectiveHideConsumed, let state = state, let layer = layer, let globallyUniqueId = message.globallyUniqueId {
                                 let updatedState = addSecretChatOutgoingOperation(transaction: transaction, peerId: messageId.peerId, operation: .readMessagesContent(layer: layer, actionGloballyUniqueId: Int64.random(in: Int64.min ... Int64.max), globallyUniqueIds: [globallyUniqueId]), state: state)
                                 if updatedState != state {
                                     transaction.setPeerChatState(messageId.peerId, state: updatedState)
@@ -124,7 +130,7 @@ func _internal_markMessageContentAsConsumedInteractively(postbox: Postbox, messa
                                 }
                             }
                             
-                            if let state = state, let layer = layer, let globallyUniqueId = message.globallyUniqueId {
+                            if !settings.effectiveHideConsumed, let state = state, let layer = layer, let globallyUniqueId = message.globallyUniqueId {
                                 let updatedState = addSecretChatOutgoingOperation(transaction: transaction, peerId: messageId.peerId, operation: .readMessagesContent(layer: layer, actionGloballyUniqueId: Int64.random(in: Int64.min ... Int64.max), globallyUniqueIds: [globallyUniqueId]), state: state)
                                 if updatedState != state {
                                     transaction.setPeerChatState(messageId.peerId, state: updatedState)

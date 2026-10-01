@@ -71,8 +71,8 @@ private final class AccountPresenceManagerImpl {
         // (bypassing the 30s timer and the same-value `wasOnline` guard) so the
         // brief server-side online blip from the send RPC is cleared immediately.
         self.offlineReassertDisposable = (ayuOfflineReassertPipe.signal()
-        |> deliverOn(self.queue)).start(next: { [weak self] in
-            guard let self else {
+        |> deliverOn(self.queue)).start(next: { [weak self] network in
+            guard let self, self.network === network else {
                 return
             }
             if self.wasOnline != true {

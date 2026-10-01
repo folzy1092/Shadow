@@ -1302,10 +1302,12 @@ func peerInfoScreenData(
             // AyuGram (Этап 4b): when last seen is hidden, replace the vague
             // "recently / within a week" text with an approximate "was online
             // ~<time>" derived from the user's most recent message in shared chats.
-            let status = combineLatest(queue: .mainQueue(),
-                baseStatus,
-                ayuApproximateLastActivity(postbox: context.account.postbox, peerId: userPeerId)
-            )
+            let activityEstimate = ayuGramSettings(postbox: context.account.postbox)
+            |> mapToSignal { settings -> Signal<Int32?, NoError> in
+                if settings.showExactLastSeen { return ayuApproximateLastActivity(postbox: context.account.postbox, peerId: userPeerId) }
+                return .single(nil)
+            }
+            let status = combineLatest(queue: .mainQueue(), baseStatus, activityEstimate)
             |> map { statusData, ayuEstimate -> PeerInfoStatusData? in
                 if let statusData = statusData, statusData.isHiddenStatus, let ayuEstimate = ayuEstimate {
                     let now = Int32(CFAbsoluteTimeGetCurrent() + NSTimeIntervalSince1970)

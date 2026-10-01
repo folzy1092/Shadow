@@ -22,7 +22,7 @@ func _internal_unregisterNotificationToken(account: Account, token: Data, type: 
     |> ignoreValues
 }
 
-func _internal_registerNotificationToken(account: Account, token: Data, type: NotificationTokenType, sandbox: Bool, otherAccountUserIds: [PeerId.Id], excludeMutedChats: Bool) -> Signal<NotificationTokenRegistrationResult, NoError> {
+func _internal_registerNotificationToken(account: Account, token: Data, type: NotificationTokenType, sandbox: Bool, otherAccountUserIds: [PeerId.Id], excludeMutedChats: Bool, retryAttempt: Int = 0) -> Signal<NotificationTokenRegistrationResult, NoError> {
     return masterNotificationsKey(account: account, ignoreDisabled: false)
     |> mapToSignal { masterKey -> Signal<NotificationTokenRegistrationResult, NoError> in
         let mappedType: Int32
@@ -59,6 +59,13 @@ func _internal_registerNotificationToken(account: Account, token: Data, type: No
             ShadowPushDiagnostics.shared.registrationFinished(accountId: account.id.int64, tokenType: mappedType, result: result)
             Logger.shared.log("ShadowPush", "token_type=\(mappedType) \(result.diagnosticDescription)")
             return .single(result)
+        }
+        |> mapToSignal { result -> Signal<NotificationTokenRegistrationResult, NoError> in
+            guard let retryDelay = result.retryDelay(attempt: retryAttempt) else { return .single(result) }
+            // Cancelling registration (new token or account logout) cancels retries.
+            return Signal<NotificationTokenRegistrationResult, NoError>.complete()
+            |> delay(retryDelay, queue: .concurrentDefaultQueue())
+            |> then(_internal_registerNotificationToken(account: account, token: token, type: type, sandbox: sandbox, otherAccountUserIds: otherAccountUserIds, excludeMutedChats: excludeMutedChats, retryAttempt: retryAttempt + 1))
         }
     }
 }

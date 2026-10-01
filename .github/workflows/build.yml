@@ -2,13 +2,21 @@ name: CI
 
 on:
   push:
-    branches: [ master, main ]
+    branches: [ master, main, fix/privacy-archive-screenshots ]
 
   workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: shadow-build-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
     runs-on: macos-26
+    timeout-minutes: 45
 
     steps:
       - uses: actions/checkout@v4
@@ -46,6 +54,7 @@ jobs:
       - name: Verify Shadow settings and screenshot regressions
         run: |
           python3 -B -m unittest discover -s Tests/ShadowSettings -p 'test_*.py'
+          python3 -B -m unittest discover -s Tests/ShadowVisualSettings -p 'test_*.py'
           python3 build-system/ci/test_shadow_foundation.py
           python3 build-system/ci/test_shadow_postbox.py
 
@@ -142,8 +151,16 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      - name: Upload debugging symbols
+        uses: actions/upload-artifact@v4
+        with:
+          name: Shadow-DSYMs-${{ env.BUILD_NUMBER }}
+          path: /Users/Shared/telegram-ios/build/artifacts/Telegram.DSYMs.zip
+          if-no-files-found: warn
+          retention-days: 30
+
       - name: Notify Telegram
-        if: always()
+        if: ${{ always() && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main') }}
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -180,7 +197,7 @@ jobs:
             || echo "Telegram notification failed (non-fatal)"
 
       - name: Notify Discord
-        if: always()
+        if: ${{ always() && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main') }}
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           DISCORD_PING_USER_ID: ${{ secrets.DISCORD_PING_USER_ID }}

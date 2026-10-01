@@ -430,7 +430,7 @@ private class ReplyThreadHistoryContextImpl {
                 }
             }
 
-            let inputPeer = transaction.getPeer(messageIndex.id.peerId).flatMap(apiInputPeer)
+            let inputPeer = currentAyuGramSettings(transaction: transaction).suppressReadReceipts(peerId: messageIndex.id.peerId) ? nil : transaction.getPeer(messageIndex.id.peerId).flatMap(apiInputPeer)
             let readCount = transaction.getThreadMessageCount(peerId: peerId, threadId: threadId, namespace: Namespaces.Message.Cloud, fromIdExclusive: fromIdExclusive, toIndex: toIndex)
             let topMessageId = transaction.getMessagesWithThreadId(peerId: peerId, namespace: Namespaces.Message.Cloud, threadId: threadId, from: MessageIndex.upperBound(peerId: peerId, namespace: Namespaces.Message.Cloud), includeFrom: false, to: MessageIndex.lowerBound(peerId: peerId, namespace: Namespaces.Message.Cloud), limit: 1).first?.id
             

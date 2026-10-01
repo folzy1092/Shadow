@@ -57,7 +57,16 @@ struct TabBarScrollTests {
         check(!state.isHidden)
         state.updateGesture(translation: -20)
         check(state.isHidden)
-        state.reset() // foreground, folder change, modal, keyboard, or bottom tap
+        state.interruptGesture()
+        check(state.isHidden)
+        state.updateGesture(translation: 1000)
+        check(state.isHidden)
+        state.updateGesture(translation: 1008)
+        check(!state.isHidden)
+        state.beginGesture()
+        state.updateGesture(translation: -20)
+        check(state.isHidden)
+        state.reset() // explicit reveal,, folder change, modal, keyboard, or bottom tap
         check(!state.isHidden)
         state.updateGesture(translation: -100) // resume a gesture after top overscroll
         check(!state.isHidden)

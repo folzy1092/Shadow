@@ -669,14 +669,14 @@ public func ayuExactLastSeenString(strings: PresentationStrings, dateTimeFormat:
     return strings.LastSeen_AtDate("\(date), \(time)").string
 }
 
-// AyuGram (Этап 4b): format an approximate "last seen" from a user's most recent
-// activity in shared chats, used when the real last seen is hidden. We reuse the
-// standard formatter by presenting the activity timestamp as a past ".present"
-// status, then mark the result as approximate with a leading "~".
+// A message timestamp is evidence of chat activity, not proof of last seen.
 public func ayuApproximateLastSeenString(strings: PresentationStrings, dateTimeFormat: PresentationDateTimeFormat, activityTimestamp: Int32, relativeTo timestamp: Int32) -> String {
-    let presence = EnginePeer.Presence(status: .present(until: activityTimestamp), lastActivity: activityTimestamp)
-    let (base, _) = stringAndActivityForUserPresence(strings: strings, dateTimeFormat: dateTimeFormat, presence: presence, relativeTo: timestamp, expanded: true)
-    return "~\(base)"
+    var time: time_t = time_t(min(activityTimestamp, timestamp))
+    var info = tm()
+    localtime_r(&time, &info)
+    let date = stringForTimestamp(day: info.tm_mday, month: info.tm_mon + 1, year: info.tm_year, dateTimeFormat: dateTimeFormat)
+    let clock = stringForShortTimestamp(hours: info.tm_hour, minutes: info.tm_min, dateTimeFormat: dateTimeFormat)
+    return "Активность по сообщениям: \(date), \(clock)"
 }
 
 public func peerStatusExpirationString(statusTimestamp: Int32, relativeTo timestamp: Int32, strings: PresentationStrings, dateTimeFormat: PresentationDateTimeFormat) -> String {

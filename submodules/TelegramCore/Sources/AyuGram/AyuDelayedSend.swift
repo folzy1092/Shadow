@@ -7,27 +7,30 @@ import SwiftSignalKit
 // presence manager does not repeatedly send "offline" while hidden, so without
 // this the user could remain online after a send. The presence manager subscribes
 // to this pipe and re-sends "offline" when it fires.
-public let ayuOfflineReassertPipe = ValuePipe<Void>()
+public let ayuOfflineReassertPipe = ValuePipe<Network>()
 
-public func ayuTriggerOfflineReassert() {
-    ayuOfflineReassertPipe.putNext(Void())
+public func ayuTriggerOfflineReassert(network: Network) {
+    ayuOfflineReassertPipe.putNext(network)
 }
 
-// Shadow fork: fire the reassert only after we KNOW the send RPC's round
-// trip has actually finished (PendingMessageManager hooks this on completion/
-// failure/cancellation of the real network request, not at enqueue time).
-// Previously this fired from `enqueueMessages` at t=0/+2s/+5s as a blind guess,
-// racing the real RPC dispatch (which can be delayed arbitrarily by media
-// upload, transaction commit, or queueing behind other pending sends) — a send
-// that went out later than +5s left the account online with no further
-// correction after the send. Hooking the actual RPC
-// completion removes the guesswork: our "offline" call is now guaranteed to be
-// queued strictly after the send RPC's own online side effect, so it always
-// corrects it (at the cost of one network round trip's worth of residual blip,
-// which is not eliminable client-side — see the comment on `transform` below).
-public func ayuReassertOfflineAfterSendIfNeeded() {
-    if ayuGramSettingsCurrent.effectiveSendViaScheduled || ayuGramSettingsCurrent.effectiveSendWithoutOnline {
-        ayuTriggerOfflineReassert()
+// Reassert for the account that completed the request. A lost response still
+// makes this best-effort; client code cannot undo Telegram's send side effects.
+public func ayuReassertOfflineAfterSendIfNeeded(postbox: Postbox, network: Network) {
+    let _ = postbox.transaction { transaction in
+        let settings = currentAyuGramSettings(transaction: transaction)
+        return settings.effectiveSendViaScheduled || settings.effectiveSendWithoutOnline
+    }.start(next: { enabled in
+        if enabled { ayuTriggerOfflineReassert(network: network) }
+    })
+}
+
+public func ayuOfflineReassertAfterRequest<T, E>(postbox: Postbox, network: Network) -> (Signal<T, E>) -> Signal<T, E> {
+    return { signal in
+        return withState(signal, { () }, next: { _, _ in
+            ayuReassertOfflineAfterSendIfNeeded(postbox: postbox, network: network)
+        }, error: { _, _ in
+            ayuReassertOfflineAfterSendIfNeeded(postbox: postbox, network: network)
+        })
     }
 }
 
@@ -100,8 +103,8 @@ public enum AyuDelayedSend {
     // appears in the current history view. Automatically scheduled messages go
     // into ScheduledCloud instead, so that view update never arrives. Expose the
     // exact transform eligibility to the UI so it can clear optimistically.
-    public static func willAutomaticallySchedule(messages: [EnqueueMessage], peerId: PeerId) -> Bool {
-        guard ayuGramSettingsCurrent.effectiveSendViaScheduled else {
+    public static func willAutomaticallySchedule(messages: [EnqueueMessage], peerId: PeerId, settings: AyuGramSettings) -> Bool {
+        guard settings.effectiveSendViaScheduled else {
             return false
         }
         guard peerSupportsScheduling(peerId) else {
@@ -126,8 +129,8 @@ public enum AyuDelayedSend {
     // Transform a batch of outgoing messages for one peer, attaching a schedule
     // attribute to each eligible message. `now` is the current unix time. Returns
     // the possibly-modified messages. Cheap and side-effect-free.
-    public static func transform(messages: [EnqueueMessage], peerId: PeerId, now: Int32) -> [EnqueueMessage] {
-        guard willAutomaticallySchedule(messages: messages, peerId: peerId) else {
+    public static func transform(messages: [EnqueueMessage], peerId: PeerId, settings: AyuGramSettings, now: Int32) -> [EnqueueMessage] {
+        guard willAutomaticallySchedule(messages: messages, peerId: peerId, settings: settings) else {
             return messages
         }
         return messages.map { message -> EnqueueMessage in

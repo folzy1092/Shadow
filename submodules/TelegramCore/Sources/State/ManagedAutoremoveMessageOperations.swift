@@ -82,12 +82,24 @@ func managedAutoremoveMessageOperations(network: Network, postbox: Postbox, isRe
                     Logger.shared.log("Autoremove", "Performing autoremove for \(entry.messageId), isRemove: \(isRemove)")
 
                     if let message = transaction.getMessage(entry.messageId) {
+                        // A timer may already have queued its transaction when
+                        // anti-delete removed the timeout attributes. Recheck here.
+                        if message.attributes.contains(where: { $0 is DeletedMessageAttribute }) {
+                            transaction.clearTimestampBasedAttribute(id: entry.messageId, tag: tag)
+                            return
+                        }
+                        let settings = currentAyuGramSettings(transaction: transaction)
+                        if message.id.peerId.namespace == Namespaces.Peer.SecretChat && message.flags.contains(.Incoming) && settings.keepDeletedSecretChatMessages {
+                            let _ = ayuGramMarkMessagesDeleted(transaction: transaction, mediaBox: postbox.mediaBox, ids: [message.id])
+                            transaction.clearTimestampBasedAttribute(id: entry.messageId, tag: tag)
+                            return
+                        }
                         // AyuGram: last-chance local backup before the media is
                         // removed or swapped for the "expired" placeholder. Hard-links
                         // the still-cached resource files into the private gallery so
                         // they survive self-destruct (especially secret-chat media,
                         // whose resources are force-removed below).
-                        if currentAyuGramSettings(transaction: transaction).saveDestructingMedia {
+                        if settings.saveDestructingMedia {
                             AyuSavedMedia.saveMessageMedia(mediaBox: postbox.mediaBox, message: message)
                         }
                         if message.id.peerId.namespace == Namespaces.Peer.SecretChat || isRemove {

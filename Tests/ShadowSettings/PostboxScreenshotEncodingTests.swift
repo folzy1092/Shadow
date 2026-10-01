@@ -62,7 +62,7 @@ private struct UnknownBackground: Encodable {
             return
         }
         for background in ShadowMessageScreenshotSettings.Background.allCases {
-            for flags in 0 ..< 64 {
+            for flags in 0 ..< 512 {
                 var options = ShadowMessageScreenshotSettings()
                 options.background = background
                 options.enabled = flags & 1 != 0
@@ -70,6 +70,10 @@ private struct UnknownBackground: Encodable {
                 options.showNames = flags & 4 != 0
                 options.showBadges = flags & 8 != 0
                 options.showTime = flags & 16 != 0
+                options.anonymize = flags & 64 != 0
+                options.anonymizeOwn = flags & 128 != 0
+                options.anonymizeOthers = flags & 256 != 0
+                options.anonymizedPeerIds = [123, Int64.max - 1]
 
                 let direct = try AdaptedPostboxEncoder().encode(options)
                 let restored = try AdaptedPostboxDecoder().decode(ShadowMessageScreenshotSettings.self, from: direct)

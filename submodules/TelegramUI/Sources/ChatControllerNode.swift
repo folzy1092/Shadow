@@ -5217,7 +5217,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                     // Explicit user scheduling keeps Telegram's native path.
                     var shouldClearInputImmediately = false
                     if scheduleTime == nil, repeatPeriod == nil, !postpone, let peerId = self.chatLocation.peerId {
-                        shouldClearInputImmediately = AyuDelayedSend.willAutomaticallySchedule(messages: messages, peerId: peerId)
+                        shouldClearInputImmediately = AyuDelayedSend.willAutomaticallySchedule(messages: messages, peerId: peerId, settings: currentAyuGramSettings(accountId: self.context.account.id))
                     }
                     
                     var usedCorrelationId: Int64?

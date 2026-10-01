@@ -949,9 +949,6 @@ public final class AccountViewTracker {
         // AyuGram: Ghost Mode also covers "seen live location" — the request below
         // is a plain readMessageContents that tells the sender we watched their
         // location. Purely fire-and-forget, so skipping it has no local effect.
-        if ayuGramSettingsCurrent.effectiveHideConsumed {
-            return
-        }
         self.queue.async {
             var addedMessageIds: [MessageId] = []
             let timestamp = Int32(CFAbsoluteTimeGetCurrent())
@@ -969,6 +966,7 @@ public final class AccountViewTracker {
                     
                     if let account = self.account {
                         let signal = (account.postbox.transaction { transaction -> Signal<Void, NoError> in
+                            if currentAyuGramSettings(transaction: transaction).effectiveHideConsumed { return .complete() }
                             if let peer = transaction.getPeer(peerId), let inputPeer = apiInputPeer(peer) {
                                 let request: Signal<Bool, MTRpcError>
                                 switch inputPeer {

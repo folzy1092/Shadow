@@ -64,11 +64,16 @@ public final class NavigationButtonComponent: Component {
         
         private var component: NavigationButtonComponent?
         private var theme: PresentationTheme?
+        private lazy var longPressGesture = UILongPressGestureRecognizer(target: self, action: #selector(self.longPressed(_:)))
         
         override init(frame: CGRect) {
             super.init(frame: frame)
             
             self.addTarget(self, action: #selector(self.pressed), for: .touchUpInside)
+            self.longPressGesture.minimumPressDuration = 0.45
+            self.longPressGesture.cancelsTouchesInView = true
+            self.longPressGesture.isEnabled = false
+            self.addGestureRecognizer(self.longPressGesture)
             
             self.highligthedChanged = { [weak self] highlighted in
                 guard let self else {
@@ -98,9 +103,17 @@ public final class NavigationButtonComponent: Component {
         @objc private func pressed() {
             self.component?.pressed(self)
         }
+
+        @objc private func longPressed(_ gesture: UILongPressGestureRecognizer) {
+            guard gesture.state == .began else { return }
+            self.component?.contextAction?(self, nil)
+        }
         
         func update(component: NavigationButtonComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<NavigationButtonComponentEnvironment>, transition: ComponentTransition) -> CGSize {
             self.component = component
+            // The more button has its own ContextGesture. Icons and text use
+            // this recognizer; cancelling touches prevents a toggle on release.
+            self.longPressGesture.isEnabled = component.contextAction != nil && component.content != .more
             
             let theme = environment[NavigationButtonComponentEnvironment.self].value.theme
             var themeUpdated = false

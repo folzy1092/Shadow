@@ -17,6 +17,10 @@ public struct ShadowMessageScreenshotSettings: Codable, Equatable {
     public static let legacyBlackARGB: Int32 = Int32(bitPattern: 0xFF000000)
 
     public var enabled: Bool = true
+    public var anonymize: Bool = false
+    public var anonymizeOwn: Bool = true
+    public var anonymizeOthers: Bool = true
+    public var anonymizedPeerIds: [Int64] = []
     public var background: Background = .chat
     public var customColorARGB: Int32 = ShadowMessageScreenshotSettings.legacyBlackARGB
     public var showAvatars: Bool = true
@@ -34,6 +38,7 @@ public struct ShadowMessageScreenshotSettings: Codable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case enabled
+        case anonymize, anonymizeOwn, anonymizeOthers, anonymizedPeerIds
         case background
         case customColorARGB
         case showAvatars
@@ -51,6 +56,10 @@ public struct ShadowMessageScreenshotSettings: Codable, Equatable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
 
         self.enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
+        self.anonymize = try c.decodeIfPresent(Bool.self, forKey: .anonymize) ?? false
+        self.anonymizeOwn = try c.decodeIfPresent(Bool.self, forKey: .anonymizeOwn) ?? true
+        self.anonymizeOthers = try c.decodeIfPresent(Bool.self, forKey: .anonymizeOthers) ?? true
+        self.anonymizedPeerIds = try c.decodeIfPresent([Int64].self, forKey: .anonymizedPeerIds) ?? []
 
         let rawBackground = try c.decodeIfPresent(Int32.self, forKey: .background) ?? Background.chat.rawValue
         let storedCustomColorARGB = try c.decodeIfPresent(Int32.self, forKey: .customColorARGB)
@@ -92,6 +101,10 @@ public struct ShadowMessageScreenshotSettings: Codable, Equatable {
         var c = encoder.container(keyedBy: CodingKeys.self)
 
         try c.encode(self.enabled, forKey: .enabled)
+        try c.encode(self.anonymize, forKey: .anonymize)
+        try c.encode(self.anonymizeOwn, forKey: .anonymizeOwn)
+        try c.encode(self.anonymizeOthers, forKey: .anonymizeOthers)
+        try c.encode(self.anonymizedPeerIds, forKey: .anonymizedPeerIds)
 
         // Postbox does not support the single-value container used by the
         // raw-value enum's synthesized encoder. Keep explicit Int32 encoding.
@@ -107,6 +120,12 @@ public struct ShadowMessageScreenshotSettings: Codable, Equatable {
         try c.encode(self.showPeerNames, forKey: .showPeerNames)
         try c.encode(self.showOwnAvatar, forKey: .showOwnAvatar)
         try c.encode(self.showPeerAvatars, forKey: .showPeerAvatars)
+    }
+
+    public func anonymizes(peerId: Int64, accountPeerId: Int64) -> Bool {
+        guard self.anonymize else { return false }
+        if peerId == accountPeerId { return self.anonymizeOwn }
+        return self.anonymizeOthers || self.anonymizedPeerIds.contains(peerId)
     }
 
     // Fixed, account-local path. Never accept a path from an imported settings file.
