@@ -604,6 +604,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
     case hideGiftButton(Bool)
     case hidePremiumBadges(Bool)
     case hideSponsoredMessages(Bool)
+    case unlimitedPinnedChats(Bool)
     case localVoiceTranscription(Bool)
     case chatsFooter
 
@@ -659,7 +660,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
             return AyuCustomizationSection.buildInfo.rawValue
         case .appearanceHeader, .showMessageSeconds, .editedIndicatorAsPencil, .editedIndicatorText, .deletedIndicatorText, .regularEmojiFirst, .doubleTapToEdit, .showExactLastSeen, .showExactLastSeenSeconds, .wideChannelPosts, .showExactViewCounts, .showForwardCount, .appearanceFooter:
             return AyuCustomizationSection.appearance.rawValue
-        case .chatsHeader, .hideAllChatsFolder, .hideStoriesBar, .hideGiftButton, .hidePremiumBadges, .hideSponsoredMessages, .chatsFooter:
+        case .chatsHeader, .hideAllChatsFolder, .hideStoriesBar, .hideGiftButton, .hidePremiumBadges, .hideSponsoredMessages, .unlimitedPinnedChats, .chatsFooter:
             return AyuCustomizationSection.chats.rawValue
         case .bottomBarHeader, .foldersAtBottom, .hideBottomSearch, .compactBottomBar, .bottomBarScrollMode, .bottomBarFooter:
             return AyuCustomizationSection.bottomBar.rawValue
@@ -707,6 +708,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .hidePremiumBadges: return 101
         case .hideSponsoredMessages: return 102
         case .localVoiceTranscription: return 103
+        case .unlimitedPinnedChats: return 104
         case .bottomBarHeader: return 14
         case .foldersAtBottom: return 15
         case .hideBottomSearch: return 16
@@ -758,6 +760,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .hideGiftButton: return (12, 2)
         case .hidePremiumBadges: return (12, 3)
         case .hideSponsoredMessages: return (12, 4)
+        case .unlimitedPinnedChats: return (12, 5)
         case .localVoiceTranscription: return (28, 1)
         default: return (self.stableId, 0)
         }
@@ -854,12 +857,16 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
             return ItemListSwitchItem(presentationData: presentationData, title: "Скрыть рекламу в каналах", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 arguments.updateSetting { $0.hideSponsoredMessages = value }
             })
+        case let .unlimitedPinnedChats(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Безлимитные закрепы", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.updateSetting { $0.unlimitedPinnedChats = value }
+            })
         case let .localVoiceTranscription(value):
             return ItemListSwitchItem(presentationData: presentationData, title: "Расшифровка голосовых на устройстве", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 arguments.updateSetting { $0.localVoiceTranscription = value }
             })
         case .chatsFooter:
-            return ItemListTextItem(presentationData: presentationData, text: .plain("«Скрыть папку «Все чаты»» убирает эту вкладку, остальные папки работают. «Скрыть истории» убирает ленту историй над списком чатов. «Скрыть кнопку подарка» убирает подарок из поля ввода. «Скрыть значки Premium» убирает звёздочку и эмодзи-статус рядом с именами (галочки верификации остаются). «Скрыть рекламу в каналах» — спонсорские сообщения не загружаются; применяется при следующем открытии канала."), sectionId: self.section)
+            return ItemListTextItem(presentationData: presentationData, text: .plain("«Скрыть папку «Все чаты»» убирает эту вкладку, остальные папки работают. «Скрыть истории» убирает ленту историй над списком чатов. «Скрыть кнопку подарка» убирает подарок из поля ввода. «Скрыть значки Premium» убирает звёздочку и эмодзи-статус рядом с именами (галочки верификации остаются). «Скрыть рекламу в каналах» — спонсорские сообщения не загружаются; применяется при следующем открытии канала. «Безлимитные закрепы» снимают ограничение на число закреплённых чатов; закрепы сверх лимита Telegram хранятся только на этом устройстве."), sectionId: self.section)
         case .bottomBarHeader:
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "НИЖНИЙ ИНТЕРФЕЙС", sectionId: self.section)
         case let .foldersAtBottom(value):
@@ -1003,6 +1010,7 @@ private func ayuCustomizationEntries(settings: AyuGramSettings) -> [AyuCustomiza
     entries.append(.hideGiftButton(settings.hideGiftButton))
     entries.append(.hidePremiumBadges(settings.hidePremiumBadges))
     entries.append(.hideSponsoredMessages(settings.hideSponsoredMessages))
+    entries.append(.unlimitedPinnedChats(settings.unlimitedPinnedChats))
     entries.append(.chatsFooter)
 
     entries.append(.bottomBarHeader)

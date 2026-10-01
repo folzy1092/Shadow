@@ -95,6 +95,8 @@ public struct AyuGramSettings: Codable, Equatable {
     public var hideGiftButton: Bool = false
     public var hidePremiumBadges: Bool = false
     public var hideSponsoredMessages: Bool = false
+    // Pin more chats than the server limit. Extra pins live on this device only.
+    public var unlimitedPinnedChats: Bool = true
     // On-device transcription of voice messages for accounts without Premium.
     public var localVoiceTranscription: Bool = true
     // Local quick reply templates inserted into the composer.
@@ -588,6 +590,7 @@ public struct AyuGramSettings: Codable, Equatable {
         self.hideGiftButton = ((try container.decodeIfPresent(Int32.self, forKey: "hideGiftButton")) ?? 0) != 0
         self.hidePremiumBadges = ((try container.decodeIfPresent(Int32.self, forKey: "hidePremiumBadges")) ?? 0) != 0
         self.hideSponsoredMessages = ((try container.decodeIfPresent(Int32.self, forKey: "hideSponsoredMessages")) ?? 0) != 0
+        self.unlimitedPinnedChats = ((try container.decodeIfPresent(Int32.self, forKey: "unlimitedPinnedChats")) ?? 1) != 0
         self.localVoiceTranscription = ((try container.decodeIfPresent(Int32.self, forKey: "localVoiceTranscription")) ?? 1) != 0
         self.quickReplyTemplates = (try container.decodeIfPresent([String].self, forKey: "quickReplyTemplates")) ?? []
         self.keepDeletedMessages = ((try container.decodeIfPresent(Int32.self, forKey: "keepDeletedMessages")) ?? 1) != 0
@@ -667,6 +670,7 @@ public struct AyuGramSettings: Codable, Equatable {
         try container.encode((self.hideGiftButton ? 1 : 0) as Int32, forKey: "hideGiftButton")
         try container.encode((self.hidePremiumBadges ? 1 : 0) as Int32, forKey: "hidePremiumBadges")
         try container.encode((self.hideSponsoredMessages ? 1 : 0) as Int32, forKey: "hideSponsoredMessages")
+        try container.encode((self.unlimitedPinnedChats ? 1 : 0) as Int32, forKey: "unlimitedPinnedChats")
         try container.encode((self.localVoiceTranscription ? 1 : 0) as Int32, forKey: "localVoiceTranscription")
         try container.encode(self.quickReplyTemplates, forKey: "quickReplyTemplates")
         try container.encode((self.keepDeletedMessages ? 1 : 0) as Int32, forKey: "keepDeletedMessages")

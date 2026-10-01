@@ -93,6 +93,14 @@ class CleanInterfaceContracts(unittest.TestCase):
         self.assertIsInstance(manifest["build"], int)
         self.assertIn("update-check", (ROOT / "build-system/ci/test_shadow_foundation.py").read_text())
 
+    def test_unlimited_pinned_chats(self):
+        toggle = read("TelegramCore/Sources/TelegramEngine/Peers/TogglePeerChatPinned.swift")
+        self.assertIn("if !shadowUnlimited, count > limitCount", toggle)
+        settings = read("TelegramCore/Sources/AyuGram/AyuGramSettings.swift")
+        self.assertIn('forKey: "unlimitedPinnedChats")) ?? 1) != 0', settings)
+        hub = read("SettingsUI/Sources/AyuGramSettingsController.swift")
+        self.assertIn("entries.append(.unlimitedPinnedChats(settings.unlimitedPinnedChats))", hub)
+
 
 if __name__ == "__main__":
     unittest.main()

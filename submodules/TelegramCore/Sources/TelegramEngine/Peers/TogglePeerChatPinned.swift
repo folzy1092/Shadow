@@ -57,7 +57,11 @@ func _internal_toggleItemPinned(postbox: Postbox, accountPeerId: PeerId, locatio
             }
             
             let count = sameKind.count + additionalCount
-            if count > limitCount, itemIds.firstIndex(of: itemId) == nil {
+            // Shadow: "Безлимитные закрепы" skips the client-side limit. The
+            // server keeps its own limit: the pin sync request for the extra
+            // pins fails silently and they stay pinned on this device only.
+            let shadowUnlimited = currentAyuGramSettings(transaction: transaction).unlimitedPinnedChats
+            if !shadowUnlimited, count > limitCount, itemIds.firstIndex(of: itemId) == nil {
                 return .limitExceeded(count: sameKind.count, limit: limitCount)
             } else {
                 if let index = itemIds.firstIndex(of: itemId) {
