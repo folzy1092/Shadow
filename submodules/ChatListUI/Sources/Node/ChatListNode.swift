@@ -3202,21 +3202,23 @@ public final class ChatListNode: ListViewImpl {
         }
         self.view.addGestureRecognizer(selectionRecognizer)
         let settingsSignal = ayuGramSettings(postbox: context.account.postbox)
-        let mappedSignal: Signal<(Bool, Bool), NoError> = settingsSignal
-        |> map { settings -> (Bool, Bool) in
-            return (settings.preferUsernameForNonContacts, settings.preferUsernameForBots)
+        let mappedSignal: Signal<(Bool, Bool, Bool), NoError> = settingsSignal
+        |> map { settings -> (Bool, Bool, Bool) in
+            return (settings.preferUsernameForNonContacts, settings.preferUsernameForBots, settings.compactChatList)
         }
-        let distinctSignal: Signal<(Bool, Bool), NoError> = mappedSignal
+        let distinctSignal: Signal<(Bool, Bool, Bool), NoError> = mappedSignal
         |> distinctUntilChanged(isEqual: { lhs, rhs -> Bool in
-            return lhs.0 == rhs.0 && lhs.1 == rhs.1
+            return lhs.0 == rhs.0 && lhs.1 == rhs.1 && lhs.2 == rhs.2
         })
-        let shadowNamesSignal: Signal<(Bool, Bool), NoError> = distinctSignal
+        let shadowNamesSignal: Signal<(Bool, Bool, Bool), NoError> = distinctSignal
         |> deliverOnMainQueue
         self.shadowNamesDisposable.set(shadowNamesSignal.start(next: { [weak self] enabled in
-            guard let self, self.currentState.presentationData.preferUsernameForNonContacts != enabled.0 || self.currentState.presentationData.preferUsernameForBots != enabled.1 else { return }
+            guard let self else { return }
+            let current = self.currentState.presentationData
+            guard current.preferUsernameForNonContacts != enabled.0 || current.preferUsernameForBots != enabled.1 || current.compactChatList != enabled.2 else { return }
             self.updateState { state in
                 var state = state
-                state.presentationData = state.presentationData.withPreferUsernameForNonContacts(enabled.0, botsEnabled: enabled.1)
+                state.presentationData = state.presentationData.withPreferUsernameForNonContacts(enabled.0, botsEnabled: enabled.1).withCompactChatList(enabled.2)
                 return state
             }
         }))

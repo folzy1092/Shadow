@@ -714,6 +714,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
     case hidePremiumBadges(Bool)
     case hideSponsoredMessages(Bool)
     case unlimitedPinnedChats(Bool)
+    case compactChatList(Bool)
     case localVoiceTranscription(Bool)
     case chatsFooter
 
@@ -771,7 +772,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
             return AyuCustomizationSection.settingsIcons.rawValue
         case .appearanceHeader, .showMessageSeconds, .editedIndicatorAsPencil, .editedIndicatorText, .deletedIndicatorText, .regularEmojiFirst, .doubleTapToEdit, .showExactLastSeen, .showExactLastSeenSeconds, .wideChannelPosts, .showExactViewCounts, .showForwardCount, .appearanceFooter:
             return AyuCustomizationSection.appearance.rawValue
-        case .chatsHeader, .hideAllChatsFolder, .hideStoriesBar, .hideGiftButton, .hidePremiumBadges, .hideSponsoredMessages, .unlimitedPinnedChats, .chatsFooter:
+        case .chatsHeader, .hideAllChatsFolder, .hideStoriesBar, .hideGiftButton, .hidePremiumBadges, .hideSponsoredMessages, .unlimitedPinnedChats, .compactChatList, .chatsFooter:
             return AyuCustomizationSection.chats.rawValue
         case .bottomBarHeader, .foldersAtBottom, .hideBottomSearch, .compactBottomBar, .bottomBarScrollMode, .bottomBarFooter:
             return AyuCustomizationSection.bottomBar.rawValue
@@ -821,6 +822,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .localVoiceTranscription: return 103
         case .unlimitedPinnedChats: return 104
         case .settingsIconsHeader: return 105
+        case .compactChatList: return 110
         case .monochromeSettingsIcons: return 106
         case .settingsIconBackground: return 107
         case .settingsIconGlyph: return 108
@@ -877,6 +879,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .hidePremiumBadges: return (12, 3)
         case .hideSponsoredMessages: return (12, 4)
         case .unlimitedPinnedChats: return (12, 5)
+        case .compactChatList: return (12, 6)
         case .localVoiceTranscription: return (28, 1)
         // Right after the appearance section.
         case .settingsIconsHeader: return (10, 1)
@@ -998,6 +1001,10 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case let .unlimitedPinnedChats(value):
             return ItemListSwitchItem(presentationData: presentationData, title: "Безлимитные закрепы", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 arguments.updateSetting { $0.unlimitedPinnedChats = value }
+            })
+        case let .compactChatList(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Компактный список чатов", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.updateSetting { $0.compactChatList = value }
             })
         case let .localVoiceTranscription(value):
             return ItemListSwitchItem(presentationData: presentationData, title: "Расшифровка голосовых на устройстве", value: value, sectionId: self.section, style: .blocks, updated: { value in
@@ -1157,6 +1164,7 @@ private func ayuCustomizationEntries(settings: AyuGramSettings) -> [AyuCustomiza
     entries.append(.hidePremiumBadges(settings.hidePremiumBadges))
     entries.append(.hideSponsoredMessages(settings.hideSponsoredMessages))
     entries.append(.unlimitedPinnedChats(settings.unlimitedPinnedChats))
+    entries.append(.compactChatList(settings.compactChatList))
     entries.append(.chatsFooter)
 
     entries.append(.bottomBarHeader)

@@ -68,6 +68,7 @@ public enum ShadowSettingsTransfer {
         "unlimitedPinnedChats": \.unlimitedPinnedChats,
         "localVoiceTranscription": \.localVoiceTranscription,
         "monochromeSettingsIcons": \.monochromeSettingsIcons,
+        "compactChatList": \.compactChatList,
         "screenshotAnonymize": \.messageScreenshot.anonymize,
         "screenshotAnonymizeOwn": \.messageScreenshot.anonymizeOwn,
         "screenshotAnonymizeOthers": \.messageScreenshot.anonymizeOthers,

@@ -13,8 +13,10 @@ public final class ChatListPresentationData {
     public let disableAnimations: Bool
     public let preferUsernameForNonContacts: Bool
     public let preferUsernameForBots: Bool
+    // Shadow: compact rows (smaller avatar, one line of preview).
+    public let compactChatList: Bool
     
-    public init(theme: PresentationTheme, fontSize: PresentationFontSize, strings: PresentationStrings, dateTimeFormat: PresentationDateTimeFormat, nameSortOrder: PresentationPersonNameOrder, nameDisplayOrder: PresentationPersonNameOrder, disableAnimations: Bool, preferUsernameForNonContacts: Bool = false, preferUsernameForBots: Bool = false) {
+    public init(theme: PresentationTheme, fontSize: PresentationFontSize, strings: PresentationStrings, dateTimeFormat: PresentationDateTimeFormat, nameSortOrder: PresentationPersonNameOrder, nameDisplayOrder: PresentationPersonNameOrder, disableAnimations: Bool, preferUsernameForNonContacts: Bool = false, preferUsernameForBots: Bool = false, compactChatList: Bool = false) {
         self.theme = theme
         self.fontSize = fontSize
         self.strings = strings
@@ -24,9 +26,14 @@ public final class ChatListPresentationData {
         self.disableAnimations = disableAnimations
         self.preferUsernameForNonContacts = preferUsernameForNonContacts
         self.preferUsernameForBots = preferUsernameForBots
+        self.compactChatList = compactChatList
     }
 
     public func withPreferUsernameForNonContacts(_ enabled: Bool, botsEnabled: Bool) -> ChatListPresentationData {
-        return ChatListPresentationData(theme: self.theme, fontSize: self.fontSize, strings: self.strings, dateTimeFormat: self.dateTimeFormat, nameSortOrder: self.nameSortOrder, nameDisplayOrder: self.nameDisplayOrder, disableAnimations: self.disableAnimations, preferUsernameForNonContacts: enabled, preferUsernameForBots: botsEnabled)
+        return ChatListPresentationData(theme: self.theme, fontSize: self.fontSize, strings: self.strings, dateTimeFormat: self.dateTimeFormat, nameSortOrder: self.nameSortOrder, nameDisplayOrder: self.nameDisplayOrder, disableAnimations: self.disableAnimations, preferUsernameForNonContacts: enabled, preferUsernameForBots: botsEnabled, compactChatList: self.compactChatList)
+    }
+
+    public func withCompactChatList(_ compact: Bool) -> ChatListPresentationData {
+        return ChatListPresentationData(theme: self.theme, fontSize: self.fontSize, strings: self.strings, dateTimeFormat: self.dateTimeFormat, nameSortOrder: self.nameSortOrder, nameDisplayOrder: self.nameDisplayOrder, disableAnimations: self.disableAnimations, preferUsernameForNonContacts: self.preferUsernameForNonContacts, preferUsernameForBots: self.preferUsernameForBots, compactChatList: compact)
     }
 }

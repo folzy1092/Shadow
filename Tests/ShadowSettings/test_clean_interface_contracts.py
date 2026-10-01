@@ -126,6 +126,15 @@ class CleanInterfaceContracts(unittest.TestCase):
         delegate = read("TelegramUI/Sources/AppDelegate.swift")
         self.assertIn('PresentationAppIcon(name: "ShadowIcon", imageName: "ShadowIcon", isDefault: true)', delegate)
 
+    def test_compact_chat_list(self):
+        item = read("ChatListUI/Sources/Node/ChatListItem.swift")
+        self.assertEqual(item.count("avatarDiameter = floor(avatarDiameter * 0.75)"), 2)
+        self.assertIn("measureLayout.size.height * (shadowCompact ? 2.0 : 3.0)", item)
+        node = read("ChatListUI/Sources/Node/ChatListNode.swift")
+        self.assertIn(".withCompactChatList(enabled.2)", node)
+        hub = read("SettingsUI/Sources/AyuGramSettingsController.swift")
+        self.assertIn("entries.append(.compactChatList(settings.compactChatList))", hub)
+
     def test_unlimited_pinned_chats(self):
         toggle = read("TelegramCore/Sources/TelegramEngine/Peers/TogglePeerChatPinned.swift")
         self.assertIn("if !shadowUnlimited, count > limitCount", toggle)
