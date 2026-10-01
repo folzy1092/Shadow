@@ -29,6 +29,39 @@ struct UpdateCheckTests {
             check(ShadowUpdateCheck.status(installedBuild: 34800, latest: release) == .upToDate(release), "Local build is newer")
             check(ShadowUpdateCheck.status(installedBuild: nil, latest: release) == .available(release), "Unknown installed build")
         }
+        let manifestJSON = """
+        {"enabled":true,"build":34700,"version":"12.9.2","title":"Замки чатов","notes":"Что нового","url":"https://example.com/shadow","minimum_build":34690}
+        """
+        let manifest = ShadowUpdateCheck.parseManifest(Data(manifestJSON.utf8))
+        check(manifest?.build == 34700 && manifest?.minimumBuild == 34690, "Manifest parsed")
+        check(manifest?.pageURL.absoluteString == "https://example.com/shadow", "Manifest URL")
+        if let manifest {
+            if case let .available(release) = ShadowUpdateCheck.status(installedBuild: 34681, manifest: manifest) {
+                check(release.isRequired, "Below minimum build is required")
+                check(release.title == "Shadow 12.9.2 (34700) — Замки чатов", "Manifest title")
+            } else {
+                check(false, "Older build sees the announced one")
+            }
+            if case let .available(release) = ShadowUpdateCheck.status(installedBuild: 34695, manifest: manifest) {
+                check(!release.isRequired, "Above minimum build is optional")
+            } else {
+                check(false, "Optional update")
+            }
+            if case .upToDate = ShadowUpdateCheck.status(installedBuild: 34700, manifest: manifest) {
+                count += 1
+            } else {
+                check(false, "Announced build installed")
+            }
+        }
+        let disabled = ShadowUpdateCheck.parseManifest(Data("{\"enabled\":false}".utf8))
+        check(disabled != nil, "Disabled manifest parses without a build")
+        if let disabled {
+            check(ShadowUpdateCheck.status(installedBuild: 1, manifest: disabled) == .upToDate(nil), "Disabled manifest announces nothing")
+        }
+        check(ShadowUpdateCheck.parseManifest(Data("{\"build\":0}".utf8)) == nil, "Enabled manifest needs a build")
+        let insecure = ShadowUpdateCheck.parseManifest(Data("{\"build\":5,\"url\":\"http://example.com\"}".utf8))
+        check(insecure?.pageURL == ShadowUpdateCheck.releasesPageURL, "Only https download pages")
+
         print("Shadow update check: \(count) checks passed")
     }
 }

@@ -6,8 +6,8 @@ import TelegramPresentationData
 import ItemListUI
 import AccountContext
 
-// Shadow: "Обновления" — compares the installed build with the latest GitHub
-// Release published by CI (ShadowUpdateCheck). Checks only when the screen is
+// Shadow: "Обновления" — compares the installed build with the build announced
+// in shadow-update.json (fallback: the latest GitHub Release; ShadowUpdateCheck). Checks only when the screen is
 // opened or on request; there is no background polling.
 
 private enum ShadowUpdatesState: Equatable {
@@ -89,10 +89,12 @@ private func shadowUpdatesEntries(state: ShadowUpdatesState) -> [ShadowUpdatesEn
         switch status {
         case let .upToDate(release):
             entries.append(.status("Актуальная версия"))
-            entries.append(.notes("Последняя сборка на GitHub: \(release.title)."))
+            if let release {
+                entries.append(.notes("Последняя объявленная сборка: \(release.title)."))
+            }
             entries.append(.open("Открыть страницу релизов"))
         case let .available(release):
-            entries.append(.status("Доступна сборка \(release.build)"))
+            entries.append(.status(release.isRequired ? "Обязательное обновление: сборка \(release.build)" : "Доступна сборка \(release.build)"))
             var notes = release.title
             let body = release.notes.trimmingCharacters(in: .whitespacesAndNewlines)
             if !body.isEmpty {
@@ -128,8 +130,10 @@ func shadowUpdatesController(context: AccountContext, focus: ShadowSettingsSearc
         var url = ShadowUpdateCheck.releasesPageURL
         if case let .result(status) = stateValue.with({ $0 }) {
             switch status {
-            case let .available(release), let .upToDate(release):
+            case let .available(release):
                 url = release.pageURL
+            case let .upToDate(release):
+                url = release?.pageURL ?? url
             case .failed:
                 break
             }

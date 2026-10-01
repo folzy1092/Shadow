@@ -84,6 +84,11 @@ class CleanInterfaceContracts(unittest.TestCase):
         check = read("TelegramCore/Sources/AyuGram/ShadowUpdateCheck.swift")
         self.assertIn('let prefix = "build-"', check)
         self.assertIn("releases/latest", check)
+        self.assertIn("master/shadow-update.json", check)
+        import json
+        manifest = json.loads((ROOT / "shadow-update.json").read_text())
+        self.assertIsInstance(manifest["enabled"], bool)
+        self.assertIsInstance(manifest["build"], int)
         self.assertIn("update-check", (ROOT / "build-system/ci/test_shadow_foundation.py").read_text())
 
 
