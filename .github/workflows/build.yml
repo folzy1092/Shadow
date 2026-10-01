@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [ master, main, fix/privacy-archive-screenshots ]
+    branches: [ master ]
 
   workflow_dispatch:
 
@@ -65,6 +65,8 @@ jobs:
           TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
         run: |
           set -x
+          # Keep Make.py's exit status through the tee below.
+          set -o pipefail
 
           # source code paths are included in the final binary, so we need to make them stable across builds
           SOURCE_DIR=/Users/Shared/telegram-ios
@@ -107,7 +109,8 @@ jobs:
             --configurationPath="build-system/shadow-configuration.json" \
             --codesigningInformationPath=build-system/fake-codesigning \
             --configuration=release_arm64 \
-            --buildNumber="$BUILD_NUMBER"
+            --buildNumber="$BUILD_NUMBER" \
+            2>&1 | tee "$GITHUB_WORKSPACE/build.log"
 
           # collect ipa
           OUTPUT_PATH="build/artifacts"
@@ -160,7 +163,7 @@ jobs:
           retention-days: 30
 
       - name: Notify Telegram
-        if: ${{ always() && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main') }}
+        if: ${{ always() && github.ref == 'refs/heads/master' }}
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -177,10 +180,21 @@ jobs:
             ICON="✅"
             HEAD="Сборка готова"
             TAIL="IPA: артефакт Shadow-IPA-${BUILD_NUMBER} на странице прогона."
+          elif [ "$JOB_STATUS" = "cancelled" ]; then
+            # A newer push to the same branch superseded this run
+            # (concurrency.cancel-in-progress); that run reports its own result.
+            ICON="⏹"
+            HEAD="Сборка отменена"
+            TAIL="Запущена более новая сборка, результат придёт от неё."
           else
             ICON="❌"
             HEAD="Сборка упала"
-            TAIL="Открой лог прогона, чтобы посмотреть ошибку."
+            ERRORS="$(python3 "$GITHUB_WORKSPACE/build-system/ci/build_failure_summary.py" "$GITHUB_WORKSPACE/build.log" || true)"
+            if [ -n "$ERRORS" ]; then
+              TAIL="$(printf 'Ошибки:\n%s' "$ERRORS")"
+            else
+              TAIL="Ошибка не в компиляции (тесты или подготовка) — открой лог прогона."
+            fi
           fi
 
           # first line of the commit message only
@@ -197,7 +211,7 @@ jobs:
             || echo "Telegram notification failed (non-fatal)"
 
       - name: Notify Discord
-        if: ${{ always() && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main') }}
+        if: ${{ always() && github.ref == 'refs/heads/master' }}
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           DISCORD_PING_USER_ID: ${{ secrets.DISCORD_PING_USER_ID }}
@@ -214,10 +228,21 @@ jobs:
             ICON="✅"
             HEAD="Сборка готова"
             TAIL="IPA: артефакт Shadow-IPA-${BUILD_NUMBER} на странице прогона."
+          elif [ "$JOB_STATUS" = "cancelled" ]; then
+            # A newer push to the same branch superseded this run
+            # (concurrency.cancel-in-progress); that run reports its own result.
+            ICON="⏹"
+            HEAD="Сборка отменена"
+            TAIL="Запущена более новая сборка, результат придёт от неё."
           else
             ICON="❌"
             HEAD="Сборка упала"
-            TAIL="Открой лог прогона, чтобы посмотреть ошибку."
+            ERRORS="$(python3 "$GITHUB_WORKSPACE/build-system/ci/build_failure_summary.py" "$GITHUB_WORKSPACE/build.log" || true)"
+            if [ -n "$ERRORS" ]; then
+              TAIL="$(printf 'Ошибки:\n%s' "$ERRORS")"
+            else
+              TAIL="Ошибка не в компиляции (тесты или подготовка) — открой лог прогона."
+            fi
           fi
 
           COMMIT_FIRST_LINE="$(printf '%s' "$COMMIT_MSG" | head -n 1)"
