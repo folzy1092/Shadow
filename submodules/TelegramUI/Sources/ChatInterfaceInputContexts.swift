@@ -220,6 +220,11 @@ func inputTextPanelStateForChatPresentationInterfaceState(_ chatPresentationInte
                 if isTextEmpty && chatPresentationInterfaceState.hasScheduledMessages && !hasForward {
                     accessoryItems.append(.scheduledMessages)
                 }
+                
+                // Shadow: local quick reply templates, offered while the field is empty.
+                if isTextEmpty && !hasForward && !currentAyuGramSettings(accountId: context.account.id).quickReplyTemplates.isEmpty {
+                    accessoryItems.append(.shadowTemplates)
+                }
                     
                 var stickersEnabled = true
                 var stickersAreEmoji = !isTextEmpty

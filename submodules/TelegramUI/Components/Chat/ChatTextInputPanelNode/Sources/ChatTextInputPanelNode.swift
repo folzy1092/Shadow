@@ -5767,6 +5767,8 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                     self.interfaceInteraction?.openPremiumGift()
                 case .suggestPost:
                     self.interfaceInteraction?.openSuggestPost(nil, .default)
+                case .shadowTemplates:
+                    self.shadowPresentQuickReplyTemplates()
                 }
                 break
             }

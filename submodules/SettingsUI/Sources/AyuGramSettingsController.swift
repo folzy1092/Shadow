@@ -98,6 +98,7 @@ private enum AyuHubEntry: ItemListNodeEntry {
     case hiddenAccounts
     case pushDiagnostics
     case cleanInterface
+    case quickReplies
     case infoFooter
 
     var section: ItemListSectionId {
@@ -108,7 +109,7 @@ private enum AyuHubEntry: ItemListNodeEntry {
             return AyuHubSection.privacy.rawValue
         case .noResults:
             return AyuHubSection.info.rawValue
-        case .customization, .spy, .ghost, .filters, .misc, .hiddenAccounts, .backup, .pushDiagnostics, .cleanInterface:
+        case .customization, .spy, .ghost, .filters, .misc, .hiddenAccounts, .backup, .pushDiagnostics, .cleanInterface, .quickReplies:
             return AyuHubSection.tools.rawValue
         case .infoFooter:
             return AyuHubSection.info.rawValue
@@ -132,6 +133,8 @@ private enum AyuHubEntry: ItemListNodeEntry {
             return 4
         case .cleanInterface:
             return 11
+        case .quickReplies:
+            return 12
         case .infoFooter:
             return 20
         case .backup:
@@ -184,6 +187,8 @@ private enum AyuHubEntry: ItemListNodeEntry {
             return ItemListDisclosureItem(presentationData: presentationData, title: "Разное", label: "", sectionId: self.section, style: .blocks, action: arguments.openPushDiagnostics)
         case .cleanInterface:
             return ItemListDisclosureItem(presentationData: presentationData, title: "Чистый интерфейс", label: "", sectionId: self.section, style: .blocks, action: { arguments.openFeature(.cleanInterface) })
+        case .quickReplies:
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Шаблоны ответов", label: "", sectionId: self.section, style: .blocks, action: { arguments.openFeature(.quickReplies) })
         }
     }
 }
@@ -230,6 +235,7 @@ func shadowSettingsSearchDestinationController(context: AccountContext, item: Sh
             return shadowMiscController(context: context)
         }
     case .cleanInterface: return shadowCleanInterfaceController(context: context, focus: item)
+    case .quickReplies: return shadowQuickRepliesController(context: context, focus: item)
     }
 }
 
@@ -272,6 +278,8 @@ public func ayuGramSettingsController(context: AccountContext) -> ViewController
         switch destination {
         case .cleanInterface:
             pushControllerImpl?(shadowCleanInterfaceController(context: context))
+        case .quickReplies:
+            pushControllerImpl?(shadowQuickRepliesController(context: context))
         default:
             break
         }
@@ -282,7 +290,7 @@ public func ayuGramSettingsController(context: AccountContext) -> ViewController
     |> map { presentationData, query -> (ItemListControllerState, (ItemListNodeState, Any)) in
         var entries: [AyuHubEntry] = [.query(query)]
         if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            entries += [.customization, .spy, .ghost, .filters, .misc, .hiddenAccounts, .backup, .pushDiagnostics, .cleanInterface, .infoFooter]
+            entries += [.customization, .spy, .ghost, .filters, .misc, .hiddenAccounts, .backup, .pushDiagnostics, .cleanInterface, .quickReplies, .infoFooter]
         } else {
             let matches = ShadowSettingsSearchIndex.search(query)
             entries += matches.isEmpty ? [.noResults] : matches.map { .result($0) }

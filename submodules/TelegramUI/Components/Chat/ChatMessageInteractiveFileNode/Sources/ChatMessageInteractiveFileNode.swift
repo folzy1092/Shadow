@@ -359,8 +359,12 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
         let premiumConfiguration = PremiumConfiguration.with(appConfiguration: arguments.context.currentAppConfiguration.with { $0 })
         
+        // Shadow: without Premium, voice messages are transcribed on the device
+        // (SFSpeechRecognizer); the audio never leaves the phone.
+        let shadowLocalTranscription = shadowUsesLocalVoiceTranscription(arguments: arguments)
+        
         let transcriptionText = self.forcedAudioTranscriptionText ?? transcribedText(message: EngineMessage(message))
-        if transcriptionText == nil && !arguments.associatedData.alwaysDisplayTranscribeButton.providedByGroupBoost {
+        if !shadowLocalTranscription && transcriptionText == nil && !arguments.associatedData.alwaysDisplayTranscribeButton.providedByGroupBoost {
             if premiumConfiguration.audioTransciptionTrialCount > 0 {
                 if !arguments.associatedData.isPremium {
                     if self.presentAudioTranscriptionTooltip(finished: false) {
@@ -419,7 +423,7 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
                 self.audioTranscriptionState = .inProgress
                 self.requestUpdateLayout(true)
                 
-                if context.sharedContext.immediateExperimentalUISettings.localTranscription {
+                if shadowLocalTranscription || context.sharedContext.immediateExperimentalUISettings.localTranscription {
                     let appLocale = presentationData.strings.baseLanguageCode
                     
                     let signal: Signal<LocallyTranscribedAudio?, NoError> = context.engine.data.get(TelegramEngine.EngineData.Item.Messages.Message(id: message.id))
@@ -786,6 +790,10 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
                             displayTranscribe = true
                         }
                     }
+                }
+                
+                if !displayTranscribe && !Namespaces.Message.allNonRegular.contains(arguments.message.id.namespace) && !isViewOnceMessage && !arguments.presentationData.isPreview && shadowUsesLocalVoiceTranscription(arguments: arguments) {
+                    displayTranscribe = true
                 }
                 
                 let transcribedText = forcedAudioTranscriptionText ?? transcribedText(message: EngineMessage(arguments.message))
@@ -2227,4 +2235,14 @@ public final class FileMessageSelectionNode: ASDisplayNode {
         }
         self.checkNode.frame = CGRect(origin: checkOrigin, size: checkSize)
     }
+}
+
+// Shadow: on-device transcription replaces the Premium-only server transcription
+// for voice messages (round videos keep the stock behavior: the local path only
+// converts Opus audio).
+private func shadowUsesLocalVoiceTranscription(arguments: ChatMessageInteractiveFileNode.Arguments) -> Bool {
+    guard arguments.file.isVoice, !arguments.associatedData.isPremium else {
+        return false
+    }
+    return currentAyuGramSettings(accountId: arguments.context.account.id).localVoiceTranscription
 }

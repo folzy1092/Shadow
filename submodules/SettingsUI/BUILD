@@ -48,6 +48,7 @@ swift_library(
         "//submodules/MergeLists:MergeLists",
         "//submodules/NotificationSoundSelectionUI:NotificationSoundSelectionUI",
         "//submodules/OverlayStatusController:OverlayStatusController",
+        "//submodules/PromptUI:PromptUI",
         "//submodules/PasswordSetupUI:PasswordSetupUI",
         "//submodules/PassportUI:PassportUI",
         "//submodules/PasscodeUI:PasscodeUI",

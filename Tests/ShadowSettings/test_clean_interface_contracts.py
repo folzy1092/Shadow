@@ -51,6 +51,28 @@ class CleanInterfaceContracts(unittest.TestCase):
         index = read("SettingsUI/Sources/ShadowSettingsSearchIndex.swift")
         self.assertEqual(index.count("destination: .cleanInterface"), 5)
 
+    def test_local_voice_transcription(self):
+        node = read("TelegramUI/Components/Chat/ChatMessageInteractiveFileNode/Sources/ChatMessageInteractiveFileNode.swift")
+        helper = node.split("private func shadowUsesLocalVoiceTranscription", 1)[1]
+        self.assertIn("arguments.file.isVoice, !arguments.associatedData.isPremium", helper)
+        self.assertIn(".localVoiceTranscription", helper)
+        self.assertIn("if shadowLocalTranscription || context.sharedContext.immediateExperimentalUISettings.localTranscription", node)
+        self.assertIn("if !shadowLocalTranscription && transcriptionText == nil", node)
+
+    def test_quick_reply_templates(self):
+        state = read("ChatPresentationInterfaceState/Sources/ChatTextInputPanelState.swift")
+        self.assertEqual(state.count("shadowTemplates"), 4)
+        icon = read("TelegramUI/Components/Chat/ChatTextInputPanelNode/Sources/AccessoryItemIconButton.swift")
+        self.assertIn("case .shadowTemplates:", icon)
+        self.assertIn(".suggestPost, .shadowTemplates:", icon)
+        panel = read("TelegramUI/Components/Chat/ChatTextInputPanelNode/Sources/ChatTextInputPanelNode.swift")
+        self.assertIn("self.shadowPresentQuickReplyTemplates()", panel)
+        contexts = read("TelegramUI/Sources/ChatInterfaceInputContexts.swift")
+        self.assertIn("accessoryItems.append(.shadowTemplates)", contexts)
+        screen = read("SettingsUI/Sources/ShadowQuickRepliesController.swift")
+        self.assertIn("shadowNormalizedQuickReplyTemplates", screen)
+        self.assertIn('"//submodules/PromptUI:PromptUI"', (SUB / "SettingsUI/BUILD").read_text())
+
 
 if __name__ == "__main__":
     unittest.main()
