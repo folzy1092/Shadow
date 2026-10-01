@@ -7,7 +7,9 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  # write: the successful master build is published as a GitHub Release,
+  # which the in-app "Обновления" screen compares against.
+  contents: write
 
 concurrency:
   group: shadow-build-${{ github.ref }}
@@ -153,6 +155,25 @@ jobs:
           path: /Users/Shared/telegram-ios/build/artifacts/Telegram.ipa
           if-no-files-found: error
           retention-days: 30
+
+      - name: Publish GitHub release
+        if: ${{ github.ref == 'refs/heads/master' && steps.build.outcome == 'success' }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+        run: |
+          # Tag build-<number>: Shadow's update check parses the number and
+          # compares it with the installed CFBundleVersion.
+          TAG="build-${BUILD_NUMBER}"
+          ASSET="$RUNNER_TEMP/Shadow-${APP_VERSION}-${BUILD_NUMBER}.ipa"
+          cp /Users/Shared/telegram-ios/build/artifacts/Telegram.ipa "$ASSET"
+          NOTES="$(printf '%s' "$COMMIT_MSG" | head -n 30)"
+          gh release create "$TAG" "$ASSET" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "Shadow ${APP_VERSION} (${BUILD_NUMBER})" \
+            --notes "$NOTES"
 
       - name: Upload debugging symbols
         uses: actions/upload-artifact@v4

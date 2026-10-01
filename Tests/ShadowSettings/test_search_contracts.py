@@ -17,6 +17,7 @@ class SearchContracts(unittest.TestCase):
         clean = (UI_ROOT / 'ShadowCleanInterfaceController.swift').read_text()
         ids['cleanInterface'] = {int(i) for i in re.findall(r'case \.\w+: return (\d)\n', clean)}
         ids['quickReplies'] = {0}
+        ids['updates'] = {0}
         for destination, name in enums.items():
             enum = UI.split(f'private enum {name}:', 1)[1].split('\nprivate ', 1)[0]
             ids[destination] = {int(i) for i in re.findall(r'case \.\w+: return (-?\d+)', enum)}

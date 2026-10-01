@@ -1,7 +1,7 @@
 import Foundation
 
 enum ShadowSettingsSearchDestination: Int32 {
-    case customization, spy, ghost, misc, backup, filters, pushDiagnostics, cleanInterface, quickReplies
+    case customization, spy, ghost, misc, backup, filters, pushDiagnostics, cleanInterface, quickReplies, updates
 
     var title: String {
         switch self {
@@ -14,6 +14,7 @@ enum ShadowSettingsSearchDestination: Int32 {
         case .pushDiagnostics: return "Разное"
         case .cleanInterface: return "Чистый интерфейс"
         case .quickReplies: return "Шаблоны ответов"
+        case .updates: return "Обновления"
         }
     }
 }
@@ -102,7 +103,8 @@ enum ShadowSettingsSearchIndex {
         ShadowSettingsSearchItem(destination: .cleanInterface, entryId: 2, title: "Скрыть значки Premium у имён", description: "Звёздочка и эмодзи-статус рядом с именем", keywords: "premium премиум звезда статус emoji status badge"),
         ShadowSettingsSearchItem(destination: .cleanInterface, entryId: 3, title: "Скрыть рекламу в каналах", description: "Не загружать спонсорские сообщения", keywords: "ads реклама sponsored спонсор"),
         ShadowSettingsSearchItem(destination: .cleanInterface, entryId: 4, title: "Расшифровка голосовых на устройстве", description: "Распознавание речи без Premium, аудио не уходит с телефона", keywords: "voice голосовые transcription расшифровка текст speech"),
-        ShadowSettingsSearchItem(destination: .quickReplies, entryId: 0, title: "Шаблоны ответов", description: "Свои заготовки текста, вставляются кнопкой в поле ввода", keywords: "templates шаблоны quick replies быстрые ответы заготовки")
+        ShadowSettingsSearchItem(destination: .quickReplies, entryId: 0, title: "Шаблоны ответов", description: "Свои заготовки текста, вставляются кнопкой в поле ввода", keywords: "templates шаблоны quick replies быстрые ответы заготовки"),
+        ShadowSettingsSearchItem(destination: .updates, entryId: 0, title: "Проверка обновлений", description: "Сравнить установленную сборку с последним релизом на GitHub", keywords: "update обновление версия сборка build release релиз github")
     ].sorted { $0.id < $1.id }
 
     private static func normalized(_ value: String) -> String {

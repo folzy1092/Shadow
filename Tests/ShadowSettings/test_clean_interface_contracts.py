@@ -73,6 +73,16 @@ class CleanInterfaceContracts(unittest.TestCase):
         self.assertIn("shadowNormalizedQuickReplyTemplates", screen)
         self.assertIn('"//submodules/PromptUI:PromptUI"', (SUB / "SettingsUI/BUILD").read_text())
 
+    def test_update_check_release_pipeline(self):
+        workflow = (ROOT / ".github/workflows/build.yml").read_text()
+        self.assertIn("contents: write", workflow)
+        self.assertIn('TAG="build-${BUILD_NUMBER}"', workflow)
+        self.assertIn("gh release create", workflow)
+        check = read("TelegramCore/Sources/AyuGram/ShadowUpdateCheck.swift")
+        self.assertIn('let prefix = "build-"', check)
+        self.assertIn("releases/latest", check)
+        self.assertIn("update-check", (ROOT / "build-system/ci/test_shadow_foundation.py").read_text())
+
 
 if __name__ == "__main__":
     unittest.main()
