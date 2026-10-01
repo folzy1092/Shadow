@@ -110,6 +110,8 @@ public struct ShadowSettingsDocument: Codable, Equatable {
             case let .integer(number) where key == "mediaAutoCleanInterval" && ageIntervals.contains(number): break
             case let .integer(number) where key == "attachmentSizeLimit" && sizeLimits.contains(number): break
             case let .integer(number) where key == "bottomBarScrollMode" && (0...3).contains(number): break
+            // ShadowGhostAccountMode raw values: manual, alwaysOn, alwaysOff, followPrevious.
+            case let .integer(number) where key == "ghostAccountMode" && (0...3).contains(number): break
             // Keep raw 3 valid for backward-compatible imports: old format used 3 for black.
             case let .integer(number) where key == "screenshotBackground" && (0...3).contains(number): break
             case let .integer(number) where key == "screenshotCustomColorARGB" && number >= Int64(Int32.min) && number <= Int64(Int32.max): break
