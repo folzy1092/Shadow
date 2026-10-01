@@ -2,6 +2,12 @@
 
 This file provides guidance to AI assistants when working with code in this repository.
 
+> **Shadow fork:** this repo is the Shadow (ex-AyuGram) fork of Telegram-iOS. Read
+> [`docs/SHADOW_AGENT_MAP.md`](docs/SHADOW_AGENT_MAP.md) first: working branch
+> (`master` only), CI and tests, where fork code lives, settings rules, Ghost Mode
+> and anti-delete hook points. Most of this file describes upstream Telegram; the
+> local-build/simulator instructions below assume a macOS dev machine.
+
 ## Build
 
 The app is built using Bazel via the `Make.py` wrapper. There is no selective per-module build — the only supported invocation builds the full `Telegram/Telegram` target.
