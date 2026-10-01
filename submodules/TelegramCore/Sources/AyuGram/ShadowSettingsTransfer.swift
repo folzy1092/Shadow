@@ -70,6 +70,7 @@ public enum ShadowSettingsTransfer {
         "monochromeSettingsIcons": \.monochromeSettingsIcons,
         "compactChatList": \.compactChatList,
         "onlineHistory": \.onlineHistory,
+        "saveViewedStories": \.saveViewedStories,
         "screenshotAnonymize": \.messageScreenshot.anonymize,
         "screenshotAnonymizeOwn": \.messageScreenshot.anonymizeOwn,
         "screenshotAnonymizeOthers": \.messageScreenshot.anonymizeOthers,

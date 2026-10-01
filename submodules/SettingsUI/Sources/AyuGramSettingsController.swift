@@ -1491,6 +1491,8 @@ private final class AyuSpyArguments {
     let updateKeepBots: (Bool) -> Void
     let openForkStorage: () -> Void
     var updateOnlineHistory: (Bool) -> Void = { _ in }
+    var updateSaveViewedStories: (Bool) -> Void = { _ in }
+    var openSavedStories: () -> Void = {}
 
     init(
         updateKeepDeleted: @escaping (Bool) -> Void,
@@ -1534,6 +1536,7 @@ private enum AyuSpySection: Int32 {
     case storyPrompt
     case savedMedia
     case onlineHistory
+    case stories
 }
 
 private enum AyuSpyEntry: ItemListNodeEntry {
@@ -1571,6 +1574,11 @@ private enum AyuSpyEntry: ItemListNodeEntry {
     case onlineHistory(Bool)
     case onlineHistoryFooter
 
+    case storiesHeader
+    case saveViewedStories(Bool)
+    case openSavedStories
+    case storiesFooter
+
     var section: ItemListSectionId {
         switch self {
         case .deletedHeader, .keepDeleted, .keepDeletedSecretChats, .keepSelfDestructMedia, .deletedFooter:
@@ -1585,6 +1593,8 @@ private enum AyuSpyEntry: ItemListNodeEntry {
             return AyuSpySection.savedMedia.rawValue
         case .onlineHistoryHeader, .onlineHistory, .onlineHistoryFooter:
             return AyuSpySection.onlineHistory.rawValue
+        case .storiesHeader, .saveViewedStories, .openSavedStories, .storiesFooter:
+            return AyuSpySection.stories.rawValue
         }
     }
 
@@ -1618,6 +1628,10 @@ private enum AyuSpyEntry: ItemListNodeEntry {
         case .onlineHistoryHeader: return 25
         case .onlineHistory: return 26
         case .onlineHistoryFooter: return 27
+        case .storiesHeader: return 28
+        case .saveViewedStories: return 29
+        case .openSavedStories: return 30
+        case .storiesFooter: return 31
         }
     }
 
@@ -1628,6 +1642,18 @@ private enum AyuSpyEntry: ItemListNodeEntry {
     func item(presentationData: ItemListPresentationData, arguments: Any) -> ListViewItem {
         let arguments = arguments as! AyuSpyArguments
         switch self {
+        case .storiesHeader:
+            return ItemListSectionHeaderItem(presentationData: presentationData, text: "ИСТОРИИ", sectionId: self.section)
+        case let .saveViewedStories(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Сохранять просмотренные истории", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.updateSaveViewedStories(value)
+            })
+        case .openSavedStories:
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Сохранённые истории", label: "", sectionId: self.section, style: .blocks, action: {
+                arguments.openSavedStories()
+            })
+        case .storiesFooter:
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Каждая история, которую вы открыли, копируется на устройство и остаётся доступной, даже если автор её удалил или она истекла. Сохраняется только то, что вы сами посмотрели."), sectionId: self.section)
         case .onlineHistoryHeader:
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "ИСТОРИЯ «В СЕТИ»", sectionId: self.section)
         case let .onlineHistory(value):
@@ -1757,6 +1783,11 @@ private func ayuSpyEntries(settings: AyuGramSettings) -> [AyuSpyEntry] {
     entries.append(.onlineHistory(settings.onlineHistory))
     entries.append(.onlineHistoryFooter)
 
+    entries.append(.storiesHeader)
+    entries.append(.saveViewedStories(settings.saveViewedStories))
+    entries.append(.openSavedStories)
+    entries.append(.storiesFooter)
+
     return entries
 }
 
@@ -1848,6 +1879,12 @@ private func ayuSpyController(context: AccountContext, focus: ShadowSettingsSear
     )
     arguments.updateOnlineHistory = { value in
         ayuUpdateSettings(context: context) { var s = $0; s.onlineHistory = value; return s }
+    }
+    arguments.updateSaveViewedStories = { value in
+        ayuUpdateSettings(context: context) { var s = $0; s.saveViewedStories = value; return s }
+    }
+    arguments.openSavedStories = {
+        pushControllerImpl?(shadowSavedStoriesController(context: context))
     }
 
     let signal = combineLatest(queue: .mainQueue(),

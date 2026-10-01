@@ -143,6 +143,16 @@ class CleanInterfaceContracts(unittest.TestCase):
         self.assertIn("shadowOnlineHistoryController(context: context, peerId: user.id)", profile)
         self.assertIn("'online-history'", (ROOT / "build-system/ci/test_shadow_foundation.py").read_text())
 
+    def test_saved_stories(self):
+        stories = read("TelegramCore/Sources/TelegramEngine/Messages/Stories.swift")
+        self.assertIn("shadowArchiveViewedStory(account: account, peerId: peerId, id: id)", stories)
+        archive = read("TelegramCore/Sources/AyuGram/ShadowStoryArchive.swift")
+        self.assertIn("currentAyuGramSettings(transaction: transaction).saveViewedStories", archive)
+        # Copies what the viewer downloaded; never fetches on its own.
+        self.assertNotIn("fetchedMediaResource", archive)
+        hub = read("SettingsUI/Sources/AyuGramSettingsController.swift")
+        self.assertIn("pushControllerImpl?(shadowSavedStoriesController(context: context))", hub)
+
     def test_unlimited_pinned_chats(self):
         toggle = read("TelegramCore/Sources/TelegramEngine/Peers/TogglePeerChatPinned.swift")
         self.assertIn("if !shadowUnlimited, count > limitCount", toggle)

@@ -2071,6 +2071,8 @@ func _internal_deleteStories(account: Account, peerId: PeerId, ids: [Int32]) -> 
 }
 
 func _internal_markStoryAsSeen(account: Account, peerId: PeerId, id: Int32, asPinned: Bool) -> Signal<Never, NoError> {
+    // Shadow: keep a local copy of viewed stories (spec 7.5).
+    shadowArchiveViewedStory(account: account, peerId: peerId, id: id)
     if asPinned {
         return account.postbox.transaction { transaction -> (Api.InputPeer?, Bool) in
             // AyuGram: don't report the view to the story's author when enabled.
