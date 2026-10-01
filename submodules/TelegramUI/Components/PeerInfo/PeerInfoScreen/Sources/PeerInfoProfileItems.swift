@@ -394,6 +394,15 @@ func infoItems(
         items[.ayugram]!.append(contentsOf: ayuGramProfileItems(peerId: user.id, photo: user.photo, includeRegistration: true, isMutualContact: user.flags.contains(.mutualContact), isSelf: user.id == context.account.peerId, idBase: 3500, presentationData: presentationData, getController: { [weak interaction] in
             interaction?.getController()
         }))
+        // Shadow: local online history of this contact (spec 7.4).
+        if ayuGramSettingsCurrent.onlineHistory, user.id != context.account.peerId {
+            items[.ayugram]!.append(PeerInfoScreenDisclosureItem(id: 3510, text: "История в сети", icon: nil, action: { [weak interaction] in
+                guard let controller = interaction?.getController() else {
+                    return
+                }
+                (controller.navigationController as? NavigationController)?.pushViewController(shadowOnlineHistoryController(context: context, peerId: user.id))
+            }))
+        }
         // AyuGram: profile badge(s) (custom emoji from the remote config). Every
         // profile_badges match for this user_id is shown (not just the first);
         // if the config has none there, fall back to the single ayuGramNameBadge

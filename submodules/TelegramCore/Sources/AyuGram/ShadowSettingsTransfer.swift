@@ -69,6 +69,7 @@ public enum ShadowSettingsTransfer {
         "localVoiceTranscription": \.localVoiceTranscription,
         "monochromeSettingsIcons": \.monochromeSettingsIcons,
         "compactChatList": \.compactChatList,
+        "onlineHistory": \.onlineHistory,
         "screenshotAnonymize": \.messageScreenshot.anonymize,
         "screenshotAnonymizeOwn": \.messageScreenshot.anonymizeOwn,
         "screenshotAnonymizeOthers": \.messageScreenshot.anonymizeOthers,

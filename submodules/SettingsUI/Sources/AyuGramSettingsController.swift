@@ -1490,6 +1490,7 @@ private final class AyuSpyArguments {
     let updateKeepChannels: (Bool) -> Void
     let updateKeepBots: (Bool) -> Void
     let openForkStorage: () -> Void
+    var updateOnlineHistory: (Bool) -> Void = { _ in }
 
     init(
         updateKeepDeleted: @escaping (Bool) -> Void,
@@ -1532,6 +1533,7 @@ private enum AyuSpySection: Int32 {
     case restricted
     case storyPrompt
     case savedMedia
+    case onlineHistory
 }
 
 private enum AyuSpyEntry: ItemListNodeEntry {
@@ -1565,6 +1567,10 @@ private enum AyuSpyEntry: ItemListNodeEntry {
     case forkStorage
     case savedMediaFooter
 
+    case onlineHistoryHeader
+    case onlineHistory(Bool)
+    case onlineHistoryFooter
+
     var section: ItemListSectionId {
         switch self {
         case .deletedHeader, .keepDeleted, .keepDeletedSecretChats, .keepSelfDestructMedia, .deletedFooter:
@@ -1577,6 +1583,8 @@ private enum AyuSpyEntry: ItemListNodeEntry {
             return AyuSpySection.storyPrompt.rawValue
         case .savedMediaHeader, .saveDestructingMedia, .saveAllIncomingMedia, .attachmentSizeLimit, .attachmentAge, .keepPinned, .keepChannels, .keepBots, .forkStorage, .savedMediaFooter:
             return AyuSpySection.savedMedia.rawValue
+        case .onlineHistoryHeader, .onlineHistory, .onlineHistoryFooter:
+            return AyuSpySection.onlineHistory.rawValue
         }
     }
 
@@ -1607,6 +1615,9 @@ private enum AyuSpyEntry: ItemListNodeEntry {
         case .keepBots: return 22
         case .forkStorage: return 23
         case .savedMediaFooter: return 24
+        case .onlineHistoryHeader: return 25
+        case .onlineHistory: return 26
+        case .onlineHistoryFooter: return 27
         }
     }
 
@@ -1617,6 +1628,14 @@ private enum AyuSpyEntry: ItemListNodeEntry {
     func item(presentationData: ItemListPresentationData, arguments: Any) -> ListViewItem {
         let arguments = arguments as! AyuSpyArguments
         switch self {
+        case .onlineHistoryHeader:
+            return ItemListSectionHeaderItem(presentationData: presentationData, text: "ИСТОРИЯ «В СЕТИ»", sectionId: self.section)
+        case let .onlineHistory(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Записывать, когда контакты в сети", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.updateOnlineHistory(value)
+            })
+        case .onlineHistoryFooter:
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Shadow запоминает входы и выходы контактов из обновлений статуса, которые Telegram и так присылает, и хранит их 30 дней только на этом устройстве. Смотреть — в профиле контакта: «История в сети». Если контакт скрыл время захода, записываются только моменты, когда приложение видело его онлайн."), sectionId: self.section)
         case .deletedHeader:
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "УДАЛЁННЫЕ СООБЩЕНИЯ", sectionId: self.section)
         case let .keepDeleted(value):
@@ -1734,6 +1753,10 @@ private func ayuSpyEntries(settings: AyuGramSettings) -> [AyuSpyEntry] {
     entries.append(.forkStorage)
     entries.append(.savedMediaFooter)
 
+    entries.append(.onlineHistoryHeader)
+    entries.append(.onlineHistory(settings.onlineHistory))
+    entries.append(.onlineHistoryFooter)
+
     return entries
 }
 
@@ -1823,6 +1846,9 @@ private func ayuSpyController(context: AccountContext, focus: ShadowSettingsSear
             pushControllerImpl?(ayuForkStorageController(context: context))
         }
     )
+    arguments.updateOnlineHistory = { value in
+        ayuUpdateSettings(context: context) { var s = $0; s.onlineHistory = value; return s }
+    }
 
     let signal = combineLatest(queue: .mainQueue(),
         context.sharedContext.presentationData,

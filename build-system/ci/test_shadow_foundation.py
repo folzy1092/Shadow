@@ -24,6 +24,7 @@ def main():
         ('document', 'submodules/TelegramCore/Sources/AyuGram/ShadowSettingsDocument.swift', 'Tests/ShadowSettings/DocumentTests.swift'),
         ('update-check', 'submodules/TelegramCore/Sources/AyuGram/ShadowUpdateCheck.swift', 'Tests/ShadowSettings/UpdateCheckTests.swift'),
         ('chat-lock', 'submodules/TelegramCore/Sources/AyuGram/ShadowChatLock.swift', 'Tests/ShadowSettings/ChatLockTests.swift'),
+        ('online-history', 'submodules/TelegramCore/Sources/AyuGram/ShadowOnlineHistory.swift', 'Tests/ShadowSettings/OnlineHistoryTests.swift'),
         ('intruder-log', 'submodules/TelegramCore/Sources/AyuGram/ShadowIntruderLog.swift', 'Tests/ShadowSettings/IntruderLogTests.swift'),
         ('spaces', ('submodules/TelegramCore/Sources/AyuGram/ShadowSpaces.swift', 'submodules/TelegramCore/Sources/AyuGram/ShadowChatLock.swift'), 'Tests/ShadowSettings/SpacesTests.swift'),
         ('search', 'submodules/SettingsUI/Sources/ShadowSettingsSearchIndex.swift', 'Tests/ShadowSettings/SearchTests.swift'),

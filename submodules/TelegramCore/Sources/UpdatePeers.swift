@@ -480,6 +480,25 @@ func updatePeerPresencesClean(transaction: Transaction, accountPeerId: PeerId, p
         parsedPresences.removeValue(forKey: accountPeerId)
     }
     
+    // Shadow: local online history of contacts (spec 7.4).
+    if currentAyuGramSettings(transaction: transaction).onlineHistory {
+        let now = Int32(Date().timeIntervalSince1970)
+        for (peerId, presence) in parsedPresences {
+            guard peerId.namespace == Namespaces.Peer.CloudUser, let presence = presence as? TelegramUserPresence, transaction.isPeerContact(peerId: peerId) else {
+                continue
+            }
+            if case let .present(until) = presence.status {
+                if until > now {
+                    ShadowOnlineHistory.shared.record(accountPeerId: accountPeerId.toInt64(), peerId: peerId.toInt64(), onlineUntil: until, lastSeen: nil, now: now)
+                } else {
+                    ShadowOnlineHistory.shared.record(accountPeerId: accountPeerId.toInt64(), peerId: peerId.toInt64(), onlineUntil: nil, lastSeen: until, now: now)
+                }
+            } else {
+                ShadowOnlineHistory.shared.record(accountPeerId: accountPeerId.toInt64(), peerId: peerId.toInt64(), onlineUntil: nil, lastSeen: nil, now: now)
+            }
+        }
+    }
+    
     transaction.updatePeerPresencesInternal(presences: parsedPresences, merge: { previous, updated in
         if let previous = previous as? TelegramUserPresence, let updated = updated as? TelegramUserPresence, previous.lastActivity != updated.lastActivity {
             return TelegramUserPresence(status: updated.status, lastActivity: max(previous.lastActivity, updated.lastActivity))

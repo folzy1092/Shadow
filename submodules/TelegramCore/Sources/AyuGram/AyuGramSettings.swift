@@ -108,6 +108,8 @@ public struct AyuGramSettings: Codable, Equatable {
     public var monochromeSettingsIcons: Bool = false
     // Compact chat list rows: smaller avatar, one line of preview.
     public var compactChatList: Bool = false
+    // Local history of when contacts were online (ShadowOnlineHistory).
+    public var onlineHistory: Bool = false
     public var settingsIconBackgroundColor: Int32 = 0x1C1C1E
     public var settingsIconGlyphColor: Int32 = 0xFFFFFF
     // Anti-deletion
@@ -602,6 +604,7 @@ public struct AyuGramSettings: Codable, Equatable {
         self.quickReplyTemplates = (try container.decodeIfPresent([String].self, forKey: "quickReplyTemplates")) ?? []
         self.monochromeSettingsIcons = ((try container.decodeIfPresent(Int32.self, forKey: "monochromeSettingsIcons")) ?? 0) != 0
         self.compactChatList = ((try container.decodeIfPresent(Int32.self, forKey: "compactChatList")) ?? 0) != 0
+        self.onlineHistory = ((try container.decodeIfPresent(Int32.self, forKey: "onlineHistory")) ?? 0) != 0
         self.settingsIconBackgroundColor = ((try container.decodeIfPresent(Int32.self, forKey: "settingsIconBackgroundColor")) ?? 0x1C1C1E) & 0xFFFFFF
         self.settingsIconGlyphColor = ((try container.decodeIfPresent(Int32.self, forKey: "settingsIconGlyphColor")) ?? 0xFFFFFF) & 0xFFFFFF
         self.keepDeletedMessages = ((try container.decodeIfPresent(Int32.self, forKey: "keepDeletedMessages")) ?? 1) != 0
@@ -686,6 +689,7 @@ public struct AyuGramSettings: Codable, Equatable {
         try container.encode(self.quickReplyTemplates, forKey: "quickReplyTemplates")
         try container.encode((self.monochromeSettingsIcons ? 1 : 0) as Int32, forKey: "monochromeSettingsIcons")
         try container.encode((self.compactChatList ? 1 : 0) as Int32, forKey: "compactChatList")
+        try container.encode((self.onlineHistory ? 1 : 0) as Int32, forKey: "onlineHistory")
         try container.encode(self.settingsIconBackgroundColor, forKey: "settingsIconBackgroundColor")
         try container.encode(self.settingsIconGlyphColor, forKey: "settingsIconGlyphColor")
         try container.encode((self.keepDeletedMessages ? 1 : 0) as Int32, forKey: "keepDeletedMessages")

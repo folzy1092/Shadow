@@ -135,6 +135,14 @@ class CleanInterfaceContracts(unittest.TestCase):
         hub = read("SettingsUI/Sources/AyuGramSettingsController.swift")
         self.assertIn("entries.append(.compactChatList(settings.compactChatList))", hub)
 
+    def test_online_history(self):
+        updates = read("TelegramCore/Sources/TelegramEngine/../UpdatePeers.swift")
+        self.assertIn("currentAyuGramSettings(transaction: transaction).onlineHistory", updates)
+        self.assertIn("transaction.isPeerContact(peerId: peerId)", updates)
+        profile = read("TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoProfileItems.swift")
+        self.assertIn("shadowOnlineHistoryController(context: context, peerId: user.id)", profile)
+        self.assertIn("'online-history'", (ROOT / "build-system/ci/test_shadow_foundation.py").read_text())
+
     def test_unlimited_pinned_chats(self):
         toggle = read("TelegramCore/Sources/TelegramEngine/Peers/TogglePeerChatPinned.swift")
         self.assertIn("if !shadowUnlimited, count > limitCount", toggle)
