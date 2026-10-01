@@ -113,6 +113,19 @@ class CleanInterfaceContracts(unittest.TestCase):
         hub = read("SettingsUI/Sources/AyuGramSettingsController.swift")
         self.assertIn("for entry in release.changelog {", hub)
 
+    def test_app_icons(self):
+        build = (ROOT / "Telegram/BUILD").read_text()
+        for name in ("ShadowIcon", "CalculatorIcon", "NotesIcon", "WeatherIcon"):
+            self.assertIn(f'"{name}",', build)
+            folder = ROOT / f"Telegram/Telegram-iOS/{name}.alticon"
+            self.assertTrue((folder / f"{name}@2x.png").exists(), name)
+            self.assertTrue((folder / f"{name}@3x.png").exists(), name)
+        icon = (ROOT / "Telegram/Telegram-iOS/Telegram.icon/icon.json").read_text()
+        self.assertIn('"PlaneShadow.svg"', icon)
+        self.assertTrue((ROOT / "Telegram/Telegram-iOS/Telegram.icon/Assets/PlaneShadow.svg").exists())
+        delegate = read("TelegramUI/Sources/AppDelegate.swift")
+        self.assertIn('PresentationAppIcon(name: "ShadowIcon", imageName: "ShadowIcon", isDefault: true)', delegate)
+
     def test_unlimited_pinned_chats(self):
         toggle = read("TelegramCore/Sources/TelegramEngine/Peers/TogglePeerChatPinned.swift")
         self.assertIn("if !shadowUnlimited, count > limitCount", toggle)

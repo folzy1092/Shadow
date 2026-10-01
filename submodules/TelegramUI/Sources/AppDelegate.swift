@@ -958,7 +958,13 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         }, getAvailableAlternateIcons: {
             if #available(iOS 10.3, *) {
                 var icons = [
-                    PresentationAppIcon(name: "BlueIcon", imageName: "BlueIcon", isDefault: buildConfig.isAppStoreBuild),
+                    // Shadow: the primary icon (Telegram.icon) is the Shadow logo;
+                    // ShadowIcon is only its preview. Disguises follow it.
+                    PresentationAppIcon(name: "ShadowIcon", imageName: "ShadowIcon", isDefault: true),
+                    PresentationAppIcon(name: "CalculatorIcon", imageName: "CalculatorIcon"),
+                    PresentationAppIcon(name: "NotesIcon", imageName: "NotesIcon"),
+                    PresentationAppIcon(name: "WeatherIcon", imageName: "WeatherIcon"),
+                    PresentationAppIcon(name: "BlueIcon", imageName: "BlueIcon"),
                     PresentationAppIcon(name: "New2", imageName: "New2"),
                     PresentationAppIcon(name: "New1", imageName: "New1"),
                     PresentationAppIcon(name: "BlackIcon", imageName: "BlackIcon"),

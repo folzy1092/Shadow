@@ -376,8 +376,20 @@ class ThemeSettingsAppIconItemNode: ListViewItemNode, ItemListItemNode {
                             var name = "Icon"
                             var bordered = true
                             switch icon.name {
+                                case "ShadowIcon":
+                                    name = "Shadow"
+                                    bordered = false
+                                case "CalculatorIcon":
+                                    name = "Калькулятор"
+                                    bordered = false
+                                case "NotesIcon":
+                                    name = "Заметки"
+                                    bordered = false
+                                case "WeatherIcon":
+                                    name = "Погода"
+                                    bordered = false
                                 case "BlueIcon":
-                                    name = item.strings.Appearance_AppIconDefault
+                                    name = "Telegram"
                                 case "BlackIcon":
                                     name = item.strings.Appearance_AppIconDefaultX
                                 case "BlueClassicIcon":

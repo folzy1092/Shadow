@@ -317,6 +317,11 @@ filegroup(
 )
 
 alternate_icon_folders = [
+    # Shadow fork: ShadowIcon previews the primary icon; the rest are disguises.
+    "ShadowIcon",
+    "CalculatorIcon",
+    "NotesIcon",
+    "WeatherIcon",
     "BlackIcon",
     "BlackClassicIcon",
     "BlackFilledIcon",
