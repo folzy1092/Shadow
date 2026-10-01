@@ -7160,6 +7160,8 @@ public final class StoryItemSetContainerComponent: Component {
                     isLiveStream = true
                 }
                 
+                let shadowAllowSave = currentAyuGramSettings(accountId: component.context.account.id).allowSaveRestrictedContent
+                
                 self.dismissAllTooltips()
                 
                 let presentationData = component.context.sharedContext.currentPresentationData.with({ $0 }).withUpdated(theme: component.theme)
@@ -7421,10 +7423,10 @@ public final class StoryItemSetContainerComponent: Component {
                             }
                             self.beginPictureInPicture()
                         })))
-                    } else if !component.slice.item.storyItem.isForwardingDisabled {
+                    } else if !component.slice.item.storyItem.isForwardingDisabled || shadowAllowSave {
                         let saveText: String = component.strings.Story_Context_SaveToGallery
                         items.append(.action(ContextMenuActionItem(text: saveText, icon: { theme in
-                            return generateTintedImage(image: UIImage(bundleImageName: accountUser.isPremium ? "Chat/Context Menu/Download" : "Chat/Context Menu/DownloadLocked"), color: theme.contextMenu.primaryColor)
+                            return generateTintedImage(image: UIImage(bundleImageName: (accountUser.isPremium || shadowAllowSave) ? "Chat/Context Menu/Download" : "Chat/Context Menu/DownloadLocked"), color: theme.contextMenu.primaryColor)
                         }, action: { [weak self] _, a in
                             a(.default)
                             
@@ -7432,7 +7434,9 @@ public final class StoryItemSetContainerComponent: Component {
                                 return
                             }
                             
-                            if accountUser.isPremium {
+                            // Shadow: «Сохранять защищённое» saves any story,
+                            // protected ones included, without Premium.
+                            if accountUser.isPremium || shadowAllowSave {
                                 self.requestSave()
                             } else {
                                 self.presentSaveUpgradeScreen()

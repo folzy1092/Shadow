@@ -498,6 +498,25 @@ extension PeerInfoScreenNode {
                         self.controller?.push(shadowChatPrivacyController(context: self.context, peerId: peer.id, title: peer.compactDisplayTitle))
                     })))
                 }
+
+                // Shadow: chat export (deleted messages included). Not offered
+                // for a chat the disguise, a space or a lock keeps covered.
+                let shadowAccountPeerId = strongSelf.context.account.peerId.toInt64()
+                let shadowExportPeerId = chatPeer.id
+                let shadowExportCovered = [peer.id, chatPeer.id].contains(where: { id in
+                    ShadowSpaceStore.shared.isHidden(accountPeerId: shadowAccountPeerId, peerId: id.toInt64()) || ShadowChatLockStore.shared.requiresUnlock(accountPeerId: shadowAccountPeerId, peerId: id.toInt64())
+                })
+                if !ShadowDisguise.shared.hidesSettings && !shadowExportCovered {
+                    items.append(.action(ContextMenuActionItem(text: "Экспорт чата", icon: { theme in
+                        generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Share"), color: theme.contextMenu.primaryColor)
+                    }, action: { [weak self] _, f in
+                        f(.dismissWithoutContent)
+                        guard let self, let controller = self.controller, let peer = self.data?.peer else {
+                            return
+                        }
+                        shadowPresentChatExport(context: self.context, peerId: shadowExportPeerId, title: peer.compactDisplayTitle, from: controller)
+                    })))
+                }
                 
                 if case let .user(user) = peer {
                     if user.botInfo == nil && strongSelf.data?.encryptionKeyFingerprint == nil && !user.isDeleted {

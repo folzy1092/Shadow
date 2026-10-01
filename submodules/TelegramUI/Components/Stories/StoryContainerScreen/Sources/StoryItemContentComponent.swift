@@ -356,7 +356,7 @@ final class StoryItemContentComponent: Component {
                             useLargeThumbnail: false,
                             autoFetchFullSizeThumbnail: false,
                             tempFilePath: nil,
-                            captureProtected: component.item.isForwardingDisabled,
+                            captureProtected: component.shadowIsCaptureProtected,
                             hintDimensions: file.dimensions?.cgSize,
                             storeAfterDownload: nil,
                             displayImage: false,
@@ -776,7 +776,7 @@ final class StoryItemContentComponent: Component {
                 availableReactions: component.availableReactions,
                 entityFiles: component.entityFiles,
                 size: size,
-                isCaptureProtected: component.item.isForwardingDisabled,
+                isCaptureProtected: component.shadowIsCaptureProtected,
                 attemptSynchronous: synchronousLoad,
                 isActive: self.progressMode.mode == .play,
                 transition: transition
@@ -972,7 +972,7 @@ final class StoryItemContentComponent: Component {
                         storyId: component.item.id,
                         media: messageMedia,
                         size: availableSize,
-                        isCaptureProtected: component.item.isForwardingDisabled,
+                        isCaptureProtected: component.shadowIsCaptureProtected,
                         attemptSynchronous: synchronousLoad,
                         transition: transition
                     )
@@ -1151,7 +1151,7 @@ final class StoryItemContentComponent: Component {
                         storyId: component.item.id,
                         media: messageMedia,
                         size: availableSize,
-                        isCaptureProtected: component.item.isForwardingDisabled,
+                        isCaptureProtected: component.shadowIsCaptureProtected,
                         attemptSynchronous: synchronousLoad,
                         transition: transition
                     )
@@ -1484,5 +1484,13 @@ final class StoryItemContentComponent: Component {
 
     func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<StoryContentItem.Environment>, transition: ComponentTransition) -> CGSize {
         return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
+    }
+}
+
+// Shadow: with «Сохранять защищённое» on, a story with forwarding disabled is
+// not blacked out in screenshots and screen recordings.
+extension StoryItemContentComponent {
+    var shadowIsCaptureProtected: Bool {
+        return self.item.isForwardingDisabled && !currentAyuGramSettings(accountId: self.context.account.id).allowSaveRestrictedContent
     }
 }

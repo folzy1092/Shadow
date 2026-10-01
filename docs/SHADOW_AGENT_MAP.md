@@ -149,6 +149,17 @@ UI-проекция настроек выбирается в `TelegramRootContro
 - Фото при неверном пароле: `ShadowIntruderLog` (очередь, `isCapturing`),
   `PasscodeUI/ShadowIntruderCamera` (снимок + галерея),
   `TelegramUI/ShadowIntruderDelivery` (отправка в «Избранное»).
+- Экстренная защита (`SettingsUI/ShadowEmergencyController`):
+  `ShadowDuress.swift` — код под принуждением (проверка в
+  `PasscodeEntryController`) и настройки тревожного жеста. Сессия duress
+  (`ShadowSpaceStore.setDuressActive`, только в памяти) прячет закрытые
+  чаты и чаты второго пространства, а также настройки (`hidesSettings`).
+  Заканчивается при вводе настоящего кода. Жесты и выход из аккаунтов:
+  `TelegramUI/ShadowDuressUI.swift`, ставится в `SharedAccountContextImpl`.
+- Экспорт чата: форматирование в `ShadowChatExport.swift` (Foundation,
+  тестируется), сбор из Postbox в `ShadowChatExportCollect.swift`, UI в
+  `SettingsUI/ShadowChatExportUI.swift`. Пункт меню профиля
+  (`PeerInfoScreenPerformButtonAction`) скрыт для закрытых и скрытых чатов.
 
 ## 6. Анти-удаление и архив
 

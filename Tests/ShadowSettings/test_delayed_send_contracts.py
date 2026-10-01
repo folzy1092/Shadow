@@ -49,7 +49,14 @@ class DelayedSendContracts(unittest.TestCase):
         attachment_send = attachment_source.split("let doSend: (Int64?) -> Void", 1)[1].split("if let targetThreadId", 1)[0]
         self.assertIn("shouldClearGhostScheduledDraft", attachment_send)
         self.assertIn("strongSelf.clearGhostScheduledDraft()", attachment_send)
-        self.assertIn("completionImpl?()", attachment_send)
+        # The ghost branch must dismiss the attachment picker via the original
+        # completion: completionImpl is nil once a media transition was prepared
+        # (≤3 photos / album ≤10), and that transition never runs for a message
+        # diverted to ScheduledCloud, so the picker stayed open after Send.
+        ghost_branch = attachment_send.split("if shouldClearGhostScheduledDraft {", 1)[1].split("\n                    }", 1)[0]
+        self.assertIn("strongSelf.clearGhostScheduledDraft()", ghost_branch)
+        self.assertIn("completion()", ghost_branch)
+        self.assertNotIn("completionImpl?()", ghost_branch)
 
         self.assertGreaterEqual(MEDIA_RECORDING.count("AyuDelayedSend.willAutomaticallySchedule"), 3)
         self.assertGreaterEqual(MEDIA_RECORDING.count("clearGhostScheduledDraft()"), 3)

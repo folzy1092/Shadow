@@ -29,6 +29,8 @@ def main():
         ('intruder-log', ('submodules/TelegramCore/Sources/AyuGram/ShadowIntruderLog.swift', 'submodules/TelegramCore/Sources/AyuGram/ShadowDisguise.swift'), 'Tests/ShadowSettings/IntruderLogTests.swift'),
         ('disguise', 'submodules/TelegramCore/Sources/AyuGram/ShadowDisguise.swift', 'Tests/ShadowSettings/DisguiseTests.swift'),
         ('spaces', ('submodules/TelegramCore/Sources/AyuGram/ShadowSpaces.swift', 'submodules/TelegramCore/Sources/AyuGram/ShadowChatLock.swift', 'submodules/TelegramCore/Sources/AyuGram/ShadowDisguise.swift'), 'Tests/ShadowSettings/SpacesTests.swift'),
+        ('duress', ('submodules/TelegramCore/Sources/AyuGram/ShadowDuress.swift', 'submodules/TelegramCore/Sources/AyuGram/ShadowSpaces.swift', 'submodules/TelegramCore/Sources/AyuGram/ShadowChatLock.swift', 'submodules/TelegramCore/Sources/AyuGram/ShadowDisguise.swift'), 'Tests/ShadowSettings/DuressTests.swift'),
+        ('chat-export', 'submodules/TelegramCore/Sources/AyuGram/ShadowChatExport.swift', 'Tests/ShadowSettings/ChatExportTests.swift'),
         ('search', 'submodules/SettingsUI/Sources/ShadowSettingsSearchIndex.swift', 'Tests/ShadowSettings/SearchTests.swift'),
         ('tab-bar-scroll', 'submodules/Display/Source/TabBarScrollState.swift', 'Tests/ShadowSettings/TabBarScrollTests.swift'),
     ]

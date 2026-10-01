@@ -9323,7 +9323,12 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                     strongSelf.sendMessages(messages.map { $0.withUpdatedReplyToMessageId(replyMessageSubject?.subjectModel) }, media: true)
                     if shouldClearGhostScheduledDraft {
                         strongSelf.clearGhostScheduledDraft()
-                        completionImpl?()
+                        // Shadow: not completionImpl — it is nil once a media
+                        // transition was prepared (≤3 items or an album ≤10), and
+                        // that transition's callback never fires here because the
+                        // message goes to ScheduledCloud. The attachment picker
+                        // would then stay open after Send.
+                        completion()
                     }
                 }
                 

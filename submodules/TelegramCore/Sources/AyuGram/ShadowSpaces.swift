@@ -116,6 +116,16 @@ public final class ShadowSpaceStore {
         }
     }
 
+    // Starts or ends the duress session (ShadowDisguise.isDuressActive) and
+    // lets the chat list re-filter.
+    public func setDuressActive(_ value: Bool) {
+        let changed = ShadowDisguise.shared.isDuressActive != value
+        ShadowDisguise.shared.setDuressActive(value)
+        if changed {
+            self.notifyChanged()
+        }
+    }
+
     // MARK: Visibility
 
     private static func decodeVisibility(_ dictionary: [String: Any]?) -> [Int64: [Int64: Int]] {
@@ -183,7 +193,15 @@ public final class ShadowSpaceStore {
     // True when the chat must not be shown in the active space.
     // Shadow: the Full disguise (ShadowDisguise) shows every chat and ignores the
     // second code, like stock Telegram.
+    // A duress session (ShadowDisguise.isDuressActive) also hides locked chats
+    // and every «only second» chat, so nothing reveals that they exist.
     public func isHidden(accountPeerId: Int64, peerId: Int64) -> Bool {
+        if ShadowDisguise.shared.isDuressActive {
+            if ShadowChatLockStore.shared.isLocked(accountPeerId: accountPeerId, peerId: peerId) {
+                return true
+            }
+            return self.visibility(accountPeerId: accountPeerId, peerId: peerId) == .secondOnly
+        }
         if ShadowDisguise.shared.isFull {
             return false
         }
@@ -200,6 +218,11 @@ public final class ShadowSpaceStore {
     // the folder unread badges). The exclusive second space hides every other
     // chat too, which cannot be listed; those are not covered here.
     public func hiddenPeerIds(accountPeerId: Int64) -> [Int64] {
+        if ShadowDisguise.shared.isDuressActive {
+            let locked = ShadowChatLockStore.shared.lockedPeerIds(accountPeerId: accountPeerId)
+            let second = self.customVisibilities(accountPeerId: accountPeerId).compactMap { $0.value == .secondOnly ? $0.key : nil }
+            return Array(Set(locked + second)).sorted()
+        }
         if ShadowDisguise.shared.isFull {
             return []
         }

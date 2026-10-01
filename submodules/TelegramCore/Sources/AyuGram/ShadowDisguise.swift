@@ -43,6 +43,10 @@ public final class ShadowDisguise {
     private let defaults: UserDefaults
     private let lock = NSLock()
     private var cachedMode: Mode?
+    // Clean session opened by the duress code or the panic gesture
+    // (ShadowDuress). Memory only: a relaunch starts without it, and the main
+    // code, the second code or biometrics end it.
+    private var duressActiveValue = false
 
     public init(defaults: UserDefaults) {
         self.defaults = defaults
@@ -59,9 +63,26 @@ public final class ShadowDisguise {
         return value
     }
 
-    // Fork settings entry points are hidden (both "settings" and "full").
+    // Fork settings entry points are hidden (both "settings" and "full", and
+    // during a duress session).
     public var hidesSettings: Bool {
-        return self.mode != .off
+        return self.mode != .off || self.isDuressActive
+    }
+
+    public var isDuressActive: Bool {
+        self.lock.lock()
+        defer { self.lock.unlock() }
+        return self.duressActiveValue
+    }
+
+    public func setDuressActive(_ value: Bool) {
+        self.lock.lock()
+        let changed = self.duressActiveValue != value
+        self.duressActiveValue = value
+        self.lock.unlock()
+        if changed {
+            self.postChange()
+        }
     }
 
     // Every fork feature is off and the UI is stock Telegram.
@@ -85,12 +106,16 @@ public final class ShadowDisguise {
         self.defaults.set(Int(mode.rawValue), forKey: Key.mode)
         self.lock.unlock()
         if changed {
-            if Thread.isMainThread {
+            self.postChange()
+        }
+    }
+
+    private func postChange() {
+        if Thread.isMainThread {
+            NotificationCenter.default.post(name: ShadowDisguise.didChangeNotification, object: self)
+        } else {
+            DispatchQueue.main.async {
                 NotificationCenter.default.post(name: ShadowDisguise.didChangeNotification, object: self)
-            } else {
-                DispatchQueue.main.async {
-                    NotificationCenter.default.post(name: ShadowDisguise.didChangeNotification, object: self)
-                }
             }
         }
     }

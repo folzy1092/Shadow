@@ -111,6 +111,7 @@ private enum AyuHubEntry: ItemListNodeEntry {
     case quickReplies
     case chatLocks
     case secondSpace
+    case emergency
     case crashReports(Int)
     case infoFooter
     case checkUpdates(label: String, enabled: Bool)
@@ -127,7 +128,7 @@ private enum AyuHubEntry: ItemListNodeEntry {
             return AyuHubSection.privacy.rawValue
         case .noResults:
             return AyuHubSection.info.rawValue
-        case .customization, .spy, .ghost, .filters, .misc, .hiddenAccounts, .backup, .pushDiagnostics, .quickReplies, .chatLocks, .secondSpace, .crashReports:
+        case .customization, .spy, .ghost, .filters, .misc, .hiddenAccounts, .backup, .pushDiagnostics, .quickReplies, .chatLocks, .secondSpace, .emergency, .crashReports:
             return AyuHubSection.tools.rawValue
         case .infoFooter:
             return AyuHubSection.info.rawValue
@@ -157,6 +158,8 @@ private enum AyuHubEntry: ItemListNodeEntry {
             return 13
         case .secondSpace:
             return 14
+        case .emergency:
+            return 16
         case .crashReports:
             return 15
         case .infoFooter:
@@ -215,6 +218,8 @@ private enum AyuHubEntry: ItemListNodeEntry {
             return ItemListDisclosureItem(presentationData: presentationData, title: "Замки чатов", label: "", sectionId: self.section, style: .blocks, action: { arguments.openFeature(.chatLocks) })
         case .secondSpace:
             return ItemListDisclosureItem(presentationData: presentationData, title: "Второе пространство", label: "", sectionId: self.section, style: .blocks, action: { arguments.openFeature(.secondSpace) })
+        case .emergency:
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Экстренная защита", label: "", sectionId: self.section, style: .blocks, action: { arguments.openFeature(.emergency) })
         case let .crashReports(count):
             return ItemListDisclosureItem(presentationData: presentationData, title: "Отчёты о вылетах", label: "\(count)", sectionId: self.section, style: .blocks, action: { arguments.openCrashReports() })
         case let .updateBanner(title, text):
@@ -283,6 +288,7 @@ func shadowSettingsSearchDestinationController(context: AccountContext, item: Sh
     case .quickReplies: return shadowQuickRepliesController(context: context, focus: item)
     case .chatLocks: return shadowChatLocksController(context: context, focus: item)
     case .secondSpace: return shadowSecondSpaceController(context: context, focus: item)
+    case .emergency: return shadowEmergencyController(context: context, focus: item)
     }
 }
 
@@ -330,6 +336,8 @@ public func ayuGramSettingsController(context: AccountContext) -> ViewController
             pushControllerImpl?(shadowChatLocksController(context: context))
         case .secondSpace:
             pushControllerImpl?(shadowSecondSpaceController(context: context))
+        case .emergency:
+            pushControllerImpl?(shadowEmergencyController(context: context))
         default:
             break
         }
@@ -443,7 +451,7 @@ public func ayuGramSettingsController(context: AccountContext) -> ViewController
         }
         entries.append(.query(query))
         if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            entries += [.customization, .spy, .ghost, .filters, .misc, .hiddenAccounts, .backup, .pushDiagnostics, .quickReplies, .chatLocks, .secondSpace, .infoFooter, .checkUpdates(label: checkLabel, enabled: checkEnabled)]
+            entries += [.customization, .spy, .ghost, .filters, .misc, .hiddenAccounts, .backup, .pushDiagnostics, .quickReplies, .chatLocks, .secondSpace, .emergency, .infoFooter, .checkUpdates(label: checkLabel, enabled: checkEnabled)]
             let crashCount = ShadowCrashReports.shared.reports().count
             if crashCount > 0 {
                 entries.insert(.crashReports(crashCount), at: entries.firstIndex(where: { if case .infoFooter = $0 { return true } else { return false } }) ?? entries.count)
@@ -1749,7 +1757,7 @@ private enum AyuSpyEntry: ItemListNodeEntry {
                 arguments.updateAllowSaveRestrictedContent(value)
             })
         case .restrictedFooter:
-            return ItemListTextItem(presentationData: presentationData, text: .plain("Снимает защиту от копирования: разрешает копировать, пересылать и сохранять в защищённых чатах и приватных каналах."), sectionId: self.section)
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Снимает защиту от копирования: разрешает копировать, пересылать и сохранять в защищённых чатах, приватных каналах и личных чатах с запретом сохранения. Истории с запретом пересылки тоже можно сохранить в галерею (без Premium) и снять скриншотом."), sectionId: self.section)
         case .storyPromptHeader:
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "ИСТОРИИ", sectionId: self.section)
         case let .askBeforeStoryView(value):

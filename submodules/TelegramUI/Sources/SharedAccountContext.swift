@@ -1061,6 +1061,9 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         self.updateNotificationTokensRegistration()
         
         if applicationBindings.isMainApp {
+            // Shadow: duress-code logout and the panic gesture (ShadowDuress).
+            ShadowDuressCoordinator.install(sharedContext: self, mainWindow: mainWindow)
+            
             self.widgetDataContext = WidgetDataContext(basePath: self.basePath, inForeground: self.applicationBindings.applicationInForeground, activeAccounts: self.activeAccountContexts
             |> map { _, accounts, _ in
                 return accounts.map { $0.1.account }

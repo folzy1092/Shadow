@@ -156,7 +156,7 @@ private final class ShadowSecondSpaceArguments {
 }
 
 // Telegram passcode -> the format the second code must follow and the main code.
-private func shadowSecondSpacePasscodeInfo(_ data: PostboxAccessChallengeData) -> (ShadowSpaceStore.CodeFormat, String)? {
+func shadowSecondSpacePasscodeInfo(_ data: PostboxAccessChallengeData) -> (ShadowSpaceStore.CodeFormat, String)? {
     switch data {
     case .none:
         return nil
@@ -167,7 +167,7 @@ private func shadowSecondSpacePasscodeInfo(_ data: PostboxAccessChallengeData) -
     }
 }
 
-private enum ShadowSecondSpaceCodePrompt {
+enum ShadowSecondSpaceCodePrompt {
     static func present(context: AccountContext, title: String, message: String?, format: ShadowSpaceStore.CodeFormat, completion: @escaping (String?) -> Void) {
         let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
         let okAction = UIAlertAction(title: "OK", style: .default, handler: { [weak alert] _ in

@@ -848,6 +848,11 @@ public class GalleryController: ViewController, StandalonePresentableController,
                     guard let message = transaction.getMessage(messageId) else {
                         return nil
                     }
+                    // Shadow: «Сохранять защищённое» also lifts the per-user
+                    // «disable sharing» of a private chat (and of a migrated group).
+                    if currentAyuGramSettings(accountId: context.account.id).allowSaveRestrictedContent {
+                        return (message, false)
+                    }
                     if let peer = message.peers[message.id.peerId] as? TelegramGroup, let migrationPeerId = peer.migrationReference?.peerId, let migrationPeer = transaction.getPeer(migrationPeerId) {
                         return (message, migrationPeer.isCopyProtectionEnabled)
                     } else if let peer = message.peers[message.id.peerId] as? TelegramUser, let cachedUserData = transaction.getPeerCachedData(peerId: peer.id) as? CachedUserData {

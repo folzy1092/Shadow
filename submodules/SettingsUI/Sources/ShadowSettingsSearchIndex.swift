@@ -1,7 +1,7 @@
 import Foundation
 
 enum ShadowSettingsSearchDestination: Int32 {
-    case customization, spy, ghost, misc, backup, filters, pushDiagnostics, quickReplies, chatLocks, secondSpace
+    case customization, spy, ghost, misc, backup, filters, pushDiagnostics, quickReplies, chatLocks, secondSpace, emergency
 
     var title: String {
         switch self {
@@ -15,6 +15,7 @@ enum ShadowSettingsSearchDestination: Int32 {
         case .quickReplies: return "Шаблоны ответов"
         case .chatLocks: return "Замки чатов"
         case .secondSpace: return "Второе пространство"
+        case .emergency: return "Экстренная защита"
         }
     }
 }
@@ -110,7 +111,9 @@ enum ShadowSettingsSearchIndex {
         ShadowSettingsSearchItem(destination: .customization, entryId: 103, title: "Расшифровка голосовых на устройстве", description: "Распознавание речи без Premium, аудио не уходит с телефона", keywords: "voice голосовые transcription расшифровка текст speech"),
         ShadowSettingsSearchItem(destination: .quickReplies, entryId: 0, title: "Шаблоны ответов", description: "Свои заготовки текста, вставляются кнопкой в поле ввода", keywords: "templates шаблоны quick replies быстрые ответы заготовки"),
         ShadowSettingsSearchItem(destination: .chatLocks, entryId: 0, title: "Замки чатов", description: "Face ID и пароль на отдельные чаты, сброс замков", keywords: "lock замок пароль face id touch id скрыть чат блокировка"),
-        ShadowSettingsSearchItem(destination: .secondSpace, entryId: 0, title: "Второе пространство", description: "Второй код-пароль открывает скрытые чаты", keywords: "space пространство второй код скрытые чаты спрятать двойной пароль")
+        ShadowSettingsSearchItem(destination: .secondSpace, entryId: 0, title: "Второе пространство", description: "Второй код-пароль открывает скрытые чаты", keywords: "space пространство второй код скрытые чаты спрятать двойной пароль"),
+        ShadowSettingsSearchItem(destination: .emergency, entryId: 0, title: "Код под принуждением", description: "Третий код открывает чистое пространство и может выйти из аккаунтов", keywords: "duress принуждение тревога экстренный третий код чистый выход аккаунт паника"),
+        ShadowSettingsSearchItem(destination: .emergency, entryId: 1, title: "Тревожный жест", description: "Перевернуть телефон, встряхнуть или тройной тап двумя пальцами", keywords: "panic паника тревога жест перевернуть встряхнуть shake тап tap маскировка full скрыть второе")
     ].sorted { $0.id < $1.id }
 
     private static func normalized(_ value: String) -> String {

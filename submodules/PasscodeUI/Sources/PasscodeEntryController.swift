@@ -159,11 +159,18 @@ public final class PasscodeEntryController: ViewController {
             // and the second code opens the second space (spec section 6).
             // Passcode checks with a `completed` handler (settings) only accept
             // the main code.
+            // The duress code opens a clean main space (ShadowDuress); the
+            // other codes end a duress session.
             if strongSelf.completed == nil && strongSelf.applicationBindings.isMainApp {
                 if succeed {
+                    ShadowSpaceStore.shared.setDuressActive(false)
                     ShadowSpaceStore.shared.setActiveSpace(.main)
                 } else if ShadowSpaceStore.shared.hasCode && ShadowSpaceStore.shared.verifyCode(passcode) {
+                    ShadowSpaceStore.shared.setDuressActive(false)
                     ShadowSpaceStore.shared.setActiveSpace(.second)
+                    succeed = true
+                } else if ShadowDuress.shared.hasCode && ShadowDuress.shared.verifyCode(passcode) {
+                    ShadowDuress.shared.trigger()
                     succeed = true
                 }
             }
@@ -272,8 +279,10 @@ public final class PasscodeEntryController: ViewController {
                     }
                     strongSelf.hasOngoingBiometricsRequest = false
                 } else {
-                    // Shadow: Face ID / Touch ID always opens the main space.
+                    // Shadow: Face ID / Touch ID always opens the main space
+                    // and ends a duress session.
                     if strongSelf.applicationBindings.isMainApp {
+                        ShadowSpaceStore.shared.setDuressActive(false)
                         ShadowSpaceStore.shared.setActiveSpace(.main)
                     }
                     strongSelf.appLockContext.unlock()
