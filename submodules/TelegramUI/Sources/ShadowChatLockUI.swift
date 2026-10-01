@@ -173,6 +173,9 @@ final class ShadowChatLockOverlayView: UIView {
     private let button = UIButton(type: .system)
     private let action: () -> Void
     var didAutoAuthenticate = false
+    // Shadow: a chat hidden in the active space (ShadowSpaceStore) cannot be
+    // opened at all here: no unlock button, nothing to authenticate.
+    private(set) var isUnavailable = false
 
     init(theme: PresentationTheme, action: @escaping () -> Void) {
         self.action = action
@@ -204,6 +207,16 @@ final class ShadowChatLockOverlayView: UIView {
 
     @objc private func buttonPressed() {
         self.action()
+    }
+
+    func setUnavailable(_ unavailable: Bool) {
+        if self.isUnavailable == unavailable {
+            return
+        }
+        self.isUnavailable = unavailable
+        self.titleLabel.text = unavailable ? "Чат недоступен" : "Чат заблокирован"
+        self.button.isHidden = unavailable
+        self.iconView.image = UIImage(systemName: unavailable ? "eye.slash.fill" : "lock.fill", withConfiguration: UIImage.SymbolConfiguration(pointSize: 44.0, weight: .regular))
     }
 
     override func layoutSubviews() {
@@ -244,12 +257,21 @@ extension ChatControllerImpl {
             })
             self.shadowChatLockObserver = ShadowChatLockObserverHolder(token: token)
         }
+        if self.shadowSpaceObserver == nil {
+            let token = NotificationCenter.default.addObserver(forName: ShadowSpaceStore.didChangeNotification, object: nil, queue: .main, using: { [weak self] _ in
+                self?.shadowChatLockUpdate(autoAuthenticate: false)
+            })
+            self.shadowSpaceObserver = ShadowChatLockObserverHolder(token: token)
+        }
 
         guard let peerId = self.chatLocation.peerId else {
             return
         }
         let accountPeerId = self.context.account.peerId.toInt64()
-        let requiresUnlock = ShadowChatLockStore.shared.requiresUnlock(accountPeerId: accountPeerId, peerId: peerId.toInt64())
+        // Shadow: a chat hidden in the active space is covered with no way in,
+        // whatever opened it (contacts, profile, link, gift, call list…).
+        let hiddenInSpace = ShadowSpaceStore.shared.isHidden(accountPeerId: accountPeerId, peerId: peerId.toInt64())
+        let requiresUnlock = hiddenInSpace || ShadowChatLockStore.shared.requiresUnlock(accountPeerId: accountPeerId, peerId: peerId.toInt64())
 
         if requiresUnlock {
             let overlay: ShadowChatLockOverlayView
@@ -271,13 +293,14 @@ extension ChatControllerImpl {
             // The first update runs from loadDisplayNode, before the first layout,
             // when the container is still empty; shadowChatLockLayout() keeps the
             // frame in sync afterwards. The history itself is hidden regardless.
+            overlay.setUnavailable(hiddenInSpace)
             self.shadowChatLockLayout()
             self.chatDisplayNode.shadowSetChatLockContentHidden(true)
             var isPreview = false
             if case .standard(.previewing) = self.mode {
                 isPreview = true
             }
-            if autoAuthenticate && !isPreview && !overlay.didAutoAuthenticate {
+            if autoAuthenticate && !isPreview && !hiddenInSpace && !overlay.didAutoAuthenticate {
                 overlay.didAutoAuthenticate = true
                 self.shadowChatLockRequestUnlock()
             }
@@ -311,6 +334,9 @@ extension ChatControllerImpl {
             return
         }
         let accountPeerId = self.context.account.peerId.toInt64()
+        if ShadowSpaceStore.shared.isHidden(accountPeerId: accountPeerId, peerId: peerId.toInt64()) {
+            return
+        }
         ShadowChatLockUI.authenticate(sharedContext: self.context.sharedContext, reason: "Разблокировать чат", completion: { [weak self] success in
             guard let self, success else {
                 return

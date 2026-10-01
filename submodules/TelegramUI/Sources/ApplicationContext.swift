@@ -442,7 +442,8 @@ final class AuthorizedApplicationContext {
                             }
                             
                             // Shadow: no in-app banner (text, sender, media) for a locked chat.
-                            if ShadowChatLockStore.shared.isLocked(accountPeerId: strongSelf.context.account.peerId.toInt64(), peerId: firstMessage.id.peerId.toInt64()) {
+                            let shadowBannerAccountPeerId = strongSelf.context.account.peerId.toInt64()
+                            if ShadowChatLockStore.shared.isLocked(accountPeerId: shadowBannerAccountPeerId, peerId: firstMessage.id.peerId.toInt64()) || ShadowSpaceStore.shared.isHidden(accountPeerId: shadowBannerAccountPeerId, peerId: firstMessage.id.peerId.toInt64()) {
                                 return
                             }
                             

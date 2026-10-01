@@ -606,8 +606,12 @@ private func shadowChatLockChanges() -> Signal<Void, NoError> {
         let token = NotificationCenter.default.addObserver(forName: ShadowChatLockStore.didChangeNotification, object: nil, queue: nil, using: { _ in
             subscriber.putNext(Void())
         })
+        let spaceToken = NotificationCenter.default.addObserver(forName: ShadowSpaceStore.didChangeNotification, object: nil, queue: nil, using: { _ in
+            subscriber.putNext(Void())
+        })
         return ActionDisposable {
             NotificationCenter.default.removeObserver(token)
+            NotificationCenter.default.removeObserver(spaceToken)
         }
     }
 }
@@ -617,8 +621,10 @@ private func shadowFilterLockedPanes(_ panes: [PeerInfoPaneKey]?, accountPeerId:
         return nil
     }
     let store = ShadowChatLockStore.shared
-    let chatLocked = store.requiresUnlock(accountPeerId: accountPeerId.toInt64(), peerId: peerId.toInt64())
-    let savedMessagesLocked = store.requiresUnlock(accountPeerId: accountPeerId.toInt64(), peerId: accountPeerId.toInt64())
+    // A chat hidden in the active space (ShadowSpaceStore) counts as locked.
+    let spaces = ShadowSpaceStore.shared
+    let chatLocked = store.requiresUnlock(accountPeerId: accountPeerId.toInt64(), peerId: peerId.toInt64()) || spaces.isHidden(accountPeerId: accountPeerId.toInt64(), peerId: peerId.toInt64())
+    let savedMessagesLocked = store.requiresUnlock(accountPeerId: accountPeerId.toInt64(), peerId: accountPeerId.toInt64()) || spaces.isHidden(accountPeerId: accountPeerId.toInt64(), peerId: accountPeerId.toInt64())
     if !chatLocked && !savedMessagesLocked {
         return panes
     }

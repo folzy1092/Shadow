@@ -251,6 +251,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     var didSetupDropToPaste: Bool = false
     // Shadow: chat lock observation (ShadowChatLockUI.swift).
     var shadowChatLockObserver: ShadowChatLockObserverHolder?
+    var shadowSpaceObserver: ShadowChatLockObserverHolder?
     
     let context: AccountContext
     public internal(set) var chatLocation: ChatLocation

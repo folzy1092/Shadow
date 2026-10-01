@@ -121,7 +121,7 @@ private func ayuArchiveMessages(context: AccountContext, peerId: PeerId?) -> Sig
                 }
                 // Shadow: kept messages of a locked chat (or Saved Messages) never
                 // show up here: the archive must not bypass the chat lock.
-                if ShadowChatLockStore.shared.isLocked(accountPeerId: accountPeerId, peerId: id.peerId.toInt64()) {
+                if ShadowChatLockStore.shared.isLocked(accountPeerId: accountPeerId, peerId: id.peerId.toInt64()) || ShadowSpaceStore.shared.isHidden(accountPeerId: accountPeerId, peerId: id.peerId.toInt64()) {
                     continue
                 }
                 if seen.contains(id) {

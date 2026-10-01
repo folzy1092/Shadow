@@ -2200,6 +2200,11 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         // (previews, relocking while the chat is open).
         let accountPeerId = params.context.account.peerId.toInt64()
         let peerId = params.chatLocation.peerId.toInt64()
+        // Shadow: a chat hidden in the active space (ShadowSpaceStore) is not
+        // opened at all — from contacts, a profile, a link, a gift or anywhere.
+        if ShadowSpaceStore.shared.isHidden(accountPeerId: accountPeerId, peerId: peerId) {
+            return
+        }
         if ShadowChatLockStore.shared.requiresUnlock(accountPeerId: accountPeerId, peerId: peerId) {
             ShadowChatLockUI.authenticate(sharedContext: self, reason: "Открыть чат", completion: { success in
                 guard success else {
