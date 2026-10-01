@@ -7240,7 +7240,18 @@ private final class ChatListLocationContext {
         
         if stateAndFilterId.state.editing {
             if case .chatList(.root) = self.location {
-                self.rightButton = nil
+                // Shadow: lock or unlock the selected chats (ShadowChatLockStore).
+                let selectedPeerIds = stateAndFilterId.state.selectedPeerIds
+                if selectedPeerIds.isEmpty {
+                    self.rightButton = nil
+                } else {
+                    self.rightButton = AnyComponentWithIdentity(id: "shadowLock", component: AnyComponent(NavigationButtonComponent(
+                        content: .text(title: "🔒", isBold: false),
+                        pressed: { [weak self] _ in
+                            self?.parentController?.shadowToggleLockForSelectedChats(selectedPeerIds)
+                        }
+                    )))
+                }
                 self.storyButton = nil
                 self.proxyButton = nil
                 self.ghostButton = nil
@@ -7647,5 +7658,50 @@ private func shadowFilteredStorySubscriptions(context: AccountContext, _ signal:
             return EngineStorySubscriptions(accountItem: nil, items: [], hasMoreToken: nil)
         }
         return subscriptions
+    }
+}
+
+extension ChatListControllerImpl {
+    // Shadow: the 🔒 button in edit mode. If every selected chat is already
+    // locked, the locks are removed (after Face ID / password); otherwise the
+    // unlocked ones are locked (the first lock creates the device password).
+    func shadowToggleLockForSelectedChats(_ peerIds: Set<EnginePeer.Id>) {
+        let context = self.context
+        let store = ShadowChatLockStore.shared
+        let accountPeerId = context.account.peerId.toInt64()
+        let candidates = peerIds.filter { $0 != context.account.peerId }.sorted(by: { $0.toInt64() < $1.toInt64() })
+        guard let first = candidates.first else {
+            return
+        }
+        let allLocked = candidates.allSatisfy { store.isLocked(accountPeerId: accountPeerId, peerId: $0.toInt64()) }
+        if allLocked {
+            context.sharedContext.shadowChatLockAuthenticate(reason: "Снять защиту с выбранных чатов", completion: { [weak self] success in
+                guard success else {
+                    return
+                }
+                for peerId in candidates {
+                    store.setLocked(false, accountPeerId: accountPeerId, peerId: peerId.toInt64())
+                }
+                self?.donePressed()
+            })
+        } else {
+            let unlocked = candidates.filter { !store.isLocked(accountPeerId: accountPeerId, peerId: $0.toInt64()) }
+            let lockRest: () -> Void = { [weak self] in
+                for peerId in unlocked {
+                    store.setLocked(true, accountPeerId: accountPeerId, peerId: peerId.toInt64())
+                }
+                self?.donePressed()
+            }
+            if store.hasPassword {
+                lockRest()
+            } else {
+                // Creates the password, locks `first`; the rest follow.
+                context.sharedContext.shadowChatLockLockChat(context: context, peerId: unlocked.first ?? first, completion: { success in
+                    if success {
+                        lockRest()
+                    }
+                })
+            }
+        }
     }
 }

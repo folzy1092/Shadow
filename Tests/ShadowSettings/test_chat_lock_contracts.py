@@ -44,7 +44,11 @@ class ChatLockContracts(unittest.TestCase):
         self.assertIn("spoilers = length > 0 ? [NSRange(location: 0, length: length)] : nil", item)
         menus = read("ChatListUI/Sources/ChatContextMenus.swift")
         self.assertIn("private func shadowStockChatContextMenuItems(", menus)
-        self.assertIn('"Заблокировать чат"', menus)
+        self.assertIn('"Защитить чат"', menus)
+        self.assertIn("items.insert(lockItem, at: pinIndex + 1)", menus)
+        controller = read("ChatListUI/Sources/ChatListController.swift")
+        self.assertIn('id: "shadowLock"', controller)
+        self.assertIn("func shadowToggleLockForSelectedChats(", controller)
         node = read("ChatListUI/Sources/Node/ChatListNode.swift")
         self.assertIn("ShadowChatLockStore.didChangeNotification", node)
 

@@ -1058,18 +1058,18 @@ private func openCustomMute(context: AccountContext, peerId: EnginePeer.Id, thre
     baseController.present(controller, in: .window(.root))
 }
 
-// Shadow: adds "Заблокировать чат" / "Снять замок" (ShadowChatLockStore) to the
-// stock chat context menu. Removing a lock asks for Face ID or the password.
+// Shadow: adds "Защитить чат" / "Снять защиту" (ShadowChatLockStore) right after
+// "Закрепить" in the stock chat context menu. Removing a lock asks for Face ID
+// or the password.
 func chatContextMenuItems(context: AccountContext, peerId: EnginePeer.Id, promoInfo: ChatListNodeEntryPromoInfo?, source: ChatContextMenuSource, chatListController: ChatListControllerImpl?, joined: Bool) -> Signal<[ContextMenuItem], NoError> {
     return shadowStockChatContextMenuItems(context: context, peerId: peerId, promoInfo: promoInfo, source: source, chatListController: chatListController, joined: joined)
     |> map { items -> [ContextMenuItem] in
         if items.isEmpty || peerId == context.account.peerId {
             return items
         }
+        let strings = context.sharedContext.currentPresentationData.with { $0 }.strings
         let isLocked = ShadowChatLockStore.shared.isLocked(accountPeerId: context.account.peerId.toInt64(), peerId: peerId.toInt64())
-        var items = items
-        items.append(.separator)
-        items.append(.action(ContextMenuActionItem(text: isLocked ? "Снять замок" : "Заблокировать чат", icon: { theme in
+        let lockItem: ContextMenuItem = .action(ContextMenuActionItem(text: isLocked ? "Снять защиту" : "Защитить чат", icon: { theme in
             return generateTintedImage(image: UIImage(systemName: isLocked ? "lock.open" : "lock"), color: theme.contextMenu.primaryColor)
         }, action: { _, f in
             f(.default)
@@ -1078,7 +1078,19 @@ func chatContextMenuItems(context: AccountContext, peerId: EnginePeer.Id, promoI
             } else {
                 context.sharedContext.shadowChatLockLockChat(context: context, peerId: peerId, completion: { _ in })
             }
-        })))
+        }))
+        var items = items
+        let pinIndex = items.firstIndex(where: { item in
+            if case let .action(action) = item {
+                return action.text == strings.ChatList_Context_Pin || action.text == strings.ChatList_Context_Unpin
+            }
+            return false
+        })
+        if let pinIndex {
+            items.insert(lockItem, at: pinIndex + 1)
+        } else {
+            items.append(lockItem)
+        }
         return items
     }
 }

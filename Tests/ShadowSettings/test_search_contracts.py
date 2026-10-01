@@ -14,8 +14,6 @@ class SearchContracts(unittest.TestCase):
         enums = {'customization': 'AyuCustomizationEntry', 'spy': 'AyuSpyEntry',
                  'ghost': 'AyuGhostEntry', 'misc': 'AyuMiscEntry'}
         ids = {'backup': {0, 1, 2}, 'filters': {0}, 'pushDiagnostics': {0, 1}}
-        clean = (UI_ROOT / 'ShadowCleanInterfaceController.swift').read_text()
-        ids['cleanInterface'] = {int(i) for i in re.findall(r'case \.\w+: return (\d)\n', clean)}
         ids['quickReplies'] = {0}
         ids['updates'] = {0}
         ids['chatLocks'] = {0}

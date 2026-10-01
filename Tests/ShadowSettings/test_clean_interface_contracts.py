@@ -47,9 +47,12 @@ class CleanInterfaceContracts(unittest.TestCase):
 
     def test_settings_screen_is_reachable_and_searchable(self):
         hub = read("SettingsUI/Sources/AyuGramSettingsController.swift")
-        self.assertIn("case .cleanInterface: return shadowCleanInterfaceController(context: context, focus: item)", hub)
+        for name in ("hideStoriesBar", "hideGiftButton", "hidePremiumBadges", "hideSponsoredMessages", "localVoiceTranscription"):
+            self.assertIn(f"entries.append(.{name}(settings.{name}))", hub)
+        self.assertFalse((SUB / "SettingsUI/Sources/ShadowCleanInterfaceController.swift").exists())
         index = read("SettingsUI/Sources/ShadowSettingsSearchIndex.swift")
-        self.assertEqual(index.count("destination: .cleanInterface"), 5)
+        for entry in (99, 100, 101, 102, 103):
+            self.assertIn(f"destination: .customization, entryId: {entry},", index)
 
     def test_local_voice_transcription(self):
         node = read("TelegramUI/Components/Chat/ChatMessageInteractiveFileNode/Sources/ChatMessageInteractiveFileNode.swift")

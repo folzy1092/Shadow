@@ -1,7 +1,7 @@
 import Foundation
 
 enum ShadowSettingsSearchDestination: Int32 {
-    case customization, spy, ghost, misc, backup, filters, pushDiagnostics, cleanInterface, quickReplies, updates, chatLocks
+    case customization, spy, ghost, misc, backup, filters, pushDiagnostics, quickReplies, updates, chatLocks
 
     var title: String {
         switch self {
@@ -12,7 +12,6 @@ enum ShadowSettingsSearchDestination: Int32 {
         case .backup: return "Резервная копия настроек"
         case .filters: return "Фильтры"
         case .pushDiagnostics: return "Разное"
-        case .cleanInterface: return "Чистый интерфейс"
         case .quickReplies: return "Шаблоны ответов"
         case .updates: return "Обновления"
         case .chatLocks: return "Замки чатов"
@@ -99,11 +98,11 @@ enum ShadowSettingsSearchIndex {
         ShadowSettingsSearchItem(destination: .backup, entryId: 0, title: "Экспортировать настройки", description: "Перенести настройки без сессий и личных данных", keywords: "export backup json"),
         ShadowSettingsSearchItem(destination: .backup, entryId: 1, title: "Импортировать настройки", description: "Применить файл к текущему аккаунту", keywords: "import settings json"),
         ShadowSettingsSearchItem(destination: .backup, entryId: 2, title: "Отменить последний импорт", description: "Вернуть настройки перед импортом", keywords: "undo restore backup"),
-        ShadowSettingsSearchItem(destination: .cleanInterface, entryId: 0, title: "Скрыть истории", description: "Убрать ленту историй над списком чатов", keywords: "stories истории сторис лента hide"),
-        ShadowSettingsSearchItem(destination: .cleanInterface, entryId: 1, title: "Скрыть кнопку подарка", description: "Убрать кнопку подарка из поля ввода", keywords: "gift подарок кнопка ввод"),
-        ShadowSettingsSearchItem(destination: .cleanInterface, entryId: 2, title: "Скрыть значки Premium у имён", description: "Звёздочка и эмодзи-статус рядом с именем", keywords: "premium премиум звезда статус emoji status badge"),
-        ShadowSettingsSearchItem(destination: .cleanInterface, entryId: 3, title: "Скрыть рекламу в каналах", description: "Не загружать спонсорские сообщения", keywords: "ads реклама sponsored спонсор"),
-        ShadowSettingsSearchItem(destination: .cleanInterface, entryId: 4, title: "Расшифровка голосовых на устройстве", description: "Распознавание речи без Premium, аудио не уходит с телефона", keywords: "voice голосовые transcription расшифровка текст speech"),
+        ShadowSettingsSearchItem(destination: .customization, entryId: 99, title: "Скрыть истории", description: "Убрать ленту историй над списком чатов", keywords: "stories истории сторис лента hide"),
+        ShadowSettingsSearchItem(destination: .customization, entryId: 100, title: "Скрыть кнопку подарка", description: "Убрать кнопку подарка из поля ввода", keywords: "gift подарок кнопка ввод"),
+        ShadowSettingsSearchItem(destination: .customization, entryId: 101, title: "Скрыть значки Premium у имён", description: "Звёздочка и эмодзи-статус рядом с именем", keywords: "premium премиум звезда статус emoji status badge"),
+        ShadowSettingsSearchItem(destination: .customization, entryId: 102, title: "Скрыть рекламу в каналах", description: "Не загружать спонсорские сообщения", keywords: "ads реклама sponsored спонсор"),
+        ShadowSettingsSearchItem(destination: .customization, entryId: 103, title: "Расшифровка голосовых на устройстве", description: "Распознавание речи без Premium, аудио не уходит с телефона", keywords: "voice голосовые transcription расшифровка текст speech"),
         ShadowSettingsSearchItem(destination: .quickReplies, entryId: 0, title: "Шаблоны ответов", description: "Свои заготовки текста, вставляются кнопкой в поле ввода", keywords: "templates шаблоны quick replies быстрые ответы заготовки"),
         ShadowSettingsSearchItem(destination: .updates, entryId: 0, title: "Проверка обновлений", description: "Сравнить установленную сборку с последним релизом на GitHub", keywords: "update обновление версия сборка build release релиз github"),
         ShadowSettingsSearchItem(destination: .chatLocks, entryId: 0, title: "Замки чатов", description: "Face ID и пароль на отдельные чаты, сброс замков", keywords: "lock замок пароль face id touch id скрыть чат блокировка")

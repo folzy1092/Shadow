@@ -97,7 +97,6 @@ private enum AyuHubEntry: ItemListNodeEntry {
     case filters
     case hiddenAccounts
     case pushDiagnostics
-    case cleanInterface
     case quickReplies
     case chatLocks
     case updates
@@ -111,7 +110,7 @@ private enum AyuHubEntry: ItemListNodeEntry {
             return AyuHubSection.privacy.rawValue
         case .noResults:
             return AyuHubSection.info.rawValue
-        case .customization, .spy, .ghost, .filters, .misc, .hiddenAccounts, .backup, .pushDiagnostics, .cleanInterface, .quickReplies, .chatLocks, .updates:
+        case .customization, .spy, .ghost, .filters, .misc, .hiddenAccounts, .backup, .pushDiagnostics, .quickReplies, .chatLocks, .updates:
             return AyuHubSection.tools.rawValue
         case .infoFooter:
             return AyuHubSection.info.rawValue
@@ -133,8 +132,6 @@ private enum AyuHubEntry: ItemListNodeEntry {
             return 3
         case .misc:
             return 4
-        case .cleanInterface:
-            return 11
         case .quickReplies:
             return 12
         case .chatLocks:
@@ -191,8 +188,6 @@ private enum AyuHubEntry: ItemListNodeEntry {
             return ItemListDisclosureItem(presentationData: presentationData, title: "Скрытие аккаунтов", label: "", sectionId: self.section, style: .blocks, action: arguments.openHiddenAccounts)
         case .pushDiagnostics:
             return ItemListDisclosureItem(presentationData: presentationData, title: "Разное", label: "", sectionId: self.section, style: .blocks, action: arguments.openPushDiagnostics)
-        case .cleanInterface:
-            return ItemListDisclosureItem(presentationData: presentationData, title: "Чистый интерфейс", label: "", sectionId: self.section, style: .blocks, action: { arguments.openFeature(.cleanInterface) })
         case .quickReplies:
             return ItemListDisclosureItem(presentationData: presentationData, title: "Шаблоны ответов", label: "", sectionId: self.section, style: .blocks, action: { arguments.openFeature(.quickReplies) })
         case .chatLocks:
@@ -244,7 +239,6 @@ func shadowSettingsSearchDestinationController(context: AccountContext, item: Sh
         } else {
             return shadowMiscController(context: context)
         }
-    case .cleanInterface: return shadowCleanInterfaceController(context: context, focus: item)
     case .quickReplies: return shadowQuickRepliesController(context: context, focus: item)
     case .chatLocks: return shadowChatLocksController(context: context, focus: item)
     case .updates: return shadowUpdatesController(context: context, focus: item)
@@ -288,8 +282,6 @@ public func ayuGramSettingsController(context: AccountContext) -> ViewController
 
     arguments.openFeature = { destination in
         switch destination {
-        case .cleanInterface:
-            pushControllerImpl?(shadowCleanInterfaceController(context: context))
         case .quickReplies:
             pushControllerImpl?(shadowQuickRepliesController(context: context))
         case .chatLocks:
@@ -306,7 +298,7 @@ public func ayuGramSettingsController(context: AccountContext) -> ViewController
     |> map { presentationData, query -> (ItemListControllerState, (ItemListNodeState, Any)) in
         var entries: [AyuHubEntry] = [.query(query)]
         if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            entries += [.customization, .spy, .ghost, .filters, .misc, .hiddenAccounts, .backup, .pushDiagnostics, .cleanInterface, .quickReplies, .chatLocks, .updates, .infoFooter]
+            entries += [.customization, .spy, .ghost, .filters, .misc, .hiddenAccounts, .backup, .pushDiagnostics, .quickReplies, .chatLocks, .updates, .infoFooter]
         } else {
             let matches = ShadowSettingsSearchIndex.search(query)
             entries += matches.isEmpty ? [.noResults] : matches.map { .result($0) }
@@ -460,6 +452,7 @@ private func ayuUpdateSettings(context: AccountContext, _ f: @escaping (AyuGramS
 
 private final class AyuCustomizationArguments {
     var openMessageScreenshot: () -> Void = {}
+    var updateSetting: (@escaping (inout AyuGramSettings) -> Void) -> Void = { _ in }
     var updatePreferUsernameForNonContacts: (Bool) -> Void = { _ in }
     var updatePreferUsernameForBots: (Bool) -> Void = { _ in }
     let updateShowMessageSeconds: (Bool) -> Void
@@ -607,6 +600,11 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
 
     case chatsHeader
     case hideAllChatsFolder(Bool)
+    case hideStoriesBar(Bool)
+    case hideGiftButton(Bool)
+    case hidePremiumBadges(Bool)
+    case hideSponsoredMessages(Bool)
+    case localVoiceTranscription(Bool)
     case chatsFooter
 
     case bottomBarHeader
@@ -661,13 +659,13 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
             return AyuCustomizationSection.buildInfo.rawValue
         case .appearanceHeader, .showMessageSeconds, .editedIndicatorAsPencil, .editedIndicatorText, .deletedIndicatorText, .regularEmojiFirst, .doubleTapToEdit, .showExactLastSeen, .showExactLastSeenSeconds, .wideChannelPosts, .showExactViewCounts, .showForwardCount, .appearanceFooter:
             return AyuCustomizationSection.appearance.rawValue
-        case .chatsHeader, .hideAllChatsFolder, .chatsFooter:
+        case .chatsHeader, .hideAllChatsFolder, .hideStoriesBar, .hideGiftButton, .hidePremiumBadges, .hideSponsoredMessages, .chatsFooter:
             return AyuCustomizationSection.chats.rawValue
         case .bottomBarHeader, .foldersAtBottom, .hideBottomSearch, .compactBottomBar, .bottomBarScrollMode, .bottomBarFooter:
             return AyuCustomizationSection.bottomBar.rawValue
         case .profilesHeader, .showProfileId, .showProfileDC, .showRegistrationDate, .hideOwnPhoneNumber, .profilesFooter:
             return AyuCustomizationSection.profiles.rawValue
-        case .mediaHeader, .roundVideoBackCamera, .showCameraTile, .cameraTileLivePreview, .mediaFooter:
+        case .mediaHeader, .roundVideoBackCamera, .showCameraTile, .cameraTileLivePreview, .localVoiceTranscription, .mediaFooter:
             return AyuCustomizationSection.media.rawValue
         case .customRoundVideosHeader, .customVideoMessageSpeed, .customRoundVideosFooter:
             return AyuCustomizationSection.customRoundVideos.rawValue
@@ -704,6 +702,11 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .chatsHeader: return 11
         case .hideAllChatsFolder: return 12
         case .chatsFooter: return 13
+        case .hideStoriesBar: return 99
+        case .hideGiftButton: return 100
+        case .hidePremiumBadges: return 101
+        case .hideSponsoredMessages: return 102
+        case .localVoiceTranscription: return 103
         case .bottomBarHeader: return 14
         case .foldersAtBottom: return 15
         case .hideBottomSearch: return 16
@@ -751,6 +754,11 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .editedIndicatorText: return (2, 1)
         case .deletedIndicatorText: return (2, 2)
         case .bottomBarScrollMode: return (17, 1)
+        case .hideStoriesBar: return (12, 1)
+        case .hideGiftButton: return (12, 2)
+        case .hidePremiumBadges: return (12, 3)
+        case .hideSponsoredMessages: return (12, 4)
+        case .localVoiceTranscription: return (28, 1)
         default: return (self.stableId, 0)
         }
     }
@@ -830,8 +838,28 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
             return ItemListSwitchItem(presentationData: presentationData, title: "Скрыть папку «Все чаты»", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 arguments.updateHideAllChatsFolder(value)
             })
+        case let .hideStoriesBar(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Скрыть истории", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.updateSetting { $0.hideStoriesBar = value }
+            })
+        case let .hideGiftButton(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Скрыть кнопку подарка", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.updateSetting { $0.hideGiftButton = value }
+            })
+        case let .hidePremiumBadges(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Скрыть значки Premium у имён", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.updateSetting { $0.hidePremiumBadges = value }
+            })
+        case let .hideSponsoredMessages(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Скрыть рекламу в каналах", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.updateSetting { $0.hideSponsoredMessages = value }
+            })
+        case let .localVoiceTranscription(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Расшифровка голосовых на устройстве", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.updateSetting { $0.localVoiceTranscription = value }
+            })
         case .chatsFooter:
-            return ItemListTextItem(presentationData: presentationData, text: .plain("Убирает вкладку «Все чаты» из списка чатов. Остальные папки продолжают работать."), sectionId: self.section)
+            return ItemListTextItem(presentationData: presentationData, text: .plain("«Скрыть папку «Все чаты»» убирает эту вкладку, остальные папки работают. «Скрыть истории» убирает ленту историй над списком чатов. «Скрыть кнопку подарка» убирает подарок из поля ввода. «Скрыть значки Premium» убирает звёздочку и эмодзи-статус рядом с именами (галочки верификации остаются). «Скрыть рекламу в каналах» — спонсорские сообщения не загружаются; применяется при следующем открытии канала."), sectionId: self.section)
         case .bottomBarHeader:
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "НИЖНИЙ ИНТЕРФЕЙС", sectionId: self.section)
         case let .foldersAtBottom(value):
@@ -883,7 +911,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
                 arguments.updateCameraTileLivePreview(value)
             })
         case .mediaFooter:
-            return ItemListTextItem(presentationData: presentationData, text: .plain("Начинать запись видеосообщений («кружков») с задней камеры. Во время записи можно переключиться на фронтальную. «Камера в галерее» показывает плитку камеры первой ячейкой в галерее вложений. «Живой предпросмотр камеры» запускает в этой плитке видео с камеры вживую вместо статичной иконки."), sectionId: self.section)
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Начинать запись видеосообщений («кружков») с задней камеры. Во время записи можно переключиться на фронтальную. «Камера в галерее» показывает плитку камеры первой ячейкой в галерее вложений. «Живой предпросмотр камеры» запускает в этой плитке видео с камеры вживую вместо статичной иконки. «Расшифровка голосовых на устройстве» без Premium распознаёт речь прямо на телефоне — аудио никуда не отправляется."), sectionId: self.section)
         case .customRoundVideosHeader:
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "КАСТОМНЫЕ КРУЖКИ", sectionId: self.section)
         case let .customVideoMessageSpeed(value):
@@ -971,6 +999,10 @@ private func ayuCustomizationEntries(settings: AyuGramSettings) -> [AyuCustomiza
 
     entries.append(.chatsHeader)
     entries.append(.hideAllChatsFolder(settings.hideAllChatsFolder))
+    entries.append(.hideStoriesBar(settings.hideStoriesBar))
+    entries.append(.hideGiftButton(settings.hideGiftButton))
+    entries.append(.hidePremiumBadges(settings.hidePremiumBadges))
+    entries.append(.hideSponsoredMessages(settings.hideSponsoredMessages))
     entries.append(.chatsFooter)
 
     entries.append(.bottomBarHeader)
@@ -991,6 +1023,7 @@ private func ayuCustomizationEntries(settings: AyuGramSettings) -> [AyuCustomiza
     entries.append(.roundVideoBackCamera(settings.roundVideoUseBackCamera))
     entries.append(.showCameraTile(settings.showCameraTile))
     entries.append(.cameraTileLivePreview(settings.cameraTileLivePreview))
+    entries.append(.localVoiceTranscription(settings.localVoiceTranscription))
     entries.append(.mediaFooter)
 
     entries.append(.customRoundVideosHeader)
@@ -1214,6 +1247,13 @@ private func ayuCustomizationController(context: AccountContext, focus: ShadowSe
         delegate.retainSelf()
         picker.delegate = delegate
         controller.view.window?.rootViewController?.present(picker, animated: true)
+    }
+    arguments.updateSetting = { f in
+        ayuUpdateSettings(context: context) { current in
+            var current = current
+            f(&current)
+            return current
+        }
     }
     arguments.openMessageScreenshot = { [weak controller] in
         controller?.push(shadowMessageScreenshotSettingsController(context: context))

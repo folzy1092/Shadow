@@ -125,7 +125,7 @@ class ShadowPrivacyFeatures(unittest.TestCase):
         root = hub.split("private enum AyuHubEntry", 1)[1].split("private final class AyuHubArguments", 1)[0]
         for title in expected:
             self.assertIn(f'title: "{title}"', root)
-        self.assertIn("entries += [.customization, .spy, .ghost, .filters, .misc, .hiddenAccounts, .backup, .pushDiagnostics, .cleanInterface, .quickReplies, .chatLocks, .updates, .infoFooter]", hub)
+        self.assertIn("entries += [.customization, .spy, .ghost, .filters, .misc, .hiddenAccounts, .backup, .pushDiagnostics, .quickReplies, .chatLocks, .updates, .infoFooter]", hub)
 
     def test_account_addition_has_no_client_premium_limit(self):
         paths = [
