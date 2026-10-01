@@ -361,6 +361,10 @@ public func ayuGramSettingsController(context: AccountContext) -> ViewController
             case .upToDate:
                 // Short enough not to truncate; the build shows what is installed.
                 checkLabel = ShadowUpdateCheck.installedBuild.map { "Актуально · \($0)" } ?? "Актуально"
+                if !bannerDismissed {
+                    let installed = ShadowUpdateCheck.installedBuild.map { "сборка \($0)" } ?? "неизвестная сборка"
+                    entries.append(.updateBanner(title: "Установлена актуальная версия", text: "Shadow \(ShadowUpdateCheck.installedVersion), \(installed). Новее пока ничего нет."))
+                }
             case let .available(release):
                 checkLabel = "Доступна \(release.build)"
                 if !bannerDismissed {
@@ -372,8 +376,11 @@ public func ayuGramSettingsController(context: AccountContext) -> ViewController
                     }
                     entries.append(.updateBanner(title: release.isRequired ? "Обязательное обновление" : "Доступно обновление", text: text))
                 }
-            case .failed:
+            case let .failed(reason):
                 checkLabel = "Не удалось проверить"
+                if !bannerDismissed {
+                    entries.append(.updateBanner(title: "Не удалось проверить обновления", text: reason))
+                }
             }
         }
         entries.append(.query(query))
