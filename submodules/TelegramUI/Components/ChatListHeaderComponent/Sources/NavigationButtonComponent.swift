@@ -178,7 +178,17 @@ public final class NavigationButtonComponent: Component {
                 }
                 if self.iconImageName != imageName || themeUpdated {
                     self.iconImageName = imageName
-                    iconView.image = generateTintedImage(image: UIImage(bundleImageName: imageName), color: theme.chat.inputPanel.panelControlColor)
+                    let color = theme.chat.inputPanel.panelControlColor
+                    // Shadow: "sf:<name>" draws an SF Symbol in the same color and
+                    // weight as the bundled header glyphs.
+                    if imageName.hasPrefix("sf:"), let symbol = UIImage(systemName: String(imageName.dropFirst(3)), withConfiguration: UIImage.SymbolConfiguration(pointSize: 21.0, weight: .medium)) {
+                        let tinted = symbol.withTintColor(color, renderingMode: .alwaysOriginal)
+                        iconView.image = UIGraphicsImageRenderer(size: tinted.size).image { _ in
+                            tinted.draw(at: CGPoint())
+                        }
+                    } else {
+                        iconView.image = generateTintedImage(image: UIImage(bundleImageName: imageName), color: color)
+                    }
                 }
                 
                 if let iconSize = iconView.image?.size {

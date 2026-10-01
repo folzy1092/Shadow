@@ -344,7 +344,7 @@ func shadowSecondSpaceController(context: AccountContext, focus: ShadowSettingsS
             for (index, item) in customPeers.enumerated() {
                 entries.append(.chat(index: index, peerId: item.0, title: item.1, visibility: item.2))
             }
-            entries.append(.chatsFooter(inSecond ? "Чаты «только второе» не видны в основном пространстве и не присылают уведомлений. Изменить видимость можно и долгим нажатием на чат или кнопкой 🫥 в режиме «Изменить»." : "Здесь показаны только чаты основного пространства. Чаты второго пространства видны, когда оно открыто."))
+            entries.append(.chatsFooter(inSecond ? "Чаты «только второе» не видны в основном пространстве и не присылают уведомлений. Изменить видимость можно и долгим нажатием на чат или кнопкой с перечёркнутым глазом в режиме «Изменить»." : "Здесь показаны только чаты основного пространства. Чаты второго пространства видны, когда оно открыто."))
         }
         focusedIndex = shadowSettingsFocusIndex(stableIds: entries.map { $0.stableId }, target: focus)
         let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Второе пространство"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))

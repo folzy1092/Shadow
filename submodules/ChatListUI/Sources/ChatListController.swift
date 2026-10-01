@@ -7246,18 +7246,18 @@ private final class ChatListLocationContext {
                     self.rightButton = nil
                 } else {
                     self.rightButton = AnyComponentWithIdentity(id: "shadowLock", component: AnyComponent(NavigationButtonComponent(
-                        content: .text(title: "🔒", isBold: false),
+                        content: .icon(imageName: "sf:lock"),
                         pressed: { [weak self] _ in
                             self?.parentController?.shadowToggleLockForSelectedChats(selectedPeerIds)
                         }
                     )))
                 }
-                // Shadow: 🫥 moves the selected chats between spaces (spec section 6).
+                // Shadow: the eye-slash button moves the selected chats between spaces (spec section 6).
                 if selectedPeerIds.isEmpty {
                     self.storyButton = nil
                 } else {
                     self.storyButton = AnyComponentWithIdentity(id: "shadowSpace", component: AnyComponent(NavigationButtonComponent(
-                        content: .text(title: "🫥", isBold: false),
+                        content: .icon(imageName: "sf:eye.slash"),
                         pressed: { [weak self] _ in
                             self?.parentController?.shadowChooseSpaceForSelectedChats(selectedPeerIds)
                         }
@@ -7672,7 +7672,7 @@ private func shadowFilteredStorySubscriptions(context: AccountContext, _ signal:
 }
 
 extension ChatListControllerImpl {
-    // Shadow: the 🫥 button in edit mode — pick the space for the selected chats.
+    // Shadow: the eye-slash button in edit mode — pick the space for the selected chats.
     func shadowChooseSpaceForSelectedChats(_ peerIds: Set<EnginePeer.Id>) {
         let context = self.context
         let candidates = peerIds.filter { $0 != context.account.peerId }.sorted(by: { $0.toInt64() < $1.toInt64() })
@@ -7701,7 +7701,7 @@ extension ChatListControllerImpl {
         self.present(actionSheet, in: .window(.root))
     }
 
-    // Shadow: the 🔒 button in edit mode. If every selected chat is already
+    // Shadow: the lock button in edit mode. If every selected chat is already
     // locked, the locks are removed (after Face ID / password); otherwise the
     // unlocked ones are locked (the first lock creates the device password).
     func shadowToggleLockForSelectedChats(_ peerIds: Set<EnginePeer.Id>) {

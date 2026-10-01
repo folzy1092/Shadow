@@ -1089,7 +1089,7 @@ func chatContextMenuItems(context: AccountContext, peerId: EnginePeer.Id, promoI
         // Shadow: "Пространство" → Везде / Только основное / Только второе (spec section 6).
         let currentVisibility = ShadowSpaceStore.shared.visibility(accountPeerId: context.account.peerId.toInt64(), peerId: peerId.toInt64())
         let spaceItem: ContextMenuItem = .action(ContextMenuActionItem(text: "Пространство: \(currentVisibility.title.lowercased())", icon: { theme in
-            return generateTintedImage(image: UIImage(systemName: "square.on.square.dashed"), color: theme.contextMenu.primaryColor)
+            return generateTintedImage(image: UIImage(systemName: "eye.slash"), color: theme.contextMenu.primaryColor)
         }, action: { c, _ in
             var subItems: [ContextMenuItem] = []
             for visibility in ShadowSpaceStore.Visibility.allCases {
