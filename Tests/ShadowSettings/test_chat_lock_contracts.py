@@ -43,6 +43,13 @@ class ChatLockContracts(unittest.TestCase):
         controller = read("TelegramUI/Sources/ChatController.swift")
         self.assertIn("self.validLayout = layout\n        self.shadowChatLockLayout()", controller)
 
+    def test_locked_chat_opens_only_after_authentication(self):
+        shared = read("TelegramUI/Sources/SharedAccountContext.swift")
+        nav = shared.split("public func navigateToChatController(_ params: NavigateToChatControllerParams) {", 1)[1].split("\n    }\n", 1)[0]
+        self.assertIn("ShadowChatLockStore.shared.requiresUnlock(", nav)
+        self.assertLess(nav.index("ShadowChatLockUI.authenticate("), nav.index("navigateToChatControllerImpl(params)"))
+        self.assertIn("guard success else {\n                    return\n                }", nav)
+
     def test_unlocking_requires_authentication(self):
         ui = read("TelegramUI/Sources/ShadowChatLockUI.swift")
         unlock = ui.split("static func unlockChatPermanently", 1)[1].split("\n    }\n", 1)[0]

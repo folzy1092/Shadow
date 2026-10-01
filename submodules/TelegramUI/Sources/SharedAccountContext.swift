@@ -2192,6 +2192,22 @@ public final class SharedAccountContextImpl: SharedAccountContext {
     }
     
     public func navigateToChatController(_ params: NavigateToChatControllerParams) {
+        // Shadow: a locked chat opens only after Face ID / Touch ID or the
+        // password (spec section 5); nothing is pushed if that fails. The cover
+        // inside the chat stays as a fallback for paths that bypass this
+        // (previews, relocking while the chat is open).
+        let accountPeerId = params.context.account.peerId.toInt64()
+        let peerId = params.chatLocation.peerId.toInt64()
+        if ShadowChatLockStore.shared.requiresUnlock(accountPeerId: accountPeerId, peerId: peerId) {
+            ShadowChatLockUI.authenticate(sharedContext: self, reason: "Открыть чат", completion: { success in
+                guard success else {
+                    return
+                }
+                ShadowChatLockStore.shared.markUnlocked(accountPeerId: accountPeerId, peerId: peerId)
+                navigateToChatControllerImpl(params)
+            })
+            return
+        }
         navigateToChatControllerImpl(params)
     }
     
