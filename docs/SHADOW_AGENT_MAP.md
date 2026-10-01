@@ -10,8 +10,11 @@ Postbox-рефакторинг. Этот файл описывает то, чт�
 - **Единственная рабочая ветка — `master`** (default branch на GitHub).
   Коммитить и пушить в неё. `main` и прочие `codex/*`, `fix/*`, `ci/*` —
   исторические: на 2026-10-01 всё их полезное содержимое влито в `master`.
-- `origin` = `github.com/folzy1092/Shadow`. Апстрим Telegram отдельным
-  remote не подключён; обновление на новый релиз — `tools/shadow-update.sh`
+- Репозиторий форка — `github.com/folzy1092/Shadow`. В облачных клонах это
+  `origin`; в локальном чекауте на Windows
+  (`Desktop\projects\iphone app\iphone app\Telegram-iOS`) он называется
+  `ghostgram`, а `origin` там указывает на апстрим TelegramMessenger. Пушить
+  в `ghostgram master`. Апстрим Telegram отдельным remote не подключён; обновление на новый релиз — `tools/shadow-update.sh`
   (инструкция в `ОБНОВЛЕНИЕ.md`).
 - Облачные сессии клонируют репозиторий **неглубоко** (shallow). `git
   merge-base` между ветками может молча ничего не вернуть — сначала
@@ -21,11 +24,19 @@ Postbox-рефакторинг. Этот файл описывает то, чт�
 
 ## 2. Сборка и тесты
 
-- Собрать приложение можно только на macOS + Xcode (Bazel). Под Linux нет ни
-  Xcode, ни `swiftc`: там доступны лишь Python-тесты контрактов.
-- CI: `.github/workflows/build.yml` — на push в `master`/`main` собирает
-  IPA (~45 мин), перед сборкой гоняет тесты:
-  - `python3 -B -m unittest discover -s Tests/ShadowSettings -p 'test_*.py'`
+- Собрать приложение можно только на macOS + Xcode (Bazel). Под Linux и
+  Windows нет ни Xcode, ни `swiftc`: там доступны лишь Python-тесты
+  контрактов. На Windows запускать с `PYTHONUTF8=1` (иначе кириллица в
+  исходниках читается в cp1251 и тесты падают ложно).
+- CI: `.github/workflows/build.yml` — на push в `master` собирает IPA
+  (~25–55 мин), перед сборкой гоняет тесты. **Push, где изменены только
+  `*.md`, сборку и диагностику не запускает** (`paths-ignore`). Чтобы не
+  запускать сборку для другого служебного коммита, добавьте `[skip ci]` в
+  сообщение. Новый push в `master` отменяет идущую сборку
+  (`cancel-in-progress`).
+  - Обе папки контрактов, обе гоняет CI:
+    `python3 -B -m unittest discover -s Tests/ShadowSettings -p 'test_*.py'` и
+    `python3 -B -m unittest discover -s Tests/ShadowVisualSettings -p 'test_*.py'`
     — **контрактные тесты**: читают исходники как текст и проверяют
     наличие/отсутствие строк. При изменении поведения обновляйте их
     вместе с кодом.
@@ -46,8 +57,15 @@ Postbox-рефакторинг. Этот файл описывает то, чт�
 - **`shadow-changelog.json`** — изменения по сборкам на русском (новые сверху).
   При каждом выпуске добавляйте запись для объявляемой сборки: плашка
   обновления показывает все записи новее установленной сборки. Номер сборки =
-  число коммитов + смещение, т. е. на 1 больше предыдущей сборки master
-  (сверяйте с `releases`).
+  `git rev-list --count HEAD` + `build_number_offset`. Считаются **все**
+  коммиты, включая те, что сборку не запускали (только `.md`, `[skip ci]`,
+  упавшие и отменённые сборки). Поэтому объявляемый номер = число коммитов
+  после вашего коммита + смещение; сверяйте с `releases`. Если сборка упала,
+  исправляющий коммит получает следующий номер — переобъявите его в
+  `shadow-update.json` и `shadow-changelog.json`.
+- Перед пушем гоняйте обе папки контрактов, `Tests/ShadowCI` и (если есть
+  `swiftc`) `test_shadow_foundation.py`. Шаг «Parse changed Swift sources» в
+  диагностике ловит только синтаксис; ошибки типов видны лишь в полной сборке.
 - Секреты `TELEGRAM_API_ID`/`TELEGRAM_API_HASH` подставляются в
   `build-system/shadow-configuration.json` только в CI. В файлы их не писать.
 
@@ -116,6 +134,21 @@ UI-проекция настроек выбирается в `TelegramRootContro
   фильтры — `chatListNodeEntriesForView`, поиск, частые собеседники.
   Новое место, где показывается список чатов, должно проверять
   `ShadowSpaceStore.shared.isHidden(accountPeerId:peerId:)`.
+- Закрытый (под замком или скрытый в текущем пространстве) чат не должен
+  открываться и читаться в обход. Точки проверки (список — в
+  `docs/specs/2026-10-01-shadow-batch.md`, раздел 8):
+  `navigateToChatController` (`SharedAccountContext`), шторка
+  `shadowChatLockUpdate` (`ShadowChatLockUI`), вкладки профиля
+  (`shadowFilterLockedPanes`, `PeerInfoData`), поиск
+  (`ChatListSearchListPaneNode`), баннеры (`ApplicationContext`), превью
+  push (`ShadowChatLockPreviews`), строка списка чатов
+  (`shadowChatListItemIsLocked`), архив удалённых
+  (`AyuArchiveChatContents`). Новый экран, показывающий содержимое чата,
+  должен проверять то же самое. «Избранное» (id аккаунта) тоже может быть
+  под замком.
+- Фото при неверном пароле: `ShadowIntruderLog` (очередь, `isCapturing`),
+  `PasscodeUI/ShadowIntruderCamera` (снимок + галерея),
+  `TelegramUI/ShadowIntruderDelivery` (отправка в «Избранное»).
 
 ## 6. Анти-удаление и архив
 
@@ -142,4 +175,14 @@ UI-проекция настроек выбирается в `TelegramRootContro
 - Устаревшие документы: `AYUGRAM_FORK.md`, `SESSION_CONTEXT.md` (ветка
   `ayugram`, пути Windows), `FORK_STATUS_2026-07-16.md` — читать как историю,
   не как текущее состояние.
+- **Компилятор Swift не успевает вывести типы** («unable to type-check this
+  expression in reasonable time») для длинных цепочек `combineLatest(...) |>
+  map |> distinctUntilChanged(isEqual:) |> map`, особенно внутри больших
+  `combineLatest` (сборка 34713 упала на этом). Разбивайте на промежуточные
+  `let x: Signal<T, NoError> = …` с явными типами.
+- Режим маскировки в debug-меню (`ShadowDisguise.swift`): в режиме Full
+  чтения настроек возвращают `AyuGramSettings.vanillaSettings`, а записи
+  идут в сохранённые значения (`storedAyuGramSettings`). Не записывайте
+  значение, прочитанное через `currentAyuGramSettings`/`ayuGramSettingsCurrent`,
+  в настройки другого аккаунта: в режиме Full это затрёт настоящие настройки.
 - Ответы пользователю — на русском.

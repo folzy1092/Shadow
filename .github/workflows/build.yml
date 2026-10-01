@@ -3,6 +3,10 @@ name: CI
 on:
   push:
     branches: [ master ]
+    # Documentation-only pushes do not build an IPA. A docs commit still counts
+    # towards the build number (git rev-list --count), see SHADOW_AGENT_MAP.md.
+    paths-ignore:
+      - '**/*.md'
 
   workflow_dispatch:
 
