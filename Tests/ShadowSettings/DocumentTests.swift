@@ -59,6 +59,10 @@ struct DocumentTests {
         let restoredGhostPolicy = try ShadowSettingsDocument.decode(ghostPolicy.encoded())
         check(restoredGhostPolicy.settings["ghostAccountMode"] == .integer(3), "Ghost account policy is portable")
         expectFailure("Unsupported ghost account policy") { _ = try ShadowSettingsDocument(settings: ["ghostAccountMode": .integer(4)]) }
+        let iconColors = try ShadowSettingsDocument(settings: ["monochromeSettingsIcons": .bool(true), "settingsIconBackgroundColor": .integer(0x1C1C1E), "settingsIconGlyphColor": .integer(0xFFFFFF)])
+        let restoredIconColors = try ShadowSettingsDocument.decode(iconColors.encoded())
+        check(restoredIconColors.settings["settingsIconBackgroundColor"] == .integer(0x1C1C1E), "Settings icon colors are portable")
+        expectFailure("Icon color outside RGB") { _ = try ShadowSettingsDocument(settings: ["settingsIconGlyphColor": .integer(0x1000000)]) }
         let bots = try ShadowSettingsDocument(settings: ["preferUsernameForBots": .bool(true)])
         let restoredBots = try ShadowSettingsDocument.decode(bots.encoded())
         check(restoredBots.settings["preferUsernameForBots"] == .bool(true), "Bot names preference is portable")

@@ -67,6 +67,7 @@ public enum ShadowSettingsTransfer {
         "hideSponsoredMessages": \.hideSponsoredMessages,
         "unlimitedPinnedChats": \.unlimitedPinnedChats,
         "localVoiceTranscription": \.localVoiceTranscription,
+        "monochromeSettingsIcons": \.monochromeSettingsIcons,
         "screenshotAnonymize": \.messageScreenshot.anonymize,
         "screenshotAnonymizeOwn": \.messageScreenshot.anonymizeOwn,
         "screenshotAnonymizeOthers": \.messageScreenshot.anonymizeOthers,
@@ -90,6 +91,8 @@ public enum ShadowSettingsTransfer {
         values["ghostAccountMode"] = .integer(Int64(settings.ghostAccountMode.rawValue))
         values["screenshotBackground"] = .integer(Int64(settings.messageScreenshot.background.rawValue))
         values["screenshotCustomColorARGB"] = .integer(Int64(settings.messageScreenshot.customColorARGB))
+        values["settingsIconBackgroundColor"] = .integer(Int64(settings.settingsIconBackgroundColor))
+        values["settingsIconGlyphColor"] = .integer(Int64(settings.settingsIconGlyphColor))
         return try ShadowSettingsDocument(settings: values)
     }
 
@@ -119,6 +122,8 @@ public enum ShadowSettingsTransfer {
                 case "mediaAutoCleanInterval": updated.mediaAutoCleanInterval = Int32(number)
                 case "attachmentSizeLimit": updated.attachmentSizeLimit = number
                 case "bottomBarScrollMode": updated.bottomBarScrollMode = Int32(number)
+                case "settingsIconBackgroundColor": updated.settingsIconBackgroundColor = Int32(number)
+                case "settingsIconGlyphColor": updated.settingsIconGlyphColor = Int32(number)
                 case "ghostAccountMode":
                     if let raw = Int32(exactly: number), let mode = ShadowGhostAccountMode(rawValue: raw) {
                         updated.ghostAccountMode = mode

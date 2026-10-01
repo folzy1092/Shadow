@@ -113,5 +113,25 @@ class CleanInterfaceContracts(unittest.TestCase):
         self.assertIn("entries.append(.unlimitedPinnedChats(settings.unlimitedPinnedChats))", hub)
 
 
+    def test_monochrome_settings_icons(self):
+        resources = read("TelegramPresentationData/Sources/Resources/PresentationResourcesSettings.swift")
+        self.assertIn("if backgroundColors != nil, let monochrome = shadowMonochromeSettingsIconColors {", resources)
+        self.assertIn("context.setFillColor(glyphColor.cgColor)", resources)
+        # Static icons are computed so they follow the setting without a restart.
+        self.assertNotIn("public static let proxy = renderSettingsIcon", resources)
+        self.assertIn("public static var proxy: UIImage? { return renderSettingsIcon(", resources)
+        self.assertIn("import TelegramCore", resources)
+        items = read("TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoSettingsItems.swift")
+        self.assertNotIn('icon: UIImage(bundleImageName: "Chat/Context Menu/', items)
+        self.assertIn("PresentationResourcesSettings.shadowArchive", items)
+        settings = read("TelegramCore/Sources/AyuGram/AyuGramSettings.swift")
+        for name in ("monochromeSettingsIcons", "settingsIconBackgroundColor", "settingsIconGlyphColor"):
+            self.assertIn(f'forKey: "{name}")', settings)
+        hub = read("SettingsUI/Sources/AyuGramSettingsController.swift")
+        self.assertIn("entries.append(.monochromeSettingsIcons(settings.monochromeSettingsIcons))", hub)
+        self.assertIn("if #available(iOS 14.0, *) {", hub)
+        self.assertIn("@available(iOS 14.0, *)\nprivate final class ShadowSystemColorPicker", hub)
+
+
 if __name__ == "__main__":
     unittest.main()

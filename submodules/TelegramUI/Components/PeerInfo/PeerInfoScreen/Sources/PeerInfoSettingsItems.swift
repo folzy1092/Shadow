@@ -200,7 +200,7 @@ func settingsItems(data: PeerInfoScreenData?, context: AccountContext, presentat
     items[.shortcuts]!.append(PeerInfoScreenDisclosureItem(id: 1, text: presentationData.strings.Settings_SavedMessages, icon: PresentationResourcesSettings.savedMessages, action: {
         interaction.openSettings(.savedMessages)
     }))
-    items[.shortcuts]!.append(PeerInfoScreenDisclosureItem(id: 2, text: "Открыть архив", icon: UIImage(bundleImageName: "Chat/Context Menu/Archive"), action: {
+    items[.shortcuts]!.append(PeerInfoScreenDisclosureItem(id: 2, text: "Открыть архив", icon: PresentationResourcesSettings.shadowArchive, action: {
         interaction.openSettings(.archive)
     }))
     items[.shortcuts]!.append(PeerInfoScreenDisclosureItem(id: 3, text: presentationData.strings.CallSettings_RecentCalls, icon: PresentationResourcesSettings.recentCalls, action: {
@@ -227,10 +227,10 @@ func settingsItems(data: PeerInfoScreenData?, context: AccountContext, presentat
     items[.shortcuts]!.append(PeerInfoScreenDisclosureItem(id: 6, text: "Shadow", icon: PresentationResourcesSettings.shadow, action: {
         interaction.openSettings(.ayugram)
     }))
-    items[.shadowReads]!.append(PeerInfoScreenDisclosureItem(id: 0, text: "Прочитать локально", icon: UIImage(bundleImageName: "Chat/Context Menu/MarkAsRead"), action: {
+    items[.shadowReads]!.append(PeerInfoScreenDisclosureItem(id: 0, text: "Прочитать локально", icon: PresentationResourcesSettings.shadowReadLocally, action: {
         interaction.openSettings(.markAllReadLocally)
     }))
-    items[.shadowReads]!.append(PeerInfoScreenDisclosureItem(id: 1, text: "Прочитать на сервере", icon: UIImage(bundleImageName: "Chat/Context Menu/MarkAsRead"), action: {
+    items[.shadowReads]!.append(PeerInfoScreenDisclosureItem(id: 1, text: "Прочитать на сервере", icon: PresentationResourcesSettings.shadowReadOnServer, action: {
         interaction.openSettings(.markAllReadOnServer)
     }))
     items[.shadowReads]!.append(PeerInfoScreenCommentItem(id: 2, text: "Локально: отметки меняются только здесь. На сервере: Telegram получает подтверждение прочтения для текущего аккаунта."))

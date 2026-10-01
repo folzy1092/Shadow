@@ -533,6 +533,8 @@ private func ayuUpdateSettings(context: AccountContext, _ f: @escaping (AyuGramS
 private final class AyuCustomizationArguments {
     var openMessageScreenshot: () -> Void = {}
     var updateSetting: (@escaping (inout AyuGramSettings) -> Void) -> Void = { _ in }
+    // true: background color, false: glyph color.
+    var pickSettingsIconColor: (Bool) -> Void = { _ in }
     var updatePreferUsernameForNonContacts: (Bool) -> Void = { _ in }
     var updatePreferUsernameForBots: (Bool) -> Void = { _ in }
     let updateShowMessageSeconds: (Bool) -> Void
@@ -649,6 +651,7 @@ private enum AyuCustomizationSection: Int32 {
     case githubConfig
     case banner
     case profileBackground
+    case settingsIcons
 }
 
 private enum AyuCustomizationEntry: ItemListNodeEntry {
@@ -677,6 +680,12 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
     case showExactViewCounts(Bool)
     case showForwardCount(Bool)
     case appearanceFooter
+
+    case settingsIconsHeader
+    case monochromeSettingsIcons(Bool)
+    case settingsIconBackground(Int32)
+    case settingsIconGlyph(Int32)
+    case settingsIconsFooter
 
     case chatsHeader
     case hideAllChatsFolder(Bool)
@@ -738,6 +747,8 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .preferUsernameForNonContacts, .preferUsernameForBots: return AyuCustomizationSection.appearance.rawValue
         case .buildInfo:
             return AyuCustomizationSection.buildInfo.rawValue
+        case .settingsIconsHeader, .monochromeSettingsIcons, .settingsIconBackground, .settingsIconGlyph, .settingsIconsFooter:
+            return AyuCustomizationSection.settingsIcons.rawValue
         case .appearanceHeader, .showMessageSeconds, .editedIndicatorAsPencil, .editedIndicatorText, .deletedIndicatorText, .regularEmojiFirst, .doubleTapToEdit, .showExactLastSeen, .showExactLastSeenSeconds, .wideChannelPosts, .showExactViewCounts, .showForwardCount, .appearanceFooter:
             return AyuCustomizationSection.appearance.rawValue
         case .chatsHeader, .hideAllChatsFolder, .hideStoriesBar, .hideGiftButton, .hidePremiumBadges, .hideSponsoredMessages, .unlimitedPinnedChats, .chatsFooter:
@@ -789,6 +800,11 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .hideSponsoredMessages: return 102
         case .localVoiceTranscription: return 103
         case .unlimitedPinnedChats: return 104
+        case .settingsIconsHeader: return 105
+        case .monochromeSettingsIcons: return 106
+        case .settingsIconBackground: return 107
+        case .settingsIconGlyph: return 108
+        case .settingsIconsFooter: return 109
         case .bottomBarHeader: return 14
         case .foldersAtBottom: return 15
         case .hideBottomSearch: return 16
@@ -842,6 +858,12 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .hideSponsoredMessages: return (12, 4)
         case .unlimitedPinnedChats: return (12, 5)
         case .localVoiceTranscription: return (28, 1)
+        // Right after the appearance section.
+        case .settingsIconsHeader: return (10, 1)
+        case .monochromeSettingsIcons: return (10, 2)
+        case .settingsIconBackground: return (10, 3)
+        case .settingsIconGlyph: return (10, 4)
+        case .settingsIconsFooter: return (10, 5)
         default: return (self.stableId, 0)
         }
     }
@@ -921,6 +943,22 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
             return ItemListSwitchItem(presentationData: presentationData, title: "Скрыть папку «Все чаты»", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 arguments.updateHideAllChatsFolder(value)
             })
+        case .settingsIconsHeader:
+            return ItemListSectionHeaderItem(presentationData: presentationData, text: "ИКОНКИ НАСТРОЕК", sectionId: self.section)
+        case let .monochromeSettingsIcons(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Одноцветные иконки", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.updateSetting { $0.monochromeSettingsIcons = value }
+            })
+        case let .settingsIconBackground(color):
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Цвет фона", label: shadowHexColorString(color), sectionId: self.section, style: .blocks, action: {
+                arguments.pickSettingsIconColor(true)
+            })
+        case let .settingsIconGlyph(color):
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Цвет значка", label: shadowHexColorString(color), sectionId: self.section, style: .blocks, action: {
+                arguments.pickSettingsIconColor(false)
+            })
+        case .settingsIconsFooter:
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Как тонированные иконки iOS: все иконки в настройках Telegram и Shadow получают один цвет фона и один цвет значка. Например, тёмно-серый фон и белый значок. Иконки мини-приложений не меняются."), sectionId: self.section)
         case let .hideStoriesBar(value):
             return ItemListSwitchItem(presentationData: presentationData, title: "Скрыть истории", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 arguments.updateSetting { $0.hideStoriesBar = value }
@@ -1083,6 +1121,14 @@ private func ayuCustomizationEntries(settings: AyuGramSettings) -> [AyuCustomiza
         entries.append(.preferUsernameForBots(settings.preferUsernameForBots))
     }
     entries.append(.appearanceFooter)
+
+    entries.append(.settingsIconsHeader)
+    entries.append(.monochromeSettingsIcons(settings.monochromeSettingsIcons))
+    if settings.monochromeSettingsIcons {
+        entries.append(.settingsIconBackground(settings.settingsIconBackgroundColor))
+        entries.append(.settingsIconGlyph(settings.settingsIconGlyphColor))
+    }
+    entries.append(.settingsIconsFooter)
 
     entries.append(.chatsHeader)
     entries.append(.hideAllChatsFolder(settings.hideAllChatsFolder))
@@ -1342,6 +1388,20 @@ private func ayuCustomizationController(context: AccountContext, focus: ShadowSe
             f(&current)
             return current
         }
+    }
+    arguments.pickSettingsIconColor = { [weak arguments] isBackground in
+        let current = ayuGramSettingsCurrent
+        let value = isBackground ? current.settingsIconBackgroundColor : current.settingsIconGlyphColor
+        ShadowColorPicker.present(context: context, title: isBackground ? "Цвет фона иконок" : "Цвет значков", color: UIColor(rgb: UInt32(truncatingIfNeeded: value) & 0xFFFFFF), completion: { color in
+            let rgb = shadowRGBValue(color)
+            arguments?.updateSetting { settings in
+                if isBackground {
+                    settings.settingsIconBackgroundColor = rgb
+                } else {
+                    settings.settingsIconGlyphColor = rgb
+                }
+            }
+        })
     }
     arguments.openMessageScreenshot = { [weak controller] in
         controller?.push(shadowMessageScreenshotSettingsController(context: context))
@@ -2164,4 +2224,82 @@ private func ayuMiscController(context: AccountContext, focus: ShadowSettingsSea
         shadowSettingsInstallFocus(controller: controller, index: { focusedIndex }, color: context.sharedContext.currentPresentationData.with { $0 }.theme.list.itemAccentColor)
     }
     return controller
+}
+
+// Shadow: 0xRRGGBB of a color; extended-range components (the system picker
+// can return them) are clamped to 0...1.
+private func shadowRGBValue(_ color: UIColor) -> Int32 {
+    var red: CGFloat = 0.0
+    var green: CGFloat = 0.0
+    var blue: CGFloat = 0.0
+    var alpha: CGFloat = 0.0
+    guard color.getRed(&red, green: &green, blue: &blue, alpha: &alpha) else {
+        return 0
+    }
+    func channel(_ value: CGFloat) -> Int32 {
+        return Int32((min(1.0, max(0.0, value)) * 255.0).rounded())
+    }
+    return (channel(red) << 16) | (channel(green) << 8) | channel(blue)
+}
+
+// Shadow: "#RRGGBB" for a stored 0xRRGGBB value.
+private func shadowHexColorString(_ value: Int32) -> String {
+    let hex = String(UInt32(truncatingIfNeeded: value) & 0xFFFFFF, radix: 16, uppercase: true)
+    return "#" + String(repeating: "0", count: max(0, 6 - hex.count)) + hex
+}
+
+// Shadow: the system color picker (UIColorPickerViewController, iOS 14+),
+// presented natively; reports the final color when the picker is dismissed.
+// iOS 13 gets a #RRGGBB text prompt instead.
+private enum ShadowColorPicker {
+    static func present(context: AccountContext, title: String, color: UIColor, completion: @escaping (UIColor) -> Void) {
+        if #available(iOS 14.0, *) {
+            ShadowSystemColorPicker.present(context: context, title: title, color: color, completion: completion)
+            return
+        }
+        let alert = UIAlertController(title: title, message: "Цвет в формате #RRGGBB", preferredStyle: .alert)
+        alert.addTextField { field in
+            field.text = shadowHexColorString(shadowRGBValue(color))
+            field.autocapitalizationType = .allCharacters
+            field.autocorrectionType = .no
+        }
+        alert.addAction(UIAlertAction(title: "Отмена", style: .cancel, handler: nil))
+        alert.addAction(UIAlertAction(title: "OK", style: .default, handler: { [weak alert] _ in
+            var text = alert?.textFields?.first?.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if text.hasPrefix("#") {
+                text.removeFirst()
+            }
+            if text.count == 6, let value = UInt32(text, radix: 16) {
+                completion(UIColor(rgb: value))
+            }
+        }))
+        context.sharedContext.mainWindow?.presentNative(alert)
+    }
+}
+
+@available(iOS 14.0, *)
+private final class ShadowSystemColorPicker: NSObject, UIColorPickerViewControllerDelegate {
+    private static var active: ShadowSystemColorPicker?
+    private let completion: (UIColor) -> Void
+
+    private init(completion: @escaping (UIColor) -> Void) {
+        self.completion = completion
+        super.init()
+    }
+
+    static func present(context: AccountContext, title: String, color: UIColor, completion: @escaping (UIColor) -> Void) {
+        let picker = UIColorPickerViewController()
+        picker.title = title
+        picker.selectedColor = color
+        picker.supportsAlpha = false
+        let delegate = ShadowSystemColorPicker(completion: completion)
+        ShadowSystemColorPicker.active = delegate
+        picker.delegate = delegate
+        context.sharedContext.mainWindow?.presentNative(picker)
+    }
+
+    func colorPickerViewControllerDidFinish(_ viewController: UIColorPickerViewController) {
+        self.completion(viewController.selectedColor)
+        ShadowSystemColorPicker.active = nil
+    }
 }

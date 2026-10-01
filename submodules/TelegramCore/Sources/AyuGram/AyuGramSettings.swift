@@ -103,6 +103,11 @@ public struct AyuGramSettings: Codable, Equatable {
     public var quickReplyTemplates: [String] = []
     public static let quickReplyTemplatesLimit = 50
     public static let quickReplyTemplateMaxLength = 4096
+    // Monochrome settings icons (like the iOS tinted home screen): every
+    // settings icon gets one background color and one glyph color (0xRRGGBB).
+    public var monochromeSettingsIcons: Bool = false
+    public var settingsIconBackgroundColor: Int32 = 0x1C1C1E
+    public var settingsIconGlyphColor: Int32 = 0xFFFFFF
     // Anti-deletion
     public var keepDeletedMessages: Bool
     // Secret chats use a separate local deletion pipeline. Keep this opt-in so
@@ -593,6 +598,9 @@ public struct AyuGramSettings: Codable, Equatable {
         self.unlimitedPinnedChats = ((try container.decodeIfPresent(Int32.self, forKey: "unlimitedPinnedChats")) ?? 1) != 0
         self.localVoiceTranscription = ((try container.decodeIfPresent(Int32.self, forKey: "localVoiceTranscription")) ?? 1) != 0
         self.quickReplyTemplates = (try container.decodeIfPresent([String].self, forKey: "quickReplyTemplates")) ?? []
+        self.monochromeSettingsIcons = ((try container.decodeIfPresent(Int32.self, forKey: "monochromeSettingsIcons")) ?? 0) != 0
+        self.settingsIconBackgroundColor = ((try container.decodeIfPresent(Int32.self, forKey: "settingsIconBackgroundColor")) ?? 0x1C1C1E) & 0xFFFFFF
+        self.settingsIconGlyphColor = ((try container.decodeIfPresent(Int32.self, forKey: "settingsIconGlyphColor")) ?? 0xFFFFFF) & 0xFFFFFF
         self.keepDeletedMessages = ((try container.decodeIfPresent(Int32.self, forKey: "keepDeletedMessages")) ?? 1) != 0
         self.keepDeletedSecretChatMessages = ((try container.decodeIfPresent(Int32.self, forKey: "keepDeletedSecretChatMessages")) ?? 0) != 0
         self.saveEditHistory = ((try container.decodeIfPresent(Int32.self, forKey: "saveEditHistory")) ?? 1) != 0
@@ -673,6 +681,9 @@ public struct AyuGramSettings: Codable, Equatable {
         try container.encode((self.unlimitedPinnedChats ? 1 : 0) as Int32, forKey: "unlimitedPinnedChats")
         try container.encode((self.localVoiceTranscription ? 1 : 0) as Int32, forKey: "localVoiceTranscription")
         try container.encode(self.quickReplyTemplates, forKey: "quickReplyTemplates")
+        try container.encode((self.monochromeSettingsIcons ? 1 : 0) as Int32, forKey: "monochromeSettingsIcons")
+        try container.encode(self.settingsIconBackgroundColor, forKey: "settingsIconBackgroundColor")
+        try container.encode(self.settingsIconGlyphColor, forKey: "settingsIconGlyphColor")
         try container.encode((self.keepDeletedMessages ? 1 : 0) as Int32, forKey: "keepDeletedMessages")
         try container.encode((self.keepDeletedSecretChatMessages ? 1 : 0) as Int32, forKey: "keepDeletedSecretChatMessages")
         try container.encode((self.saveEditHistory ? 1 : 0) as Int32, forKey: "saveEditHistory")
