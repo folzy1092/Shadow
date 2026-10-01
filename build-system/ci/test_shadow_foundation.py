@@ -23,6 +23,7 @@ def main():
         ('message-screenshot', 'submodules/TelegramCore/Sources/AyuGram/ShadowMessageScreenshotSettings.swift', 'Tests/ShadowSettings/MessageScreenshotTests.swift'),
         ('document', 'submodules/TelegramCore/Sources/AyuGram/ShadowSettingsDocument.swift', 'Tests/ShadowSettings/DocumentTests.swift'),
         ('update-check', 'submodules/TelegramCore/Sources/AyuGram/ShadowUpdateCheck.swift', 'Tests/ShadowSettings/UpdateCheckTests.swift'),
+        ('chat-lock', 'submodules/TelegramCore/Sources/AyuGram/ShadowChatLock.swift', 'Tests/ShadowSettings/ChatLockTests.swift'),
         ('search', 'submodules/SettingsUI/Sources/ShadowSettingsSearchIndex.swift', 'Tests/ShadowSettings/SearchTests.swift'),
         ('tab-bar-scroll', 'submodules/Display/Source/TabBarScrollState.swift', 'Tests/ShadowSettings/TabBarScrollTests.swift'),
     ]

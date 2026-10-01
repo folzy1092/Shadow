@@ -1324,6 +1324,7 @@ public final class ChatListNode: ListViewImpl {
     private let chatListLocation = ValuePromise<ChatListNodeLocation>()
     private let chatListDisposable = MetaDisposable()
     private let shadowNamesDisposable = MetaDisposable()
+    private var shadowChatLockObserver: NSObjectProtocol?
     private var activityStatusesDisposable: Disposable?
     
     private let scrollToTopOptionPromise = Promise<ChatListGlobalScrollOption>(.none)
@@ -3218,11 +3219,26 @@ public final class ChatListNode: ListViewImpl {
                 return state
             }
         }))
+        // Shadow: a chat lock change re-renders the rows (new presentation data
+        // instance), so the preview spoiler appears or disappears right away.
+        self.shadowChatLockObserver = NotificationCenter.default.addObserver(forName: ShadowChatLockStore.didChangeNotification, object: nil, queue: .main, using: { [weak self] _ in
+            guard let self else {
+                return
+            }
+            self.updateState { state in
+                var state = state
+                state.presentationData = state.presentationData.withPreferUsernameForNonContacts(state.presentationData.preferUsernameForNonContacts, botsEnabled: state.presentationData.preferUsernameForBots)
+                return state
+            }
+        })
     }
     
     deinit {
         self.chatListDisposable.dispose()
         self.shadowNamesDisposable.dispose()
+        if let shadowChatLockObserver = self.shadowChatLockObserver {
+            NotificationCenter.default.removeObserver(shadowChatLockObserver)
+        }
         self.activityStatusesDisposable?.dispose()
         self.updatedFilterDisposable.dispose()
         self.pollFilterUpdatesDisposable?.dispose()

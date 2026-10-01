@@ -1455,6 +1455,11 @@ public protocol SharedAccountContext: AnyObject {
     func makeStorySelectionController(context: AccountContext, peerId: EnginePeer.Id, excludeIds: [Int32], completion: @escaping ([EngineStoryItem]) -> Void) -> ViewController
     func makeArchiveSettingsController(context: AccountContext) -> ViewController
     func makeShadowGhostSettingsController(context: AccountContext) -> ViewController
+    // Shadow chat lock (ShadowChatLockUI in TelegramUI).
+    func shadowChatLockAuthenticate(reason: String, completion: @escaping (Bool) -> Void)
+    func shadowChatLockCreatePassword(completion: @escaping (Bool) -> Void)
+    func shadowChatLockLockChat(context: AccountContext, peerId: EnginePeer.Id, completion: @escaping (Bool) -> Void)
+    func shadowChatLockUnlockChat(context: AccountContext, peerId: EnginePeer.Id, completion: @escaping (Bool) -> Void)
     func makeFilterSettingsController(context: AccountContext, modal: Bool, scrollToTags: Bool, dismissed: (() -> Void)?) -> ViewController
     func makeBusinessSetupScreen(context: AccountContext) -> ViewController
     func makeChatbotSetupScreen(context: AccountContext, initialData: ChatbotSetupScreenInitialData) -> ViewController

@@ -2850,6 +2850,22 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         return PeerInfoStoryGridScreen(context: context, peerId: peerId, scope: .saved, excludeIds: excludeIds, selectionModeCompletion: completion)
     }
     
+    public func shadowChatLockAuthenticate(reason: String, completion: @escaping (Bool) -> Void) {
+        ShadowChatLockUI.authenticate(sharedContext: self, reason: reason, completion: completion)
+    }
+
+    public func shadowChatLockCreatePassword(completion: @escaping (Bool) -> Void) {
+        ShadowChatLockUI.createPassword(sharedContext: self, completion: completion)
+    }
+
+    public func shadowChatLockLockChat(context: AccountContext, peerId: EnginePeer.Id, completion: @escaping (Bool) -> Void) {
+        ShadowChatLockUI.lockChat(context: context, peerId: peerId, completion: completion)
+    }
+
+    public func shadowChatLockUnlockChat(context: AccountContext, peerId: EnginePeer.Id, completion: @escaping (Bool) -> Void) {
+        ShadowChatLockUI.unlockChatPermanently(context: context, peerId: peerId, completion: completion)
+    }
+
     public func makeShadowGhostSettingsController(context: AccountContext) -> ViewController {
         return ayuGhostController(context: context)
     }

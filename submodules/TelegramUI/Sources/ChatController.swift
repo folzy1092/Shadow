@@ -249,6 +249,8 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     let customChatNavigationStack: [EnginePeer.Id]?
     
     var didSetupDropToPaste: Bool = false
+    // Shadow: chat lock observation (ShadowChatLockUI.swift).
+    var shadowChatLockObserver: ShadowChatLockObserverHolder?
     
     let context: AccountContext
     public internal(set) var chatLocation: ChatLocation
@@ -7557,6 +7559,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     
     override public func loadDisplayNode() {
         self.loadDisplayNodeImpl()
+        self.shadowChatLockUpdate(autoAuthenticate: false)
         self.galleryPresentationContext.view = self.view
         self.galleryPresentationContext.controllersUpdated = { [weak self] _ in
             guard let self else {
@@ -7568,6 +7571,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     
     override public func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        self.shadowChatLockUpdate(autoAuthenticate: true)
                 
         if self.willAppear {
             self.chatDisplayNode.historyNode.refreshPollActionsForVisibleMessages()

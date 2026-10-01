@@ -1,0 +1,278 @@
+import Foundation
+import UIKit
+import Display
+import SwiftSignalKit
+import TelegramCore
+import TelegramPresentationData
+import ItemListUI
+import AccountContext
+
+// Shadow: "Замки чатов" — password, locked chats of this account and reset
+// (spec docs/specs/2026-10-01-shadow-batch.md, section 5). Chats are locked from
+// the chat list context menu; state lives in ShadowChatLockStore.
+
+private enum ShadowChatLocksSection: Int32 {
+    case password
+    case chats
+    case reset
+}
+
+private enum ShadowChatLocksEntry: ItemListNodeEntry {
+    case passwordAction(hasPassword: Bool)
+    case passwordFooter
+    case chatsHeader
+    case chat(index: Int, peerId: EnginePeer.Id, title: String)
+    case chatsEmpty
+    case chatsFooter
+    case resetAction
+    case resetPending(String)
+    case resetNow(enabled: Bool)
+    case resetCancel
+    case resetFooter
+
+    var section: ItemListSectionId {
+        switch self {
+        case .passwordAction, .passwordFooter:
+            return ShadowChatLocksSection.password.rawValue
+        case .chatsHeader, .chat, .chatsEmpty, .chatsFooter:
+            return ShadowChatLocksSection.chats.rawValue
+        case .resetAction, .resetPending, .resetNow, .resetCancel, .resetFooter:
+            return ShadowChatLocksSection.reset.rawValue
+        }
+    }
+
+    // 0 is the search entry id (ShadowSettingsSearchIndex, destination .chatLocks).
+    var stableId: Int32 {
+        switch self {
+        case .passwordAction: return 0
+        case .passwordFooter: return 1
+        case .chatsHeader: return 2
+        case let .chat(index, _, _): return 100 + Int32(index)
+        case .chatsEmpty: return 10_000
+        case .chatsFooter: return 10_001
+        case .resetAction: return 10_002
+        case .resetPending: return 10_003
+        case .resetNow: return 10_004
+        case .resetCancel: return 10_005
+        case .resetFooter: return 10_006
+        }
+    }
+
+    static func <(lhs: ShadowChatLocksEntry, rhs: ShadowChatLocksEntry) -> Bool {
+        return lhs.stableId < rhs.stableId
+    }
+
+    func item(presentationData: ItemListPresentationData, arguments: Any) -> ListViewItem {
+        let arguments = arguments as! ShadowChatLocksArguments
+        switch self {
+        case let .passwordAction(hasPassword):
+            return ItemListActionItem(presentationData: presentationData, title: hasPassword ? "Сменить пароль" : "Задать пароль", kind: .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: arguments.changePassword)
+        case .passwordFooter:
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Чат открывается по Face ID / Touch ID. Пароль нужен, если биометрия не сработала, и для сброса замков. Пароль хранится на устройстве только в виде хэша."), sectionId: self.section)
+        case .chatsHeader:
+            return ItemListSectionHeaderItem(presentationData: presentationData, text: "ЗАБЛОКИРОВАННЫЕ ЧАТЫ", sectionId: self.section)
+        case let .chat(_, peerId, title):
+            return ItemListDisclosureItem(presentationData: presentationData, title: title, label: "Снять", sectionId: self.section, style: .blocks, action: {
+                arguments.unlock(peerId)
+            })
+        case .chatsEmpty:
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Нет заблокированных чатов. Зажмите чат в списке и выберите «Заблокировать чат»."), sectionId: self.section)
+        case .chatsFooter:
+            return ItemListTextItem(presentationData: presentationData, text: .plain("В списке чатов имя видно, а текст сообщения скрыт спойлером. После разблокировки чат остаётся открытым, пока приложение не уйдёт в фон."), sectionId: self.section)
+        case .resetAction:
+            return ItemListActionItem(presentationData: presentationData, title: "Сбросить все замки", kind: .destructive, alignment: .natural, sectionId: self.section, style: .blocks, action: arguments.reset)
+        case let .resetPending(text):
+            return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
+        case let .resetNow(enabled):
+            return ItemListActionItem(presentationData: presentationData, title: "Сбросить сейчас", kind: enabled ? .destructive : .disabled, alignment: .natural, sectionId: self.section, style: .blocks, action: arguments.resetNow)
+        case .resetCancel:
+            return ItemListActionItem(presentationData: presentationData, title: "Отменить сброс", kind: .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: arguments.cancelReset)
+        case .resetFooter:
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Сброс снимает замки со всех чатов на всех аккаунтах и удаляет пароль. С паролем — сразу, без пароля — через час. Любая успешная разблокировка чата за этот час отменяет сброс."), sectionId: self.section)
+        }
+    }
+}
+
+private final class ShadowChatLocksArguments {
+    let changePassword: () -> Void
+    let unlock: (EnginePeer.Id) -> Void
+    let reset: () -> Void
+    let resetNow: () -> Void
+    let cancelReset: () -> Void
+
+    init(changePassword: @escaping () -> Void, unlock: @escaping (EnginePeer.Id) -> Void, reset: @escaping () -> Void, resetNow: @escaping () -> Void, cancelReset: @escaping () -> Void) {
+        self.changePassword = changePassword
+        self.unlock = unlock
+        self.reset = reset
+        self.resetNow = resetNow
+        self.cancelReset = cancelReset
+    }
+}
+
+private func shadowChatLockResetText(remaining: TimeInterval) -> String {
+    if remaining <= 0.0 {
+        return "Сброс без пароля доступен."
+    }
+    let minutes = Int(ceil(remaining / 60.0))
+    return "Сброс без пароля станет доступен через \(minutes) мин."
+}
+
+func shadowChatLocksController(context: AccountContext, focus: ShadowSettingsSearchItem? = nil) -> ViewController {
+    let store = ShadowChatLockStore.shared
+    let accountPeerId = context.account.peerId.toInt64()
+    var presentControllerImpl: ((ViewController) -> Void)?
+    var focusedIndex: Int?
+
+    // Re-render on store changes and every 30 seconds (reset countdown).
+    let revision = ValuePromise<Int>(0, ignoreRepeated: false)
+    var revisionValue = 0
+    let bump: () -> Void = {
+        revisionValue += 1
+        revision.set(revisionValue)
+    }
+    let observer = NotificationCenter.default.addObserver(forName: ShadowChatLockStore.didChangeNotification, object: nil, queue: .main, using: { _ in
+        bump()
+    })
+    let ticker = (Signal<Void, NoError>.single(Void())
+    |> then(Signal<Void, NoError>.complete() |> delay(30.0, queue: Queue.mainQueue()))
+    |> restart)
+
+    let arguments = ShadowChatLocksArguments(changePassword: {
+        if store.hasPassword {
+            context.sharedContext.shadowChatLockAuthenticate(reason: "Сменить пароль замков", completion: { success in
+                if success {
+                    context.sharedContext.shadowChatLockCreatePassword(completion: { _ in })
+                }
+            })
+        } else {
+            context.sharedContext.shadowChatLockCreatePassword(completion: { _ in })
+        }
+    }, unlock: { peerId in
+        context.sharedContext.shadowChatLockUnlockChat(context: context, peerId: peerId, completion: { _ in })
+    }, reset: {
+        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+        let actionSheet = ActionSheetController(presentationData: presentationData)
+        var items: [ActionSheetItem] = [ActionSheetTextItem(title: "Снять все замки и удалить пароль?", parseMarkdown: false)]
+        if store.hasPassword {
+            items.append(ActionSheetButtonItem(title: "Ввести пароль", color: .destructive, action: { [weak actionSheet] in
+                actionSheet?.dismissAnimated()
+                // Password only: the reset exists for when Face ID is not an option.
+                ShadowChatLockPasswordPrompt.present(context: context, completion: { password in
+                    guard let password else {
+                        return
+                    }
+                    if store.verifyPassword(password) {
+                        store.performReset()
+                    } else {
+                        ShadowChatLockPasswordPrompt.showWrongPassword(context: context)
+                    }
+                })
+            }))
+        }
+        items.append(ActionSheetButtonItem(title: "Не помню пароль (через 1 час)", color: .destructive, action: { [weak actionSheet] in
+            actionSheet?.dismissAnimated()
+            store.requestReset()
+        }))
+        actionSheet.setItemGroups([
+            ActionSheetItemGroup(items: items),
+            ActionSheetItemGroup(items: [
+                ActionSheetButtonItem(title: presentationData.strings.Common_Cancel, color: .accent, font: .bold, action: { [weak actionSheet] in
+                    actionSheet?.dismissAnimated()
+                })
+            ])
+        ])
+        presentControllerImpl?(actionSheet)
+    }, resetNow: {
+        if store.canResetWithoutPassword() {
+            store.performReset()
+        }
+    }, cancelReset: {
+        store.cancelReset()
+    })
+
+    let lockedPeers: Signal<[(EnginePeer.Id, String)], NoError> = revision.get()
+    |> map { _ -> [EnginePeer.Id] in
+        return store.lockedPeerIds(accountPeerId: accountPeerId).map { EnginePeer.Id($0) }
+    }
+    |> distinctUntilChanged
+    |> mapToSignal { peerIds -> Signal<[(EnginePeer.Id, String)], NoError> in
+        return context.engine.data.get(EngineDataMap(peerIds.map(TelegramEngine.EngineData.Item.Peer.Peer.init(id:))))
+        |> map { peers -> [(EnginePeer.Id, String)] in
+            let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+            return peerIds.map { peerId in
+                let title = peers[peerId].flatMap { $0 }?.displayTitle(strings: presentationData.strings, displayOrder: presentationData.nameDisplayOrder) ?? "Чат \(peerId.id._internalGetInt64Value())"
+                return (peerId, title)
+            }
+        }
+    }
+
+    let signal = combineLatest(queue: .mainQueue(), context.sharedContext.presentationData, revision.get(), ticker, lockedPeers)
+    |> deliverOnMainQueue
+    |> map { presentationData, _, _, lockedPeers -> (ItemListControllerState, (ItemListNodeState, Any)) in
+        var entries: [ShadowChatLocksEntry] = [
+            .passwordAction(hasPassword: store.hasPassword),
+            .passwordFooter,
+            .chatsHeader
+        ]
+        if lockedPeers.isEmpty {
+            entries.append(.chatsEmpty)
+        } else {
+            for (index, item) in lockedPeers.enumerated() {
+                entries.append(.chat(index: index, peerId: item.0, title: item.1))
+            }
+            entries.append(.chatsFooter)
+        }
+        if let remaining = store.resetRemaining() {
+            entries.append(.resetPending(shadowChatLockResetText(remaining: remaining)))
+            entries.append(.resetNow(enabled: remaining <= 0.0))
+            entries.append(.resetCancel)
+        } else {
+            entries.append(.resetAction)
+        }
+        entries.append(.resetFooter)
+        focusedIndex = shadowSettingsFocusIndex(stableIds: entries.map { $0.stableId }, target: focus)
+        let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Замки чатов"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
+        let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, initialScrollToItem: shadowSettingsInitialScroll(index: focusedIndex), animateChanges: false)
+        return (controllerState, (listState, arguments))
+    }
+    |> afterDisposed {
+        NotificationCenter.default.removeObserver(observer)
+    }
+
+    let controller = ItemListController(context: context, state: signal)
+    presentControllerImpl = { [weak controller] c in
+        controller?.present(c, in: .window(.root))
+    }
+    if focus != nil {
+        shadowSettingsInstallFocus(controller: controller, index: { focusedIndex }, color: context.sharedContext.currentPresentationData.with { $0 }.theme.list.itemAccentColor)
+    }
+    return controller
+}
+
+// Secure password entry for the reset (system alert with a secure text field).
+private enum ShadowChatLockPasswordPrompt {
+    static func present(context: AccountContext, completion: @escaping (String?) -> Void) {
+        let alert = UIAlertController(title: "Введите пароль", message: "Пароль замков чатов", preferredStyle: .alert)
+        alert.addTextField { field in
+            field.isSecureTextEntry = true
+            field.placeholder = "Пароль"
+        }
+        alert.addAction(UIAlertAction(title: "Отмена", style: .cancel, handler: { _ in
+            completion(nil)
+        }))
+        alert.addAction(UIAlertAction(title: "Сбросить", style: .destructive, handler: { [weak alert] _ in
+            completion(alert?.textFields?.first?.text ?? "")
+        }))
+        DispatchQueue.main.async {
+            context.sharedContext.mainWindow?.presentNative(alert)
+        }
+    }
+
+    static func showWrongPassword(context: AccountContext) {
+        let alert = UIAlertController(title: "Неверный пароль", message: nil, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default, handler: nil))
+        DispatchQueue.main.async {
+            context.sharedContext.mainWindow?.presentNative(alert)
+        }
+    }
+}

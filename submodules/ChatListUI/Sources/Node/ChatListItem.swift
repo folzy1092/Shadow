@@ -2643,6 +2643,16 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         break
                     }
                     
+                    // Shadow: a locked chat shows its last message as a spoiler.
+                    if ShadowChatLockStore.shared.isLocked(accountPeerId: item.context.account.peerId.toInt64(), peerId: itemPeer.peerId.toInt64()) {
+                        messageText = foldLineBreaks(messageText)
+                        let length = (messageText as NSString).length
+                        spoilers = length > 0 ? [NSRange(location: 0, length: length)] : nil
+                        messageEntities = []
+                        customEmojiRanges = nil
+                        richTextPreview = nil
+                    }
+                    
                     contentData = .chat(itemPeer: itemPeer, threadInfo: threadInfo, peer: peer, hideAuthor: hideAuthor, messageText: messageText, messageEntities: messageEntities, spoilers: spoilers, customEmojiRanges: customEmojiRanges, richTextPreview: richTextPreview)
                     hideAuthor = initialHideAuthor
                 case let .group(groupPeers):
@@ -3094,6 +3104,9 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         if message._asMessage().containsSecretMedia {
                             displayMediaPreviews = false
                         } else if let _ = message.peers[message.id.peerId] as? TelegramSecretChat {
+                            displayMediaPreviews = false
+                        } else if ShadowChatLockStore.shared.isLocked(accountPeerId: item.context.account.peerId.toInt64(), peerId: message.id.peerId.toInt64()) {
+                            // Shadow: no media thumbnails for a locked chat.
                             displayMediaPreviews = false
                         }
                         if displayMediaPreviews {

@@ -1042,6 +1042,14 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         })
     }
     
+    // Shadow: while a locked chat is covered, hide what sits outside the cover:
+    // the composer (draft, reply preview) and the pinned-message panel.
+    func shadowSetChatLockContentHidden(_ hidden: Bool) {
+        self.inputPanelContainerNode.isHidden = hidden
+        self.inputContextPanelContainer.isHidden = hidden
+        self.titleAccessoryPanelContainer.isHidden = hidden
+    }
+    
     deinit {
         self.interactiveEmojisDisposable?.dispose()
         self.openStickersDisposable?.dispose()

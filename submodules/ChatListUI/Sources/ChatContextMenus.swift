@@ -80,7 +80,7 @@ private func chatContextMenuPeerIsMuted(peer: EnginePeer, notificationSettings: 
     }
 }
 
-func chatContextMenuItems(context: AccountContext, peerId: EnginePeer.Id, promoInfo: ChatListNodeEntryPromoInfo?, source: ChatContextMenuSource, chatListController: ChatListControllerImpl?, joined: Bool) -> Signal<[ContextMenuItem], NoError> {
+private func shadowStockChatContextMenuItems(context: AccountContext, peerId: EnginePeer.Id, promoInfo: ChatListNodeEntryPromoInfo?, source: ChatContextMenuSource, chatListController: ChatListControllerImpl?, joined: Bool) -> Signal<[ContextMenuItem], NoError> {
     let presentationData = context.sharedContext.currentPresentationData.with({ $0 })
     let strings = presentationData.strings
 
@@ -1056,4 +1056,29 @@ private func openCustomMute(context: AccountContext, peerId: EnginePeer.Id, thre
     })
     baseController.view.endEditing(true)
     baseController.present(controller, in: .window(.root))
+}
+
+// Shadow: adds "Заблокировать чат" / "Снять замок" (ShadowChatLockStore) to the
+// stock chat context menu. Removing a lock asks for Face ID or the password.
+func chatContextMenuItems(context: AccountContext, peerId: EnginePeer.Id, promoInfo: ChatListNodeEntryPromoInfo?, source: ChatContextMenuSource, chatListController: ChatListControllerImpl?, joined: Bool) -> Signal<[ContextMenuItem], NoError> {
+    return shadowStockChatContextMenuItems(context: context, peerId: peerId, promoInfo: promoInfo, source: source, chatListController: chatListController, joined: joined)
+    |> map { items -> [ContextMenuItem] in
+        if items.isEmpty || peerId == context.account.peerId {
+            return items
+        }
+        let isLocked = ShadowChatLockStore.shared.isLocked(accountPeerId: context.account.peerId.toInt64(), peerId: peerId.toInt64())
+        var items = items
+        items.append(.separator)
+        items.append(.action(ContextMenuActionItem(text: isLocked ? "Снять замок" : "Заблокировать чат", icon: { theme in
+            return generateTintedImage(image: UIImage(systemName: isLocked ? "lock.open" : "lock"), color: theme.contextMenu.primaryColor)
+        }, action: { _, f in
+            f(.default)
+            if isLocked {
+                context.sharedContext.shadowChatLockUnlockChat(context: context, peerId: peerId, completion: { _ in })
+            } else {
+                context.sharedContext.shadowChatLockLockChat(context: context, peerId: peerId, completion: { _ in })
+            }
+        })))
+        return items
+    }
 }
