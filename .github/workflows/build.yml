@@ -18,7 +18,9 @@ concurrency:
 jobs:
   build:
     runs-on: macos-26
-    timeout-minutes: 45
+    # A cold-cache build alone takes ~40 min; 45 cut runs off right before
+    # the IPA upload and release steps.
+    timeout-minutes: 90
 
     steps:
       - uses: actions/checkout@v4
@@ -212,10 +214,10 @@ jobs:
               TAIL="IPA: артефакт Shadow-IPA-${BUILD_NUMBER} на странице прогона."
             fi
           elif [ "$JOB_STATUS" = "cancelled" ]; then
-            # A newer push to the same branch superseded this run
+            # A newer push superseded this run, or it hit timeout-minutes
             # (concurrency.cancel-in-progress); that run reports its own result.
             ICON="⏹"
-            HEAD="Сборка отменена"
+            HEAD="Сборка отменена (новый push или таймаут)"
             TAIL="Запущена более новая сборка, результат придёт от неё."
           else
             ICON="❌"
@@ -266,10 +268,10 @@ jobs:
               TAIL="IPA: артефакт Shadow-IPA-${BUILD_NUMBER} на странице прогона."
             fi
           elif [ "$JOB_STATUS" = "cancelled" ]; then
-            # A newer push to the same branch superseded this run
+            # A newer push superseded this run, or it hit timeout-minutes
             # (concurrency.cancel-in-progress); that run reports its own result.
             ICON="⏹"
-            HEAD="Сборка отменена"
+            HEAD="Сборка отменена (новый push или таймаут)"
             TAIL="Запущена более новая сборка, результат придёт от неё."
           else
             ICON="❌"
