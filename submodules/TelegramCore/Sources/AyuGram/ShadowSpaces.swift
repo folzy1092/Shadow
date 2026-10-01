@@ -181,7 +181,12 @@ public final class ShadowSpaceStore {
     }
 
     // True when the chat must not be shown in the active space.
+    // Shadow: the Full disguise (ShadowDisguise) shows every chat and ignores the
+    // second code, like stock Telegram.
     public func isHidden(accountPeerId: Int64, peerId: Int64) -> Bool {
+        if ShadowDisguise.shared.isFull {
+            return false
+        }
         self.lock.lock()
         defer { self.lock.unlock() }
         let visibility = self.visibilityCache[accountPeerId]?[peerId].flatMap(Visibility.init(rawValue:)) ?? .everywhere
@@ -195,6 +200,9 @@ public final class ShadowSpaceStore {
     // the folder unread badges). The exclusive second space hides every other
     // chat too, which cannot be listed; those are not covered here.
     public func hiddenPeerIds(accountPeerId: Int64) -> [Int64] {
+        if ShadowDisguise.shared.isFull {
+            return []
+        }
         self.lock.lock()
         defer { self.lock.unlock() }
         let space = self.activeSpaceValue
@@ -284,6 +292,9 @@ public final class ShadowSpaceStore {
     }
 
     public func verifyCode(_ code: String) -> Bool {
+        if ShadowDisguise.shared.isFull {
+            return false
+        }
         let code = ShadowSpaceStore.normalize(code)
         guard !code.isEmpty, let stored = self.defaults.dictionary(forKey: Key.code),
               let salt = stored["salt"] as? Data,

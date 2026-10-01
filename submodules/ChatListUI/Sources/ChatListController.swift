@@ -6964,9 +6964,17 @@ private final class ChatListLocationContext {
             if !hideNetworkActivityStatus {
                 // AyuGram: track Ghost Mode so the navbar toggle reflects (and can
                 // flip) the master flag reactively.
-                let ghostModeSignal = ayuGramSettings(postbox: context.account.postbox)
-                |> map { $0.ghostMode }
-                |> distinctUntilChanged
+                // Shadow: the disguise mode (ShadowDisguise) also redraws the navbar.
+                let ghostModeSignal = combineLatest(ayuGramSettings(postbox: context.account.postbox), shadowDisguiseModeSignal())
+                |> map { settings, mode -> (Bool, ShadowDisguise.Mode) in
+                    return (settings.ghostMode, mode)
+                }
+                |> distinctUntilChanged(isEqual: { lhs, rhs in
+                    return lhs.0 == rhs.0 && lhs.1 == rhs.1
+                })
+                |> map { ghostMode, _ -> Bool in
+                    return ghostMode
+                }
                 self.titleDisposable = combineLatest(queue: .mainQueue(),
                     networkState,
                     hasProxy,
@@ -7241,8 +7249,9 @@ private final class ChatListLocationContext {
         if stateAndFilterId.state.editing {
             if case .chatList(.root) = self.location {
                 // Shadow: lock or unlock the selected chats (ShadowChatLockStore).
+                // The Full disguise (ShadowDisguise) shows stock Telegram's empty buttons.
                 let selectedPeerIds = stateAndFilterId.state.selectedPeerIds
-                if selectedPeerIds.isEmpty {
+                if selectedPeerIds.isEmpty || ShadowDisguise.shared.isFull {
                     self.rightButton = nil
                 } else {
                     self.rightButton = AnyComponentWithIdentity(id: "shadowLock", component: AnyComponent(NavigationButtonComponent(
@@ -7258,7 +7267,7 @@ private final class ChatListLocationContext {
                     )))
                 }
                 // Shadow: the eye-slash button moves the selected chats between spaces (spec section 6).
-                if selectedPeerIds.isEmpty {
+                if selectedPeerIds.isEmpty || ShadowDisguise.shared.isFull {
                     self.storyButton = nil
                 } else {
                     self.storyButton = AnyComponentWithIdentity(id: "shadowSpace", component: AnyComponent(NavigationButtonComponent(
@@ -7384,8 +7393,21 @@ private final class ChatListLocationContext {
                 // state (checkmark when active) and tapping it flips ghostMode for
                 // the active account. The distinct identity forces the header to
                 // re-render the icon when the state changes.
+                // Shadow: no Ghost button in the Full disguise; its long press
+                // (Ghost settings) is off while the settings are hidden (ShadowDisguise).
                 let ghostContext = self.context
-                self.ghostButton = AnyComponentWithIdentity(id: ghostMode ? "ghost_on" : "ghost_off", component: AnyComponent(NavigationButtonComponent(
+                let ghostOpensSettings = !ShadowDisguise.shared.hidesSettings
+                var ghostContextAction: ((UIView, ContextGesture?) -> Void)?
+                if ghostOpensSettings {
+                    ghostContextAction = { [weak self] _, _ in
+                        guard let self, let parentController = self.parentController else { return }
+                        parentController.push(ghostContext.sharedContext.makeShadowGhostSettingsController(context: ghostContext))
+                    }
+                }
+                if ShadowDisguise.shared.isFull {
+                    self.ghostButton = nil
+                } else {
+                self.ghostButton = AnyComponentWithIdentity(id: (ghostMode ? "ghost_on" : "ghost_off") + (ghostOpensSettings ? "" : "_hidden"), component: AnyComponent(NavigationButtonComponent(
                     content: .icon(imageName: ghostMode ? "Chat List/GhostActiveIcon" : "Chat List/GhostIcon"),
                     pressed: { _ in
                         let _ = updateAyuGramSettings(postbox: ghostContext.account.postbox, { settings in
@@ -7395,11 +7417,9 @@ private final class ChatListLocationContext {
                             return settings
                         }).startStandalone()
                     },
-                    contextAction: { [weak self] _, _ in
-                        guard let self, let parentController = self.parentController else { return }
-                        parentController.push(ghostContext.sharedContext.makeShadowGhostSettingsController(context: ghostContext))
-                    }
+                    contextAction: ghostContextAction
                 )))
+                }
             } else {
                 let parentController = self.parentController
                 self.rightButton = AnyComponentWithIdentity(id: "more", component: AnyComponent(NavigationButtonComponent(

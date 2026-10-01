@@ -978,6 +978,11 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                 if buildConfig.isInternalBuild {
                     icons.append(PresentationAppIcon(name: "WhiteFilledIcon", imageName: "WhiteFilledIcon"))
                 }
+                // Shadow: the Full disguise (ShadowDisguise) offers stock icons only.
+                if ShadowDisguise.shared.isFull {
+                    let forkIcons: Set<String> = ["ShadowIcon", "CalculatorIcon", "NotesIcon", "WeatherIcon"]
+                    icons = icons.filter { !forkIcons.contains($0.name) }
+                }
                 
                 icons.append(PresentationAppIcon(name: "Premium", imageName: "Premium", isPremium: true))
                 icons.append(PresentationAppIcon(name: "PremiumTurbo", imageName: "PremiumTurbo", isPremium: true))
@@ -1508,12 +1513,12 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                         let presentationData = context.context.sharedContext.currentPresentationData.with { $0 }
                         // AyuGram: keep the Ghost Mode quick action's subtitle live so
                         // it always shows the current On/Off state.
-                        return ayuGramSettings(postbox: context.context.account.postbox)
-                        |> map { $0.ghostMode }
-                        |> distinctUntilChanged
-                        |> map { ghostModeEnabled -> [ApplicationShortcutItem] in
-                            return applicationShortcutItems(strings: presentationData.strings, otherAccountName: otherAccountName, ghostModeEnabled: ghostModeEnabled)
+                        // Shadow: stock quick actions in the Full disguise (ShadowDisguise).
+                        return combineLatest(ayuGramSettings(postbox: context.context.account.postbox), shadowDisguiseModeSignal())
+                        |> map { settings, mode -> [ApplicationShortcutItem] in
+                            return applicationShortcutItems(strings: presentationData.strings, otherAccountName: otherAccountName, ghostModeEnabled: settings.ghostMode, stock: mode == .full)
                         }
+                        |> distinctUntilChanged
                     }
                 } else {
                     return .single([])

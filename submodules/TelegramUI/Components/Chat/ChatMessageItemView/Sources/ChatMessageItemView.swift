@@ -874,6 +874,13 @@ open class ChatMessageItemView: ListViewItemNode, ChatMessageItemNodeProtocol {
     
     open func presentMessageButtonContextMenu(button: ReplyMarkupButton) {
         if let item = self.item {
+            // Shadow: the Full disguise (ShadowDisguise) keeps stock Telegram's long tap.
+            if ShadowDisguise.shared.isFull {
+                if case let .url(url) = button.action {
+                    item.controllerInteraction.longTap(.url(url), ChatControllerInteraction.LongTapParams(message: item.message))
+                }
+                return
+            }
             switch button.action {
                 case let .url(url):
                     // Shadow: simple link popup instead of the native long-tap URL

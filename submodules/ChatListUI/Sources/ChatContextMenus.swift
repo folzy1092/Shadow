@@ -1064,7 +1064,8 @@ private func openCustomMute(context: AccountContext, peerId: EnginePeer.Id, thre
 func chatContextMenuItems(context: AccountContext, peerId: EnginePeer.Id, promoInfo: ChatListNodeEntryPromoInfo?, source: ChatContextMenuSource, chatListController: ChatListControllerImpl?, joined: Bool) -> Signal<[ContextMenuItem], NoError> {
     return shadowStockChatContextMenuItems(context: context, peerId: peerId, promoInfo: promoInfo, source: source, chatListController: chatListController, joined: joined)
     |> map { items -> [ContextMenuItem] in
-        if items.isEmpty || peerId == context.account.peerId {
+        // The Full disguise (ShadowDisguise) keeps the stock menu.
+        if items.isEmpty || peerId == context.account.peerId || ShadowDisguise.shared.isFull {
             return items
         }
         let strings = context.sharedContext.currentPresentationData.with { $0 }.strings

@@ -1804,7 +1804,9 @@ public final class SharedAccountContextImpl: SharedAccountContext {
                 }
             })
         }
-        if let destination = self.activeAccountsValue?.accounts.first(where: { $0.0 == id })?.1 {
+        // Shadow: in the Full disguise (ShadowDisguise) settings read as stock
+        // values; never copy them into another account's stored settings.
+        if !ShadowDisguise.shared.isFull, let destination = self.activeAccountsValue?.accounts.first(where: { $0.0 == id })?.1 {
             let _ = (updateAyuGramSettings(postbox: destination.account.postbox, { settings in
                 var settings = settings
                 switch settings.ghostAccountMode {
@@ -2869,6 +2871,10 @@ public final class SharedAccountContextImpl: SharedAccountContext {
     
     public func shadowChatLockAuthenticate(reason: String, completion: @escaping (Bool) -> Void) {
         ShadowChatLockUI.authenticate(sharedContext: self, reason: reason, completion: completion)
+    }
+
+    public func shadowDisguiseAuthenticate(reason: String, completion: @escaping (Bool) -> Void) {
+        ShadowChatLockUI.authenticateOwner(sharedContext: self, reason: reason, completion: completion)
     }
 
     public func shadowChatLockCreatePassword(completion: @escaping (Bool) -> Void) {

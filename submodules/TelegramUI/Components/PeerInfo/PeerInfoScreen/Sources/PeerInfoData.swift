@@ -981,7 +981,10 @@ func peerInfoScreenSettingsData(context: AccountContext, peerId: EnginePeer.Id, 
         preferences,
         combineLatest(notificationExceptions, notificationsAuthorizationStatus.get(), notificationsWarningSuppressed.get()),
         combineLatest(context.account.viewTracker.featuredStickerPacks(), archivedStickerPacks),
-        hasPassport,
+        // Shadow: the disguise mode re-emits the data so the settings rows update.
+        combineLatest(hasPassport, shadowDisguiseModeSignal()) |> map { hasPassport, _ -> Bool in
+            return hasPassport
+        },
         context.engine.data.subscribe(TelegramEngine.EngineData.Item.Configuration.ApplicationSpecificPreference(key: PreferencesKeys.appConfiguration)),
         context.engine.notices.getServerProvidedSuggestions(),
         context.engine.data.get(

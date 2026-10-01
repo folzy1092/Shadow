@@ -803,6 +803,9 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         canReply = false
     }
     
+    // Shadow: the Full disguise (ShadowDisguise) hides the fork's menu items.
+    let shadowDisguiseFull = ShadowDisguise.shared.isFull
+
     // Shadow: anti-delete keeps a local copy of a message the server already
     // deleted. Server-side actions on it (reply, pin, edit) can only fail.
     let ayuIsKeptDeleted = messages.contains(where: { $0.attributes.contains(where: { $0 is DeletedMessageAttribute }) })
@@ -1353,7 +1356,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             guard let channel = message.peers[message.id.peerId] as? TelegramChannel, case .broadcast = channel.info else { return false }
             return channel.addressName == nil
         }()
-        let shouldForwardAsCopy = isServerCopyProtected || isPrivateChannel
+        let shouldForwardAsCopy = !shadowDisguiseFull && (isServerCopyProtected || isPrivateChannel)
         if !messageText.isEmpty || richMessageMarkdown != nil || (resourceAvailable && isImage) || diceEmoji != nil {
             if !isExpired {
                 if !isPoll {
@@ -1968,16 +1971,19 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                     f(.dismissWithoutContent)
                 })))
                 // AyuGram: forward with sender names hidden, available for any chat.
+                // Not in the Full disguise (ShadowDisguise): stock menu only.
+                if !shadowDisguiseFull {
                 actions.append(.action(ContextMenuActionItem(text: "Forward without author", icon: { theme in
                     return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Forward"), color: theme.actionSheet.primaryTextColor)
                 }, action: { _, f in
                     interfaceInteraction.forwardMessagesWithoutAuthor(selectAll || isImage ? messages : [message])
                     f(.dismissWithoutContent)
                 })))
+                }
             }
         }
 
-        if messages.count == 1, message.flags.contains(.Incoming), message.id.namespace == Namespaces.Message.Cloud {
+        if !shadowDisguiseFull, messages.count == 1, message.flags.contains(.Incoming), message.id.namespace == Namespaces.Message.Cloud {
             actions.append(.action(ContextMenuActionItem(text: "Прочитать", icon: { theme in
                 return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/MarkAsRead"), color: theme.actionSheet.primaryTextColor)
             }, action: { _, f in
@@ -1989,7 +1995,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         // AyuGram: "Burn" a kept view-once / self-destruct message — report it as
         // viewed to the sender (and let it expire), on demand. Shown only for an
         // incoming self-destruct media message that hasn't been burned yet.
-        if messages.count == 1, message.flags.contains(.Incoming), message.containsSecretMedia, message.id.peerId.namespace != Namespaces.Peer.SecretChat {
+        if !shadowDisguiseFull, messages.count == 1, message.flags.contains(.Incoming), message.containsSecretMedia, message.id.peerId.namespace != Namespaces.Peer.SecretChat {
             let alreadyBurned = message.attributes.contains(where: { attribute in
                 if let attribute = attribute as? AutoclearTimeoutMessageAttribute {
                     return attribute.countdownBeginTime != nil && attribute.countdownBeginTime != 0
@@ -2009,7 +2015,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         }
 
         // AyuGram: "Edit history" — show previous versions captured before edits.
-        if messages.count == 1, let editHistory = message.attributes.first(where: { $0 is SavedMessageEditsAttribute }) as? SavedMessageEditsAttribute, !editHistory.versions.isEmpty {
+        if !shadowDisguiseFull, messages.count == 1, let editHistory = message.attributes.first(where: { $0 is SavedMessageEditsAttribute }) as? SavedMessageEditsAttribute, !editHistory.versions.isEmpty {
             if ayuGramSettingsCurrent.showEditComparisonAction {
                 actions.append(.action(ContextMenuActionItem(text: "Сравнить правки", icon: { theme in
                     return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Edit"), color: theme.actionSheet.primaryTextColor)

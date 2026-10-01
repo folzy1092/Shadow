@@ -12,13 +12,26 @@ public enum ShadowHiddenAccounts {
     private static let defaultsKey = "shadow.hiddenAccountPeerIds.v1"
     private static let value = ValuePromise<Set<Int64>>(ShadowHiddenAccounts.loadIds(), ignoreRepeated: true)
 
-    private static func loadIds() -> Set<Int64> {
+    private static func storedIds() -> Set<Int64> {
         let values = UserDefaults.standard.stringArray(forKey: self.defaultsKey) ?? []
         return Set(values.compactMap(Int64.init))
     }
 
+    // Shadow: in the Full disguise no account is hidden (stock Telegram).
+    private static func loadIds() -> Set<Int64> {
+        if ShadowDisguise.shared.isFull {
+            return Set()
+        }
+        return self.storedIds()
+    }
+
     public static func ids() -> Set<Int64> {
         return self.loadIds()
+    }
+
+    // Re-publishes the list after the disguise mode changes.
+    static func refresh() {
+        self.value.set(self.loadIds())
     }
 
     public static func signal() -> Signal<Set<Int64>, NoError> {
@@ -30,13 +43,13 @@ public enum ShadowHiddenAccounts {
     }
 
     public static func setHidden(_ hidden: Bool, peerId: PeerId) {
-        var values = self.ids()
+        var values = self.storedIds()
         if hidden {
             values.insert(peerId.toInt64())
         } else {
             values.remove(peerId.toInt64())
         }
         UserDefaults.standard.set(values.sorted().map(String.init), forKey: self.defaultsKey)
-        self.value.set(values)
+        self.value.set(self.loadIds())
     }
 }

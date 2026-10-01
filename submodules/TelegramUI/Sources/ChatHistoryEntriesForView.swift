@@ -908,6 +908,34 @@ func chatHistoryEntriesForView(
         return ([], currentState)
     }
 
+    // Shadow: the Full disguise (ShadowDisguise) shows the chat like stock
+    // Telegram, without the kept copies of deleted messages. They stay stored.
+    if ShadowDisguise.shared.isFull {
+        let isKeptDeleted: (Message) -> Bool = { message in
+            return message.attributes.contains(where: { $0 is DeletedMessageAttribute })
+        }
+        entries = entries.flatMap { entry -> [ChatHistoryEntry] in
+            switch entry {
+            case let .MessageEntry(message, _, _, _, _, _):
+                return isKeptDeleted(message) ? [] : [entry]
+            case let .MessageGroupEntry(groupInfo, messages, presentation):
+                let visible = messages.filter { !isKeptDeleted($0.0) }
+                if visible.count == messages.count {
+                    return [entry]
+                } else if visible.isEmpty {
+                    return []
+                } else if visible.count == 1 {
+                    let (message, isRead, selection, attributes, location) = visible[0]
+                    return [.MessageEntry(message, presentation, isRead, location, selection, attributes)]
+                } else {
+                    return [.MessageGroupEntry(groupInfo, visible, presentation)]
+                }
+            default:
+                return [entry]
+            }
+        }
+    }
+
     let shadowSettings = currentAyuGramSettings(accountId: context.account.id)
     if !shadowSettings.messageFilterPhrases.isEmpty {
         entries = entries.flatMap { entry -> [ChatHistoryEntry] in

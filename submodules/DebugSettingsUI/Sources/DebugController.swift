@@ -52,6 +52,7 @@ private enum DebugControllerSection: Int32 {
     case translation
     case videoExperiments
     case videoExperiments2
+    case shadow
     case info
 }
 
@@ -117,6 +118,9 @@ private enum DebugControllerEntry: ItemListNodeEntry {
     case disableVideoAspectScaling(Bool)
     case enableNetworkFramework(Bool)
     case enableNetworkExperiments(Bool)
+    // Shadow: disguise mode (ShadowDisguise) — hide the fork's settings or the whole fork.
+    case shadowDisguise(ShadowDisguise.Mode, Bool)
+    case shadowDisguiseInfo
     case restorePurchases(PresentationTheme)
     case logTranslationRecognition(Bool)
     case resetTranslationStates
@@ -145,6 +149,8 @@ private enum DebugControllerEntry: ItemListNodeEntry {
             return DebugControllerSection.videoExperiments.rawValue
         case .disableVideoAspectScaling, .enableNetworkFramework, .enableNetworkExperiments:
             return DebugControllerSection.videoExperiments2.rawValue
+        case .shadowDisguise, .shadowDisguiseInfo:
+            return DebugControllerSection.shadow.rawValue
         case .hostInfo, .versionInfo:
             return DebugControllerSection.info.rawValue
         }
@@ -280,10 +286,14 @@ private enum DebugControllerEntry: ItemListNodeEntry {
             return 101
         case .enableNetworkExperiments:
             return 102
+        case let .shadowDisguise(mode, _):
+            return 103 + Int(mode.rawValue)
+        case .shadowDisguiseInfo:
+            return 106
         case .hostInfo:
-            return 103
+            return 107
         case .versionInfo:
-            return 104
+            return 108
         }
     }
     
@@ -1501,6 +1511,12 @@ private enum DebugControllerEntry: ItemListNodeEntry {
                     }).start()
                 }
             })
+        case let .shadowDisguise(mode, isSelected):
+            return ItemListCheckboxItem(presentationData: presentationData, systemStyle: .glass, title: mode.title, style: .right, checked: isSelected, zeroSeparatorInsets: false, sectionId: self.section, action: {
+                shadowSelectDisguiseMode(mode, arguments: arguments)
+            })
+        case .shadowDisguiseInfo:
+            return ItemListTextItem(presentationData: presentationData, text: .plain("«Скрыть настройки» убирает пункты Shadow из настроек и поиска. «Full» временно превращает приложение в обычный Telegram: все функции форка выключены, замки и второе пространство не действуют, удалённые сообщения не показываются, иконка — стандартная. Ничего не удаляется. Выход из скрытия и включение Full — по Face ID или паролю замков."), sectionId: self.section)
         case .restorePurchases:
             return ItemListActionItem(presentationData: presentationData, systemStyle: .glass, title: "Restore Purchases", kind: .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: {
                 arguments.context?.inAppPurchaseManager?.restorePurchases(completion: { state in
@@ -1533,6 +1549,54 @@ private enum DebugControllerEntry: ItemListNodeEntry {
             let bundleVersion = bundle.infoDictionary?["CFBundleShortVersionString"] ?? ""
             let bundleBuild = bundle.infoDictionary?[kCFBundleVersionKey as String] ?? ""
             return ItemListTextItem(presentationData: presentationData, text: .plain("\(bundleId)\n\(bundleVersion) (\(bundleBuild))"), sectionId: self.section)
+        }
+    }
+}
+
+// Shadow: switches the disguise. Entering Full, or leaving any hiding mode, needs
+// Face ID / the chat-lock password; the app icon follows Full (stock blue icon).
+private func shadowSelectDisguiseMode(_ target: ShadowDisguise.Mode, arguments: DebugControllerArguments) {
+    let current = ShadowDisguise.shared.mode
+    if current == target {
+        return
+    }
+    let sharedContext = arguments.sharedContext
+    let apply: () -> Void = {
+        DispatchQueue.main.async {
+            shadowUpdateDisguiseIcon(sharedContext: sharedContext, from: ShadowDisguise.shared.mode, to: target)
+            setShadowDisguiseMode(target)
+        }
+    }
+    if ShadowDisguise.requiresAuthentication(from: current, to: target) {
+        sharedContext.shadowDisguiseAuthenticate(reason: "Сменить режим Shadow", completion: { success in
+            if success {
+                apply()
+            }
+        })
+    } else {
+        apply()
+    }
+}
+
+private let shadowDisguisePreviousIconKey = "shadow.disguise.previousIcon.v1"
+
+private func shadowUpdateDisguiseIcon(sharedContext: SharedAccountContext, from: ShadowDisguise.Mode, to: ShadowDisguise.Mode) {
+    let bindings = sharedContext.applicationBindings
+    guard bindings.isMainApp else {
+        return
+    }
+    let defaults = UserDefaults.standard
+    if to == .full && from != .full {
+        let currentIcon = bindings.getAlternateIconName()
+        defaults.set(currentIcon ?? "", forKey: shadowDisguisePreviousIconKey)
+        if currentIcon != "BlueIcon" {
+            bindings.requestSetAlternateIconName("BlueIcon", { _ in })
+        }
+    } else if from == .full && to != .full, let previous = defaults.string(forKey: shadowDisguisePreviousIconKey) {
+        defaults.removeObject(forKey: shadowDisguisePreviousIconKey)
+        let previousIcon: String? = previous.isEmpty ? nil : previous
+        if bindings.getAlternateIconName() != previousIcon {
+            bindings.requestSetAlternateIconName(previousIcon, { _ in })
         }
     }
 }
@@ -1644,6 +1708,12 @@ private func debugControllerEntries(context: AccountContext?, sharedContext: Sha
         entries.append(.disableVideoAspectScaling(experimentalSettings.disableVideoAspectScaling))
         entries.append(.enableNetworkFramework(networkSettings?.useNetworkFramework ?? useBetaFeatures))
         entries.append(.enableNetworkExperiments(networkSettings?.useExperimentalDownload ?? true))
+
+        let shadowMode = ShadowDisguise.shared.mode
+        for mode in ShadowDisguise.Mode.allCases {
+            entries.append(.shadowDisguise(mode, mode == shadowMode))
+        }
+        entries.append(.shadowDisguiseInfo)
     }
 
     if let backupHostOverride = networkSettings?.backupHostOverride {
@@ -1687,8 +1757,9 @@ public func debugController(sharedContext: SharedAccountContext, context: Accoun
         preferencesSignal = .single(nil)
     }
     
-    let signal = combineLatest(sharedContext.presentationData, sharedContext.accountManager.sharedData(keys: Set([SharedDataKeys.loggingSettings, ApplicationSpecificSharedDataKeys.mediaInputSettings, ApplicationSpecificSharedDataKeys.experimentalUISettings])), preferencesSignal)
-    |> map { presentationData, sharedData, preferences -> (ItemListControllerState, (ItemListNodeState, Any)) in
+    // Shadow: the disguise mode only refreshes the list; the entries read it directly.
+    let signal = combineLatest(sharedContext.presentationData, sharedContext.accountManager.sharedData(keys: Set([SharedDataKeys.loggingSettings, ApplicationSpecificSharedDataKeys.mediaInputSettings, ApplicationSpecificSharedDataKeys.experimentalUISettings])), preferencesSignal, shadowDisguiseModeSignal())
+    |> map { presentationData, sharedData, preferences, _ -> (ItemListControllerState, (ItemListNodeState, Any)) in
         let loggingSettings: LoggingSettings
         if let value = sharedData.entries[SharedDataKeys.loggingSettings]?.get(LoggingSettings.self) {
             loggingSettings = value

@@ -1,11 +1,14 @@
 import Foundation
 import UIKit
 import AVFoundation
+import Photos
 import TelegramCore
 
-// Shadow: takes a front-camera photo after a wrong password (spec 7.2) and
-// stores it in ShadowIntruderLog. Never asks for camera access here (that is
-// done when the option is turned on): without access nothing is captured.
+// Shadow: takes a front-camera photo after a wrong password (spec 7.2), stores
+// it in ShadowIntruderLog (sent to Saved Messages after the next unlock) and, at
+// once, in the photo library. Never asks for access here (that is done when the
+// option is turned on): without camera access nothing is captured, without
+// photo-library access the photo only waits for Saved Messages.
 public final class ShadowIntruderCamera: NSObject, AVCapturePhotoCaptureDelegate {
     private static var active: ShadowIntruderCamera?
 
@@ -13,6 +16,7 @@ public final class ShadowIntruderCamera: NSObject, AVCapturePhotoCaptureDelegate
     private let output = AVCapturePhotoOutput()
     private let reason: ShadowIntruderLog.Reason
     private let queue = DispatchQueue(label: "shadow.intruder.camera")
+    private var didSave = false
 
     private init(reason: ShadowIntruderLog.Reason) {
         self.reason = reason
@@ -25,6 +29,7 @@ public final class ShadowIntruderCamera: NSObject, AVCapturePhotoCaptureDelegate
         }
         DispatchQueue.main.async {
             if self.active != nil {
+                ShadowIntruderLog.shared.endCapture()
                 return
             }
             let camera = ShadowIntruderCamera(reason: reason)
@@ -67,16 +72,60 @@ public final class ShadowIntruderCamera: NSObject, AVCapturePhotoCaptureDelegate
             if let image = UIImage(data: data), let compressed = image.jpegData(compressionQuality: 0.7) {
                 jpeg = compressed
             }
+            // save() ends the capture whether or not the file was written.
+            self.didSave = true
             ShadowIntruderLog.shared.save(jpeg: jpeg, reason: self.reason)
+            ShadowIntruderCamera.saveToPhotoLibrary(jpeg: jpeg)
         }
         self.queue.async {
             self.finish()
         }
     }
 
+    // Owner-granted (when the option was turned on) add-only access; never prompts here.
+    public static var canSaveToPhotoLibrary: Bool {
+        if #available(iOS 14.0, *) {
+            let status = PHPhotoLibrary.authorizationStatus(for: .addOnly)
+            return status == .authorized || status == .limited
+        } else {
+            return PHPhotoLibrary.authorizationStatus() == .authorized
+        }
+    }
+
+    public static func requestPhotoLibraryAccess(completion: @escaping (Bool) -> Void) {
+        if #available(iOS 14.0, *) {
+            PHPhotoLibrary.requestAuthorization(for: .addOnly, handler: { status in
+                DispatchQueue.main.async {
+                    completion(status == .authorized || status == .limited)
+                }
+            })
+        } else {
+            PHPhotoLibrary.requestAuthorization({ status in
+                DispatchQueue.main.async {
+                    completion(status == .authorized)
+                }
+            })
+        }
+    }
+
+    private static func saveToPhotoLibrary(jpeg: Data) {
+        guard self.canSaveToPhotoLibrary else {
+            return
+        }
+        PHPhotoLibrary.shared().performChanges({
+            let request = PHAssetCreationRequest.forAsset()
+            request.addResource(with: .photo, data: jpeg, options: nil)
+        }, completionHandler: nil)
+    }
+
     private func finish() {
         if self.session.isRunning {
             self.session.stopRunning()
+        }
+        if !self.didSave {
+            // No photo (no camera, capture error): end the capture once.
+            self.didSave = true
+            ShadowIntruderLog.shared.endCapture()
         }
         DispatchQueue.main.async {
             ShadowIntruderCamera.active = nil

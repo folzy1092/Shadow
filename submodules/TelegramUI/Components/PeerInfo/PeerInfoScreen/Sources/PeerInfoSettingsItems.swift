@@ -200,9 +200,13 @@ func settingsItems(data: PeerInfoScreenData?, context: AccountContext, presentat
     items[.shortcuts]!.append(PeerInfoScreenDisclosureItem(id: 1, text: presentationData.strings.Settings_SavedMessages, icon: PresentationResourcesSettings.savedMessages, action: {
         interaction.openSettings(.savedMessages)
     }))
-    items[.shortcuts]!.append(PeerInfoScreenDisclosureItem(id: 2, text: "Открыть архив", icon: PresentationResourcesSettings.shadowArchive, action: {
-        interaction.openSettings(.archive)
-    }))
+    // Shadow: the fork's rows are hidden by the disguise (ShadowDisguise, debug menu).
+    let shadowShowsSettings = !ShadowDisguise.shared.hidesSettings
+    if shadowShowsSettings {
+        items[.shortcuts]!.append(PeerInfoScreenDisclosureItem(id: 2, text: "Открыть архив", icon: PresentationResourcesSettings.shadowArchive, action: {
+            interaction.openSettings(.archive)
+        }))
+    }
     items[.shortcuts]!.append(PeerInfoScreenDisclosureItem(id: 3, text: presentationData.strings.CallSettings_RecentCalls, icon: PresentationResourcesSettings.recentCalls, action: {
         interaction.openSettings(.recentCalls)
     }))
@@ -224,16 +228,18 @@ func settingsItems(data: PeerInfoScreenData?, context: AccountContext, presentat
     items[.shortcuts]!.append(PeerInfoScreenDisclosureItem(id: 5, text: presentationData.strings.Settings_ChatFolders, icon: PresentationResourcesSettings.chatFolders, action: {
         interaction.openSettings(.chatFolders)
     }))
-    items[.shortcuts]!.append(PeerInfoScreenDisclosureItem(id: 6, text: "Shadow", icon: PresentationResourcesSettings.shadow, action: {
-        interaction.openSettings(.ayugram)
-    }))
-    items[.shadowReads]!.append(PeerInfoScreenDisclosureItem(id: 0, text: "Прочитать локально", icon: PresentationResourcesSettings.shadowReadLocally, action: {
-        interaction.openSettings(.markAllReadLocally)
-    }))
-    items[.shadowReads]!.append(PeerInfoScreenDisclosureItem(id: 1, text: "Прочитать на сервере", icon: PresentationResourcesSettings.shadowReadOnServer, action: {
-        interaction.openSettings(.markAllReadOnServer)
-    }))
-    items[.shadowReads]!.append(PeerInfoScreenCommentItem(id: 2, text: "Локально: отметки меняются только здесь. На сервере: Telegram получает подтверждение прочтения для текущего аккаунта."))
+    if shadowShowsSettings {
+        items[.shortcuts]!.append(PeerInfoScreenDisclosureItem(id: 6, text: "Shadow", icon: PresentationResourcesSettings.shadow, action: {
+            interaction.openSettings(.ayugram)
+        }))
+        items[.shadowReads]!.append(PeerInfoScreenDisclosureItem(id: 0, text: "Прочитать локально", icon: PresentationResourcesSettings.shadowReadLocally, action: {
+            interaction.openSettings(.markAllReadLocally)
+        }))
+        items[.shadowReads]!.append(PeerInfoScreenDisclosureItem(id: 1, text: "Прочитать на сервере", icon: PresentationResourcesSettings.shadowReadOnServer, action: {
+            interaction.openSettings(.markAllReadOnServer)
+        }))
+        items[.shadowReads]!.append(PeerInfoScreenCommentItem(id: 2, text: "Локально: отметки меняются только здесь. На сервере: Telegram получает подтверждение прочтения для текущего аккаунта."))
+    }
 
     let notificationsWarning: Bool
     if let settings = data.globalSettings {

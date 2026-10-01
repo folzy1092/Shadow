@@ -170,7 +170,7 @@ private func ayuGramProfileItems(peerId: EnginePeer.Id, photo: [TelegramMediaIma
         result.append(PeerInfoScreenLabeledValueItem(id: idBase + 2, label: "Дата регистрации", text: registration, textColor: .primary, action: nil, requestLayout: { _ in
         }))
     }
-    if isMutualContact {
+    if isMutualContact, !ShadowDisguise.shared.isFull {
         result.append(PeerInfoScreenLabeledValueItem(id: idBase + 3, label: "Взаимный контакт", text: "", textColor: .primary, action: nil, requestLayout: { _ in
         }))
     }

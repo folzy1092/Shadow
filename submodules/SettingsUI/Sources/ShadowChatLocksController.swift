@@ -7,6 +7,7 @@ import TelegramPresentationData
 import ItemListUI
 import AccountContext
 import AVFoundation
+import PasscodeUI
 
 // Shadow: "Замки чатов" — password, locked chats of this account and reset
 // (spec docs/specs/2026-10-01-shadow-batch.md, section 5). Chats are locked from
@@ -82,7 +83,7 @@ private enum ShadowChatLocksEntry: ItemListNodeEntry {
                 arguments.setIntruderPhoto(value)
             })
         case .intruderFooter:
-            return ItemListTextItem(presentationData: presentationData, text: .plain("Если кто-то ошибётся с паролем замка или код-паролем Telegram, фронтальная камера сделает снимок. После следующей разблокировки он придёт вам в «Избранное» с временем и причиной (если отправить не выйдет — сохранится в галерею)."), sectionId: self.section)
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Если кто-то ошибётся с паролем замка или код-паролем Telegram, фронтальная камера сделает снимок. Снимок сразу сохраняется в галерею, а после следующей разблокировки приходит вам в «Избранное» с временем и причиной. Face ID сам по себе снимок не делает — только неверный пароль."), sectionId: self.section)
         case .chatsHeader:
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "ЗАБЛОКИРОВАННЫЕ ЧАТЫ", sectionId: self.section)
         case let .chat(_, peerId, title):
@@ -211,14 +212,20 @@ func shadowChatLocksController(context: AccountContext, focus: ShadowSettingsSea
             bump()
             return
         }
-        // Ask for the camera here, never on the lock screen.
+        // Ask for the camera and the photo library here, never on the lock screen.
         AVCaptureDevice.requestAccess(for: .video, completionHandler: { granted in
             DispatchQueue.main.async {
                 ShadowIntruderLog.shared.isEnabled = granted
                 bump()
                 if !granted {
                     ShadowChatLockPasswordPrompt.showMessage(context: context, title: "Нет доступа к камере", message: "Разрешите Telegram доступ к камере в Настройках iOS.")
+                    return
                 }
+                ShadowIntruderCamera.requestPhotoLibraryAccess(completion: { photosGranted in
+                    if !photosGranted {
+                        ShadowChatLockPasswordPrompt.showMessage(context: context, title: "Нет доступа к фото", message: "Снимки будут приходить только в «Избранное». Чтобы они сразу сохранялись в галерею, разрешите Telegram добавлять фото в Настройках iOS.")
+                    }
+                })
             }
         })
     }

@@ -91,6 +91,17 @@ enum ShadowChatLockUI {
         }
     }
 
+    // Shadow disguise (debug menu): like `authenticate`, but a device with
+    // neither biometrics nor a chat-lock password has nothing to check against,
+    // so the switch is allowed there.
+    static func authenticateOwner(sharedContext: SharedAccountContext, reason: String, completion: @escaping (Bool) -> Void) {
+        if LocalAuth.biometricAuthentication == nil && !ShadowChatLockStore.shared.hasPassword {
+            completion(true)
+            return
+        }
+        self.authenticate(sharedContext: sharedContext, reason: reason, completion: completion)
+    }
+
     // Asks for a new password twice. Calls `completion(true)` once it is stored.
     static func createPassword(sharedContext: SharedAccountContext, completion: @escaping (Bool) -> Void) {
         let window = sharedContext.mainWindow

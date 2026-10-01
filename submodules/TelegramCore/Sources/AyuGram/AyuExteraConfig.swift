@@ -56,6 +56,10 @@ private func setExteraConfig(_ config: AyuExteraConfig) {
 // Значок поддержавшего для конкретного пира. nil — пир не из списков Extera,
 // либо это обычный поддержавший, а общий emoji_id в config.json не задан.
 public func ayuExteraBadge(peerId: PeerId) -> AyuExteraBadge? {
+    // Shadow: no fork badges in the Full disguise (ShadowDisguise).
+    if ShadowDisguise.shared.isFull {
+        return nil
+    }
     let raw = peerId.id._internalGetInt64Value()
     let config = currentExteraConfig()
 
@@ -87,6 +91,9 @@ public func ayuExteraBadgeEmojiId(peerId: PeerId) -> Int64? {
 // "поддержал exteraGram" осмысленна и тогда, когда общий emoji_id не задан и
 // рисовать рядом с именем нечего.
 public func ayuExteraDescription(peerId: PeerId) -> String? {
+    if ShadowDisguise.shared.isFull {
+        return nil
+    }
     let raw = peerId.id._internalGetInt64Value()
     let config = currentExteraConfig()
     if let custom = config.customBadges[raw] {

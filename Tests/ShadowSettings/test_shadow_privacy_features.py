@@ -41,7 +41,7 @@ class ShadowPrivacyFeatures(unittest.TestCase):
 
     def test_private_or_protected_forward_is_one_copy_action(self):
         menu = (UI / "Sources/ChatInterfaceStateContextMenus.swift").read_text()
-        self.assertIn("let shouldForwardAsCopy = isServerCopyProtected || isPrivateChannel", menu)
+        self.assertIn("let shouldForwardAsCopy = !shadowDisguiseFull && (isServerCopyProtected || isPrivateChannel)", menu)
         protected = menu.split("if shouldForwardAsCopy {", 1)[1].split("} else if data.messageActions.options.contains(.forward)", 1)[0]
         self.assertEqual(protected.count("ContextMenuActionItem"), 1)
         self.assertIn("forwardMessagesAsCopy", protected)

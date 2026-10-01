@@ -4422,7 +4422,8 @@ func settingsSearchableItems(
         var allItems: [SettingsSearchableItem] = []
         // Reuse Shadow's metadata and exact-row navigation in Telegram's global
         // settings search as well. No extra account reads for these entries.
-        allItems.append(contentsOf: ShadowSettingsSearchIndex.items.map { item in
+        // Hidden by the disguise (ShadowDisguise, debug menu).
+        allItems.append(contentsOf: (ShadowDisguise.shared.hidesSettings ? [] : ShadowSettingsSearchIndex.items).map { item in
             SettingsSearchableItem(
                 id: "shadow/\(item.id)",
                 title: item.title,

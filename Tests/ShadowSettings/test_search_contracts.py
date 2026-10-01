@@ -32,7 +32,7 @@ class SearchContracts(unittest.TestCase):
 
     def test_global_search_reuses_same_navigation(self):
         global_search = (UI_ROOT / 'Search/SettingsSearchableItems.swift').read_text()
-        self.assertIn('ShadowSettingsSearchIndex.items.map', global_search)
+        self.assertIn('(ShadowDisguise.shared.hidesSettings ? [] : ShadowSettingsSearchIndex.items).map', global_search)
         self.assertIn('shadowSettingsSearchDestinationController(context: context, item: item)', global_search)
 
     def test_all_screens_install_focus(self):

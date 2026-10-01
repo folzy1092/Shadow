@@ -34,6 +34,9 @@ public final class ShadowIntruderLog {
     // Minimum time between two photos, so a burst of wrong codes makes one photo.
     public static let minimumInterval: TimeInterval = 15.0
 
+    // Posted on the main thread after a photo is saved (object: the log).
+    public static let didSaveNotification = Notification.Name("ShadowIntruderLogDidSave")
+
     private enum Key {
         static let enabled = "shadow.intruder.enabled.v1"
     }
@@ -42,6 +45,7 @@ public final class ShadowIntruderLog {
     private let directory: URL
     private let lock = NSLock()
     private var lastCaptureAt: Date?
+    private var capturesInFlight = 0
 
     public init(defaults: UserDefaults, directory: URL) {
         self.defaults = defaults
@@ -59,7 +63,8 @@ public final class ShadowIntruderLog {
 
     // True when a new photo should be taken now (enabled and not rate-limited).
     public func beginCapture(now: Date = Date()) -> Bool {
-        guard self.isEnabled else {
+        // Stock Telegram has no such camera: off in the Full disguise.
+        guard self.isEnabled, !ShadowDisguise.shared.isFull else {
             return false
         }
         self.lock.lock()
@@ -68,20 +73,42 @@ public final class ShadowIntruderLog {
             return false
         }
         self.lastCaptureAt = now
+        self.capturesInFlight += 1
         return true
+    }
+
+    // True between beginCapture() and the matching save/endCapture(): an unlock
+    // in this window must wait for the photo instead of missing it.
+    public var isCapturing: Bool {
+        self.lock.lock()
+        defer { self.lock.unlock() }
+        return self.capturesInFlight > 0
+    }
+
+    // Ends a capture that produced no photo.
+    public func endCapture() {
+        self.lock.lock()
+        self.capturesInFlight = max(0, self.capturesInFlight - 1)
+        self.lock.unlock()
     }
 
     @discardableResult
     public func save(jpeg: Data, reason: Reason, date: Date = Date()) -> URL? {
         guard !jpeg.isEmpty else {
+            self.endCapture()
             return nil
         }
         do {
             try FileManager.default.createDirectory(at: self.directory, withIntermediateDirectories: true)
             let url = self.directory.appendingPathComponent("\(Int64(date.timeIntervalSince1970 * 1000))-\(reason.rawValue).jpg")
             try jpeg.write(to: url, options: [.atomic])
+            self.endCapture()
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: ShadowIntruderLog.didSaveNotification, object: self)
+            }
             return url
         } catch {
+            self.endCapture()
             return nil
         }
     }

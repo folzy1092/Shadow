@@ -1457,6 +1457,8 @@ public protocol SharedAccountContext: AnyObject {
     func makeShadowGhostSettingsController(context: AccountContext) -> ViewController
     // Shadow chat lock (ShadowChatLockUI in TelegramUI).
     func shadowChatLockAuthenticate(reason: String, completion: @escaping (Bool) -> Void)
+    // Shadow disguise (debug menu): Face ID / Touch ID, else the chat-lock password.
+    func shadowDisguiseAuthenticate(reason: String, completion: @escaping (Bool) -> Void)
     func shadowChatLockCreatePassword(completion: @escaping (Bool) -> Void)
     func shadowChatLockLockChat(context: AccountContext, peerId: EnginePeer.Id, completion: @escaping (Bool) -> Void)
     func shadowChatLockUnlockChat(context: AccountContext, peerId: EnginePeer.Id, completion: @escaping (Bool) -> Void)

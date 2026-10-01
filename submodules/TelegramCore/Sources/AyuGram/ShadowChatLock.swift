@@ -48,19 +48,30 @@ public final class ShadowChatLockStore {
         return (self.defaults.dictionary(forKey: Key.locked) as? [String: [String]]) ?? [:]
     }
 
+    // Shadow: the Full disguise (ShadowDisguise) turns every lock off; the stored
+    // locks come back when it is switched off.
     public func lockedPeerIds(accountPeerId: Int64) -> [Int64] {
+        if ShadowDisguise.shared.isFull {
+            return []
+        }
         self.lock.lock()
         defer { self.lock.unlock() }
         return (self.lockedMap()["\(accountPeerId)"] ?? []).compactMap(Int64.init)
     }
 
     public func isLocked(accountPeerId: Int64, peerId: Int64) -> Bool {
+        if ShadowDisguise.shared.isFull {
+            return false
+        }
         self.lock.lock()
         defer { self.lock.unlock() }
         return self.lockedMap()["\(accountPeerId)"]?.contains("\(peerId)") ?? false
     }
 
     public var hasLockedChats: Bool {
+        if ShadowDisguise.shared.isFull {
+            return false
+        }
         self.lock.lock()
         defer { self.lock.unlock() }
         return self.lockedMap().values.contains(where: { !$0.isEmpty })

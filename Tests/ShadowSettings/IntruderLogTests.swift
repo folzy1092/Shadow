@@ -22,6 +22,12 @@ struct IntruderLogTests {
         check(log.beginCapture(now: start), "First capture")
         check(!log.beginCapture(now: start.addingTimeInterval(5)), "Rate limited")
         check(log.beginCapture(now: start.addingTimeInterval(ShadowIntruderLog.minimumInterval + 1)), "Allowed after the interval")
+        check(log.isCapturing, "Captures in flight")
+        log.endCapture()
+        log.endCapture()
+        check(!log.isCapturing, "Ended captures")
+        log.endCapture()
+        check(!log.isCapturing, "Extra end is harmless")
 
         check(log.pending().isEmpty, "Nothing pending")
         check(log.save(jpeg: Data(), reason: .passcode) == nil, "Empty data is not saved")

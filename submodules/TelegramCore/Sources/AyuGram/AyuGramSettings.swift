@@ -376,6 +376,32 @@ public struct AyuGramSettings: Codable, Equatable {
         )
     }
 
+    // Shadow: what every reader sees while the disguise is in Full mode
+    // (ShadowDisguise): each fork feature off, stock Telegram behaviour. Never
+    // stored — the real settings stay in Postbox untouched.
+    public static var vanillaSettings: AyuGramSettings {
+        var settings = AyuGramSettings.defaultSettings
+        settings.messageScreenshot.enabled = false
+        settings.unlimitedPinnedChats = false
+        settings.localVoiceTranscription = false
+        settings.keepDeletedMessages = false
+        settings.keepDeletedSecretChatMessages = false
+        settings.saveEditHistory = false
+        settings.showEditComparisonAction = false
+        settings.keepSelfDestructMedia = false
+        settings.ghostMode = false
+        settings.hideOnlineStatus = false
+        settings.hideReadReceipts = false
+        settings.hideStoryViews = false
+        settings.editedIndicatorAsPencil = false
+        settings.allowSaveRestrictedContent = false
+        settings.saveDestructingMedia = false
+        settings.showProfileId = false
+        settings.showProfileDC = false
+        settings.showRegistrationDate = false
+        return settings
+    }
+
     // Reading a chat sends a read receipt, which the server also treats as
     // activity and flips you "online". So whenever online is hidden we must also
     // suppress read receipts — otherwise opening a message would reveal you.
@@ -837,14 +863,14 @@ private func cachedAyuGramSettings(accountId: AccountRecordId) -> AyuGramSetting
 public var ayuGramSettingsCurrent: AyuGramSettings {
     ayuGramSettingsStateLock.lock()
     defer { ayuGramSettingsStateLock.unlock() }
-    return ayuGramSettingsStateValue
+    return shadowDisguiseMasked(ayuGramSettingsStateValue)
 }
 
 /// Returns this account's last known settings without opening a transaction.
 public func currentAyuGramSettings(accountId: AccountRecordId) -> AyuGramSettings {
     ayuGramSettingsStateLock.lock()
     defer { ayuGramSettingsStateLock.unlock() }
-    return cachedAyuGramSettings(accountId: accountId)
+    return shadowDisguiseMasked(cachedAyuGramSettings(accountId: accountId))
 }
 
 /// For media hooks that cannot open a nested Postbox transaction. An unknown
@@ -853,9 +879,9 @@ public func currentAyuGramSettings(mediaBox: MediaBox) -> AyuGramSettings {
     ayuGramSettingsStateLock.lock()
     defer { ayuGramSettingsStateLock.unlock() }
     guard let accountId = ayuGramSettingsMediaAccounts[mediaBox.basePath] else {
-        return AyuGramSettings.defaultSettings
+        return shadowDisguiseMasked(AyuGramSettings.defaultSettings)
     }
-    return cachedAyuGramSettings(accountId: accountId)
+    return shadowDisguiseMasked(cachedAyuGramSettings(accountId: accountId))
 }
 
 /// Select the account whose UI is being constructed, before creating its views.
@@ -887,6 +913,7 @@ public func setAyuGramSettingsCurrent(_ settings: AyuGramSettings, accountId: Ac
 }
 
 private func writeAyuBottomBarDefaults(_ settings: AyuGramSettings) {
+    let settings = shadowDisguiseMasked(settings)
     let defaults = UserDefaults.standard
     defaults.set(settings.foldersAtBottom, forKey: AyuBottomBarDefaultsKeys.foldersAtBottom)
     defaults.set(settings.hideBottomSearch, forKey: AyuBottomBarDefaultsKeys.hideBottomSearch)
@@ -921,6 +948,12 @@ public enum AyuBottomBarDefaultsKeys {
 // interception points (presence, typing, delete handling). A read must have no
 // side effects on another account's UI or UserDefaults mirrors.
 public func currentAyuGramSettings(transaction: Transaction) -> AyuGramSettings {
+    return shadowDisguiseMasked(storedAyuGramSettings(transaction: transaction))
+}
+
+// The stored value, ignoring the disguise. Only for read-modify-write, so the
+// Full disguise never writes its stock values over the real settings.
+private func storedAyuGramSettings(transaction: Transaction) -> AyuGramSettings {
     let settings: AyuGramSettings
     if let entry = transaction.getPreferencesEntry(key: PreferencesKeys.ayuGramSettings)?.get(AyuGramSettings.self) {
         settings = entry
@@ -931,7 +964,7 @@ public func currentAyuGramSettings(transaction: Transaction) -> AyuGramSettings 
 }
 
 public func updateAyuGramSettings(transaction: Transaction, _ f: (AyuGramSettings) -> AyuGramSettings) {
-    let current = currentAyuGramSettings(transaction: transaction)
+    let current = storedAyuGramSettings(transaction: transaction)
     let updated = f(current)
     if updated != current {
         transaction.setPreferencesEntry(key: PreferencesKeys.ayuGramSettings, value: PreferencesEntry(updated))
@@ -947,10 +980,38 @@ public func updateAyuGramSettings(postbox: Postbox, _ f: @escaping (AyuGramSetti
 
 // Reactive stream — used by the UI (settings screen) and the presence wiring.
 public func ayuGramSettings(postbox: Postbox) -> Signal<AyuGramSettings, NoError> {
-    return postbox.preferencesView(keys: [PreferencesKeys.ayuGramSettings])
-    |> map { view -> AyuGramSettings in
-        return view.values[PreferencesKeys.ayuGramSettings]?.get(AyuGramSettings.self) ?? AyuGramSettings.defaultSettings
+    return combineLatest(postbox.preferencesView(keys: [PreferencesKeys.ayuGramSettings]), shadowDisguiseModeSignal())
+    |> map { view, _ -> AyuGramSettings in
+        return shadowDisguiseMasked(view.values[PreferencesKeys.ayuGramSettings]?.get(AyuGramSettings.self) ?? AyuGramSettings.defaultSettings)
     }
+}
+
+// MARK: - Shadow disguise (ShadowDisguise.swift)
+
+private let shadowDisguiseModeValue = ValuePromise<ShadowDisguise.Mode>(ShadowDisguise.shared.mode, ignoreRepeated: true)
+
+public func shadowDisguiseModeSignal() -> Signal<ShadowDisguise.Mode, NoError> {
+    return shadowDisguiseModeValue.get()
+}
+
+func shadowDisguiseMasked(_ settings: AyuGramSettings) -> AyuGramSettings {
+    return ShadowDisguise.shared.isFull ? AyuGramSettings.vanillaSettings : settings
+}
+
+/// Switches the disguise and refreshes every reader: settings streams, the
+/// tab-bar bridge and the hidden-account list.
+public func setShadowDisguiseMode(_ mode: ShadowDisguise.Mode) {
+    precondition(Thread.isMainThread)
+    ShadowDisguise.shared.setMode(mode)
+    shadowDisguiseModeValue.set(mode)
+    ShadowHiddenAccounts.refresh()
+    // Chat lists, folder badges and chat covers listen to these.
+    NotificationCenter.default.post(name: ShadowSpaceStore.didChangeNotification, object: ShadowSpaceStore.shared)
+    NotificationCenter.default.post(name: ShadowChatLockStore.didChangeNotification, object: ShadowChatLockStore.shared)
+    ayuGramSettingsStateLock.lock()
+    let settings = ayuGramSettingsStateValue
+    ayuGramSettingsStateLock.unlock()
+    writeAyuBottomBarDefaults(settings)
 }
 
 // Started once per account. Keep its cache and disk mirror independent; the
@@ -961,7 +1022,11 @@ public func keepAyuGramSettingsUpdated(postbox: Postbox, accountId: AccountRecor
     let _ = cachedAyuGramSettings(accountId: accountId)
     ayuGramSettingsStateLock.unlock()
 
-    return ayuGramSettings(postbox: postbox)
+    // Stored values: the per-account cache and mirror are masked on read.
+    return postbox.preferencesView(keys: [PreferencesKeys.ayuGramSettings])
+    |> map { view -> AyuGramSettings in
+        return view.values[PreferencesKeys.ayuGramSettings]?.get(AyuGramSettings.self) ?? AyuGramSettings.defaultSettings
+    }
     |> distinctUntilChanged
     |> map { settings -> AyuGramSettings in
         ayuGramSettingsStateLock.lock()

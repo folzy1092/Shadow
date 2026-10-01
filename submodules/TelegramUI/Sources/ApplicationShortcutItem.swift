@@ -44,7 +44,25 @@ extension ApplicationShortcutItem {
     }
 }
 
-func applicationShortcutItems(strings: PresentationStrings, otherAccountName: String?, ghostModeEnabled: Bool = false) -> [ApplicationShortcutItem] {
+func applicationShortcutItems(strings: PresentationStrings, otherAccountName: String?, ghostModeEnabled: Bool = false, stock: Bool = false) -> [ApplicationShortcutItem] {
+    // Shadow: stock Telegram's quick actions (the Full disguise, ShadowDisguise).
+    if stock {
+        if let otherAccountName = otherAccountName {
+            return [
+                ApplicationShortcutItem(type: .search, title: strings.Common_Search, subtitle: nil),
+                ApplicationShortcutItem(type: .compose, title: strings.Compose_NewMessage, subtitle: nil),
+                ApplicationShortcutItem(type: .savedMessages, title: strings.Conversation_SavedMessages, subtitle: nil),
+                ApplicationShortcutItem(type: .account, title: strings.Shortcut_SwitchAccount, subtitle: otherAccountName)
+            ]
+        } else {
+            return [
+                ApplicationShortcutItem(type: .search, title: strings.Common_Search, subtitle: nil),
+                ApplicationShortcutItem(type: .compose, title: strings.Compose_NewMessage, subtitle: nil),
+                ApplicationShortcutItem(type: .savedMessages, title: strings.Conversation_SavedMessages, subtitle: nil),
+                ApplicationShortcutItem(type: .appIcon, title: strings.Shortcut_AppIcon, subtitle: nil)
+            ]
+        }
+    }
     // AyuGram: a Ghost Mode toggle at the top of the long-press menu. The subtitle
     // reflects the current state so the user can see it at a glance. Hardcoded
     // English titles to match the AyuGram settings screen (no localization keys).

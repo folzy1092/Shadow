@@ -3,13 +3,37 @@ import UIKit
 import SwiftSignalKit
 import TelegramCore
 import AccountContext
+import PasscodeUI
 
 // Shadow: sends wrong-password photos (ShadowIntruderLog, spec 7.2) to Saved
-// Messages of the account that is unlocked; if they cannot be queued, they go
-// to the photo library instead. Called whenever the app becomes unlocked.
+// Messages of the account that is unlocked; if they cannot be queued and the
+// camera could not already put them into the photo library, they go there.
+// Called whenever the app or a locked chat becomes unlocked.
 enum ShadowIntruderDelivery {
+    private static weak var waitingContext: AccountContext?
+    private static var saveObserver: NSObjectProtocol?
+
     static func deliverPending(context: AccountContext) {
         let log = ShadowIntruderLog.shared
+        // Not while the app pretends to be stock Telegram (ShadowDisguise): the
+        // photos wait for the next unlock after the disguise is off.
+        if ShadowDisguise.shared.isFull {
+            return
+        }
+        // Unlocked while the camera is still taking the photo (a correct code
+        // right after a wrong one): send it as soon as it is saved.
+        if log.isCapturing {
+            self.waitingContext = context
+            if self.saveObserver == nil {
+                self.saveObserver = NotificationCenter.default.addObserver(forName: ShadowIntruderLog.didSaveNotification, object: nil, queue: .main, using: { _ in
+                    guard let context = ShadowIntruderDelivery.waitingContext, !ShadowIntruderLog.shared.isCapturing else {
+                        return
+                    }
+                    ShadowIntruderDelivery.waitingContext = nil
+                    ShadowIntruderDelivery.deliverPending(context: context)
+                })
+            }
+        }
         let entries = log.pending()
         guard !entries.isEmpty else {
             return
@@ -44,7 +68,7 @@ enum ShadowIntruderDelivery {
         }
         let _ = (enqueueMessages(account: context.account, peerId: context.account.peerId, messages: messages)
         |> deliverOnMainQueue).startStandalone(next: { ids in
-            if !ids.contains(where: { $0 != nil }) {
+            if !ids.contains(where: { $0 != nil }) && !ShadowIntruderCamera.canSaveToPhotoLibrary {
                 for image in images {
                     UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil)
                 }

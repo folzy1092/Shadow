@@ -486,7 +486,8 @@ extension PeerInfoScreenNode {
                 default:
                     canOpenShadowRules = false
                 }
-                if canOpenShadowRules {
+                // Shadow: a settings entry point, hidden by the disguise (ShadowDisguise).
+                if canOpenShadowRules, !ShadowDisguise.shared.hidesSettings {
                     items.append(.action(ContextMenuActionItem(text: "Правила Shadow", icon: { theme in
                         generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Privacy"), color: theme.contextMenu.primaryColor)
                     }, action: { [weak self] _, f in
