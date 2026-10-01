@@ -1598,6 +1598,11 @@ private func synchronizeChatListFilters(transaction: Transaction, accountPeerId:
                 }
             }
             
+            // Shadow: folders the server rejected (e.g. more chats than its
+            // limit with "Безлимитные закрепы") stay local and are retried on
+            // the next sync instead of being marked as synced and reverted to
+            // the server copy on the next launch.
+            let rejectedFilterIds = Atomic<Set<Int32>>(value: Set())
             var addSignals: Signal<Never, NoError> = .complete()
             for filter in mergedFilters {
                 let updated: Bool
@@ -1607,10 +1612,16 @@ private func synchronizeChatListFilters(transaction: Transaction, accountPeerId:
                     updated = true
                 }
                 if updated {
+                    let filterId = filter.id
                     addSignals = addSignals
                     |> then(
                         _internal_requestUpdateChatListFilter(postbox: postbox, network: network, id: filter.id, filter: filter)
                         |> `catch` { _ -> Signal<Never, NoError> in
+                            let _ = rejectedFilterIds.modify { current in
+                                var current = current
+                                current.insert(filterId)
+                                return current
+                            }
                             return .complete()
                         }
                         |> ignoreValues
@@ -1652,10 +1663,16 @@ private func synchronizeChatListFilters(transaction: Transaction, accountPeerId:
             )
             |> then(
                 postbox.transaction { transaction -> Void in
+                    let rejected = rejectedFilterIds.with { $0 }
                     let _ = updateChatListFiltersState(transaction: transaction, { state in
                         var state = state
                         state.filters = mergedFilters
-                        state.remoteFilters = state.filters
+                        state.remoteFilters = mergedFilters.compactMap { filter -> ChatListFilter? in
+                            if rejected.contains(filter.id) {
+                                return remoteFilters.first(where: { $0.id == filter.id })
+                            }
+                            return filter
+                        }
                         state.remoteDisplayTags = state.displayTags
                         return state
                     })

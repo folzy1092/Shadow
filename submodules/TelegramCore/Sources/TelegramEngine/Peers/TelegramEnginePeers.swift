@@ -1390,7 +1390,12 @@ public extension TelegramEngine {
         }
         
         public func toggleForumChannelTopicPinned(id: EnginePeer.Id, threadId: Int64) -> Signal<Never, SetForumChannelTopicPinnedError> {
-            return self.account.postbox.transaction { transaction -> ([Int64], Int) in
+            let account = self.account
+            return self.account.postbox.transaction { transaction -> ([Int64], Int, Bool) in
+                // Shadow: "Безлимитные закрепы" — no limit for pinned Saved
+                // Messages chats and forum topics; pins above the server limit
+                // stay on this device (the server request then fails quietly).
+                let shadowUnlimited = currentAyuGramSettings(transaction: transaction).unlimitedPinnedChats
                 if id == self.account.peerId {
                     let appConfiguration: AppConfiguration = transaction.getPreferencesEntry(key: PreferencesKeys.appConfiguration)?.get(AppConfiguration.self) ?? AppConfiguration.defaultValue
                     
@@ -1398,7 +1403,7 @@ public extension TelegramEngine {
                     let limitsConfiguration = UserLimitsConfiguration(appConfiguration: appConfiguration, isPremium: accountPeer?.isPremium ?? false)
                     let limit = limitsConfiguration.maxPinnedSavedChatCount
                     
-                    return (transaction.getPeerPinnedThreads(peerId: id), Int(limit))
+                    return (transaction.getPeerPinnedThreads(peerId: id), Int(limit), shadowUnlimited)
                 } else {
                     var limit = 5
                     let appConfiguration: AppConfiguration = transaction.getPreferencesEntry(key: PreferencesKeys.appConfiguration)?.get(AppConfiguration.self) ?? AppConfiguration.defaultValue
@@ -1406,22 +1411,29 @@ public extension TelegramEngine {
                         limit = Int(value)
                     }
                     
-                    return (transaction.getPeerPinnedThreads(peerId: id), limit)
+                    return (transaction.getPeerPinnedThreads(peerId: id), limit, shadowUnlimited)
                 }
             }
             |> castError(SetForumChannelTopicPinnedError.self)
-            |> mapToSignal { threadIds, limit -> Signal<Never, SetForumChannelTopicPinnedError> in
+            |> mapToSignal { threadIds, limit, shadowUnlimited -> Signal<Never, SetForumChannelTopicPinnedError> in
                 var threadIds = threadIds
                 if threadIds.contains(threadId) {
                     threadIds.removeAll(where: { $0 == threadId })
                 } else {
-                    if threadIds.count + 1 > limit {
+                    if !shadowUnlimited && threadIds.count + 1 > limit {
                         return .fail(.limitReached(limit))
                     }
                     threadIds.insert(threadId, at: 0)
                 }
                 
-                return _internal_setForumChannelPinnedTopics(account: self.account, id: id, threadIds: threadIds)
+                let signal = _internal_setForumChannelPinnedTopics(account: account, id: id, threadIds: threadIds)
+                if shadowUnlimited && threadIds.count > limit {
+                    return signal
+                    |> `catch` { _ -> Signal<Never, SetForumChannelTopicPinnedError> in
+                        return .complete()
+                    }
+                }
+                return signal
             }
         }
         

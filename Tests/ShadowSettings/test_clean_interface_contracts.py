@@ -96,6 +96,12 @@ class CleanInterfaceContracts(unittest.TestCase):
     def test_unlimited_pinned_chats(self):
         toggle = read("TelegramCore/Sources/TelegramEngine/Peers/TogglePeerChatPinned.swift")
         self.assertIn("if !shadowUnlimited, count > limitCount", toggle)
+        self.assertIn("!currentAyuGramSettings(transaction: transaction).unlimitedPinnedChats, updatedData.includePeers.peers.count > userLimitsConfiguration.maxFolderChatsCount", toggle)
+        peers = read("TelegramCore/Sources/TelegramEngine/Peers/TelegramEnginePeers.swift")
+        self.assertIn("if !shadowUnlimited && threadIds.count + 1 > limit", peers)
+        filtering = read("TelegramCore/Sources/TelegramEngine/Peers/ChatListFiltering.swift")
+        self.assertIn("rejectedFilterIds", filtering)
+        self.assertIn("return remoteFilters.first(where: { $0.id == filter.id })", filtering)
         settings = read("TelegramCore/Sources/AyuGram/AyuGramSettings.swift")
         self.assertIn('forKey: "unlimitedPinnedChats")) ?? 1) != 0', settings)
         hub = read("SettingsUI/Sources/AyuGramSettingsController.swift")

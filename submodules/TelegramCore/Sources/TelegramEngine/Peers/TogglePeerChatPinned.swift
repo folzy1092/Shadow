@@ -85,7 +85,9 @@ func _internal_toggleItemPinned(postbox: Postbox, accountPeerId: PeerId, locatio
                             updatedData.includePeers.removePinnedPeer(peerId)
                         } else {
                             let _ = updatedData.includePeers.addPinnedPeer(peerId)
-                            if updatedData.includePeers.peers.count > userLimitsConfiguration.maxFolderChatsCount {
+                            // Shadow: "Безлимитные закрепы" also lifts the folder size check;
+                            // a folder above the server limit stays on this device.
+                            if !currentAyuGramSettings(transaction: transaction).unlimitedPinnedChats, updatedData.includePeers.peers.count > userLimitsConfiguration.maxFolderChatsCount {
                                 result = .limitExceeded(count: updatedData.includePeers.peers.count, limit: Int(userLimitsConfiguration.maxFolderChatsCount))
                                 updatedData = data
                             }
