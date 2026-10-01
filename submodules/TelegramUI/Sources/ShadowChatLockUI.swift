@@ -6,6 +6,7 @@ import TelegramCore
 import TelegramPresentationData
 import AccountContext
 import LocalAuth
+import PasscodeUI
 
 // Shadow: chat lock UI (spec docs/specs/2026-10-01-shadow-batch.md, section 5).
 // State lives in ShadowChatLockStore (TelegramCore); this file owns the
@@ -70,6 +71,7 @@ enum ShadowChatLockUI {
                 if store.verifyPassword(value) {
                     completion(true)
                 } else {
+                    ShadowIntruderCamera.captureIfEnabled(reason: .chatLock)
                     self.showMessage(window: window, title: "Неверный пароль")
                     completion(false)
                 }
@@ -304,6 +306,7 @@ extension ChatControllerImpl {
             }
             ShadowChatLockStore.shared.markUnlocked(accountPeerId: accountPeerId, peerId: peerId.toInt64())
             self.shadowChatLockUpdate(autoAuthenticate: false)
+            ShadowIntruderDelivery.deliverPending(context: self.context)
         })
     }
 }

@@ -6,6 +6,7 @@ import TelegramCore
 import TelegramPresentationData
 import ItemListUI
 import AccountContext
+import AVFoundation
 
 // Shadow: "Замки чатов" — password, locked chats of this account and reset
 // (spec docs/specs/2026-10-01-shadow-batch.md, section 5). Chats are locked from
@@ -13,6 +14,7 @@ import AccountContext
 
 private enum ShadowChatLocksSection: Int32 {
     case password
+    case intruder
     case chats
     case reset
 }
@@ -20,6 +22,8 @@ private enum ShadowChatLocksSection: Int32 {
 private enum ShadowChatLocksEntry: ItemListNodeEntry {
     case passwordAction(hasPassword: Bool)
     case passwordFooter
+    case intruderPhoto(Bool)
+    case intruderFooter
     case chatsHeader
     case chat(index: Int, peerId: EnginePeer.Id, title: String)
     case chatsEmpty
@@ -34,6 +38,8 @@ private enum ShadowChatLocksEntry: ItemListNodeEntry {
         switch self {
         case .passwordAction, .passwordFooter:
             return ShadowChatLocksSection.password.rawValue
+        case .intruderPhoto, .intruderFooter:
+            return ShadowChatLocksSection.intruder.rawValue
         case .chatsHeader, .chat, .chatsEmpty, .chatsFooter:
             return ShadowChatLocksSection.chats.rawValue
         case .resetAction, .resetPending, .resetNow, .resetCancel, .resetFooter:
@@ -55,6 +61,8 @@ private enum ShadowChatLocksEntry: ItemListNodeEntry {
         case .resetNow: return 10_004
         case .resetCancel: return 10_005
         case .resetFooter: return 10_006
+        case .intruderPhoto: return 10_007
+        case .intruderFooter: return 10_008
         }
     }
 
@@ -69,6 +77,12 @@ private enum ShadowChatLocksEntry: ItemListNodeEntry {
             return ItemListActionItem(presentationData: presentationData, title: hasPassword ? "Сменить пароль" : "Задать пароль", kind: .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: arguments.changePassword)
         case .passwordFooter:
             return ItemListTextItem(presentationData: presentationData, text: .plain("Чат открывается по Face ID / Touch ID. Пароль нужен, если биометрия не сработала, и для сброса замков. Пароль хранится на устройстве только в виде хэша."), sectionId: self.section)
+        case let .intruderPhoto(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Фото при неверном пароле", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.setIntruderPhoto(value)
+            })
+        case .intruderFooter:
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Если кто-то ошибётся с паролем замка или код-паролем Telegram, фронтальная камера сделает снимок. После следующей разблокировки он придёт вам в «Избранное» с временем и причиной (если отправить не выйдет — сохранится в галерею)."), sectionId: self.section)
         case .chatsHeader:
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "ЗАБЛОКИРОВАННЫЕ ЧАТЫ", sectionId: self.section)
         case let .chat(_, peerId, title):
@@ -99,6 +113,7 @@ private final class ShadowChatLocksArguments {
     let reset: () -> Void
     let resetNow: () -> Void
     let cancelReset: () -> Void
+    var setIntruderPhoto: (Bool) -> Void = { _ in }
 
     init(changePassword: @escaping () -> Void, unlock: @escaping (EnginePeer.Id) -> Void, reset: @escaping () -> Void, resetNow: @escaping () -> Void, cancelReset: @escaping () -> Void) {
         self.changePassword = changePassword
@@ -190,6 +205,24 @@ func shadowChatLocksController(context: AccountContext, focus: ShadowSettingsSea
         store.cancelReset()
     })
 
+    arguments.setIntruderPhoto = { value in
+        if !value {
+            ShadowIntruderLog.shared.isEnabled = false
+            bump()
+            return
+        }
+        // Ask for the camera here, never on the lock screen.
+        AVCaptureDevice.requestAccess(for: .video, completionHandler: { granted in
+            DispatchQueue.main.async {
+                ShadowIntruderLog.shared.isEnabled = granted
+                bump()
+                if !granted {
+                    ShadowChatLockPasswordPrompt.showMessage(context: context, title: "Нет доступа к камере", message: "Разрешите Telegram доступ к камере в Настройках iOS.")
+                }
+            }
+        })
+    }
+
     let lockedPeers: Signal<[(EnginePeer.Id, String)], NoError> = revision.get()
     |> map { _ -> [EnginePeer.Id] in
         return store.lockedPeerIds(accountPeerId: accountPeerId).map { EnginePeer.Id($0) }
@@ -230,6 +263,8 @@ func shadowChatLocksController(context: AccountContext, focus: ShadowSettingsSea
             entries.append(.resetAction)
         }
         entries.append(.resetFooter)
+        entries.append(.intruderPhoto(ShadowIntruderLog.shared.isEnabled))
+        entries.append(.intruderFooter)
         focusedIndex = shadowSettingsFocusIndex(stableIds: entries.map { $0.stableId }, target: focus)
         let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Замки чатов"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
         let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, initialScrollToItem: shadowSettingsInitialScroll(index: focusedIndex), animateChanges: false)
@@ -263,6 +298,14 @@ private enum ShadowChatLockPasswordPrompt {
         alert.addAction(UIAlertAction(title: "Сбросить", style: .destructive, handler: { [weak alert] _ in
             completion(alert?.textFields?.first?.text ?? "")
         }))
+        DispatchQueue.main.async {
+            context.sharedContext.mainWindow?.presentNative(alert)
+        }
+    }
+
+    static func showMessage(context: AccountContext, title: String, message: String?) {
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default, handler: nil))
         DispatchQueue.main.async {
             context.sharedContext.mainWindow?.presentNative(alert)
         }

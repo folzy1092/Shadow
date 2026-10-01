@@ -121,6 +121,7 @@ final class AuthorizedApplicationContext {
     private let watchNavigateToMessageDisposable = MetaDisposable()
     private let permissionsDisposable = MetaDisposable()
     private let appUpdateInfoDisposable = MetaDisposable()
+    private let shadowIntruderDisposable = MetaDisposable()
     
     private var inAppNotificationSettings: InAppNotificationSettings?
     
@@ -192,6 +193,20 @@ final class AuthorizedApplicationContext {
             }
             
             strongSelf.notificationController.updateIsTemporaryHidden(hasContext)
+        }
+        
+        // Shadow: wrong-password photos are sent to Saved Messages once the app
+        // is unlocked (spec 7.2).
+        if let appLockContext = self.context.sharedContext.appLockContext as? AppLockContextImpl {
+            self.shadowIntruderDisposable.set((appLockContext.isCurrentlyLocked
+            |> distinctUntilChanged
+            |> filter { !$0 }
+            |> deliverOnMainQueue).start(next: { [weak self] _ in
+                guard let self else {
+                    return
+                }
+                ShadowIntruderDelivery.deliverPending(context: self.context)
+            }))
         }
         
         if KeyShortcutsController.isAvailable {
@@ -833,6 +848,7 @@ final class AuthorizedApplicationContext {
         self.context.account.shouldKeepOnlinePresence.set(.single(false))
         self.context.account.shouldBeServiceTaskMaster.set(.single(.never))
         self.loggedOutDisposable.dispose()
+        self.shadowIntruderDisposable.dispose()
         self.inAppNotificationSettingsDisposable.dispose()
         self.notificationMessagesDisposable.dispose()
         self.termsOfServiceUpdatesDisposable.dispose()

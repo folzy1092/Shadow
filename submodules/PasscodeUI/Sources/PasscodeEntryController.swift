@@ -186,6 +186,10 @@ public final class PasscodeEntryController: ViewController {
             } else {
                 strongSelf.appLockContext.failedUnlockAttempt()
                 strongSelf.controllerNode.animateError()
+                // Shadow: optional front-camera photo of whoever got the code wrong (spec 7.2).
+                if strongSelf.applicationBindings.isMainApp {
+                    ShadowIntruderCamera.captureIfEnabled(reason: .passcode)
+                }
             }
         }
         self.controllerNode.requestBiometrics = { [weak self] in

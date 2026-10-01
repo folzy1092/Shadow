@@ -2204,6 +2204,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
                     return
                 }
                 ShadowChatLockStore.shared.markUnlocked(accountPeerId: accountPeerId, peerId: peerId)
+                ShadowIntruderDelivery.deliverPending(context: params.context)
                 navigateToChatControllerImpl(params)
             })
             return

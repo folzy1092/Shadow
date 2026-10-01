@@ -56,6 +56,21 @@ class ChatLockContracts(unittest.TestCase):
         self.assertIn("ShadowChatLockStore.shared.relock(", hook)
         self.assertIn("if !stillInStack", hook)
 
+    def test_intruder_photo(self):
+        entry = read("PasscodeUI/Sources/PasscodeEntryController.swift")
+        self.assertIn("ShadowIntruderCamera.captureIfEnabled(reason: .passcode)", entry)
+        ui = read("TelegramUI/Sources/ShadowChatLockUI.swift")
+        self.assertIn("ShadowIntruderCamera.captureIfEnabled(reason: .chatLock)", ui)
+        camera = read("PasscodeUI/Sources/ShadowIntruderCamera.swift")
+        # Never prompts for camera access on the lock screen.
+        self.assertNotIn("requestAccess", camera)
+        self.assertIn("authorizationStatus(for: .video) == .authorized", camera)
+        delivery = read("TelegramUI/Sources/ShadowIntruderDelivery.swift")
+        self.assertIn("peerId: context.account.peerId", delivery)
+        self.assertIn("UIImageWriteToSavedPhotosAlbum", delivery)
+        app = read("TelegramUI/Sources/ApplicationContext.swift")
+        self.assertIn("ShadowIntruderDelivery.deliverPending(context: self.context)", app)
+
     def test_unlocking_requires_authentication(self):
         ui = read("TelegramUI/Sources/ShadowChatLockUI.swift")
         unlock = ui.split("static func unlockChatPermanently", 1)[1].split("\n    }\n", 1)[0]
