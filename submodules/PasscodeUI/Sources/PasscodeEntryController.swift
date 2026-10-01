@@ -155,6 +155,19 @@ public final class PasscodeEntryController: ViewController {
                     succeed = passcode == code
             }
             
+            // Shadow: on the app lock screen the main code opens the main space
+            // and the second code opens the second space (spec section 6).
+            // Passcode checks with a `completed` handler (settings) only accept
+            // the main code.
+            if strongSelf.completed == nil && strongSelf.applicationBindings.isMainApp {
+                if succeed {
+                    ShadowSpaceStore.shared.setActiveSpace(.main)
+                } else if ShadowSpaceStore.shared.hasCode && ShadowSpaceStore.shared.verifyCode(passcode) {
+                    ShadowSpaceStore.shared.setActiveSpace(.second)
+                    succeed = true
+                }
+            }
+            
             if succeed {
                 if let completed = strongSelf.completed {
                     completed()
@@ -255,6 +268,10 @@ public final class PasscodeEntryController: ViewController {
                     }
                     strongSelf.hasOngoingBiometricsRequest = false
                 } else {
+                    // Shadow: Face ID / Touch ID always opens the main space.
+                    if strongSelf.applicationBindings.isMainApp {
+                        ShadowSpaceStore.shared.setActiveSpace(.main)
+                    }
                     strongSelf.appLockContext.unlock()
                     strongSelf.hasOngoingBiometricsRequest = false
                 }

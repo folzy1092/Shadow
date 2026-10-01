@@ -7252,7 +7252,17 @@ private final class ChatListLocationContext {
                         }
                     )))
                 }
-                self.storyButton = nil
+                // Shadow: 🫥 moves the selected chats between spaces (spec section 6).
+                if selectedPeerIds.isEmpty {
+                    self.storyButton = nil
+                } else {
+                    self.storyButton = AnyComponentWithIdentity(id: "shadowSpace", component: AnyComponent(NavigationButtonComponent(
+                        content: .text(title: "🫥", isBold: false),
+                        pressed: { [weak self] _ in
+                            self?.parentController?.shadowChooseSpaceForSelectedChats(selectedPeerIds)
+                        }
+                    )))
+                }
                 self.proxyButton = nil
                 self.ghostButton = nil
             }
@@ -7662,6 +7672,35 @@ private func shadowFilteredStorySubscriptions(context: AccountContext, _ signal:
 }
 
 extension ChatListControllerImpl {
+    // Shadow: the 🫥 button in edit mode — pick the space for the selected chats.
+    func shadowChooseSpaceForSelectedChats(_ peerIds: Set<EnginePeer.Id>) {
+        let context = self.context
+        let candidates = peerIds.filter { $0 != context.account.peerId }.sorted(by: { $0.toInt64() < $1.toInt64() })
+        if candidates.isEmpty {
+            return
+        }
+        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+        let actionSheet = ActionSheetController(presentationData: presentationData)
+        var items: [ActionSheetItem] = [ActionSheetTextItem(title: "Где показывать выбранные чаты")]
+        for visibility in ShadowSpaceStore.Visibility.allCases {
+            items.append(ActionSheetButtonItem(title: visibility.title, color: .accent, action: { [weak self, weak actionSheet] in
+                actionSheet?.dismissAnimated()
+                guard let self else {
+                    return
+                }
+                shadowSetSpaceVisibility(context: context, peerIds: candidates, visibility: visibility, parentController: self)
+                self.donePressed()
+            }))
+        }
+        actionSheet.setItemGroups([
+            ActionSheetItemGroup(items: items),
+            ActionSheetItemGroup(items: [ActionSheetButtonItem(title: presentationData.strings.Common_Cancel, color: .accent, font: .bold, action: { [weak actionSheet] in
+                actionSheet?.dismissAnimated()
+            })])
+        ])
+        self.present(actionSheet, in: .window(.root))
+    }
+
     // Shadow: the 🔒 button in edit mode. If every selected chat is already
     // locked, the locks are removed (after Face ID / password); otherwise the
     // unlocked ones are locked (the first lock creates the device password).

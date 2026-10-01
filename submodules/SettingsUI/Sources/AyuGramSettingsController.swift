@@ -110,6 +110,7 @@ private enum AyuHubEntry: ItemListNodeEntry {
     case pushDiagnostics
     case quickReplies
     case chatLocks
+    case secondSpace
     case infoFooter
     case checkUpdates(label: String, enabled: Bool)
 
@@ -125,7 +126,7 @@ private enum AyuHubEntry: ItemListNodeEntry {
             return AyuHubSection.privacy.rawValue
         case .noResults:
             return AyuHubSection.info.rawValue
-        case .customization, .spy, .ghost, .filters, .misc, .hiddenAccounts, .backup, .pushDiagnostics, .quickReplies, .chatLocks:
+        case .customization, .spy, .ghost, .filters, .misc, .hiddenAccounts, .backup, .pushDiagnostics, .quickReplies, .chatLocks, .secondSpace:
             return AyuHubSection.tools.rawValue
         case .infoFooter:
             return AyuHubSection.info.rawValue
@@ -153,6 +154,8 @@ private enum AyuHubEntry: ItemListNodeEntry {
             return 12
         case .chatLocks:
             return 13
+        case .secondSpace:
+            return 14
         case .infoFooter:
             return 20
         case .backup:
@@ -207,6 +210,8 @@ private enum AyuHubEntry: ItemListNodeEntry {
             return ItemListDisclosureItem(presentationData: presentationData, title: "Шаблоны ответов", label: "", sectionId: self.section, style: .blocks, action: { arguments.openFeature(.quickReplies) })
         case .chatLocks:
             return ItemListDisclosureItem(presentationData: presentationData, title: "Замки чатов", label: "", sectionId: self.section, style: .blocks, action: { arguments.openFeature(.chatLocks) })
+        case .secondSpace:
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Второе пространство", label: "", sectionId: self.section, style: .blocks, action: { arguments.openFeature(.secondSpace) })
         case let .updateBanner(title, text):
             return ItemListInfoItem(presentationData: presentationData, title: title, text: .markdown(text), style: .blocks, sectionId: self.section, linkAction: { action in
                 if case let .tap(url) = action {
@@ -271,6 +276,7 @@ func shadowSettingsSearchDestinationController(context: AccountContext, item: Sh
         }
     case .quickReplies: return shadowQuickRepliesController(context: context, focus: item)
     case .chatLocks: return shadowChatLocksController(context: context, focus: item)
+    case .secondSpace: return shadowSecondSpaceController(context: context, focus: item)
     }
 }
 
@@ -315,6 +321,8 @@ public func ayuGramSettingsController(context: AccountContext) -> ViewController
             pushControllerImpl?(shadowQuickRepliesController(context: context))
         case .chatLocks:
             pushControllerImpl?(shadowChatLocksController(context: context))
+        case .secondSpace:
+            pushControllerImpl?(shadowSecondSpaceController(context: context))
         default:
             break
         }
@@ -351,7 +359,8 @@ public func ayuGramSettingsController(context: AccountContext) -> ViewController
         case let .result(status):
             switch status {
             case .upToDate:
-                checkLabel = "Актуальная версия"
+                // Short enough not to truncate; the build shows what is installed.
+                checkLabel = ShadowUpdateCheck.installedBuild.map { "Актуально · \($0)" } ?? "Актуально"
             case let .available(release):
                 checkLabel = "Доступна \(release.build)"
                 if !bannerDismissed {
@@ -369,7 +378,7 @@ public func ayuGramSettingsController(context: AccountContext) -> ViewController
         }
         entries.append(.query(query))
         if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            entries += [.customization, .spy, .ghost, .filters, .misc, .hiddenAccounts, .backup, .pushDiagnostics, .quickReplies, .chatLocks, .infoFooter, .checkUpdates(label: checkLabel, enabled: checkEnabled)]
+            entries += [.customization, .spy, .ghost, .filters, .misc, .hiddenAccounts, .backup, .pushDiagnostics, .quickReplies, .chatLocks, .secondSpace, .infoFooter, .checkUpdates(label: checkLabel, enabled: checkEnabled)]
         } else {
             let matches = ShadowSettingsSearchIndex.search(query)
             entries += matches.isEmpty ? [.noResults] : matches.map { .result($0) }

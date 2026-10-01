@@ -615,6 +615,25 @@ func chatListNodeEntriesForView(view: EngineChatList, state: ChatListNodeState, 
         ))
     }
     
+    // Shadow: chats hidden in the active space (spec section 6) leave the list
+    // and the archive preview.
+    let shadowSpaces = ShadowSpaceStore.shared
+    let shadowAccountPeerId = accountPeerId.toInt64()
+    let shadowIsHidden: (EnginePeer.Id) -> Bool = { peerId in
+        return shadowSpaces.isHidden(accountPeerId: shadowAccountPeerId, peerId: peerId.toInt64())
+    }
+    groupItems = groupItems.map { group -> EngineChatList.GroupItem in
+        let items = group.items.filter { !shadowIsHidden($0.peer.peerId) }
+        var topMessage = group.topMessage
+        if let message = topMessage, shadowIsHidden(message.id.peerId) {
+            topMessage = nil
+        }
+        if items.count == group.items.count && topMessage?.id == group.topMessage?.id {
+            return group
+        }
+        return EngineChatList.GroupItem(id: group.id, topMessage: topMessage, items: items, unreadCount: group.unreadCount)
+    }
+    
     var result: [ChatListNodeEntry] = []
     
     var hasContacts = false
@@ -625,7 +644,7 @@ func chatListNodeEntriesForView(view: EngineChatList, state: ChatListNodeState, 
         }
         
         for contact in contacts {
-            if existingPeerIds.contains(contact.peer.id) {
+            if existingPeerIds.contains(contact.peer.id) || shadowIsHidden(contact.peer.id) {
                 continue
             }
             result.append(.ContactEntry(ChatListNodeEntry.ContactEntryData(
@@ -651,7 +670,7 @@ func chatListNodeEntriesForView(view: EngineChatList, state: ChatListNodeState, 
     }
     
     let filteredAdditionalItemEntries = view.additionalItems.filter { item -> Bool in
-        return item.item.renderedPeer.peerId != state.hiddenPsaPeerId
+        return item.item.renderedPeer.peerId != state.hiddenPsaPeerId && !shadowIsHidden(item.item.renderedPeer.peerId)
     }
     
     var foundPeerIds = Set<EnginePeer.Id>()
@@ -681,6 +700,9 @@ func chatListNodeEntriesForView(view: EngineChatList, state: ChatListNodeState, 
         }
         
         if let savedMessagesPeer = savedMessagesPeer, let peerId = peerId, savedMessagesPeer.id == peerId || foundPeerIds.contains(peerId) {
+            continue loop
+        }
+        if case .chatList = entry.index, let peerId, shadowIsHidden(peerId) {
             continue loop
         }
         if let peerId = peerId, state.pendingRemovalItemIds.contains(ChatListNodeState.ItemId(peerId: peerId, threadId: threadId)) {

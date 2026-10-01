@@ -16,6 +16,7 @@ class SearchContracts(unittest.TestCase):
         ids = {'backup': {0, 1, 2}, 'filters': {0}, 'pushDiagnostics': {0, 1}}
         ids['quickReplies'] = {0}
         ids['chatLocks'] = {0}
+        ids['secondSpace'] = {0}
         for destination, name in enums.items():
             enum = UI.split(f'private enum {name}:', 1)[1].split('\nprivate ', 1)[0]
             ids[destination] = {int(i) for i in re.findall(r'case \.\w+: return (-?\d+)', enum)}

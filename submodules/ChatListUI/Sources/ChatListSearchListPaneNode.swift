@@ -3471,6 +3471,19 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                     entries.append(.addContact(finalQuery, presentationData.theme, presentationData.strings))
                 }
 
+                // Shadow: chats hidden in the active space are not found (spec section 6).
+                let shadowAccountPeerId = context.account.peerId.toInt64()
+                entries = entries.filter { entry in
+                    switch entry.stableId {
+                    case let .localPeerId(peerId), let .globalPeerId(peerId):
+                        return !ShadowSpaceStore.shared.isHidden(accountPeerId: shadowAccountPeerId, peerId: peerId.toInt64())
+                    case let .messageId(messageId, _):
+                        return !ShadowSpaceStore.shared.isHidden(accountPeerId: shadowAccountPeerId, peerId: messageId.peerId.toInt64())
+                    default:
+                        return true
+                    }
+                }
+
                 return (entries, isSearching, query)
             }
         }
@@ -4173,6 +4186,9 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                         continue loop
                     }
                     if !doesPeerMatchFilter(peer: EnginePeer(peer), filter: peersFilter) {
+                        continue
+                    }
+                    if ShadowSpaceStore.shared.isHidden(accountPeerId: context.account.peerId.toInt64(), peerId: peer.id.toInt64()) {
                         continue
                     }
                     peerIds.insert(peer.id)

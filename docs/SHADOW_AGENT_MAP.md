@@ -100,6 +100,18 @@ UI-проекция настроек выбирается в `TelegramRootContro
 - отправка без онлайна: `AyuDelayedSend.swift` (через schedule_date) + `EnqueueMessage.swift`;
 - уведомления о скриншотах **не отправляются никогда** (`ShadowScreenshotNotices.swift`).
 
+## 5a. Замки чатов и второе пространство
+
+- Замки: `ShadowChatLock.swift` (хранилище), `TelegramUI/Sources/ShadowChatLockUI.swift`
+  (Face ID/пароль, шторка). Пока чат заблокирован, лента скрыта целиком
+  (`ChatControllerNode.shadowSetChatLockContentHidden`), а не только закрыта.
+- Второе пространство: `ShadowSpaces.swift` (видимость чатов, второй код,
+  активное пространство только в памяти) + `ShadowSpacesSync.swift` (заглушка
+  уведомлений). Код проверяется в `PasscodeEntryController` (экран блокировки),
+  фильтры — `chatListNodeEntriesForView`, поиск, частые собеседники.
+  Новое место, где показывается список чатов, должно проверять
+  `ShadowSpaceStore.shared.isHidden(accountPeerId:peerId:)`.
+
 ## 6. Анти-удаление и архив
 
 - Удалённые сервером чужие сообщения не удаляются, а помечаются

@@ -1086,11 +1086,56 @@ func chatContextMenuItems(context: AccountContext, peerId: EnginePeer.Id, promoI
             }
             return false
         })
+        // Shadow: "Пространство" → Везде / Только основное / Только второе (spec section 6).
+        let currentVisibility = ShadowSpaceStore.shared.visibility(accountPeerId: context.account.peerId.toInt64(), peerId: peerId.toInt64())
+        let spaceItem: ContextMenuItem = .action(ContextMenuActionItem(text: "Пространство: \(currentVisibility.title.lowercased())", icon: { theme in
+            return generateTintedImage(image: UIImage(systemName: "square.on.square.dashed"), color: theme.contextMenu.primaryColor)
+        }, action: { c, _ in
+            var subItems: [ContextMenuItem] = []
+            for visibility in ShadowSpaceStore.Visibility.allCases {
+                subItems.append(.action(ContextMenuActionItem(text: visibility.title, icon: { theme in
+                    if visibility == currentVisibility {
+                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor)
+                    }
+                    return nil
+                }, action: { _, f in
+                    f(.default)
+                    shadowSetSpaceVisibility(context: context, peerIds: [peerId], visibility: visibility, parentController: chatListController)
+                })))
+            }
+            c?.setItems(.single(ContextController.Items(content: .list(subItems))), minHeight: nil, animated: true)
+        }))
         if let pinIndex {
             items.insert(lockItem, at: pinIndex + 1)
+            items.insert(spaceItem, at: pinIndex + 2)
         } else {
             items.append(lockItem)
+            items.append(spaceItem)
         }
         return items
     }
+}
+
+// Shadow: changes the space visibility of chats. Moving a chat to "only the
+// second space" needs a second code (so the chat stays reachable) and mutes it.
+func shadowSetSpaceVisibility(context: AccountContext, peerIds: [EnginePeer.Id], visibility: ShadowSpaceStore.Visibility, parentController: ViewController?) {
+    let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+    if visibility == .secondOnly && !ShadowSpaceStore.shared.hasCode {
+        parentController?.present(textAlertController(context: context, title: "Второе пространство не настроено", text: "Задайте второй код в Shadow → «Второе пространство», иначе чат будет некуда открыть.", actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+        return
+    }
+    let _ = (shadowApplySpaceVisibility(account: context.account, peerIds: peerIds, visibility: visibility)
+    |> deliverOnMainQueue).startStandalone(next: { _ in
+        let hidden = !visibility.isVisible(in: ShadowSpaceStore.shared.activeSpace)
+        let text: String
+        switch visibility {
+        case .everywhere:
+            text = "Чат виден в обоих пространствах"
+        case .mainOnly:
+            text = hidden ? "Чат перенесён в основное пространство" : "Чат виден только в основном пространстве"
+        case .secondOnly:
+            text = hidden ? "Чат перенесён во второе пространство, уведомления выключены" : "Чат виден только во втором пространстве, уведомления выключены"
+        }
+        parentController?.present(UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: text, timeout: nil, customUndoText: nil), elevatedLayout: false, animateInAsReplacement: true, action: { _ in return false }), in: .current)
+    })
 }

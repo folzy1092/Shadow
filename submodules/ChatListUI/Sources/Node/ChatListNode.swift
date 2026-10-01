@@ -1325,6 +1325,7 @@ public final class ChatListNode: ListViewImpl {
     private let chatListDisposable = MetaDisposable()
     private let shadowNamesDisposable = MetaDisposable()
     private var shadowChatLockObserver: NSObjectProtocol?
+    private var shadowSpaceObserver: NSObjectProtocol?
     private var activityStatusesDisposable: Disposable?
     
     private let scrollToTopOptionPromise = Promise<ChatListGlobalScrollOption>(.none)
@@ -3231,6 +3232,18 @@ public final class ChatListNode: ListViewImpl {
                 return state
             }
         })
+        // Shadow: the active space or a chat's visibility changed — rebuild the
+        // entries (chatListNodeEntriesForView filters by ShadowSpaceStore).
+        self.shadowSpaceObserver = NotificationCenter.default.addObserver(forName: ShadowSpaceStore.didChangeNotification, object: nil, queue: .main, using: { [weak self] _ in
+            guard let self else {
+                return
+            }
+            self.updateState { state in
+                var state = state
+                state.presentationData = state.presentationData.withPreferUsernameForNonContacts(state.presentationData.preferUsernameForNonContacts, botsEnabled: state.presentationData.preferUsernameForBots)
+                return state
+            }
+        })
     }
     
     deinit {
@@ -3238,6 +3251,9 @@ public final class ChatListNode: ListViewImpl {
         self.shadowNamesDisposable.dispose()
         if let shadowChatLockObserver = self.shadowChatLockObserver {
             NotificationCenter.default.removeObserver(shadowChatLockObserver)
+        }
+        if let shadowSpaceObserver = self.shadowSpaceObserver {
+            NotificationCenter.default.removeObserver(shadowSpaceObserver)
         }
         self.activityStatusesDisposable?.dispose()
         self.updatedFilterDisposable.dispose()

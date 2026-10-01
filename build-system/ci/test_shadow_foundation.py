@@ -24,15 +24,18 @@ def main():
         ('document', 'submodules/TelegramCore/Sources/AyuGram/ShadowSettingsDocument.swift', 'Tests/ShadowSettings/DocumentTests.swift'),
         ('update-check', 'submodules/TelegramCore/Sources/AyuGram/ShadowUpdateCheck.swift', 'Tests/ShadowSettings/UpdateCheckTests.swift'),
         ('chat-lock', 'submodules/TelegramCore/Sources/AyuGram/ShadowChatLock.swift', 'Tests/ShadowSettings/ChatLockTests.swift'),
+        ('spaces', ('submodules/TelegramCore/Sources/AyuGram/ShadowSpaces.swift', 'submodules/TelegramCore/Sources/AyuGram/ShadowChatLock.swift'), 'Tests/ShadowSettings/SpacesTests.swift'),
         ('search', 'submodules/SettingsUI/Sources/ShadowSettingsSearchIndex.swift', 'Tests/ShadowSettings/SearchTests.swift'),
         ('tab-bar-scroll', 'submodules/Display/Source/TabBarScrollState.swift', 'Tests/ShadowSettings/TabBarScrollTests.swift'),
     ]
     with tempfile.TemporaryDirectory(prefix='shadow-foundation-tests-') as directory:
-        for name, source, tests in cases:
+        for name, sources, tests in cases:
+            if isinstance(sources, str):
+                sources = (sources,)
             executable = Path(directory) / (name + '-tests')
             subprocess.run([
                 compiler, '-warnings-as-errors', '-o', str(executable),
-                str(ROOT / source), str(ROOT / tests),
+                *(str(ROOT / source) for source in sources), str(ROOT / tests),
             ], check=True)
             subprocess.run([str(executable)], check=True)
 

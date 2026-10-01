@@ -247,7 +247,8 @@ public final class ChatListSearchRecentPeersNode: ASDisplayNode {
             case let .peers(peers):
                 return combineLatest(queue: .mainQueue(),
                     peers.filter {
-                        !$0.isDeleted
+                        // Shadow: chats hidden in the active space are not suggested (spec section 6).
+                        !$0.isDeleted && !ShadowSpaceStore.shared.isHidden(accountPeerId: accountPeerId.toInt64(), peerId: $0.id.toInt64())
                     }.map {
                         stateManager.postbox.peerView(id: $0.id)
                     }
