@@ -8,13 +8,31 @@ import AccountContext
 import TelegramUIPreferences
 import TelegramCore
 
-public func chatListFilterItems(context: AccountContext) -> Signal<(Int, [(ChatListFilter, Int, Bool)]), NoError> {
-    return context.engine.peers.updatedChatListFilters()
+// Shadow: chats hidden in the active space (ShadowSpaceStore), updated on change.
+private func shadowHiddenPeerIds(context: AccountContext) -> Signal<Set<EnginePeer.Id>, NoError> {
+    let accountPeerId = context.account.peerId.toInt64()
+    return Signal<Set<EnginePeer.Id>, NoError> { subscriber in
+        let emit: () -> Void = {
+            subscriber.putNext(Set(ShadowSpaceStore.shared.hiddenPeerIds(accountPeerId: accountPeerId).map { EnginePeer.Id($0) }))
+        }
+        emit()
+        let token = NotificationCenter.default.addObserver(forName: ShadowSpaceStore.didChangeNotification, object: nil, queue: nil, using: { _ in
+            emit()
+        })
+        return ActionDisposable {
+            NotificationCenter.default.removeObserver(token)
+        }
+    }
     |> distinctUntilChanged
-    |> mapToSignal { filters -> Signal<(Int, [(ChatListFilter, Int, Bool)]), NoError> in
+}
+
+public func chatListFilterItems(context: AccountContext) -> Signal<(Int, [(ChatListFilter, Int, Bool)]), NoError> {
+    return combineLatest(context.engine.peers.updatedChatListFilters() |> distinctUntilChanged, shadowHiddenPeerIds(context: context))
+    |> mapToSignal { filters, shadowHidden -> Signal<(Int, [(ChatListFilter, Int, Bool)]), NoError> in
         var unreadCountItems: [EngineRawUnreadMessageCountsItem] = []
         unreadCountItems.append(.totalInGroup(.root))
-        var additionalPeerIds = Set<EnginePeer.Id>()
+        // Shadow: load hidden chats' unread state so they can be taken out of the badges.
+        var additionalPeerIds = shadowHidden
         var additionalGroupIds = Set<EnginePeerGroupId>()
         for case let .filter(_, _, _, data) in filters {
             additionalPeerIds.formUnion(data.includePeers.peers)
@@ -112,6 +130,9 @@ public func chatListFilterItems(context: AccountContext) -> Signal<(Int, [(ChatL
                 var count = 0
                 var unmutedUnreadCount = 0
                 if case let .filter(_, _, _, data) = filter {
+                    // Shadow: a hidden chat counts as excluded from every folder.
+                    let shadowIncludePeers = data.includePeers.peers.filter { !shadowHidden.contains($0) }
+                    let shadowExcludePeers = data.excludePeers + shadowHidden.filter { !data.excludePeers.contains($0) }.sorted(by: { $0.toInt64() < $1.toInt64() })
                     var tags: [EnginePeerSummaryCounterTags] = []
                     if data.categories.contains(.contacts) {
                         tags.append(.contact)
@@ -173,7 +194,7 @@ public func chatListFilterItems(context: AccountContext) -> Signal<(Int, [(ChatL
                             }
                         }
                     }
-                    for peerId in data.includePeers.peers {
+                    for peerId in shadowIncludePeers {
                         if let (tag, peerCount, hasUnmuted, groupIdValue, isMuted) = peerTagAndCount[peerId], peerCount != 0, let groupId = groupIdValue {
                             var matches = true
                             if tags.contains(tag) {
@@ -203,7 +224,7 @@ public func chatListFilterItems(context: AccountContext) -> Signal<(Int, [(ChatL
                             }
                         }
                     }
-                    for peerId in data.excludePeers {
+                    for peerId in shadowExcludePeers {
                         if let (tag, peerCount, _, groupIdValue, isMuted) = peerTagAndCount[peerId], peerCount != 0, let groupId = groupIdValue {
                             var matches = false
                             if tags.contains(tag) {

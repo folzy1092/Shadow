@@ -191,6 +191,21 @@ public final class ShadowSpaceStore {
         return !visibility.isVisible(in: self.activeSpaceValue)
     }
 
+    // Chats with a stored visibility that are hidden in the active space (used by
+    // the folder unread badges). The exclusive second space hides every other
+    // chat too, which cannot be listed; those are not covered here.
+    public func hiddenPeerIds(accountPeerId: Int64) -> [Int64] {
+        self.lock.lock()
+        defer { self.lock.unlock() }
+        let space = self.activeSpaceValue
+        return (self.visibilityCache[accountPeerId] ?? [:]).compactMap { peerId, raw in
+            guard let visibility = Visibility(rawValue: raw) else {
+                return nil
+            }
+            return visibility.isVisible(in: space) ? nil : peerId
+        }
+    }
+
     // MARK: Saved mute state
 
     // Opaque string from the caller (TelegramCore encodes the PeerMuteState).

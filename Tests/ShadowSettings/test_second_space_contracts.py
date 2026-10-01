@@ -44,6 +44,12 @@ class SecondSpaceContracts(unittest.TestCase):
         recent = read("ChatListSearchRecentPeersNode/Sources/ChatListSearchRecentPeersNode.swift")
         self.assertIn("ShadowSpaceStore.shared.isHidden(accountPeerId: accountPeerId.toInt64()", recent)
 
+    def test_folder_badges_skip_hidden_chats(self):
+        tabs = read("ChatListUI/Sources/TabBarChatListFilterController.swift")
+        self.assertIn("for peerId in shadowIncludePeers {", tabs)
+        self.assertIn("for peerId in shadowExcludePeers {", tabs)
+        self.assertIn("var additionalPeerIds = shadowHidden", tabs)
+
     def test_second_only_chats_are_muted(self):
         sync = read("TelegramCore/Sources/AyuGram/ShadowSpacesSync.swift")
         self.assertIn("muteInterval: Int32.max)", sync)
