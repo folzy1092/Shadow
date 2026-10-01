@@ -15,7 +15,9 @@ import Foundation
 //   "version": "12.9.2",          // shown next to the build
 //   "title": "Замки чатов",        // optional headline
 //   "notes": "Что нового…",       // optional release notes
-//   "url": "https://…",           // optional download page (default: releases)
+//   "url": "https://…",           // optional release page (default: releases)
+//   "ipa_url": "https://…",       // optional direct IPA link
+//                                 // (default: releases/download/build-<build>/Shadow.ipa)
 //   "minimum_build": 0            // installed builds below it see "обязательное"
 // }
 public enum ShadowUpdateCheck {
@@ -23,21 +25,29 @@ public enum ShadowUpdateCheck {
     public static let latestReleaseURL = URL(string: "https://api.github.com/repos/folzy1092/Shadow/releases/latest")!
     public static let releasesPageURL = URL(string: "https://github.com/folzy1092/Shadow/releases")!
 
+    // CI attaches the IPA to every release under this fixed name.
+    public static func ipaURL(build: Int) -> URL {
+        return URL(string: "https://github.com/folzy1092/Shadow/releases/download/build-\(build)/Shadow.ipa")!
+    }
+
     public struct Release: Equatable {
         public let build: Int
         public let title: String
         public let pageURL: URL
         public let publishedAt: Date?
         public let notes: String
+        // Direct IPA download, when known.
+        public let downloadURL: URL?
         // The installed build is below the manifest's minimum_build.
         public let isRequired: Bool
 
-        public init(build: Int, title: String, pageURL: URL, publishedAt: Date?, notes: String, isRequired: Bool = false) {
+        public init(build: Int, title: String, pageURL: URL, publishedAt: Date?, notes: String, downloadURL: URL? = nil, isRequired: Bool = false) {
             self.build = build
             self.title = title
             self.pageURL = pageURL
             self.publishedAt = publishedAt
             self.notes = notes
+            self.downloadURL = downloadURL
             self.isRequired = isRequired
         }
     }
@@ -49,6 +59,7 @@ public enum ShadowUpdateCheck {
         public let title: String?
         public let notes: String
         public let pageURL: URL
+        public let downloadURL: URL?
         public let minimumBuild: Int
     }
 
@@ -81,6 +92,10 @@ public enum ShadowUpdateCheck {
         if let urlString = object["url"] as? String, let url = URL(string: urlString), url.scheme == "https" {
             pageURL = url
         }
+        var downloadURL: URL? = build > 0 ? ipaURL(build: build) : nil
+        if let urlString = object["ipa_url"] as? String, let url = URL(string: urlString), url.scheme == "https" {
+            downloadURL = url
+        }
         func nonEmpty(_ key: String) -> String? {
             guard let value = object[key] as? String else {
                 return nil
@@ -95,6 +110,7 @@ public enum ShadowUpdateCheck {
             title: nonEmpty("title"),
             notes: nonEmpty("notes") ?? "",
             pageURL: pageURL,
+            downloadURL: downloadURL,
             minimumBuild: max(0, (object["minimum_build"] as? Int) ?? 0)
         )
     }
@@ -112,7 +128,7 @@ public enum ShadowUpdateCheck {
             title += " — " + headline
         }
         let isRequired = installedBuild.map { $0 < manifest.minimumBuild } ?? false
-        let release = Release(build: manifest.build, title: title, pageURL: manifest.pageURL, publishedAt: nil, notes: manifest.notes, isRequired: isRequired)
+        let release = Release(build: manifest.build, title: title, pageURL: manifest.pageURL, publishedAt: nil, notes: manifest.notes, downloadURL: manifest.downloadURL, isRequired: isRequired)
         return self.status(installedBuild: installedBuild, latest: release)
     }
 
@@ -130,7 +146,16 @@ public enum ShadowUpdateCheck {
             publishedAt = ISO8601DateFormatter().date(from: published)
         }
         let notes = (object["body"] as? String) ?? ""
-        return Release(build: build, title: title, pageURL: pageURL, publishedAt: publishedAt, notes: notes)
+        var downloadURL: URL?
+        if let assets = object["assets"] as? [[String: Any]] {
+            for asset in assets {
+                if let name = asset["name"] as? String, name.hasSuffix(".ipa"), let urlString = asset["browser_download_url"] as? String, let url = URL(string: urlString) {
+                    downloadURL = url
+                    break
+                }
+            }
+        }
+        return Release(build: build, title: title, pageURL: pageURL, publishedAt: publishedAt, notes: notes, downloadURL: downloadURL)
     }
 
     public static func status(installedBuild: Int?, latest: Release) -> Status {

@@ -35,6 +35,11 @@ struct UpdateCheckTests {
         let manifest = ShadowUpdateCheck.parseManifest(Data(manifestJSON.utf8))
         check(manifest?.build == 34700 && manifest?.minimumBuild == 34690, "Manifest parsed")
         check(manifest?.pageURL.absoluteString == "https://example.com/shadow", "Manifest URL")
+        check(manifest?.downloadURL == ShadowUpdateCheck.ipaURL(build: 34700), "Default IPA link")
+        let customIpa = ShadowUpdateCheck.parseManifest(Data("{\"build\":7,\"ipa_url\":\"https://example.com/a.ipa\"}".utf8))
+        check(customIpa?.downloadURL?.absoluteString == "https://example.com/a.ipa", "Custom IPA link")
+        let releaseWithAsset = ShadowUpdateCheck.parseLatestRelease(Data("{\"tag_name\":\"build-9\",\"html_url\":\"https://github.com/x\",\"assets\":[{\"name\":\"Shadow.ipa\",\"browser_download_url\":\"https://github.com/x/Shadow.ipa\"}]}".utf8))
+        check(releaseWithAsset?.downloadURL?.absoluteString == "https://github.com/x/Shadow.ipa", "Release IPA asset")
         if let manifest {
             if case let .available(release) = ShadowUpdateCheck.status(installedBuild: 34681, manifest: manifest) {
                 check(release.isRequired, "Below minimum build is required")

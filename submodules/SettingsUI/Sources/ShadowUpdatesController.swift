@@ -25,13 +25,14 @@ private enum ShadowUpdatesEntry: ItemListNodeEntry {
     case status(String)
     case notes(String)
     case open(String)
+    case download
     case recheck(enabled: Bool)
 
     var section: ItemListSectionId {
         switch self {
         case .installed, .status, .notes:
             return ShadowUpdatesSection.status.rawValue
-        case .open, .recheck:
+        case .open, .download, .recheck:
             return ShadowUpdatesSection.actions.rawValue
         }
     }
@@ -42,8 +43,9 @@ private enum ShadowUpdatesEntry: ItemListNodeEntry {
         case .installed: return 0
         case .status: return 1
         case .notes: return 2
-        case .open: return 3
-        case .recheck: return 4
+        case .download: return 3
+        case .open: return 4
+        case .recheck: return 5
         }
     }
 
@@ -62,6 +64,8 @@ private enum ShadowUpdatesEntry: ItemListNodeEntry {
             return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
         case let .open(title):
             return ItemListActionItem(presentationData: presentationData, title: title, kind: .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: arguments.open)
+        case .download:
+            return ItemListActionItem(presentationData: presentationData, title: "Скачать IPA", kind: .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: arguments.download)
         case let .recheck(enabled):
             return ItemListActionItem(presentationData: presentationData, title: "Проверить снова", kind: enabled ? .generic : .disabled, alignment: .natural, sectionId: self.section, style: .blocks, action: arguments.recheck)
         }
@@ -70,10 +74,12 @@ private enum ShadowUpdatesEntry: ItemListNodeEntry {
 
 private final class ShadowUpdatesArguments {
     let open: () -> Void
+    let download: () -> Void
     let recheck: () -> Void
 
-    init(open: @escaping () -> Void, recheck: @escaping () -> Void) {
+    init(open: @escaping () -> Void, download: @escaping () -> Void, recheck: @escaping () -> Void) {
         self.open = open
+        self.download = download
         self.recheck = recheck
     }
 }
@@ -101,7 +107,10 @@ private func shadowUpdatesEntries(state: ShadowUpdatesState) -> [ShadowUpdatesEn
                 notes += "\n\n" + String(body.prefix(600))
             }
             entries.append(.notes(notes))
-            entries.append(.open("Открыть страницу загрузки"))
+            if release.downloadURL != nil {
+                entries.append(.download)
+            }
+            entries.append(.open("Открыть страницу релиза"))
         case let .failed(reason):
             entries.append(.status("Не удалось проверить"))
             entries.append(.notes(reason))
@@ -139,6 +148,10 @@ func shadowUpdatesController(context: AccountContext, focus: ShadowSettingsSearc
             }
         }
         context.sharedContext.applicationBindings.openUrl(url.absoluteString)
+    }, download: {
+        if case let .result(status) = stateValue.with({ $0 }), case let .available(release) = status, let url = release.downloadURL {
+            context.sharedContext.applicationBindings.openUrl(url.absoluteString)
+        }
     }, recheck: {
         runCheck()
     })

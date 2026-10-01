@@ -157,6 +157,7 @@ jobs:
           retention-days: 30
 
       - name: Publish GitHub release
+        id: release
         if: ${{ github.ref == 'refs/heads/master' && steps.build.outcome == 'success' }}
         continue-on-error: true
         env:
@@ -166,7 +167,10 @@ jobs:
           # Tag build-<number>: Shadow's update check parses the number and
           # compares it with the installed CFBundleVersion.
           TAG="build-${BUILD_NUMBER}"
-          ASSET="$RUNNER_TEMP/Shadow-${APP_VERSION}-${BUILD_NUMBER}.ipa"
+          # Fixed asset name: .../releases/download/build-N/Shadow.ipa is the
+          # direct link for this build, .../releases/latest/download/Shadow.ipa
+          # always points at the newest one.
+          ASSET="$RUNNER_TEMP/Shadow.ipa"
           cp /Users/Shared/telegram-ios/build/artifacts/Telegram.ipa "$ASSET"
           NOTES="$(printf '%s' "$COMMIT_MSG" | head -n 30)"
           gh release create "$TAG" "$ASSET" \
@@ -189,6 +193,8 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           JOB_STATUS: ${{ job.status }}
+          RELEASE_OUTCOME: ${{ steps.release.outcome }}
+          IPA_URL: ${{ github.server_url }}/${{ github.repository }}/releases/download/build-${{ env.BUILD_NUMBER }}/Shadow.ipa
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           COMMIT_MSG: ${{ github.event.head_commit.message }}
         run: |
@@ -200,7 +206,11 @@ jobs:
           if [ "$JOB_STATUS" = "success" ]; then
             ICON="✅"
             HEAD="Сборка готова"
-            TAIL="IPA: артефакт Shadow-IPA-${BUILD_NUMBER} на странице прогона."
+            if [ "$RELEASE_OUTCOME" = "success" ]; then
+              TAIL="Скачать IPA: ${IPA_URL}"
+            else
+              TAIL="IPA: артефакт Shadow-IPA-${BUILD_NUMBER} на странице прогона."
+            fi
           elif [ "$JOB_STATUS" = "cancelled" ]; then
             # A newer push to the same branch superseded this run
             # (concurrency.cancel-in-progress); that run reports its own result.
@@ -237,6 +247,8 @@ jobs:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           DISCORD_PING_USER_ID: ${{ secrets.DISCORD_PING_USER_ID }}
           JOB_STATUS: ${{ job.status }}
+          RELEASE_OUTCOME: ${{ steps.release.outcome }}
+          IPA_URL: ${{ github.server_url }}/${{ github.repository }}/releases/download/build-${{ env.BUILD_NUMBER }}/Shadow.ipa
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           COMMIT_MSG: ${{ github.event.head_commit.message }}
         run: |
@@ -248,7 +260,11 @@ jobs:
           if [ "$JOB_STATUS" = "success" ]; then
             ICON="✅"
             HEAD="Сборка готова"
-            TAIL="IPA: артефакт Shadow-IPA-${BUILD_NUMBER} на странице прогона."
+            if [ "$RELEASE_OUTCOME" = "success" ]; then
+              TAIL="Скачать IPA: ${IPA_URL}"
+            else
+              TAIL="IPA: артефакт Shadow-IPA-${BUILD_NUMBER} на странице прогона."
+            fi
           elif [ "$JOB_STATUS" = "cancelled" ]; then
             # A newer push to the same branch superseded this run
             # (concurrency.cancel-in-progress); that run reports its own result.

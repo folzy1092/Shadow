@@ -36,7 +36,9 @@ Postbox-рефакторинг. Этот файл описывает то, чт�
   - `python3 -m unittest discover -s Tests/ShadowCI` — скрипты CI.
 - `.github/workflows/shadow-diagnostics.yml` — быстрый прогон тестов
   (без сборки IPA) на PR и push в `master`.
-- Успешная сборка `master` публикуется как GitHub Release `build-<номер>`.
+- Успешная сборка `master` публикуется как GitHub Release `build-<номер>` с
+  файлом `Shadow.ipa` (прямая ссылка `releases/download/build-N/Shadow.ipa`,
+  всегда свежая — `releases/latest/download/Shadow.ipa`; её же присылает бот).
   **Что объявлять пользователям, решает файл `shadow-update.json` в корне**
   (`enabled`, `build`, `version`, `title`, `notes`, `url`, `minimum_build`);
   приложение читает его с raw.githubusercontent.com (кэш до ~5 минут), а

@@ -81,6 +81,8 @@ class CleanInterfaceContracts(unittest.TestCase):
         self.assertIn("contents: write", workflow)
         self.assertIn('TAG="build-${BUILD_NUMBER}"', workflow)
         self.assertIn("gh release create", workflow)
+        self.assertIn('ASSET="$RUNNER_TEMP/Shadow.ipa"', workflow)
+        self.assertEqual(workflow.count('TAIL="Скачать IPA: ${IPA_URL}"'), 2)
         check = read("TelegramCore/Sources/AyuGram/ShadowUpdateCheck.swift")
         self.assertIn('let prefix = "build-"', check)
         self.assertIn("releases/latest", check)
