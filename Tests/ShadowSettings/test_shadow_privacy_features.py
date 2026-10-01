@@ -163,6 +163,10 @@ class ShadowPrivacyFeatures(unittest.TestCase):
         kept_range = anti_delete.split("func ayuGramKeptDeletedMessagesInRange", 1)[1].split("\nfunc ", 1)[0]
         self.assertNotIn("scanTopMessages", kept_range)
         self.assertNotIn("ayuGramMarkMessagesDeleted", kept_range)
+        # Every caller must match the signature (no mediaBox argument).
+        for path in ROOT.joinpath("submodules/TelegramCore/Sources").rglob("*.swift"):
+            for call in path.read_text().split("ayuGramKeptDeletedMessagesInRange(")[1:]:
+                self.assertNotIn("mediaBox:", call.split(")", 1)[0], str(path))
 
     def test_screenshot_notices_are_never_sent(self):
         core = (CORE / "SecretChats/SetSecretChatMessageAutoremoveTimeoutInteractively.swift").read_text()

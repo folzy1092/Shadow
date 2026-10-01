@@ -960,7 +960,7 @@ func _internal_fetchAndUpdateCachedPeerData(accountPeerId: PeerId, peerId rawPee
                                             })
                                         
                                             if let minAvailableMessageId = minAvailableMessageId, minAvailableMessageIdUpdated {
-                                                let kept = ayuGramKeptDeletedMessagesInRange(transaction: transaction, mediaBox: postbox.mediaBox, peerId: peerId, namespace: minAvailableMessageId.namespace, minId: 1, maxId: minAvailableMessageId.id)
+                                                let kept = ayuGramKeptDeletedMessagesInRange(transaction: transaction, peerId: peerId, namespace: minAvailableMessageId.namespace, minId: 1, maxId: minAvailableMessageId.id)
                                                 var keptResources: [MediaResourceId] = []
                                                 for message in kept {
                                                     for media in message.media { addMessageMediaResourceIdsToRemove(media: media, resourceIds: &keptResources) }
