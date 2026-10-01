@@ -421,8 +421,8 @@ public final class SecretMediaPreviewController: ViewController {
             self.screenCaptureEventsDisposable = (screenCaptureEvents()
             |> deliverOnMainQueue).start(next: { [weak self] _ in
                 if let strongSelf = self, strongSelf.traceVisibility() {
-                    // Shadow: Ghost Mode does not report screenshots to the sender.
-                    if currentAyuGramSettings(accountId: strongSelf.context.account.id).ghostMode {
+                    // Shadow: never report screenshots to the sender.
+                    if shadowSuppressScreenshotNotices {
                         return
                     }
                     if strongSelf.messageId.peerId.namespace == Namespaces.Peer.CloudUser {

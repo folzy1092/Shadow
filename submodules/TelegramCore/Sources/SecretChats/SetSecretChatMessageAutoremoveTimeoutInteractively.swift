@@ -27,8 +27,8 @@ func _internal_setSecretChatMessageAutoremoveTimeoutInteractively(transaction: T
 
 func _internal_addSecretChatMessageScreenshot(account: Account, peerId: PeerId) -> Signal<Void, NoError> {
     return account.postbox.transaction { transaction -> Void in
-        // Shadow: Ghost Mode does not send the "took a screenshot" notice.
-        if currentAyuGramSettings(transaction: transaction).ghostMode {
+        // Shadow: never send the "took a screenshot" notice.
+        if shadowSuppressScreenshotNotices {
             return
         }
         if let _ = transaction.getPeer(peerId) as? TelegramSecretChat, let state = transaction.getPeerChatState(peerId) as? SecretChatState {

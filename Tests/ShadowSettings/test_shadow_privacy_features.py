@@ -164,13 +164,24 @@ class ShadowPrivacyFeatures(unittest.TestCase):
         self.assertNotIn("scanTopMessages", kept_range)
         self.assertNotIn("ayuGramMarkMessagesDeleted", kept_range)
 
-    def test_ghost_mode_suppresses_screenshot_notices(self):
+    def test_screenshot_notices_are_never_sent(self):
         core = (CORE / "SecretChats/SetSecretChatMessageAutoremoveTimeoutInteractively.swift").read_text()
         body = core.split("func _internal_addSecretChatMessageScreenshot", 1)[1].split("enqueueMessages", 1)[0]
-        self.assertIn("ghostMode", body)
+        self.assertIn("shadowSuppressScreenshotNotices", body)
         preview = (ROOT / "submodules/GalleryUI/Sources/SecretMediaPreviewController.swift").read_text()
         handler = preview.split("screenCaptureEvents()", 1)[1].split("historyScreenshot", 1)[0]
-        self.assertIn("ghostMode", handler)
+        self.assertIn("shadowSuppressScreenshotNotices", handler)
+        switch = (CORE / "AyuGram/ShadowScreenshotNotices.swift").read_text()
+        self.assertIn("shadowSuppressScreenshotNotices: Bool = true", switch)
+
+    def test_secret_chat_media_is_capturable(self):
+        gallery = (ROOT / "submodules/GalleryUI/Sources/Items/ChatImageGalleryItem.swift").read_text()
+        line = [l for l in gallery.splitlines() if "self.imageNode.captureProtected =" in l][0]
+        self.assertNotIn("SecretChat", line)
+        self.assertNotIn("isSecret", line)
+        controller = (ROOT / "submodules/TelegramUI/Sources/ChatController.swift").read_text()
+        pinch = controller.split("makePinchController(", 1)[0].rsplit("let isSecret", 1)[1]
+        self.assertNotIn("SecretChat", pinch.split("\n", 1)[0])
 
     def test_kept_deleted_messages_disable_server_actions(self):
         menus = (ROOT / "submodules/TelegramUI/Sources/ChatInterfaceStateContextMenus.swift").read_text()

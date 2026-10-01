@@ -2194,9 +2194,10 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 }
             }
 
-            // Shadow: the chat itself is capturable; keep the pinch overlay consistent.
+            // Shadow: the chat itself is capturable (secret chats included);
+            // keep the pinch overlay consistent with it.
             let ayuAllowCapture = currentAyuGramSettings(accountId: strongSelf.context.account.id).allowSaveRestrictedContent
-            let isSecret = !ayuAllowCapture && (strongSelf.presentationInterfaceState.copyProtectionEnabled || strongSelf.chatLocation.peerId?.namespace == Namespaces.Peer.SecretChat)
+            let isSecret = !ayuAllowCapture && strongSelf.presentationInterfaceState.copyProtectionEnabled
             let pinchController = makePinchController(sourceNode: sourceNode, disableScreenshots: isSecret, getContentAreaInScreenSpace: {
                 guard let strongSelf = self else {
                     return CGRect()
