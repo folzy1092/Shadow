@@ -8292,6 +8292,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         super.containerLayoutUpdated(layout, transition: transition)
         
         self.validLayout = layout
+        self.shadowChatLockLayout()
         
         switch self.presentationInterfaceState.mode {
         case .standard, .inline:

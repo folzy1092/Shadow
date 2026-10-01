@@ -32,6 +32,17 @@ class ChatLockContracts(unittest.TestCase):
         node = read("TelegramUI/Sources/ChatControllerNode.swift")
         self.assertIn("func shadowSetChatLockContentHidden(_ hidden: Bool)", node)
 
+    def test_locked_history_is_hidden_not_just_covered(self):
+        # The cover alone was created before the first layout (zero frame) and
+        # left the history readable and scrollable, including in previews.
+        node = read("TelegramUI/Sources/ChatControllerNode.swift")
+        hide = node.split("func shadowSetChatLockContentHidden(_ hidden: Bool)", 1)[1].split("\n    }\n", 1)[0]
+        self.assertIn("self.historyNodeContainer.isHidden = hidden || restricted", hide)
+        self.assertIn("self.historyNodeContainer.isHidden = self.shadowChatLockHidesHistory", node)
+        self.assertNotIn("self.historyNodeContainer.isHidden = false", node)
+        controller = read("TelegramUI/Sources/ChatController.swift")
+        self.assertIn("self.validLayout = layout\n        self.shadowChatLockLayout()", controller)
+
     def test_unlocking_requires_authentication(self):
         ui = read("TelegramUI/Sources/ShadowChatLockUI.swift")
         unlock = ui.split("static func unlockChatPermanently", 1)[1].split("\n    }\n", 1)[0]

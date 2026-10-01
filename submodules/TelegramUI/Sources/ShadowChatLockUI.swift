@@ -247,7 +247,6 @@ extension ChatControllerImpl {
                     self?.shadowChatLockRequestUnlock()
                 })
                 let container = self.chatDisplayNode.contentContainerNode.contentNode.view
-                overlay.frame = container.bounds
                 overlay.autoresizingMask = [.flexibleWidth, .flexibleHeight]
                 if let navigationView = self.navigationBar?.view, navigationView.superview === container {
                     container.insertSubview(overlay, belowSubview: navigationView)
@@ -255,8 +254,12 @@ extension ChatControllerImpl {
                     container.addSubview(overlay)
                 }
                 self.chatDisplayNode.view.endEditing(true)
-                self.chatDisplayNode.shadowSetChatLockContentHidden(true)
             }
+            // The first update runs from loadDisplayNode, before the first layout,
+            // when the container is still empty; shadowChatLockLayout() keeps the
+            // frame in sync afterwards. The history itself is hidden regardless.
+            self.shadowChatLockLayout()
+            self.chatDisplayNode.shadowSetChatLockContentHidden(true)
             var isPreview = false
             if case .standard(.previewing) = self.mode {
                 isPreview = true
@@ -272,6 +275,21 @@ extension ChatControllerImpl {
             }, completion: { _ in
                 overlay.removeFromSuperview()
             })
+        }
+    }
+
+    // Called from containerLayoutUpdated: the cover always fills the chat.
+    func shadowChatLockLayout() {
+        guard let overlay = self.shadowChatLockOverlay else {
+            return
+        }
+        // ChatControllerNode sizes contentContainerNode to the full layout size.
+        var bounds = self.chatDisplayNode.contentContainerNode.contentNode.view.bounds
+        if let layout = self.validLayout {
+            bounds = CGRect(origin: CGPoint(), size: layout.size)
+        }
+        if overlay.frame != bounds {
+            overlay.frame = bounds
         }
     }
 

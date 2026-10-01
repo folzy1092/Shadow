@@ -1042,9 +1042,17 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         })
     }
     
-    // Shadow: while a locked chat is covered, hide what sits outside the cover:
-    // the composer (draft, reply preview) and the pinned-message panel.
+    // Shadow: true while a locked chat waits for Face ID / the password.
+    private(set) var shadowChatLockHidesHistory = false
+
+    // Shadow: while a locked chat is covered, hide the message history itself
+    // (so no cover geometry, preview or scroll can reveal it), the composer
+    // (draft, reply preview) and the pinned-message panel.
     func shadowSetChatLockContentHidden(_ hidden: Bool) {
+        self.shadowChatLockHidesHistory = hidden
+        let restricted = self.restrictedNode != nil
+        self.historyNodeContainer.isHidden = hidden || restricted
+        self.navigateButtons.isHidden = hidden || restricted
         self.inputPanelContainerNode.isHidden = hidden
         self.inputContextPanelContainer.isHidden = hidden
         self.titleAccessoryPanelContainer.isHidden = hidden
@@ -3768,8 +3776,8 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             } else if let restrictedNode = self.restrictedNode {
                 self.restrictedNode = nil
                 restrictedNode.removeFromSupernode()
-                self.historyNodeContainer.isHidden = false
-                self.navigateButtons.isHidden = false
+                self.historyNodeContainer.isHidden = self.shadowChatLockHidesHistory
+                self.navigateButtons.isHidden = self.shadowChatLockHidesHistory
                 self.loadingNode.isHidden = false
                 self.emptyNode?.isHidden = false
             }
