@@ -1514,7 +1514,9 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                         // AyuGram: keep the Ghost Mode quick action's subtitle live so
                         // it always shows the current On/Off state.
                         // Shadow: stock quick actions in the Full disguise (ShadowDisguise).
-                        return combineLatest(ayuGramSettings(postbox: context.context.account.postbox), shadowDisguiseModeSignal())
+                        let shortcutSettings: Signal<AyuGramSettings, NoError> = ayuGramSettings(postbox: context.context.account.postbox)
+                        let shortcutMode: Signal<ShadowDisguise.Mode, NoError> = shadowDisguiseModeSignal()
+                        return combineLatest(shortcutSettings, shortcutMode)
                         |> map { settings, mode -> [ApplicationShortcutItem] in
                             return applicationShortcutItems(strings: presentationData.strings, otherAccountName: otherAccountName, ghostModeEnabled: settings.ghostMode, stock: mode == .full)
                         }

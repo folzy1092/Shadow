@@ -6965,13 +6965,14 @@ private final class ChatListLocationContext {
                 // AyuGram: track Ghost Mode so the navbar toggle reflects (and can
                 // flip) the master flag reactively.
                 // Shadow: the disguise mode (ShadowDisguise) also redraws the navbar.
-                let ghostModeSignal = combineLatest(ayuGramSettings(postbox: context.account.postbox), shadowDisguiseModeSignal())
-                |> map { settings, mode -> (Bool, ShadowDisguise.Mode) in
-                    return (settings.ghostMode, mode)
+                // Typed steps: one chained expression is too slow to type-check.
+                let ghostSettingsSignal: Signal<Bool, NoError> = ayuGramSettings(postbox: context.account.postbox)
+                |> map { settings -> Bool in
+                    return settings.ghostMode
                 }
-                |> distinctUntilChanged(isEqual: { lhs, rhs in
-                    return lhs.0 == rhs.0 && lhs.1 == rhs.1
-                })
+                |> distinctUntilChanged
+                let ghostDisguiseSignal: Signal<ShadowDisguise.Mode, NoError> = shadowDisguiseModeSignal()
+                let ghostModeSignal: Signal<Bool, NoError> = combineLatest(ghostSettingsSignal, ghostDisguiseSignal)
                 |> map { ghostMode, _ -> Bool in
                     return ghostMode
                 }
