@@ -158,6 +158,26 @@ class ShadowPrivacyFeatures(unittest.TestCase):
         self.assertIn("ayuGramKeptDeletedMessagesInRange", trim)
         self.assertIn("transaction.addMessages(keptDeletedMessages, location: .Random)", trim)
         self.assertIn("keptResourceIdSet.contains", trim)
+        # The range trim is also sent for "clear history for me"; it must not
+        # turn the cleared range into anti-delete ghosts.
+        kept_range = anti_delete.split("func ayuGramKeptDeletedMessagesInRange", 1)[1].split("\nfunc ", 1)[0]
+        self.assertNotIn("scanTopMessages", kept_range)
+        self.assertNotIn("ayuGramMarkMessagesDeleted", kept_range)
+
+    def test_ghost_mode_suppresses_screenshot_notices(self):
+        core = (CORE / "SecretChats/SetSecretChatMessageAutoremoveTimeoutInteractively.swift").read_text()
+        body = core.split("func _internal_addSecretChatMessageScreenshot", 1)[1].split("enqueueMessages", 1)[0]
+        self.assertIn("ghostMode", body)
+        preview = (ROOT / "submodules/GalleryUI/Sources/SecretMediaPreviewController.swift").read_text()
+        handler = preview.split("screenCaptureEvents()", 1)[1].split("historyScreenshot", 1)[0]
+        self.assertIn("ghostMode", handler)
+
+    def test_kept_deleted_messages_disable_server_actions(self):
+        menus = (ROOT / "submodules/TelegramUI/Sources/ChatInterfaceStateContextMenus.swift").read_text()
+        self.assertIn("ayuIsKeptDeleted", menus)
+        common = (ROOT / "submodules/TelegramUI/Components/Chat/ChatMessageItemCommon/Sources/ChatMessageItemCommon.swift").read_text()
+        reactions = common.split("func canAddMessageReactions", 1)[1].split("\npublic func ", 1)[0]
+        self.assertIn("DeletedMessageAttribute", reactions)
 
 
 if __name__ == "__main__":

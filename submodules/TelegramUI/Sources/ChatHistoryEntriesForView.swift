@@ -66,6 +66,30 @@ private func shadowFilteredPlaceholder(_ message: Message) -> Message {
     )
 }
 
+// Shadow: the fork-store repair only has to see each kept/edited message once
+// per process. This function runs on every history view update (scrolling,
+// typing, reactions), so without this filter every update with a visible
+// kept or edited message started its own Postbox write transaction.
+private let ayuForkRepairLock = NSLock()
+private var ayuForkRepairedMessageIds: [AccountRecordId: Set<MessageId>] = [:]
+
+private func ayuForkMessagesNeedingRepair(accountId: AccountRecordId, messages: [Message]) -> [Message] {
+    let candidates = messages.filter { message in
+        return message.attributes.contains(where: { $0 is DeletedMessageAttribute || $0 is SavedMessageEditsAttribute })
+    }
+    if candidates.isEmpty {
+        return []
+    }
+    ayuForkRepairLock.lock()
+    defer { ayuForkRepairLock.unlock() }
+    var repaired = ayuForkRepairedMessageIds[accountId] ?? Set()
+    let result = candidates.filter { repaired.insert($0.id).inserted }
+    if !result.isEmpty {
+        ayuForkRepairedMessageIds[accountId] = repaired
+    }
+    return result
+}
+
 func chatHistoryEntriesForView(
     currentState: ChatHistoryEntriesForViewState,
     context: AccountContext,
@@ -97,9 +121,7 @@ func chatHistoryEntriesForView(
 ) -> ([ChatHistoryEntry], ChatHistoryEntriesForViewState) {
     var currentState = currentState
 
-    let forkMessages = view.entries.map { $0.message }.filter { message in
-        return message.attributes.contains(where: { $0 is DeletedMessageAttribute || $0 is SavedMessageEditsAttribute })
-    }
+    let forkMessages = ayuForkMessagesNeedingRepair(accountId: context.account.id, messages: view.entries.map { $0.message })
     if !forkMessages.isEmpty {
         let _ = context.account.postbox.transaction { transaction in
             ayuForkStoreRepair(transaction: transaction, messages: forkMessages)

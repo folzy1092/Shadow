@@ -1481,6 +1481,9 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 if strongSelf.selectionNode != nil {
                     return false
                 }
+                if item.content.firstMessage.attributes.contains(where: { $0 is DeletedMessageAttribute }) {
+                    return false
+                }
                 for media in item.content.firstMessage.media {
                     if let _ = media as? TelegramMediaExpiredContent {
                         return false

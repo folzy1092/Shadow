@@ -277,6 +277,10 @@ public func canAddMessageReactions(message: EngineMessage) -> Bool {
     if message.id.namespace != Namespaces.Message.Cloud {
         return false
     }
+    // Shadow: an anti-delete copy no longer exists on the server.
+    if message.attributes.contains(where: { $0 is DeletedMessageAttribute }) {
+        return false
+    }
     if let peer = message.peers[message.id.peerId] {
         if let _ = peer as? TelegramSecretChat {
             return false

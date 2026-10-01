@@ -87,26 +87,21 @@ func ayuGramMarkMessagesDeleted(transaction: Transaction, mediaBox: MediaBox, id
 
 // A later `UpdateMinAvailableMessage` can arrive right after an ordinary
 // delete update. Telegram uses it to trim a history range and its stock path
-// would otherwise remove the locally-kept copy. Capture eligible cached
-// messages before trimming, including when the range arrives first.
-// Messages never received by this client cannot be recovered.
+// would otherwise remove the same locally-kept ghost a second time. Only
+// restore messages already marked by anti-delete.
+//
+// Do NOT mark the rest of the range as deleted here: the server also sends
+// this update when the user clears a supergroup's history "for me" (e.g. on
+// another device). Capturing the range would resurrect the whole cleared
+// history as "deleted by sender" ghosts and hard-link all of its media, in a
+// single transaction that scans up to the entire chat.
 func ayuGramKeptDeletedMessagesInRange(
     transaction: Transaction,
-    mediaBox: MediaBox,
     peerId: PeerId,
     namespace: MessageId.Namespace,
     minId: MessageId.Id,
     maxId: MessageId.Id
 ) -> [StoreMessage] {
-    // Capture local copies even if the range trim arrives before delete updates.
-    if currentAyuGramSettings(transaction: transaction).keepDeletedMessages {
-        var ids: [MessageId] = []
-        transaction.scanTopMessages(peerId: peerId, namespace: namespace, limit: 1_000_000, { message in
-            if message.id.id >= minId && message.id.id <= maxId { ids.append(message.id) }
-            return true
-        })
-        let _ = ayuGramMarkMessagesDeleted(transaction: transaction, mediaBox: mediaBox, ids: ids)
-    }
     let refs = ayuForkStore(transaction: transaction).keptDeleted
     var messages: [StoreMessage] = []
     for ref in refs where ref.peer == peerId.toInt64() && ref.namespace == namespace && ref.id >= minId && ref.id <= maxId {

@@ -4495,7 +4495,6 @@ func replayFinalState(
                 // update makes a visible ghost and its archive entry vanish.
                 let keptDeletedMessages = ayuGramKeptDeletedMessagesInRange(
                     transaction: transaction,
-                    mediaBox: postbox.mediaBox,
                     peerId: id.peerId,
                     namespace: id.namespace,
                     minId: 1,

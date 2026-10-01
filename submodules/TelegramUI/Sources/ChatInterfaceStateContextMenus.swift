@@ -803,6 +803,14 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         canReply = false
     }
     
+    // Shadow: anti-delete keeps a local copy of a message the server already
+    // deleted. Server-side actions on it (reply, pin, edit) can only fail.
+    let ayuIsKeptDeleted = messages.contains(where: { $0.attributes.contains(where: { $0 is DeletedMessageAttribute }) })
+    if ayuIsKeptDeleted {
+        canReply = false
+        canPin = false
+    }
+    
     if let peer = messages[0].peers[messages[0].id.peerId] {
         if peer.isDeleted {
             canPin = false
@@ -912,6 +920,9 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         if !isAction {
             let message = messages[0]
             canEdit = canEditMessage(context: context, limitsConfiguration: limitsConfiguration, message: message)
+        }
+        if ayuIsKeptDeleted {
+            canEdit = false
         }
         
         let translationSettings: TranslationSettings

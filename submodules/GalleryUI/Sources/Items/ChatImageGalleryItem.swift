@@ -460,7 +460,11 @@ final class ChatImageGalleryItemNode: ZoomableContentGalleryItemNode {
         self.translateToLanguage = translateToLanguage
         self.peerIsCopyProtected = peerIsCopyProtected
         self.isSecret = isSecret
-        self.imageNode.captureProtected = message.id.peerId.namespace == Namespaces.Peer.SecretChat || message.isCopyProtected() || peerIsCopyProtected || isSecret || message.paidContent != nil
+        // Shadow: "allow saving restricted content" also lifts screenshot
+        // protection for secret chats and protected peers in the gallery.
+        let ayuAllowCapture = currentAyuGramSettings(accountId: self.context.account.id).allowSaveRestrictedContent
+        let ayuProtected = !ayuAllowCapture && (message.id.peerId.namespace == Namespaces.Peer.SecretChat || peerIsCopyProtected || isSecret)
+        self.imageNode.captureProtected = ayuProtected || message.isCopyProtected() || message.paidContent != nil
         self.updateFooter(animated: false)
         
         var title: String?
