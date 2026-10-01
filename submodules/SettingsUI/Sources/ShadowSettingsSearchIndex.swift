@@ -1,7 +1,7 @@
 import Foundation
 
 enum ShadowSettingsSearchDestination: Int32 {
-    case customization, spy, ghost, misc, backup, filters, pushDiagnostics, quickReplies, updates, chatLocks
+    case customization, spy, ghost, misc, backup, filters, pushDiagnostics, quickReplies, chatLocks
 
     var title: String {
         switch self {
@@ -13,7 +13,6 @@ enum ShadowSettingsSearchDestination: Int32 {
         case .filters: return "Фильтры"
         case .pushDiagnostics: return "Разное"
         case .quickReplies: return "Шаблоны ответов"
-        case .updates: return "Обновления"
         case .chatLocks: return "Замки чатов"
         }
     }
@@ -105,7 +104,6 @@ enum ShadowSettingsSearchIndex {
         ShadowSettingsSearchItem(destination: .customization, entryId: 104, title: "Безлимитные закрепы", description: "Без лимита в списке, архиве, папках, Избранном и темах (сверх лимита — только на этом устройстве)", keywords: "pin закреп закрепить лимит unlimited безлимит папки folders темы topics избранное"),
         ShadowSettingsSearchItem(destination: .customization, entryId: 103, title: "Расшифровка голосовых на устройстве", description: "Распознавание речи без Premium, аудио не уходит с телефона", keywords: "voice голосовые transcription расшифровка текст speech"),
         ShadowSettingsSearchItem(destination: .quickReplies, entryId: 0, title: "Шаблоны ответов", description: "Свои заготовки текста, вставляются кнопкой в поле ввода", keywords: "templates шаблоны quick replies быстрые ответы заготовки"),
-        ShadowSettingsSearchItem(destination: .updates, entryId: 0, title: "Проверка обновлений", description: "Сравнить установленную сборку с последним релизом на GitHub", keywords: "update обновление версия сборка build release релиз github"),
         ShadowSettingsSearchItem(destination: .chatLocks, entryId: 0, title: "Замки чатов", description: "Face ID и пароль на отдельные чаты, сброс замков", keywords: "lock замок пароль face id touch id скрыть чат блокировка")
     ].sorted { $0.id < $1.id }
 

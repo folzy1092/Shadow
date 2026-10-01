@@ -92,6 +92,11 @@ class CleanInterfaceContracts(unittest.TestCase):
         self.assertIsInstance(manifest["enabled"], bool)
         self.assertIsInstance(manifest["build"], int)
         self.assertIn("update-check", (ROOT / "build-system/ci/test_shadow_foundation.py").read_text())
+        hub = read("SettingsUI/Sources/AyuGramSettingsController.swift")
+        self.assertIn("ItemListInfoItem(", hub)
+        self.assertIn("arguments.dismissUpdateBanner()", hub)
+        self.assertIn("[Скачать IPA]", hub)
+        self.assertFalse((SUB / "SettingsUI/Sources/ShadowUpdatesController.swift").exists())
 
     def test_unlimited_pinned_chats(self):
         toggle = read("TelegramCore/Sources/TelegramEngine/Peers/TogglePeerChatPinned.swift")

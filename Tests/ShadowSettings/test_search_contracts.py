@@ -15,7 +15,6 @@ class SearchContracts(unittest.TestCase):
                  'ghost': 'AyuGhostEntry', 'misc': 'AyuMiscEntry'}
         ids = {'backup': {0, 1, 2}, 'filters': {0}, 'pushDiagnostics': {0, 1}}
         ids['quickReplies'] = {0}
-        ids['updates'] = {0}
         ids['chatLocks'] = {0}
         for destination, name in enums.items():
             enum = UI.split(f'private enum {name}:', 1)[1].split('\nprivate ', 1)[0]

@@ -77,15 +77,26 @@ private func attachmentSizeLabel(_ value: Int64) -> String {
 // MARK: - Hub
 
 private enum AyuHubSection: Int32 {
+    case updateBanner
     case search
     case privacy
     case interface
     case accounts
     case tools
     case info
+    case updateCheck
+}
+
+// Shadow: update check from the bottom of the hub; an available update is
+// shown as a dismissible card at the top (ShadowUpdateCheck).
+private enum ShadowHubUpdateState: Equatable {
+    case idle
+    case checking
+    case result(ShadowUpdateCheck.Status)
 }
 
 private enum AyuHubEntry: ItemListNodeEntry {
+    case updateBanner(title: String, text: String)
     case query(String)
     case result(ShadowSettingsSearchItem)
     case noResults
@@ -99,18 +110,22 @@ private enum AyuHubEntry: ItemListNodeEntry {
     case pushDiagnostics
     case quickReplies
     case chatLocks
-    case updates
     case infoFooter
+    case checkUpdates(label: String, enabled: Bool)
 
     var section: ItemListSectionId {
         switch self {
+        case .updateBanner:
+            return AyuHubSection.updateBanner.rawValue
+        case .checkUpdates:
+            return AyuHubSection.updateCheck.rawValue
         case .query:
             return AyuHubSection.search.rawValue
         case .result:
             return AyuHubSection.privacy.rawValue
         case .noResults:
             return AyuHubSection.info.rawValue
-        case .customization, .spy, .ghost, .filters, .misc, .hiddenAccounts, .backup, .pushDiagnostics, .quickReplies, .chatLocks, .updates:
+        case .customization, .spy, .ghost, .filters, .misc, .hiddenAccounts, .backup, .pushDiagnostics, .quickReplies, .chatLocks:
             return AyuHubSection.tools.rawValue
         case .infoFooter:
             return AyuHubSection.info.rawValue
@@ -119,7 +134,9 @@ private enum AyuHubEntry: ItemListNodeEntry {
 
     var stableId: Int32 {
         switch self {
+        case .updateBanner: return -2
         case .query: return -1
+        case .checkUpdates: return 30
         case let .result(item): return 100 + item.id
         case .noResults: return 10
         case .customization:
@@ -136,8 +153,6 @@ private enum AyuHubEntry: ItemListNodeEntry {
             return 12
         case .chatLocks:
             return 13
-        case .updates:
-            return 14
         case .infoFooter:
             return 20
         case .backup:
@@ -192,8 +207,20 @@ private enum AyuHubEntry: ItemListNodeEntry {
             return ItemListDisclosureItem(presentationData: presentationData, title: "Шаблоны ответов", label: "", sectionId: self.section, style: .blocks, action: { arguments.openFeature(.quickReplies) })
         case .chatLocks:
             return ItemListDisclosureItem(presentationData: presentationData, title: "Замки чатов", label: "", sectionId: self.section, style: .blocks, action: { arguments.openFeature(.chatLocks) })
-        case .updates:
-            return ItemListDisclosureItem(presentationData: presentationData, title: "Обновления", label: "", sectionId: self.section, style: .blocks, action: { arguments.openFeature(.updates) })
+        case let .updateBanner(title, text):
+            return ItemListInfoItem(presentationData: presentationData, title: title, text: .markdown(text), style: .blocks, sectionId: self.section, linkAction: { action in
+                if case let .tap(url) = action {
+                    arguments.openUrl(url)
+                }
+            }, closeAction: {
+                arguments.dismissUpdateBanner()
+            })
+        case let .checkUpdates(label, enabled):
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Проверить обновления", enabled: enabled, label: label, sectionId: self.section, style: .blocks, disclosureStyle: .none, action: {
+                if enabled {
+                    arguments.checkUpdates()
+                }
+            })
         }
     }
 }
@@ -210,6 +237,9 @@ private final class AyuHubArguments {
     let openHiddenAccounts: () -> Void
     let openPushDiagnostics: () -> Void
     var openFeature: (ShadowSettingsSearchDestination) -> Void = { _ in }
+    var checkUpdates: () -> Void = {}
+    var dismissUpdateBanner: () -> Void = {}
+    var openUrl: (String) -> Void = { _ in }
 
     init(updateQuery: @escaping (String) -> Void, openResult: @escaping (ShadowSettingsSearchItem) -> Void, openCustomization: @escaping () -> Void, openSpy: @escaping () -> Void, openGhost: @escaping () -> Void, openMisc: @escaping () -> Void, openBackup: @escaping () -> Void, openFilters: @escaping () -> Void, openHiddenAccounts: @escaping () -> Void, openPushDiagnostics: @escaping () -> Void) {
         self.updateQuery = updateQuery
@@ -241,7 +271,6 @@ func shadowSettingsSearchDestinationController(context: AccountContext, item: Sh
         }
     case .quickReplies: return shadowQuickRepliesController(context: context, focus: item)
     case .chatLocks: return shadowChatLocksController(context: context, focus: item)
-    case .updates: return shadowUpdatesController(context: context, focus: item)
     }
 }
 
@@ -286,19 +315,61 @@ public func ayuGramSettingsController(context: AccountContext) -> ViewController
             pushControllerImpl?(shadowQuickRepliesController(context: context))
         case .chatLocks:
             pushControllerImpl?(shadowChatLocksController(context: context))
-        case .updates:
-            pushControllerImpl?(shadowUpdatesController(context: context))
         default:
             break
         }
     }
 
-    let signal = combineLatest(queue: .mainQueue(), context.sharedContext.presentationData, query.get())
+    let updateState = ValuePromise<ShadowHubUpdateState>(.idle, ignoreRepeated: true)
+    let bannerDismissed = ValuePromise<Bool>(false, ignoreRepeated: true)
+    arguments.checkUpdates = {
+        updateState.set(.checking)
+        bannerDismissed.set(false)
+        ShadowUpdateCheck.check { status in
+            updateState.set(.result(status))
+        }
+    }
+    arguments.dismissUpdateBanner = {
+        bannerDismissed.set(true)
+    }
+    arguments.openUrl = { url in
+        context.sharedContext.applicationBindings.openUrl(url)
+    }
+
+    let signal = combineLatest(queue: .mainQueue(), context.sharedContext.presentationData, query.get(), updateState.get(), bannerDismissed.get())
     |> deliverOnMainQueue
-    |> map { presentationData, query -> (ItemListControllerState, (ItemListNodeState, Any)) in
-        var entries: [AyuHubEntry] = [.query(query)]
+    |> map { presentationData, query, updateState, bannerDismissed -> (ItemListControllerState, (ItemListNodeState, Any)) in
+        var entries: [AyuHubEntry] = []
+        var checkLabel = ""
+        var checkEnabled = true
+        switch updateState {
+        case .idle:
+            break
+        case .checking:
+            checkLabel = "Проверяю…"
+            checkEnabled = false
+        case let .result(status):
+            switch status {
+            case .upToDate:
+                checkLabel = "Актуальная версия"
+            case let .available(release):
+                checkLabel = "Доступна \(release.build)"
+                if !bannerDismissed {
+                    let link = (release.downloadURL ?? release.pageURL).absoluteString
+                    var text = "\(release.title)\n[Скачать IPA](\(link))"
+                    let notes = release.notes.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !notes.isEmpty {
+                        text = "\(release.title)\n\(String(notes.prefix(400)))\n[Скачать IPA](\(link))"
+                    }
+                    entries.append(.updateBanner(title: release.isRequired ? "Обязательное обновление" : "Доступно обновление", text: text))
+                }
+            case .failed:
+                checkLabel = "Не удалось проверить"
+            }
+        }
+        entries.append(.query(query))
         if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            entries += [.customization, .spy, .ghost, .filters, .misc, .hiddenAccounts, .backup, .pushDiagnostics, .quickReplies, .chatLocks, .updates, .infoFooter]
+            entries += [.customization, .spy, .ghost, .filters, .misc, .hiddenAccounts, .backup, .pushDiagnostics, .quickReplies, .chatLocks, .infoFooter, .checkUpdates(label: checkLabel, enabled: checkEnabled)]
         } else {
             let matches = ShadowSettingsSearchIndex.search(query)
             entries += matches.isEmpty ? [.noResults] : matches.map { .result($0) }
