@@ -123,6 +123,23 @@ UI-проекция настроек выбирается в `TelegramRootContro
 - отправка без онлайна: `AyuDelayedSend.swift` (через schedule_date) + `EnqueueMessage.swift`;
 - уведомления о скриншотах **не отправляются никогда** (`ShadowScreenshotNotices.swift`).
 
+## 5b. Вайтлист устройств и фильтры сообщений
+
+- Вайтлист: `ShadowDeviceAccess.swift` (ID устройства в Keychain,
+  `AfterFirstUnlockThisDeviceOnly`, без Face ID; загрузка и кэш
+  `shadow-whitelist.json` с master) + `TelegramUI/Sources/ShadowDeviceAccessUI.swift`
+  (отдельное окно-заглушка поверх всего, ставится в `AppDelegate`).
+  `"enabled": false` в файле — пускать всех. Залогиненный аккаунт
+  `ShadowDeviceAccess.adminPeerId` (7878830498) проходит всегда.
+  Правка списка: Shadow → «Доступ устройств» (только админ) → «Скопировать JSON»
+  → коммит файла на GitHub. Пуш только этого файла CI не запускает.
+- Фильтры: `ShadowMessageFilters.swift` (регулярка + флаги, matcher кэшируется
+  в `AyuGramSettings`), поле `messageFilters` (ключ `messageFiltersV2`, старое
+  `messageFilterPhrases` мигрирует), `messageFilterShowPlaceholder`. Скрытие —
+  `ChatHistoryEntriesForView`. «В фильтры»: `TextSelectionNode.shadowAddToFilter`
+  и меню @username (`ChatControllerOpenUsernameContextMenu`) через
+  `ChatControllerInteraction.shadowAddMessageFilter`.
+
 ## 5a. Замки чатов и второе пространство
 
 - Замки: `ShadowChatLock.swift` (хранилище), `TelegramUI/Sources/ShadowChatLockUI.swift`
