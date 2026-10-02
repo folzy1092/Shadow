@@ -95,7 +95,7 @@ class CleanInterfaceContracts(unittest.TestCase):
         hub = read("SettingsUI/Sources/AyuGramSettingsController.swift")
         self.assertIn("ItemListInfoItem(", hub)
         self.assertIn("arguments.dismissUpdateBanner()", hub)
-        self.assertIn("[Скачать IPA]", hub)
+        self.assertIn('"Скачать IPA (\(release.build))"', hub)
         self.assertFalse((SUB / "SettingsUI/Sources/ShadowUpdatesController.swift").exists())
 
     def test_changelog_file_and_banner(self):
@@ -111,7 +111,8 @@ class CleanInterfaceContracts(unittest.TestCase):
         check = read("TelegramCore/Sources/AyuGram/ShadowUpdateCheck.swift")
         self.assertIn("master/shadow-changelog.json", check)
         hub = read("SettingsUI/Sources/AyuGramSettingsController.swift")
-        self.assertIn("for entry in release.changelog {", hub)
+        self.assertIn("shadowUpdateNotesText(release)", hub)
+        self.assertIn("let shown = release.changelog.prefix(5)", hub)
 
     def test_app_icons(self):
         build = (ROOT / "Telegram/BUILD").read_text()

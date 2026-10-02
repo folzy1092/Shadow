@@ -7,6 +7,8 @@ on:
     # towards the build number (git rev-list --count), see SHADOW_AGENT_MAP.md.
     paths-ignore:
       - '**/*.md'
+      # Whitelist edits from the admin menu do not need a new IPA.
+      - 'shadow-whitelist.json'
 
   workflow_dispatch:
 

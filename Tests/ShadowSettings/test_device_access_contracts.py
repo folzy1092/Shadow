@@ -1,0 +1,50 @@
+"""Source contracts for the device whitelist gate."""
+from pathlib import Path
+import unittest
+
+ROOT = Path(__file__).resolve().parents[2]
+SUB = ROOT / "submodules"
+
+
+def read(path):
+    return (SUB / path).read_text(encoding="utf-8")
+
+
+class DeviceAccessContracts(unittest.TestCase):
+    def test_keychain_item_is_silent_and_device_only(self):
+        core = read("TelegramCore/Sources/AyuGram/ShadowDeviceAccess.swift")
+        self.assertIn("kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly", core)
+        self.assertNotIn("SecAccessControl", core)
+        self.assertIn("public static let adminPeerId: Int64 = 7878830498", core)
+
+    def test_gate_is_installed_at_launch_and_on_activation(self):
+        app = read("TelegramUI/Sources/AppDelegate.swift")
+        self.assertIn("ShadowDeviceAccessGate(", app)
+        self.assertIn("self.shadowDeviceAccessGate?.check(force: false)", app)
+
+    def test_gate_has_admin_bypass_and_copy(self):
+        ui = read("TelegramUI/Sources/ShadowDeviceAccessUI.swift")
+        self.assertIn("Доступ ограничен", ui)
+        self.assertIn("UIPasteboard.general.string = ShadowDeviceAccess.deviceId", ui)
+        self.assertIn("self.adminLoggedIn()", ui)
+
+    def test_whitelist_file_exists_and_skips_ci(self):
+        self.assertTrue((ROOT / "shadow-whitelist.json").exists())
+        workflow = (ROOT / ".github/workflows/build.yml").read_text(encoding="utf-8")
+        self.assertIn("shadow-whitelist.json", workflow)
+
+    def test_foundation_suite_compiles_device_access(self):
+        script = (ROOT / "build-system/ci/test_shadow_foundation.py").read_text(encoding="utf-8")
+        self.assertIn("Tests/ShadowSettings/DeviceAccessTests.swift", script)
+
+    def test_admin_menu_is_last_and_admin_only(self):
+        hub = read("SettingsUI/Sources/AyuGramSettingsController.swift")
+        self.assertIn("case deviceAccess", hub)
+        self.assertIn("context.account.peerId.id._internalGetInt64Value() == ShadowDeviceAccess.adminPeerId", hub)
+        admin = read("SettingsUI/Sources/ShadowDeviceAccessController.swift")
+        self.assertIn("ShadowDeviceAccess.encode(", admin)
+        self.assertIn("ShadowDeviceAccess.editURL", admin)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -169,9 +169,14 @@ public enum ShadowUpdateCheck {
     }
 
     // Entries newer than the installed build and not newer than the announced one.
+    // Unknown installed build (re-signed IPA without a numeric CFBundleVersion):
+    // only the announced entry, never the whole history.
     public static func changes(installedBuild: Int?, announcedBuild: Int, entries: [ChangelogEntry]) -> [ChangelogEntry] {
+        guard let installedBuild else {
+            return entries.filter { $0.build == announcedBuild }
+        }
         return entries.filter { entry in
-            entry.build <= announcedBuild && entry.build > (installedBuild ?? 0)
+            entry.build <= announcedBuild && entry.build > installedBuild
         }
     }
 

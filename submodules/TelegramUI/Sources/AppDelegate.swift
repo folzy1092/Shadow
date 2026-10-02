@@ -219,6 +219,10 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
     var nativeWindow: (UIWindow & WindowHost)?
     var mainWindow: Window1!
     private var dataImportSplash: LegacyDataImportSplash?
+    // Shadow: device whitelist gate (ShadowDeviceAccess).
+    private var shadowDeviceAccessGate: ShadowDeviceAccessGate?
+    private var shadowAdminLoggedIn = false
+    private let shadowAdminAccountsDisposable = MetaDisposable()
     private var memoryUsageOverlayView: UILabel?
     
     private var buildConfig: BuildConfig?
@@ -415,6 +419,12 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         }
         self.window = window
         self.nativeWindow = window
+
+        // Shadow: device whitelist gate (ShadowDeviceAccess).
+        self.shadowDeviceAccessGate = ShadowDeviceAccessGate(windowScene: window.windowScene, adminLoggedIn: { [weak self] in
+            return self?.shadowAdminLoggedIn ?? false
+        })
+        self.shadowDeviceAccessGate?.check(force: true)
         
         hostView.containerView.layer.addSublayer(MetalEngine.shared.rootLayer)
         
@@ -1226,6 +1236,23 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             
             return .single(sharedApplicationContext)
         })
+
+        // Shadow: a logged-in admin account always passes the device whitelist.
+        self.shadowAdminAccountsDisposable.set((self.sharedContextPromise.get()
+        |> mapToSignal { sharedApplicationContext -> Signal<Bool, NoError> in
+            return sharedApplicationContext.sharedContext.activeAccountContexts
+            |> map { _, accounts, _ -> Bool in
+                return accounts.contains(where: { $0.1.account.peerId.id._internalGetInt64Value() == ShadowDeviceAccess.adminPeerId })
+            }
+        }
+        |> distinctUntilChanged
+        |> deliverOnMainQueue).start(next: { [weak self] adminLoggedIn in
+            guard let self else {
+                return
+            }
+            self.shadowAdminLoggedIn = adminLoggedIn
+            self.shadowDeviceAccessGate?.check(force: false)
+        }))
             
         self.context.set(self.sharedContextPromise.get()
         |> deliverOnMainQueue
@@ -2043,6 +2070,8 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         self.resetBadge()
         
         self.maybeCheckForUpdates()
+        
+        self.shadowDeviceAccessGate?.check(force: false)
         
         SharedDisplayLinkDriver.shared.updateForegroundState(self.isActiveValue)
         

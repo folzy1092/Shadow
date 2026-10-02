@@ -77,6 +77,8 @@ struct UpdateCheckTests {
         check(missed.map { $0.build } == [34703, 34700], "Every skipped build is listed")
         check(ShadowUpdateCheck.changes(installedBuild: 34703, announcedBuild: 34703, entries: entries).isEmpty, "Nothing for the installed build")
         check(ShadowUpdateCheck.parseChangelog(Data("[]".utf8)).isEmpty, "Malformed changelog")
+        check(ShadowUpdateCheck.changes(installedBuild: nil, announcedBuild: 34703, entries: entries).map { $0.build } == [34703], "Unknown installed build shows only the announced entry")
+        check(ShadowUpdateCheck.changes(installedBuild: 34700, announcedBuild: 34703, entries: entries).map { $0.build } == [34703], "One skipped build, one entry")
 
         print("Shadow update check: \(count) checks passed")
     }

@@ -85,10 +85,12 @@ private enum AyuHubSection: Int32 {
     case tools
     case info
     case updateCheck
+    case admin
 }
 
-// Shadow: update check from the bottom of the hub; an available update is
-// shown as a dismissible card at the top (ShadowUpdateCheck).
+// Shadow: a big "check for updates" button opens the hub; status, the IPA
+// download button and the notes of every skipped build go right under it
+// (ShadowUpdateCheck).
 private enum ShadowHubUpdateState: Equatable {
     case idle
     case checking
@@ -96,7 +98,10 @@ private enum ShadowHubUpdateState: Equatable {
 }
 
 private enum AyuHubEntry: ItemListNodeEntry {
-    case updateBanner(title: String, text: String)
+    case updateButton(enabled: Bool)
+    case updateStatus(String)
+    case downloadButton(String, String)
+    case updateNotes(title: String, text: String)
     case query(String)
     case result(ShadowSettingsSearchItem)
     case noResults
@@ -114,14 +119,16 @@ private enum AyuHubEntry: ItemListNodeEntry {
     case emergency
     case crashReports(Int)
     case infoFooter
-    case checkUpdates(label: String, enabled: Bool)
+    case deviceAccess
 
     var section: ItemListSectionId {
         switch self {
-        case .updateBanner:
+        case .updateButton, .updateStatus, .downloadButton:
             return AyuHubSection.updateBanner.rawValue
-        case .checkUpdates:
+        case .updateNotes:
             return AyuHubSection.updateCheck.rawValue
+        case .deviceAccess:
+            return AyuHubSection.admin.rawValue
         case .query:
             return AyuHubSection.search.rawValue
         case .result:
@@ -137,9 +144,12 @@ private enum AyuHubEntry: ItemListNodeEntry {
 
     var stableId: Int32 {
         switch self {
-        case .updateBanner: return -2
+        case .updateButton: return -5
+        case .updateStatus: return -4
+        case .downloadButton: return -3
+        case .updateNotes: return -2
         case .query: return -1
-        case .checkUpdates: return 30
+        case .deviceAccess: return 30
         case let .result(item): return 100 + item.id
         case .noResults: return 10
         case .customization:
@@ -222,19 +232,23 @@ private enum AyuHubEntry: ItemListNodeEntry {
             return ItemListDisclosureItem(presentationData: presentationData, title: "Экстренная защита", label: "", sectionId: self.section, style: .blocks, action: { arguments.openFeature(.emergency) })
         case let .crashReports(count):
             return ItemListDisclosureItem(presentationData: presentationData, title: "Отчёты о вылетах", label: "\(count)", sectionId: self.section, style: .blocks, action: { arguments.openCrashReports() })
-        case let .updateBanner(title, text):
-            return ItemListInfoItem(presentationData: presentationData, title: title, text: .markdown(text), style: .blocks, sectionId: self.section, linkAction: { action in
-                if case let .tap(url) = action {
-                    arguments.openUrl(url)
-                }
-            }, closeAction: {
+        case let .updateButton(enabled):
+            return ShadowBigButtonItem(presentationData: presentationData, title: "Проверить обновления", enabled: enabled, sectionId: self.section, action: {
+                arguments.checkUpdates()
+            })
+        case let .updateStatus(text):
+            return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section, textAlignment: .center)
+        case let .downloadButton(title, url):
+            return ShadowBigButtonItem(presentationData: presentationData, title: title, enabled: true, sectionId: self.section, action: {
+                arguments.openUrl(url)
+            })
+        case let .updateNotes(title, text):
+            return ItemListInfoItem(presentationData: presentationData, title: title, text: .plain(text), style: .blocks, sectionId: self.section, closeAction: {
                 arguments.dismissUpdateBanner()
             })
-        case let .checkUpdates(label, enabled):
-            return ItemListDisclosureItem(presentationData: presentationData, title: "Проверить обновления", enabled: enabled, label: label, sectionId: self.section, style: .blocks, disclosureStyle: .none, action: {
-                if enabled {
-                    arguments.checkUpdates()
-                }
+        case .deviceAccess:
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Доступ устройств", label: "", sectionId: self.section, style: .blocks, action: {
+                arguments.openDeviceAccess()
             })
         }
     }
@@ -256,6 +270,7 @@ private final class AyuHubArguments {
     var dismissUpdateBanner: () -> Void = {}
     var openUrl: (String) -> Void = { _ in }
     var openCrashReports: () -> Void = {}
+    var openDeviceAccess: () -> Void = {}
 
     init(updateQuery: @escaping (String) -> Void, openResult: @escaping (ShadowSettingsSearchItem) -> Void, openCustomization: @escaping () -> Void, openSpy: @escaping () -> Void, openGhost: @escaping () -> Void, openMisc: @escaping () -> Void, openBackup: @escaping () -> Void, openFilters: @escaping () -> Void, openHiddenAccounts: @escaping () -> Void, openPushDiagnostics: @escaping () -> Void) {
         self.updateQuery = updateQuery
@@ -290,6 +305,24 @@ func shadowSettingsSearchDestinationController(context: AccountContext, item: Sh
     case .secondSpace: return shadowSecondSpaceController(context: context, focus: item)
     case .emergency: return shadowEmergencyController(context: context, focus: item)
     }
+}
+
+// Notes of every build between the installed and the announced one, newest
+// first; long gaps are cut by builds, not in the middle of an item.
+private func shadowUpdateNotesText(_ release: ShadowUpdateCheck.Release) -> String {
+    guard !release.changelog.isEmpty else {
+        return String(release.notes.trimmingCharacters(in: .whitespacesAndNewlines).prefix(600))
+    }
+    let shown = release.changelog.prefix(5)
+    var blocks = shown.map { entry -> String in
+        let header = "Сборка \(entry.build)" + (entry.date.isEmpty ? "" : " · \(entry.date)") + ":"
+        return header + "\n" + entry.items.map { "• \($0)" }.joined(separator: "\n")
+    }
+    let rest = release.changelog.count - shown.count
+    if rest > 0 {
+        blocks.append("…и ещё \(rest) сборок")
+    }
+    return blocks.joined(separator: "\n\n")
 }
 
 public func ayuGramSettingsController(context: AccountContext) -> ViewController {
@@ -396,65 +429,62 @@ public func ayuGramSettingsController(context: AccountContext) -> ViewController
     arguments.openUrl = { url in
         context.sharedContext.applicationBindings.openUrl(url)
     }
+    arguments.openDeviceAccess = {
+        pushControllerImpl?(shadowDeviceAccessController(context: context))
+    }
+    // Shadow: the device whitelist editor is for the owner only.
+    let isAdmin = context.account.peerId.id._internalGetInt64Value() == ShadowDeviceAccess.adminPeerId
 
     let signal = combineLatest(queue: .mainQueue(), context.sharedContext.presentationData, query.get(), updateState.get(), bannerDismissed.get(), crashRevision.get())
     |> deliverOnMainQueue
     |> map { presentationData, query, updateState, bannerDismissed, _ -> (ItemListControllerState, (ItemListNodeState, Any)) in
-        var entries: [AyuHubEntry] = []
-        var checkLabel = ""
-        var checkEnabled = true
+        let installed = ShadowUpdateCheck.installedBuild.map { "\($0)" } ?? "?"
+        var updateEnabled = true
+        var statusText = "Установлена сборка \(installed)"
+        var download: (String, String)?
+        var notes: (String, String)?
         switch updateState {
         case .idle:
             break
         case .checking:
-            checkLabel = "Проверяю…"
-            checkEnabled = false
+            statusText = "Проверяю…"
+            updateEnabled = false
         case let .result(status):
             switch status {
             case .upToDate:
-                // Short enough not to truncate; the build shows what is installed.
-                checkLabel = ShadowUpdateCheck.installedBuild.map { "Актуально · \($0)" } ?? "Актуально"
-                if !bannerDismissed {
-                    let installed = ShadowUpdateCheck.installedBuild.map { "сборка \($0)" } ?? "неизвестная сборка"
-                    entries.append(.updateBanner(title: "Установлена актуальная версия", text: "Shadow \(ShadowUpdateCheck.installedVersion), \(installed). Новее пока ничего нет."))
-                }
+                statusText = "Актуально · сборка \(installed)"
             case let .available(release):
-                checkLabel = "Доступна \(release.build)"
+                statusText = "У тебя \(installed) → доступна \(release.build)"
+                if release.changelog.count > 1 {
+                    statusText += ", пропущено \(release.changelog.count) обновлений"
+                }
+                if release.isRequired {
+                    statusText = "Обязательное обновление. " + statusText
+                }
+                download = ("Скачать IPA (\(release.build))", (release.downloadURL ?? release.pageURL).absoluteString)
                 if !bannerDismissed {
-                    let link = (release.downloadURL ?? release.pageURL).absoluteString
-                    var text = "\(release.title)\n[Скачать IPA](\(link))"
-                    if !release.changelog.isEmpty {
-                        // Every build newer than the installed one, so skipped updates are covered too.
-                        var changes = ""
-                        for entry in release.changelog {
-                            changes += "\nСборка \(entry.build)" + (entry.date.isEmpty ? "" : " · \(entry.date)") + ":\n"
-                            changes += entry.items.map { "• \($0)" }.joined(separator: "\n") + "\n"
-                        }
-                        if changes.count > 1500 {
-                            changes = String(changes.prefix(1500)) + "…\n"
-                        }
-                        text = "\(release.title)\n\(changes)\n[Скачать IPA](\(link))"
-                    } else {
-                        let notes = release.notes.trimmingCharacters(in: .whitespacesAndNewlines)
-                        if !notes.isEmpty {
-                            text = "\(release.title)\n\(String(notes.prefix(400)))\n[Скачать IPA](\(link))"
-                        }
-                    }
-                    entries.append(.updateBanner(title: release.isRequired ? "Обязательное обновление" : "Доступно обновление", text: text))
+                    notes = (release.title, shadowUpdateNotesText(release))
                 }
             case let .failed(reason):
-                checkLabel = "Не удалось проверить"
-                if !bannerDismissed {
-                    entries.append(.updateBanner(title: "Не удалось проверить обновления", text: reason))
-                }
+                statusText = "Не удалось проверить: \(reason)"
             }
+        }
+        var entries: [AyuHubEntry] = [.updateButton(enabled: updateEnabled), .updateStatus(statusText)]
+        if let download {
+            entries.append(.downloadButton(download.0, download.1))
+        }
+        if let notes, !notes.1.isEmpty {
+            entries.append(.updateNotes(title: notes.0, text: notes.1))
         }
         entries.append(.query(query))
         if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            entries += [.customization, .spy, .ghost, .filters, .misc, .hiddenAccounts, .backup, .pushDiagnostics, .quickReplies, .chatLocks, .secondSpace, .emergency, .infoFooter, .checkUpdates(label: checkLabel, enabled: checkEnabled)]
+            entries += [.customization, .spy, .ghost, .filters, .misc, .hiddenAccounts, .backup, .pushDiagnostics, .quickReplies, .chatLocks, .secondSpace, .emergency, .infoFooter]
             let crashCount = ShadowCrashReports.shared.reports().count
             if crashCount > 0 {
                 entries.insert(.crashReports(crashCount), at: entries.firstIndex(where: { if case .infoFooter = $0 { return true } else { return false } }) ?? entries.count)
+            }
+            if isAdmin {
+                entries.append(.deviceAccess)
             }
         } else {
             let matches = ShadowSettingsSearchIndex.search(query)
