@@ -139,6 +139,12 @@ UI-проекция настроек выбирается в `TelegramRootContro
   `ShadowDeviceAccess.adminPeerId` (7878830498) проходит всегда.
   Правка списка: Shadow → «Доступ устройств» (только админ) → «Скопировать JSON»
   → коммит файла в `folzy1092/tgfork` («Открыть файл на GitHub» ведёт туда).
+  Админы — `ShadowDeviceAccess.adminPeerIds` (Folzy 7878830498, matey 1068369028).
+- Запрос доступа: поле `request_url` в вайтлисте → на заглушке кнопка
+  «Запросить доступ» → POST на Cloudflare Worker (`tools/shadow-bot`, инструкция
+  в его README) → админам сообщение с кнопкой `tg://shadow/access?id=…`.
+- IPA-релизы зеркалируются в `folzy1092/tgfork`, если в секретах Shadow есть
+  `TGFORK_RELEASE_TOKEN` (fine-grained token, Contents: read/write только на tgfork).
 - Фильтры: `ShadowMessageFilters.swift` (регулярка + флаги, matcher кэшируется
   в `AyuGramSettings`), поле `messageFilters` (ключ `messageFiltersV2`, старое
   `messageFilterPhrases` мигрирует), `messageFilterShowPlaceholder`. Скрытие —

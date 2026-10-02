@@ -1242,7 +1242,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         |> mapToSignal { sharedApplicationContext -> Signal<Bool, NoError> in
             return sharedApplicationContext.sharedContext.activeAccountContexts
             |> map { _, accounts, _ -> Bool in
-                return accounts.contains(where: { $0.1.account.peerId.id._internalGetInt64Value() == ShadowDeviceAccess.adminPeerId })
+                return accounts.contains(where: { ShadowDeviceAccess.isAdmin(peerId: $0.1.account.peerId.id._internalGetInt64Value()) })
             }
         }
         |> distinctUntilChanged

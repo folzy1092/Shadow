@@ -187,6 +187,32 @@ jobs:
             --title "Shadow ${APP_VERSION} (${BUILD_NUMBER})" \
             --notes "$NOTES"
 
+      # The same release in the public data repo (folzy1092/tgfork), so IPA links
+      # keep working if this repo goes private. Needs the TGFORK_RELEASE_TOKEN
+      # secret (fine-grained token, Contents: read and write on tgfork only);
+      # without it the step is skipped.
+      - name: Mirror release to tgfork
+        if: ${{ github.ref == 'refs/heads/master' && steps.build.outcome == 'success' }}
+        continue-on-error: true
+        env:
+          TGFORK_RELEASE_TOKEN: ${{ secrets.TGFORK_RELEASE_TOKEN }}
+          GH_TOKEN: ${{ secrets.TGFORK_RELEASE_TOKEN }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+        run: |
+          if [ -z "$TGFORK_RELEASE_TOKEN" ]; then
+            echo "TGFORK_RELEASE_TOKEN is not set, skipping the tgfork mirror"
+            exit 0
+          fi
+          TAG="build-${BUILD_NUMBER}"
+          ASSET="$RUNNER_TEMP/Shadow.ipa"
+          [ -f "$ASSET" ] || cp /Users/Shared/telegram-ios/build/artifacts/Telegram.ipa "$ASSET"
+          NOTES="$(printf '%s' "$COMMIT_MSG" | head -n 30)"
+          gh release create "$TAG" "$ASSET" \
+            --repo folzy1092/tgfork \
+            --target main \
+            --title "Shadow ${APP_VERSION} (${BUILD_NUMBER})" \
+            --notes "$NOTES"
+
       - name: Upload debugging symbols
         uses: actions/upload-artifact@v4
         with:

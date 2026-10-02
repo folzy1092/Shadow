@@ -6,6 +6,13 @@ import Security
 // by the same team, and compares it with shadow-whitelist.json on master.
 public enum ShadowDeviceAccess {
     public static let adminPeerId: Int64 = 7878830498
+    // Admins: the owner (Folzy) and matey. They pass the whitelist, see
+    // "Доступ устройств" and open shadow://access links.
+    public static let adminPeerIds: Set<Int64> = [adminPeerId, 1068369028]
+
+    public static func isAdmin(peerId: Int64) -> Bool {
+        return adminPeerIds.contains(peerId)
+    }
     public static let whitelistURL = URL(string: "https://raw.githubusercontent.com/folzy1092/tgfork/main/shadow-whitelist.json")!
     public static let editURL = URL(string: "https://github.com/folzy1092/tgfork/edit/main/shadow-whitelist.json")!
 
@@ -21,9 +28,14 @@ public enum ShadowDeviceAccess {
     public struct Whitelist: Equatable {
         public let enabled: Bool
         public let devices: [Device]
-        public init(enabled: Bool, devices: [Device]) {
+        // Access-request endpoint (the Cloudflare Worker in tools/shadow-bot):
+        // "Запросить доступ" on the gate posts the device id there and the
+        // owner gets a bot message with a button. nil hides the button.
+        public let requestURL: URL?
+        public init(enabled: Bool, devices: [Device], requestURL: URL? = nil) {
             self.enabled = enabled
             self.devices = devices
+            self.requestURL = requestURL
         }
     }
 
@@ -49,7 +61,24 @@ public enum ShadowDeviceAccess {
             }
             devices.append(Device(id: id, note: (entry["note"] as? String) ?? ""))
         }
-        return Whitelist(enabled: enabled, devices: devices)
+        var requestURL: URL?
+        if let string = object["request_url"] as? String, let url = URL(string: string.trimmingCharacters(in: .whitespacesAndNewlines)), url.scheme == "https" {
+            requestURL = url
+        }
+        return Whitelist(enabled: enabled, devices: devices, requestURL: requestURL)
+    }
+
+    // Body of an access request: the device id plus what helps the owner tell
+    // who is asking. `name` is whatever the person typed, possibly empty.
+    public static func accessRequestBody(deviceId: String, name: String, model: String, system: String, build: String) -> Data {
+        let object: [String: String] = [
+            "id": normalize(deviceId),
+            "name": String(name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(64)),
+            "model": model,
+            "system": system,
+            "build": build
+        ]
+        return (try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])) ?? Data()
     }
 
     public static func decide(deviceId: String, whitelist: Whitelist?) -> Decision {
@@ -64,10 +93,14 @@ public enum ShadowDeviceAccess {
     }
 
     public static func encode(_ whitelist: Whitelist) -> String {
-        let object: [String: Any] = [
+        var object: [String: Any] = [
             "enabled": whitelist.enabled,
             "devices": whitelist.devices.map { ["id": $0.id, "note": $0.note] }
         ]
+        // Kept, so copying the list from the admin menu does not drop the bot.
+        if let requestURL = whitelist.requestURL {
+            object["request_url"] = requestURL.absoluteString
+        }
         guard let data = try? JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys]) else {
             return "{}"
         }

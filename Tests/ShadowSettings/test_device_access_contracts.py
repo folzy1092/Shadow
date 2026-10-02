@@ -46,7 +46,18 @@ class DeviceAccessContracts(unittest.TestCase):
     def test_admin_menu_is_last_and_admin_only(self):
         hub = read("SettingsUI/Sources/AyuGramSettingsController.swift")
         self.assertIn("case deviceAccess", hub)
-        self.assertIn("context.account.peerId.id._internalGetInt64Value() == ShadowDeviceAccess.adminPeerId", hub)
+        self.assertIn("let isAdmin = ShadowDeviceAccess.isAdmin(peerId: context.account.peerId.id._internalGetInt64Value())", hub)
+        core = read("TelegramCore/Sources/AyuGram/ShadowDeviceAccess.swift")
+        self.assertIn("public static let adminPeerIds: Set<Int64> = [adminPeerId, 1068369028]", core)
+
+    def test_access_request_bot(self):
+        gate = read("TelegramUI/Sources/ShadowDeviceAccessUI.swift")
+        self.assertIn('"Запросить доступ"', gate)
+        self.assertIn("ShadowDeviceAccess.accessRequestBody(", gate)
+        worker = (ROOT / "tools/shadow-bot/worker.js").read_text(encoding="utf-8")
+        self.assertIn("tg://shadow/access?id=${id}", worker)
+        self.assertIn("shadow://access?id=", worker)
+        self.assertIn('url.pathname !== "/request"', worker)
         admin = read("SettingsUI/Sources/ShadowDeviceAccessController.swift")
         self.assertIn("ShadowDeviceAccess.encode(", admin)
         self.assertIn("ShadowDeviceAccess.editURL", admin)

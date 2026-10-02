@@ -28,6 +28,16 @@ struct DeviceAccessTests {
         if let list {
             check(ShadowDeviceAccess.parse(Data(ShadowDeviceAccess.encode(list).utf8)) == list, "Encode round-trip")
         }
+        check(list?.requestURL == nil, "No request endpoint by default")
+        let withBot = ShadowDeviceAccess.parse(Data("{\"devices\":[],\"request_url\":\"https://bot.example.workers.dev/request\"}".utf8))
+        check(withBot?.requestURL?.absoluteString == "https://bot.example.workers.dev/request", "Request endpoint parsed")
+        if let withBot {
+            check(ShadowDeviceAccess.parse(Data(ShadowDeviceAccess.encode(withBot).utf8)) == withBot, "Request endpoint survives copying the JSON")
+        }
+        check(ShadowDeviceAccess.parse(Data("{\"request_url\":\"http://insecure.example\"}".utf8))?.requestURL == nil, "Only https endpoints")
+        let body = ShadowDeviceAccess.accessRequestBody(deviceId: " ab12-cd34-ef56-7890 ", name: "  Вася  ", model: "iPhone16,1", system: "iOS 26.0", build: "34730")
+        let decoded = (try? JSONSerialization.jsonObject(with: body)) as? [String: String]
+        check(decoded?["id"] == "AB12-CD34-EF56-7890" && decoded?["name"] == "Вася", "Request body normalized")
         print("Shadow device access: \(count) checks passed")
     }
 }

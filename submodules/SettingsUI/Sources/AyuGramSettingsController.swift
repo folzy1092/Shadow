@@ -433,8 +433,8 @@ public func ayuGramSettingsController(context: AccountContext, autoCheckUpdates:
     arguments.openDeviceAccess = {
         pushControllerImpl?(shadowDeviceAccessController(context: context))
     }
-    // Shadow: the device whitelist editor is for the owner only.
-    let isAdmin = context.account.peerId.id._internalGetInt64Value() == ShadowDeviceAccess.adminPeerId
+    // Shadow: the device whitelist editor is for the admins only.
+    let isAdmin = ShadowDeviceAccess.isAdmin(peerId: context.account.peerId.id._internalGetInt64Value())
 
     let signal = combineLatest(queue: .mainQueue(), context.sharedContext.presentationData, query.get(), updateState.get(), bannerDismissed.get(), crashRevision.get())
     |> deliverOnMainQueue

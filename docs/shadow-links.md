@@ -28,7 +28,7 @@
 | `shadow://storage` | Хранилище форка |
 | `shadow://deleted` | Архив: удалённые сообщения |
 | `shadow://edited` | Архив: отредактированные сообщения |
-| `shadow://access?id=<ID>` | Доступ устройств с подставленным ID (только владелец) |
+| `shadow://access?id=<ID>` | Доступ устройств с подставленным ID (только админы: Folzy, matey) |
 | `shadow://folzy` | профиль Folzy |
 | `shadow://matey` | профиль matey |
 

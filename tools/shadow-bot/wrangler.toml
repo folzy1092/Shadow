@@ -1,0 +1,16 @@
+name = "shadow-access-bot"
+main = "worker.js"
+compatibility_date = "2026-10-01"
+
+[vars]
+# Who gets access requests: Telegram user ids, comma-separated.
+OWNER_CHAT_ID = "7878830498"
+
+# Optional: one request per device per 10 minutes.
+# Create a KV namespace (Workers → KV → Create) and put its id here.
+# [[kv_namespaces]]
+# binding = "THROTTLE"
+# id = "<KV namespace id>"
+
+# BOT_TOKEN is a secret: `npx wrangler secret put BOT_TOKEN`
+# (or Workers → shadow-access-bot → Settings → Variables and Secrets).

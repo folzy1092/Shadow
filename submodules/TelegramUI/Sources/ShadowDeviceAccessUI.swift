@@ -24,7 +24,7 @@ final class ShadowDeviceAccessGate {
             self.hide()
             return
         }
-        self.apply(ShadowDeviceAccess.decide(deviceId: ShadowDeviceAccess.deviceId, whitelist: ShadowDeviceAccess.cachedWhitelist), offline: false)
+        self.apply(whitelist: ShadowDeviceAccess.cachedWhitelist, offline: false)
         if self.fetching {
             return
         }
@@ -43,31 +43,32 @@ final class ShadowDeviceAccessGate {
                 return
             }
             if let whitelist {
-                self.apply(ShadowDeviceAccess.decide(deviceId: ShadowDeviceAccess.deviceId, whitelist: whitelist), offline: false)
+                self.apply(whitelist: whitelist, offline: false)
             } else {
-                self.apply(ShadowDeviceAccess.decide(deviceId: ShadowDeviceAccess.deviceId, whitelist: ShadowDeviceAccess.cachedWhitelist), offline: true)
+                self.apply(whitelist: ShadowDeviceAccess.cachedWhitelist, offline: true)
             }
         }
     }
 
-    private func apply(_ decision: ShadowDeviceAccess.Decision, offline: Bool) {
-        switch decision {
+    private func apply(whitelist: ShadowDeviceAccess.Whitelist?, offline: Bool) {
+        switch ShadowDeviceAccess.decide(deviceId: ShadowDeviceAccess.deviceId, whitelist: whitelist) {
         case .allowed:
             self.hide()
         case .denied:
-            self.show(title: "Доступ ограничен", text: "Это устройство не в списке разрешённых. Отправь ID владельцу Shadow.")
+            let hasRequest = whitelist?.requestURL != nil
+            self.show(title: "Доступ ограничен", text: hasRequest ? "Это устройство не в списке разрешённых. Запроси доступ — владельцу Shadow придёт уведомление." : "Это устройство не в списке разрешённых. Отправь ID владельцу Shadow.", requestURL: whitelist?.requestURL)
         case .unknown:
             if offline {
-                self.show(title: "Нет связи", text: "Не удалось проверить доступ. Подключись к интернету и нажми «Проверить снова».")
+                self.show(title: "Нет связи", text: "Не удалось проверить доступ. Подключись к интернету и нажми «Проверить снова».", requestURL: nil)
             } else {
-                self.show(title: "Проверка доступа…", text: "Секунду, проверяю, разрешено ли это устройство.")
+                self.show(title: "Проверка доступа…", text: "Секунду, проверяю, разрешено ли это устройство.", requestURL: nil)
             }
         }
     }
 
-    private func show(title: String, text: String) {
+    private func show(title: String, text: String, requestURL: URL?) {
         if let controller = self.controller {
-            controller.update(title: title, text: text)
+            controller.update(title: title, text: text, requestURL: requestURL)
             self.window?.isHidden = false
             return
         }
@@ -75,7 +76,7 @@ final class ShadowDeviceAccessGate {
             self?.check(force: true)
         })
         controller.loadViewIfNeeded()
-        controller.update(title: title, text: text)
+        controller.update(title: title, text: text, requestURL: requestURL)
         let window: UIWindow
         if let windowScene = self.windowScene {
             window = UIWindow(windowScene: windowScene)
@@ -101,6 +102,12 @@ private final class ShadowDeviceAccessViewController: UIViewController {
     private let titleLabel = UILabel()
     private let textLabel = UILabel()
     private let idLabel = UILabel()
+    // "Запросить доступ": shown only when the whitelist names a request endpoint.
+    private let nameField = UITextField()
+    private var requestButton: UIButton?
+    private var requestURL: URL?
+    private var requestSentAt: Date?
+    private var centerConstraint: NSLayoutConstraint?
 
     init(retry: @escaping () -> Void) {
         self.retry = retry
@@ -146,10 +153,27 @@ private final class ShadowDeviceAccessViewController: UIViewController {
         self.idLabel.minimumScaleFactor = 0.6
         self.idLabel.text = ShadowDeviceAccess.deviceId
 
-        let copyButton = self.makeButton(title: "Скопировать ID", filled: true, action: #selector(self.copyPressed))
+        self.nameField.font = UIFont.systemFont(ofSize: 17.0)
+        self.nameField.textColor = .white
+        self.nameField.attributedPlaceholder = NSAttributedString(string: "Имя или @username (необязательно)", attributes: [.foregroundColor: UIColor(white: 1.0, alpha: 0.4)])
+        self.nameField.backgroundColor = UIColor(white: 1.0, alpha: 0.08)
+        self.nameField.layer.cornerRadius = 12.0
+        self.nameField.leftView = UIView(frame: CGRect(x: 0.0, y: 0.0, width: 14.0, height: 1.0))
+        self.nameField.leftViewMode = .always
+        self.nameField.autocorrectionType = .no
+        self.nameField.returnKeyType = .send
+        self.nameField.keyboardAppearance = .dark
+        self.nameField.addTarget(self, action: #selector(self.requestPressed), for: .editingDidEndOnExit)
+        self.nameField.isHidden = true
+
+        let requestButton = self.makeButton(title: "Запросить доступ", filled: true, action: #selector(self.requestPressed))
+        requestButton.isHidden = true
+        self.requestButton = requestButton
+
+        let copyButton = self.makeButton(title: "Скопировать ID", filled: false, action: #selector(self.copyPressed))
         let retryButton = self.makeButton(title: "Проверить снова", filled: false, action: #selector(self.retryPressed))
 
-        let stack = UIStackView(arrangedSubviews: [icon, self.titleLabel, self.textLabel, idCaption, self.idLabel, copyButton, retryButton])
+        let stack = UIStackView(arrangedSubviews: [icon, self.titleLabel, self.textLabel, idCaption, self.idLabel, self.nameField, requestButton, copyButton, retryButton])
         stack.axis = .vertical
         stack.alignment = .fill
         stack.spacing = 12.0
@@ -160,21 +184,105 @@ private final class ShadowDeviceAccessViewController: UIViewController {
         stack.translatesAutoresizingMaskIntoConstraints = false
         self.view.addSubview(stack)
 
+        let centerConstraint = stack.centerYAnchor.constraint(equalTo: self.view.safeAreaLayoutGuide.centerYAnchor)
+        self.centerConstraint = centerConstraint
         NSLayoutConstraint.activate([
             stack.leadingAnchor.constraint(equalTo: self.view.safeAreaLayoutGuide.leadingAnchor, constant: 24.0),
             stack.trailingAnchor.constraint(equalTo: self.view.safeAreaLayoutGuide.trailingAnchor, constant: -24.0),
-            stack.centerYAnchor.constraint(equalTo: self.view.safeAreaLayoutGuide.centerYAnchor),
+            centerConstraint,
+            self.nameField.heightAnchor.constraint(equalToConstant: 50.0),
+            requestButton.heightAnchor.constraint(equalToConstant: 50.0),
             copyButton.heightAnchor.constraint(equalToConstant: 50.0),
             retryButton.heightAnchor.constraint(equalToConstant: 50.0)
         ])
+
+        // Keep the name field above the keyboard; a tap outside closes it.
+        NotificationCenter.default.addObserver(self, selector: #selector(self.keyboardWillChange(_:)), name: UIResponder.keyboardWillChangeFrameNotification, object: nil)
+        self.view.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(self.backgroundTapped)))
     }
 
-    func update(title: String, text: String) {
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    func update(title: String, text: String, requestURL: URL?) {
         self.titleLabel.text = title
-        self.textLabel.text = text
+        // A sent request keeps its confirmation instead of the generic text.
+        if self.requestSentAt == nil || requestURL == nil {
+            self.textLabel.text = text
+        }
         // The id may be unavailable on a background launch before the first unlock.
         let deviceId = ShadowDeviceAccess.deviceId
         self.idLabel.text = deviceId.isEmpty ? "—" : deviceId
+        self.requestURL = requestURL
+        let showsRequest = requestURL != nil && !deviceId.isEmpty
+        self.nameField.isHidden = !showsRequest
+        self.requestButton?.isHidden = !showsRequest
+    }
+
+    @objc private func keyboardWillChange(_ notification: Notification) {
+        guard let frame = (notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue else {
+            return
+        }
+        let overlap = max(0.0, self.view.bounds.maxY - self.view.convert(frame, from: nil).minY)
+        self.centerConstraint?.constant = -overlap * 0.5
+        UIView.animate(withDuration: 0.25, animations: {
+            self.view.layoutIfNeeded()
+        })
+    }
+
+    @objc private func backgroundTapped() {
+        self.view.endEditing(true)
+    }
+
+    @objc private func requestPressed() {
+        self.view.endEditing(true)
+        guard let requestURL = self.requestURL, let button = self.requestButton, button.isEnabled else {
+            return
+        }
+        // One request a minute is plenty; the worker throttles too.
+        if let sentAt = self.requestSentAt, Date().timeIntervalSince(sentAt) < 60.0 {
+            return
+        }
+        let deviceId = ShadowDeviceAccess.deviceId
+        if deviceId.isEmpty {
+            return
+        }
+        var systemInfo = utsname()
+        uname(&systemInfo)
+        let model = withUnsafeBytes(of: &systemInfo.machine) { buffer -> String in
+            return String(decoding: buffer.prefix(while: { $0 != 0 }), as: UTF8.self)
+        }
+        let build = (Bundle.main.infoDictionary?["CFBundleVersion"] as? String) ?? "?"
+        var request = URLRequest(url: requestURL)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 20.0
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = ShadowDeviceAccess.accessRequestBody(deviceId: deviceId, name: self.nameField.text ?? "", model: model, system: "iOS \(UIDevice.current.systemVersion)", build: build)
+
+        button.isEnabled = false
+        button.setTitle("Отправляю…", for: .normal)
+        URLSession.shared.dataTask(with: request) { [weak self] _, response, error in
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            DispatchQueue.main.async {
+                guard let self, let button = self.requestButton else {
+                    return
+                }
+                if error == nil, (200 ..< 300).contains(status) {
+                    self.requestSentAt = Date()
+                    button.setTitle("Запрос отправлен", for: .normal)
+                    self.textLabel.text = "Запрос отправлен владельцу. Когда он добавит устройство, нажми «Проверить снова»."
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 60.0) { [weak self] in
+                        self?.requestButton?.isEnabled = true
+                        self?.requestButton?.setTitle("Запросить доступ", for: .normal)
+                    }
+                } else {
+                    button.isEnabled = true
+                    button.setTitle("Запросить доступ", for: .normal)
+                    self.textLabel.text = status == 429 ? "Запрос уже отправлен недавно. Подожди немного." : "Не удалось отправить запрос. Проверь интернет и попробуй ещё раз."
+                }
+            }
+        }.resume()
     }
 
     private func makeButton(title: String, filled: Bool, action: Selector) -> UIButton {
