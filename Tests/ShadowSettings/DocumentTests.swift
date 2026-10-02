@@ -31,6 +31,8 @@ struct DocumentTests {
         check(ignored.settings.count == 1, "Unknown and private fields must be ignored")
         let partial = try ShadowSettingsDocument.decode(fixture("{\"compactBottomBar\":true}"))
         check(partial.settings["ghostMode"] == nil, "Missing values must remain absent")
+        let filterPlaceholder = try ShadowSettingsDocument.decode(fixture("{\"messageFilterShowPlaceholder\":false}"))
+        check(filterPlaceholder.settings["messageFilterShowPlaceholder"] == .bool(false), "Filter placeholder toggle is transferable")
         expectFailure("Invalid format") { _ = try ShadowSettingsDocument.decode(fixture("{\"ghostMode\":true}", format: "other")) }
         expectFailure("Future version") { _ = try ShadowSettingsDocument.decode(fixture("{\"ghostMode\":true}", version: 2)) }
         expectFailure("Unsupported old version") { _ = try ShadowSettingsDocument.decode(fixture("{\"ghostMode\":true}", version: 0)) }

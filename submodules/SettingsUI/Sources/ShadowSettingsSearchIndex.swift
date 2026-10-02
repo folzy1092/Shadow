@@ -92,7 +92,7 @@ enum ShadowSettingsSearchIndex {
         ShadowSettingsSearchItem(destination: .ghost, entryId: 5, title: "Скрывать просмотры историй", description: "Не отмечаться среди зрителей", keywords: "hide story views"),
         ShadowSettingsSearchItem(destination: .ghost, entryId: 8, title: "Отправлять через отложенные сообщения", description: "Отправка с задержкой в режиме призрака", keywords: "scheduled delayed send"),
         ShadowSettingsSearchItem(destination: .ghost, entryId: 9, title: "Отправлять без появления онлайн", description: "Повторно устанавливать статус офлайн", keywords: "send without online offline"),
-        ShadowSettingsSearchItem(destination: .filters, entryId: 0, title: "Фильтры сообщений", description: "Локально сворачивать сообщения по словам и фразам", keywords: "local filter phrase скрыть слово фильтр"),
+        ShadowSettingsSearchItem(destination: .filters, entryId: 0, title: "Фильтры сообщений", description: "Скрывать сообщения по словам и регулярным выражениям, с плашкой или полностью", keywords: "local filter phrase regex регулярка регулярное выражение скрыть слово фильтр плашка обратный"),
         ShadowSettingsSearchItem(destination: .misc, entryId: 1, title: "Подменить ID", description: "Визуальная подмена ID в профиле", keywords: "spoof profile id"),
         ShadowSettingsSearchItem(destination: .misc, entryId: 3, title: "Подменить DC", description: "Визуальная подмена дата-центра", keywords: "spoof dc data center"),
         ShadowSettingsSearchItem(destination: .misc, entryId: 5, title: "Подменить номер", description: "Визуальная подмена телефона", keywords: "spoof phone number"),

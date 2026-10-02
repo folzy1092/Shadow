@@ -937,11 +937,14 @@ func chatHistoryEntriesForView(
     }
 
     let shadowSettings = currentAyuGramSettings(accountId: context.account.id)
-    if !shadowSettings.messageFilterPhrases.isEmpty {
+    if !shadowSettings.messageFilters.isEmpty {
+        // Placeholder off: a matched message or album leaves the chat entirely.
+        let showPlaceholder = shadowSettings.messageFilterShowPlaceholder
         entries = entries.flatMap { entry -> [ChatHistoryEntry] in
             switch entry {
             case let .MessageEntry(message, presentation, isRead, location, selection, attributes):
                 guard shadowSettings.matchesMessageFilter(text: message.text) else { return [entry] }
+                guard showPlaceholder else { return [] }
                 let placeholder = shadowFilteredPlaceholder(message)
                 return [.MessageEntry(placeholder, presentation, isRead, location, selection, attributes)]
             case let .MessageGroupEntry(_, messages, presentation):
@@ -953,6 +956,7 @@ func chatHistoryEntriesForView(
                 guard let hiddenItem = messages.first(where: { shadowSettings.matchesMessageFilter(text: $0.0.text) }) else {
                     return [entry]
                 }
+                guard showPlaceholder else { return [] }
                 let (message, isRead, selection, attributes, location) = hiddenItem
                 let placeholder = shadowFilteredPlaceholder(message)
                 return [.MessageEntry(placeholder, presentation, isRead, location, selection, attributes)]

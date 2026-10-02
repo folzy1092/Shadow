@@ -22,6 +22,7 @@ struct MessageFiltersTests {
         let reversed = ShadowMessageFilter(id: 4, expression: "важно", reversed: true)
         check(ShadowMessageFilterMatcher(filters: [reversed]).hides(text: "просто текст"), "Reversed hides non-matching")
         check(!ShadowMessageFilterMatcher(filters: [reversed]).hides(text: "это важно"), "Reversed keeps matching")
+        check(!ShadowMessageFilterMatcher(filters: [reversed]).hides(text: ""), "Reversed keeps messages without text")
         let broken = ShadowMessageFilter(id: 5, expression: "(unclosed")
         check(!ShadowMessageFilterMatcher(filters: [broken]).hides(text: "(unclosed"), "Broken regex never matches")
 

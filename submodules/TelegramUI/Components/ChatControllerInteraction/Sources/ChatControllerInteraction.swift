@@ -328,6 +328,8 @@ public final class ChatControllerInteraction: ChatControllerInteractionProtocol 
     public let displayPollRestrictedToast: (EngineMessage.Id) -> Void
     
     public var canPlayMedia: Bool = false
+    // Shadow: opens the "Добавить фильтр" sheet with an escaped expression.
+    public var shadowAddMessageFilter: ((String) -> Void)?
     public var hiddenMedia: [EngineMessage.Id: [EngineRawMedia]] = [:]
     public var expandedTranslationMessageStableIds: Set<UInt32> = Set()
     public var selectionState: ChatInterfaceSelectionState?

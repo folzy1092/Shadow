@@ -89,7 +89,11 @@ public struct AyuGramSettings: Codable, Equatable {
     public var preferUsernameForBots: Bool = false
     // Account-scoped overrides keyed by the stable peer id string.
     public var chatPrivacyRules: [String: ShadowChatPrivacyRule] = [:]
-    public var messageFilterPhrases: [String] = []
+    // Shadow: AyuGram Desktop style regex filters (ShadowMessageFilters.swift).
+    public var messageFilters: [ShadowMessageFilter] = []
+    // true: a matched message turns into a "Скрыто локальным фильтром" stub;
+    // false: it disappears from the chat entirely.
+    public var messageFilterShowPlaceholder: Bool = true
     // Clean interface (all off by default).
     public var hideStoriesBar: Bool = false
     public var hideGiftButton: Bool = false
@@ -432,12 +436,8 @@ public struct AyuGramSettings: Codable, Equatable {
     }
 
     public func matchesMessageFilter(text: String) -> Bool {
-        guard !self.messageFilterPhrases.isEmpty else { return false }
-        let normalized = text.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale.current)
-        return self.messageFilterPhrases.contains { phrase in
-            let needle = phrase.trimmingCharacters(in: .whitespacesAndNewlines)
-            return !needle.isEmpty && normalized.range(of: needle, options: [.caseInsensitive, .diacriticInsensitive]) != nil
-        }
+        guard !self.messageFilters.isEmpty else { return false }
+        return shadowMessageFilterMatcher(for: self.messageFilters).hides(text: text)
     }
 
     // MARK: - Effective presence gates
@@ -542,7 +542,8 @@ public struct AyuGramSettings: Codable, Equatable {
         bottomBarScrollMode: Int32 = 0,
         ghostLastSeenTimestamp: Int32 = 0,
         chatPrivacyRules: [String: ShadowChatPrivacyRule] = [:],
-        messageFilterPhrases: [String] = []
+        messageFilters: [ShadowMessageFilter] = [],
+        messageFilterShowPlaceholder: Bool = true
     ) {
         self.keepDeletedMessages = keepDeletedMessages
         self.keepDeletedSecretChatMessages = keepDeletedSecretChatMessages
@@ -603,7 +604,8 @@ public struct AyuGramSettings: Codable, Equatable {
         self.customProfileBackgroundForOthers = customProfileBackgroundForOthers
         self.customProfileBackgroundForSettings = customProfileBackgroundForSettings
         self.chatPrivacyRules = chatPrivacyRules.filter { !$0.value.isDefault }
-        self.messageFilterPhrases = messageFilterPhrases.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        self.messageFilters = messageFilters
+        self.messageFilterShowPlaceholder = messageFilterShowPlaceholder
     }
 
     public init(from decoder: Decoder) throws {
@@ -622,7 +624,13 @@ public struct AyuGramSettings: Codable, Equatable {
         } else {
             self.chatPrivacyRules = [:]
         }
-        self.messageFilterPhrases = (try container.decodeIfPresent([String].self, forKey: "messageFilterPhrases")) ?? []
+        if let filters = try? container.decode([ShadowMessageFilter].self, forKey: "messageFiltersV2") {
+            self.messageFilters = filters
+        } else {
+            // Before regex filters: comma-separated plain phrases.
+            self.messageFilters = ShadowMessageFilter.migrated(phrases: (try? container.decodeIfPresent([String].self, forKey: "messageFilterPhrases")) ?? [])
+        }
+        self.messageFilterShowPlaceholder = ((try container.decodeIfPresent(Int32.self, forKey: "messageFilterShowPlaceholder")) ?? 1) != 0
         self.hideStoriesBar = ((try container.decodeIfPresent(Int32.self, forKey: "hideStoriesBar")) ?? 0) != 0
         self.hideGiftButton = ((try container.decodeIfPresent(Int32.self, forKey: "hideGiftButton")) ?? 0) != 0
         self.hidePremiumBadges = ((try container.decodeIfPresent(Int32.self, forKey: "hidePremiumBadges")) ?? 0) != 0
@@ -708,7 +716,8 @@ public struct AyuGramSettings: Codable, Equatable {
             .map { ShadowChatPrivacyRuleRecord(peerId: $0.key, rule: $0.value) }
             .sorted { $0.peerId < $1.peerId }
         try container.encode(privacyRecords, forKey: "chatPrivacyRulesV2")
-        try container.encode(self.messageFilterPhrases, forKey: "messageFilterPhrases")
+        try container.encode(self.messageFilters, forKey: "messageFiltersV2")
+        try container.encode((self.messageFilterShowPlaceholder ? 1 : 0) as Int32, forKey: "messageFilterShowPlaceholder")
         try container.encode((self.hideStoriesBar ? 1 : 0) as Int32, forKey: "hideStoriesBar")
         try container.encode((self.hideGiftButton ? 1 : 0) as Int32, forKey: "hideGiftButton")
         try container.encode((self.hidePremiumBadges ? 1 : 0) as Int32, forKey: "hidePremiumBadges")
@@ -1047,4 +1056,20 @@ public func keepAyuGramSettingsUpdated(postbox: Postbox, accountId: AccountRecor
         return settings
     }
     |> ignoreValues
+}
+
+// Shadow: compiled regex filters are reused while the filter list is unchanged,
+// so the chat history does not recompile them for every message.
+private let shadowMessageFilterMatcherLock = NSLock()
+private var shadowMessageFilterMatcherCache: ([ShadowMessageFilter], ShadowMessageFilterMatcher)?
+
+func shadowMessageFilterMatcher(for filters: [ShadowMessageFilter]) -> ShadowMessageFilterMatcher {
+    shadowMessageFilterMatcherLock.lock()
+    defer { shadowMessageFilterMatcherLock.unlock() }
+    if let cache = shadowMessageFilterMatcherCache, cache.0 == filters {
+        return cache.1
+    }
+    let matcher = ShadowMessageFilterMatcher(filters: filters)
+    shadowMessageFilterMatcherCache = (filters, matcher)
+    return matcher
 }

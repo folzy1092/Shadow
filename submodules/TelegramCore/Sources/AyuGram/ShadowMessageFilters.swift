@@ -85,7 +85,12 @@ public final class ShadowMessageFilterMatcher {
         return self.rules.isEmpty
     }
 
+    // Messages without text (media without a caption, stickers, service
+    // messages) are never hidden, so a reversed filter cannot wipe them out.
     public func hides(text: String) -> Bool {
+        if text.isEmpty {
+            return false
+        }
         let range = NSRange(text.startIndex..., in: text)
         for (regex, reversed) in self.rules {
             let found = regex.firstMatch(in: text, options: [], range: range) != nil

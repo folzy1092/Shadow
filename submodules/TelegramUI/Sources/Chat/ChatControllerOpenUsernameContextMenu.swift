@@ -100,6 +100,17 @@ extension ChatControllerImpl {
                     self.present(UndoOverlayController(presentationData: self.presentationData, content: .copy(text: presentationData.strings.Conversation_UsernameCopied), elevatedLayout: false, animateInAsReplacement: false, action: { _ in return false }), in: .current)
                 }))
             )
+            // Shadow: hide messages that mention this username.
+            items.append(
+                .action(ContextMenuActionItem(text: "В фильтры", icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/TagFilter"), color: theme.contextMenu.primaryColor) }, action: { [weak self] _, f in
+                    f(.default)
+                    guard let self else {
+                        return
+                    }
+                    let mention = username.hasPrefix("@") ? username : "@" + username
+                    self.controllerInteraction?.shadowAddMessageFilter?(ShadowMessageFilter.escaped(mention))
+                }))
+            )
             
             items.append(.separator)
             if let peer {

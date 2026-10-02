@@ -65,6 +65,7 @@ public enum ShadowSettingsTransfer {
         "hideGiftButton": \.hideGiftButton,
         "hidePremiumBadges": \.hidePremiumBadges,
         "hideSponsoredMessages": \.hideSponsoredMessages,
+        "messageFilterShowPlaceholder": \.messageFilterShowPlaceholder,
         "unlimitedPinnedChats": \.unlimitedPinnedChats,
         "localVoiceTranscription": \.localVoiceTranscription,
         "monochromeSettingsIcons": \.monochromeSettingsIcons,

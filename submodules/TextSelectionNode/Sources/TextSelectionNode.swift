@@ -280,6 +280,8 @@ public final class TextSelectionNode: ASDisplayNode {
     private var displayLinkAnimator: DisplayLinkAnimator?
     
     public var enableCopy: Bool = true
+    // Shadow: "В фильтры" in the selection menu; nil hides the item.
+    public var shadowAddToFilter: ((String) -> Void)?
     public var enableLookup: Bool = true
     public var enableQuote: Bool = false
     public var enableTranslate: Bool = true
@@ -771,6 +773,12 @@ public final class TextSelectionNode: ASDisplayNode {
         if self.enableCopy {
             actions.append(ContextMenuAction(content: .text(title: self.strings.Conversation_ContextMenuCopy, accessibilityLabel: self.strings.Conversation_ContextMenuCopy), action: { [weak self] in
                 self?.performAction(string, .copy)
+                self?.cancelSelection()
+            }))
+        }
+        if let shadowAddToFilter = self.shadowAddToFilter {
+            actions.append(ContextMenuAction(content: .text(title: "В фильтры", accessibilityLabel: "В фильтры"), action: { [weak self] in
+                shadowAddToFilter(string.string)
                 self?.cancelSelection()
             }))
         }

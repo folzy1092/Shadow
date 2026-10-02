@@ -5936,6 +5936,14 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             self.displayPollRestrictedToast(messageId: messageId)
         }, automaticMediaDownloadSettings: self.automaticMediaDownloadSettings, pollActionState: ChatInterfacePollActionState(), stickerSettings: self.stickerSettings, presentationContext: ChatPresentationContext(context: context, backgroundNode: self.chatBackgroundNode))
         controllerInteraction.enableFullTranslucency = context.sharedContext.energyUsageSettings.fullTranslucency
+        // Shadow: "В фильтры" from text selection and @username menus.
+        controllerInteraction.shadowAddMessageFilter = { [weak self] expression in
+            guard let self else {
+                return
+            }
+            self.chatDisplayNode.dismissInput()
+            self.push(shadowMessageFilterEditController(context: self.context, filter: nil, initialExpression: expression))
+        }
         
         self.controllerInteraction = controllerInteraction
         

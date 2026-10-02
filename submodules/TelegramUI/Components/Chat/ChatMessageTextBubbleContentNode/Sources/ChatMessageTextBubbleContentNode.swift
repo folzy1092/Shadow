@@ -1639,6 +1639,15 @@ public class ChatMessageTextBubbleContentNode: ChatMessageBubbleContentNode {
                     }
                     item.controllerInteraction.performTextSelectionAction(item.message, true, text, nil, action)
                 })
+                // Shadow: add the selected fragment to local message filters.
+                if item.controllerInteraction.shadowAddMessageFilter != nil {
+                    textSelectionNode.shadowAddToFilter = { [weak self] text in
+                        guard let item = self?.item else {
+                            return
+                        }
+                        item.controllerInteraction.shadowAddMessageFilter?(ShadowMessageFilter.escaped(text.trimmingCharacters(in: .whitespacesAndNewlines)))
+                    }
+                }
                 textSelectionNode.updateRange = { [weak self] selectionRange in
                     guard let strongSelf = self else {
                         return
