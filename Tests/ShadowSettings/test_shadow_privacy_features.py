@@ -91,7 +91,7 @@ class ShadowPrivacyFeatures(unittest.TestCase):
         source = (UI / "Sources/ChatHistoryEntriesForView.swift").read_text()
         block = source.split("case let .MessageGroupEntry(_, messages, presentation):", 1)[1].split("case let .MessageEntry", 1)[0]
         self.assertIn("guard let hiddenItem = messages.first", block)
-        self.assertIn("shadowFilteredPlaceholder(message)", block)
+        self.assertIn("shadowFilteredPlaceholder(message, text: placeholderText(message))", block)
         self.assertIn("return [.MessageEntry(placeholder", block)
         self.assertNotIn("return messages.map", block)
         self.assertIn("private func shadowFilteredPlaceholder", source)

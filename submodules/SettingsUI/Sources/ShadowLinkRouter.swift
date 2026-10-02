@@ -31,7 +31,7 @@ public func shadowOpenLink(context: AccountContext, link: ShadowLinks.Link, navi
         push(ayuSpyController(context: context))
     case "ghost":
         push(ayuGhostController(context: context))
-    case "filters":
+    case "filters", "shadowban":
         push(shadowMessageFiltersController(context: context))
     case "profile":
         push(ayuMiscController(context: context))

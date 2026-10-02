@@ -94,6 +94,10 @@ public struct AyuGramSettings: Codable, Equatable {
     // true: a matched message turns into a "Скрыто локальным фильтром" stub;
     // false: it disappears from the chat entirely.
     public var messageFilterShowPlaceholder: Bool = true
+    // Shadow: shadow ban — messages of these users are hidden like filtered
+    // ones (stub or entirely, per messageFilterShowPlaceholder), without
+    // blocking them.
+    public var shadowBannedPeerIds: [Int64] = []
     // Clean interface (all off by default).
     public var hideStoriesBar: Bool = false
     public var hideGiftButton: Bool = false
@@ -435,6 +439,10 @@ public struct AyuGramSettings: Codable, Equatable {
         }
     }
 
+    public func isShadowBanned(peerId: Int64) -> Bool {
+        return self.shadowBannedPeerIds.contains(peerId)
+    }
+
     public func matchesMessageFilter(text: String) -> Bool {
         guard !self.messageFilters.isEmpty else { return false }
         return shadowMessageFilterMatcher(for: self.messageFilters).hides(text: text)
@@ -543,7 +551,8 @@ public struct AyuGramSettings: Codable, Equatable {
         ghostLastSeenTimestamp: Int32 = 0,
         chatPrivacyRules: [String: ShadowChatPrivacyRule] = [:],
         messageFilters: [ShadowMessageFilter] = [],
-        messageFilterShowPlaceholder: Bool = true
+        messageFilterShowPlaceholder: Bool = true,
+        shadowBannedPeerIds: [Int64] = []
     ) {
         self.keepDeletedMessages = keepDeletedMessages
         self.keepDeletedSecretChatMessages = keepDeletedSecretChatMessages
@@ -606,6 +615,7 @@ public struct AyuGramSettings: Codable, Equatable {
         self.chatPrivacyRules = chatPrivacyRules.filter { !$0.value.isDefault }
         self.messageFilters = messageFilters
         self.messageFilterShowPlaceholder = messageFilterShowPlaceholder
+        self.shadowBannedPeerIds = shadowBannedPeerIds
     }
 
     public init(from decoder: Decoder) throws {
@@ -631,6 +641,7 @@ public struct AyuGramSettings: Codable, Equatable {
             self.messageFilters = ShadowMessageFilter.migrated(phrases: (try? container.decodeIfPresent([String].self, forKey: "messageFilterPhrases")) ?? [])
         }
         self.messageFilterShowPlaceholder = ((try container.decodeIfPresent(Int32.self, forKey: "messageFilterShowPlaceholder")) ?? 1) != 0
+        self.shadowBannedPeerIds = (try? container.decodeIfPresent([Int64].self, forKey: "shadowBannedPeerIdsV1")) ?? []
         self.hideStoriesBar = ((try container.decodeIfPresent(Int32.self, forKey: "hideStoriesBar")) ?? 0) != 0
         self.hideGiftButton = ((try container.decodeIfPresent(Int32.self, forKey: "hideGiftButton")) ?? 0) != 0
         self.hidePremiumBadges = ((try container.decodeIfPresent(Int32.self, forKey: "hidePremiumBadges")) ?? 0) != 0
@@ -718,6 +729,7 @@ public struct AyuGramSettings: Codable, Equatable {
         try container.encode(privacyRecords, forKey: "chatPrivacyRulesV2")
         try container.encode(self.messageFilters, forKey: "messageFiltersV2")
         try container.encode((self.messageFilterShowPlaceholder ? 1 : 0) as Int32, forKey: "messageFilterShowPlaceholder")
+        try container.encode(self.shadowBannedPeerIds, forKey: "shadowBannedPeerIdsV1")
         try container.encode((self.hideStoriesBar ? 1 : 0) as Int32, forKey: "hideStoriesBar")
         try container.encode((self.hideGiftButton ? 1 : 0) as Int32, forKey: "hideGiftButton")
         try container.encode((self.hidePremiumBadges ? 1 : 0) as Int32, forKey: "hidePremiumBadges")

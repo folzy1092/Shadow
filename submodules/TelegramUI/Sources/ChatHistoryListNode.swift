@@ -1195,10 +1195,26 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
                         }
                     }
                 }
+                // Shadow: messages hidden entirely by a filter or a shadow ban
+                // have no item node, so the read mark would stop below them and
+                // the chat would stay unread forever. At the bottom of a fully
+                // loaded history, read up to its real last message.
+                if strongSelf.isScrollAtBottomPosition, let lastMessageId, let historyView = (strongSelf.listView.opaqueTransactionState as? ChatHistoryTransactionOpaqueState)?.historyView, let lastIndex = historyView.originalView.entries.last?.message.index, lastIndex.id == lastMessageId {
+                    let shadowSettings = currentAyuGramSettings(accountId: strongSelf.context.account.id)
+                    if (!shadowSettings.messageFilters.isEmpty && !shadowSettings.messageFilterShowPlaceholder) || !shadowSettings.shadowBannedPeerIds.isEmpty {
+                        if let maxMessageValue = maxMessage {
+                            if maxMessageValue < lastIndex {
+                                maxMessage = lastIndex
+                            }
+                        } else {
+                            maxMessage = lastIndex
+                        }
+                    }
+                }
                 if let maxMessage {
                     strongSelf.updateMaxVisibleReadIncomingMessageIndex(maxMessage)
                 }
-                
+
                 strongSelf.messageReadMetricsTracker?.reportUserActivity()
                 strongSelf.updateMessageReadTracker()
             }

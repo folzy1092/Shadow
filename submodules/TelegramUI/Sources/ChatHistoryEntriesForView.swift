@@ -37,7 +37,7 @@ struct ChatHistoryEntriesForViewState {
 // Local filtering is a rendering transformation. The replacement must not keep
 // forwarding metadata, media attributes, grouped-media state, or media links:
 // message nodes can otherwise select a video/forward layout for an empty body.
-private func shadowFilteredPlaceholder(_ message: Message) -> Message {
+private func shadowFilteredPlaceholder(_ message: Message, text: String = "Скрыто локальным фильтром") -> Message {
     return Message(
         stableId: message.stableId,
         stableVersion: message.stableVersion,
@@ -54,7 +54,7 @@ private func shadowFilteredPlaceholder(_ message: Message) -> Message {
         customTags: message.customTags,
         forwardInfo: nil,
         author: message.author,
-        text: "Скрыто локальным фильтром",
+        text: text,
         attributes: [],
         media: [],
         peers: message.peers,
@@ -937,15 +937,25 @@ func chatHistoryEntriesForView(
     }
 
     let shadowSettings = currentAyuGramSettings(accountId: context.account.id)
-    if !shadowSettings.messageFilters.isEmpty {
+    if !shadowSettings.messageFilters.isEmpty || !shadowSettings.shadowBannedPeerIds.isEmpty {
         // Placeholder off: a matched message or album leaves the chat entirely.
         let showPlaceholder = shadowSettings.messageFilterShowPlaceholder
+        // Shadow ban: other people's messages from a banned user; own messages stay.
+        let isBanned: (Message) -> Bool = { message in
+            guard let authorId = message.author?.id, authorId != context.account.peerId else {
+                return false
+            }
+            return shadowSettings.isShadowBanned(peerId: authorId.toInt64())
+        }
+        let placeholderText: (Message) -> String = { message in
+            return isBanned(message) ? "Скрыто: теневой бан" : "Скрыто локальным фильтром"
+        }
         entries = entries.flatMap { entry -> [ChatHistoryEntry] in
             switch entry {
             case let .MessageEntry(message, presentation, isRead, location, selection, attributes):
-                guard shadowSettings.matchesMessageFilter(text: message.text) else { return [entry] }
+                guard isBanned(message) || shadowSettings.matchesMessageFilter(text: message.text) else { return [entry] }
                 guard showPlaceholder else { return [] }
-                let placeholder = shadowFilteredPlaceholder(message)
+                let placeholder = shadowFilteredPlaceholder(message, text: placeholderText(message))
                 return [.MessageEntry(placeholder, presentation, isRead, location, selection, attributes)]
             case let .MessageGroupEntry(_, messages, presentation):
                 // Telegram renders an album as several separate bubbles. Keeping
@@ -953,12 +963,12 @@ func chatHistoryEntriesForView(
                 // layout with mixed entry types, which could crash when opened.
                 // One matching caption hides the whole local album as one safe,
                 // media-free placeholder.
-                guard let hiddenItem = messages.first(where: { shadowSettings.matchesMessageFilter(text: $0.0.text) }) else {
+                guard let hiddenItem = messages.first(where: { isBanned($0.0) || shadowSettings.matchesMessageFilter(text: $0.0.text) }) else {
                     return [entry]
                 }
                 guard showPlaceholder else { return [] }
                 let (message, isRead, selection, attributes, location) = hiddenItem
-                let placeholder = shadowFilteredPlaceholder(message)
+                let placeholder = shadowFilteredPlaceholder(message, text: placeholderText(message))
                 return [.MessageEntry(placeholder, presentation, isRead, location, selection, attributes)]
             default:
                 return [entry]

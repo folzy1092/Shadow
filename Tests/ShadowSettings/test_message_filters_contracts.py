@@ -25,7 +25,7 @@ class MessageFiltersContracts(unittest.TestCase):
     def test_history_hides_completely_when_placeholder_off(self):
         history = read("TelegramUI/Sources/ChatHistoryEntriesForView.swift")
         self.assertIn("shadowSettings.messageFilterShowPlaceholder", history)
-        self.assertIn("if !shadowSettings.messageFilters.isEmpty {", history)
+        self.assertIn("if !shadowSettings.messageFilters.isEmpty || !shadowSettings.shadowBannedPeerIds.isEmpty {", history)
 
     def test_foundation_suite_compiles_filters(self):
         script = (SUB.parent / "build-system/ci/test_shadow_foundation.py").read_text(encoding="utf-8")

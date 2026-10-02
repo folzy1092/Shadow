@@ -517,7 +517,21 @@ extension PeerInfoScreenNode {
                         shadowPresentChatExport(context: self.context, peerId: shadowExportPeerId, title: peer.compactDisplayTitle, from: controller)
                     })))
                 }
-                
+
+                // Shadow: shadow ban — hide this user's messages without blocking.
+                if case .user = peer, peer.id != strongSelf.context.account.peerId, !ShadowDisguise.shared.hidesSettings {
+                    let isBanned = shadowIsShadowBanned(context: strongSelf.context, peerId: peer.id)
+                    items.append(.action(ContextMenuActionItem(text: isBanned ? "Снять теневой бан" : "Теневой бан", icon: { theme in
+                        generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/TagFilter"), color: theme.contextMenu.primaryColor)
+                    }, action: { [weak self] _, f in
+                        f(.dismissWithoutContent)
+                        guard let self, let controller = self.controller, let peer = self.data?.peer else {
+                            return
+                        }
+                        shadowToggleShadowBan(context: self.context, peerId: peer.id, title: peer.compactDisplayTitle, from: controller)
+                    })))
+                }
+
                 if case let .user(user) = peer {
                     if user.botInfo == nil && strongSelf.data?.encryptionKeyFingerprint == nil && !user.isDeleted {
                         items.append(.action(ContextMenuActionItem(text: presentationData.strings.UserInfo_ChangeWallpaper, icon: { theme in

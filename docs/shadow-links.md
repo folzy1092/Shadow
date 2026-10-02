@@ -17,6 +17,7 @@
 | `shadow://spy` | Шпион |
 | `shadow://ghost` | Призрак |
 | `shadow://filters` | Фильтры |
+| `shadow://shadowban` | Фильтры → список теневого бана |
 | `shadow://profile` | Подмена профиля |
 | `shadow://accounts` | Скрытие аккаунтов |
 | `shadow://backup` | Резервная копия настроек |

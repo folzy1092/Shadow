@@ -4,10 +4,14 @@ import SwiftSignalKit
 import TelegramCore
 import TelegramPresentationData
 import ItemListUI
+import PresentationDataUtils
 import AccountContext
+import UndoUI
+import AlertUI
 
 // Shadow: message filters screen, modelled on AyuGram Desktop — a list of
-// regex filters, each edited in its own sheet (ShadowMessageFilterEditController).
+// regex filters, each edited in its own sheet (ShadowMessageFilterEditController),
+// plus the shadow-ban list (users whose messages are hidden without blocking).
 
 private enum ShadowMessageFiltersEntry: ItemListNodeEntry {
     case showPlaceholder(Bool)
@@ -16,6 +20,9 @@ private enum ShadowMessageFiltersEntry: ItemListNodeEntry {
     case filter(Int32, ShadowMessageFilter)
     case empty
     case help
+    case banHeader
+    case banned(Int32, EnginePeer.Id, String)
+    case banInfo
 
     var section: ItemListSectionId {
         switch self {
@@ -25,6 +32,8 @@ private enum ShadowMessageFiltersEntry: ItemListNodeEntry {
             return 1
         case .help:
             return 2
+        case .banHeader, .banned, .banInfo:
+            return 3
         }
     }
 
@@ -36,6 +45,9 @@ private enum ShadowMessageFiltersEntry: ItemListNodeEntry {
         case let .filter(index, _): return 100 + index
         case .empty: return 10000
         case .help: return 10001
+        case .banHeader: return 20000
+        case let .banned(index, _, _): return 20001 + index
+        case .banInfo: return 30000
         }
     }
 
@@ -51,7 +63,7 @@ private enum ShadowMessageFiltersEntry: ItemListNodeEntry {
                 arguments.setShowPlaceholder(value)
             })
         case .placeholderInfo:
-            return ItemListTextItem(presentationData: presentationData, text: .plain("Выключено — совпавшие сообщения пропадают из чата полностью, без плашки."), sectionId: self.section)
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Выключено — совпавшие сообщения и сообщения из теневого бана пропадают из чата полностью, без плашки."), sectionId: self.section)
         case .add:
             return ItemListActionItem(presentationData: presentationData, title: "Добавить фильтр", kind: .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: {
                 arguments.add()
@@ -74,6 +86,14 @@ private enum ShadowMessageFiltersEntry: ItemListNodeEntry {
             return ItemListTextItem(presentationData: presentationData, text: .plain("Фильтров пока нет. Добавь здесь или прямо из чата: выдели текст или зажми @username и нажми «В фильтры»."), sectionId: self.section)
         case .help:
             return ItemListTextItem(presentationData: presentationData, text: .plain("Совпадения ищутся в тексте и подписях сообщений. Скрываются только на этом устройстве: сообщения не удаляются, прочтения не отправляются. «Аа» — с учётом регистра."), sectionId: self.section)
+        case .banHeader:
+            return ItemListSectionHeaderItem(presentationData: presentationData, text: "ТЕНЕВОЙ БАН", sectionId: self.section)
+        case let .banned(_, peerId, title):
+            return ItemListDisclosureItem(presentationData: presentationData, title: title, label: "Снять", sectionId: self.section, style: .blocks, action: {
+                arguments.unban(peerId, title)
+            })
+        case .banInfo:
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Сообщения этих людей скрываются во всех чатах, без чёрного списка — они ничего не узнают. Добавить: профиль пользователя → «…» → «Теневой бан»."), sectionId: self.section)
         }
     }
 }
@@ -82,16 +102,47 @@ private final class ShadowMessageFiltersArguments {
     let setShowPlaceholder: (Bool) -> Void
     let add: () -> Void
     let edit: (ShadowMessageFilter) -> Void
+    let unban: (EnginePeer.Id, String) -> Void
 
-    init(setShowPlaceholder: @escaping (Bool) -> Void, add: @escaping () -> Void, edit: @escaping (ShadowMessageFilter) -> Void) {
+    init(setShowPlaceholder: @escaping (Bool) -> Void, add: @escaping () -> Void, edit: @escaping (ShadowMessageFilter) -> Void, unban: @escaping (EnginePeer.Id, String) -> Void) {
         self.setShowPlaceholder = setShowPlaceholder
         self.add = add
         self.edit = edit
+        self.unban = unban
     }
 }
 
+// MARK: - Shadow ban
+
+public func shadowIsShadowBanned(context: AccountContext, peerId: EnginePeer.Id) -> Bool {
+    return currentAyuGramSettings(accountId: context.account.id).isShadowBanned(peerId: peerId.toInt64())
+}
+
+private func shadowSetShadowBanned(context: AccountContext, peerId: EnginePeer.Id, banned: Bool) {
+    let _ = updateAyuGramSettings(postbox: context.account.postbox) { current in
+        var current = current
+        current.shadowBannedPeerIds.removeAll(where: { $0 == peerId.toInt64() })
+        if banned {
+            current.shadowBannedPeerIds.append(peerId.toInt64())
+        }
+        return current
+    }.startStandalone()
+}
+
+// Toggles the ban and confirms it with a toast on `controller`.
+public func shadowToggleShadowBan(context: AccountContext, peerId: EnginePeer.Id, title: String, from controller: ViewController) {
+    let banned = !shadowIsShadowBanned(context: context, peerId: peerId)
+    shadowSetShadowBanned(context: context, peerId: peerId, banned: banned)
+    let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+    let text = banned ? "\(title) в теневом бане: его сообщения скрыты." : "Теневой бан снят: сообщения \(title) снова видны."
+    controller.present(UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: text, timeout: nil, customUndoText: nil), elevatedLayout: false, action: { _ in return false }), in: .current)
+}
+
+// MARK: - Screen
+
 public func shadowMessageFiltersController(context: AccountContext) -> ViewController {
     var pushControllerImpl: ((ViewController) -> Void)?
+    var presentControllerImpl: ((ViewController) -> Void)?
 
     let arguments = ShadowMessageFiltersArguments(setShowPlaceholder: { value in
         let _ = updateAyuGramSettings(postbox: context.account.postbox) { current in
@@ -103,11 +154,35 @@ public func shadowMessageFiltersController(context: AccountContext) -> ViewContr
         pushControllerImpl?(shadowMessageFilterEditController(context: context, filter: nil))
     }, edit: { filter in
         pushControllerImpl?(shadowMessageFilterEditController(context: context, filter: filter))
+    }, unban: { peerId, title in
+        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+        presentControllerImpl?(textAlertController(context: context, title: nil, text: "Снять теневой бан с \(title)?", actions: [
+            TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {}),
+            TextAlertAction(type: .defaultAction, title: "Снять", action: {
+                shadowSetShadowBanned(context: context, peerId: peerId, banned: false)
+            })
+        ]))
     })
 
-    let signal = combineLatest(queue: .mainQueue(), context.sharedContext.presentationData, ayuGramSettings(postbox: context.account.postbox))
+    let settings = ayuGramSettings(postbox: context.account.postbox)
+    let bannedPeers: Signal<[(EnginePeer.Id, String)], NoError> = settings
+    |> map { $0.shadowBannedPeerIds }
+    |> distinctUntilChanged
+    |> mapToSignal { ids -> Signal<[(EnginePeer.Id, String)], NoError> in
+        let peerIds = ids.map { EnginePeer.Id($0) }
+        return context.engine.data.get(EngineDataMap(peerIds.map(TelegramEngine.EngineData.Item.Peer.Peer.init(id:))))
+        |> map { peers -> [(EnginePeer.Id, String)] in
+            let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+            return peerIds.map { peerId in
+                let title = peers[peerId].flatMap { $0 }?.displayTitle(strings: presentationData.strings, displayOrder: presentationData.nameDisplayOrder) ?? "Пользователь \(peerId.id._internalGetInt64Value())"
+                return (peerId, title)
+            }
+        }
+    }
+
+    let signal = combineLatest(queue: .mainQueue(), context.sharedContext.presentationData, settings, bannedPeers)
     |> deliverOnMainQueue
-    |> map { presentationData, settings -> (ItemListControllerState, (ItemListNodeState, Any)) in
+    |> map { presentationData, settings, bannedPeers -> (ItemListControllerState, (ItemListNodeState, Any)) in
         var entries: [ShadowMessageFiltersEntry] = [.showPlaceholder(settings.messageFilterShowPlaceholder), .placeholderInfo, .add]
         for (index, filter) in settings.messageFilters.enumerated() {
             entries.append(.filter(Int32(index), filter))
@@ -116,12 +191,20 @@ public func shadowMessageFiltersController(context: AccountContext) -> ViewContr
             entries.append(.empty)
         }
         entries.append(.help)
+        entries.append(.banHeader)
+        for (index, item) in bannedPeers.enumerated() {
+            entries.append(.banned(Int32(index), item.0, item.1))
+        }
+        entries.append(.banInfo)
         let state = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Фильтры"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
         return (state, (ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, animateChanges: true), arguments))
     }
     let controller = ItemListController(context: context, state: signal)
     pushControllerImpl = { [weak controller] c in
         controller?.push(c)
+    }
+    presentControllerImpl = { [weak controller] c in
+        controller?.present(c, in: .window(.root))
     }
     return controller
 }
