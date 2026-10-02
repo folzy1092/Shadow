@@ -241,6 +241,45 @@ public enum AyuSavedMedia {
         }
     }
 
+    // MARK: - Restoring into the Telegram cache
+
+    // Shadow: the archive renders kept messages with the stock chat UI, which
+    // reads media from the MediaBox. Once Telegram's cache cleanup removes its
+    // copy, a deleted message would show a "download from cloud" button that
+    // can never succeed. Put the fork's copy back under the original resource
+    // id (hard link, byte copy as a fallback). Returns the number of restored
+    // resources.
+    @discardableResult
+    public static func restoreMessageMedia(mediaBox: MediaBox, message: Message) -> Int {
+        return ShadowSavedMediaFiles.synchronized {
+            let directoryPath = directory(basePath: mediaBox.basePath)
+            var restored = 0
+            for media in message.effectiveMedia {
+                for entry in savableResources(from: media) {
+                    if mediaBox.completedResourcePath(entry.resource) != nil {
+                        continue
+                    }
+                    let savedPath = directoryPath + "/" + fileName(peerId: message.id.peerId, messageId: message.id, resource: entry.resource, fileExtension: entry.fileExtension)
+                    guard FileManager.default.fileExists(atPath: savedPath) else {
+                        continue
+                    }
+                    let destination = mediaBox.storePathsForId(entry.resource.id).complete
+                    do {
+                        do {
+                            try FileManager.default.linkItem(atPath: savedPath, toPath: destination)
+                        } catch {
+                            try FileManager.default.copyItem(atPath: savedPath, toPath: destination)
+                        }
+                        restored += 1
+                    } catch {
+                        continue
+                    }
+                }
+            }
+            return restored
+        }
+    }
+
     // MARK: - Auto-save of all incoming media (3b)
 
     // Given the reference of a media fetch, returns a closure that persists the

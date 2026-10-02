@@ -7,10 +7,10 @@ import TelegramCore
 import AccountContext
 
 // Shadow: «архив» — сохранённые форком сообщения, показанные обычным чатом.
-// Три входа в один и тот же экран:
-//   • весь архив                        — ayuArchiveChatController(context:)
-//   • удалённые в конкретном чате        — ayuArchiveChatController(context:peerId:)
-//   • история правок одного сообщения    — ayuEditHistoryChatController(context:message:)
+// Входы в один и тот же экран:
+//   • удалённые (все или одного чата)      — ayuArchiveChatController(context:peerId:)
+//   • отредактированные (все или одного чата) — ayuEditedArchiveChatController(context:peerId:)
+//   • история правок одного сообщения      — ayuEditHistoryChatController(context:message:)
 //
 // Рисуется НАСТОЯЩИМ чат-контроллером через ChatCustomContentsProtocol —
 // механизм, которым Telegram уже показывает произвольные сообщения (быстрые
@@ -98,12 +98,20 @@ final class AyuArchiveChatContents: ChatCustomContentsProtocol {
 
 // MARK: - Источники сообщений
 
+// Какие сообщения показывает архив. Удалённые и отредактированные — разные
+// вкладки: в «Удалённых» только то, что собеседник удалил.
+public enum AyuArchiveKind {
+    case deleted
+    case edited
+}
+
 // Сохранённые сообщения из индекса форка. peerId != nil — только из этого чата.
 //
 // Подписка на сам индекс, а не разовое чтение: если во время просмотра придёт
 // новое удаление или правка, список обновится сам.
-private func ayuArchiveMessages(context: AccountContext, peerId: PeerId?) -> Signal<[Message], NoError> {
+private func ayuArchiveMessages(context: AccountContext, peerId: PeerId?, kind: AyuArchiveKind) -> Signal<[Message], NoError> {
     let postbox = context.account.postbox
+    let mediaBox = postbox.mediaBox
     let accountPeerId = context.account.peerId.toInt64()
     return postbox.preferencesView(keys: [PreferencesKeys.ayuForkStore])
     |> mapToSignal { _ -> Signal<[Message], NoError> in
@@ -112,7 +120,14 @@ private func ayuArchiveMessages(context: AccountContext, peerId: PeerId?) -> Sig
 
             var seen = Set<MessageId>()
             var messages: [Message] = []
-            for ref in store.keptDeleted + store.editHistory {
+            let refs: [AyuForkMsgRef]
+            switch kind {
+            case .deleted:
+                refs = store.keptDeleted
+            case .edited:
+                refs = store.editHistory
+            }
+            for ref in refs {
                 // AyuForkMsgRef.messageId живёт внутри TelegramCore, снаружи не
                 // виден — собираем id из его публичных полей.
                 let id = MessageId(peerId: PeerId(ref.peer), namespace: ref.namespace, id: ref.id)
@@ -130,9 +145,24 @@ private func ayuArchiveMessages(context: AccountContext, peerId: PeerId?) -> Sig
                 seen.insert(id)
                 // Сообщения могли быть вычищены (кнопками очистки в «Хранилище»
                 // или по сроку хранения) — их просто пропускаем.
-                if let message = transaction.getMessage(id) {
-                    messages.append(message)
+                guard let message = transaction.getMessage(id) else {
+                    continue
                 }
+                switch kind {
+                case .deleted:
+                    guard message.attributes.contains(where: { $0 is DeletedMessageAttribute }) else {
+                        continue
+                    }
+                    // Медиа удалённого сообщения на сервере уже нет: если кэш
+                    // Telegram успел его вычистить, возвращаем копию форка, иначе
+                    // в архиве висит вечное «загрузить из облака».
+                    AyuSavedMedia.restoreMessageMedia(mediaBox: mediaBox, message: message)
+                case .edited:
+                    guard message.attributes.contains(where: { $0 is SavedMessageEditsAttribute }) else {
+                        continue
+                    }
+                }
+                messages.append(message)
             }
             messages.sort(by: { $0.index < $1.index })
             return messages
@@ -305,9 +335,14 @@ private func ayuArchiveController(context: AccountContext, messages: Signal<[Mes
     )
 }
 
-// Весь архив, либо только сохранённое из одного чата.
+// Удалённые сообщения: все, либо только из одного чата.
 public func ayuArchiveChatController(context: AccountContext, peerId: PeerId? = nil) -> ViewController {
-    return ayuArchiveController(context: context, messages: ayuArchiveMessages(context: context, peerId: peerId))
+    return ayuArchiveController(context: context, messages: ayuArchiveMessages(context: context, peerId: peerId, kind: .deleted))
+}
+
+// Сообщения с сохранённой историей правок: все, либо только из одного чата.
+public func ayuEditedArchiveChatController(context: AccountContext, peerId: PeerId? = nil) -> ViewController {
+    return ayuArchiveController(context: context, messages: ayuArchiveMessages(context: context, peerId: peerId, kind: .edited))
 }
 
 // История правок одного сообщения, показанная чатом.

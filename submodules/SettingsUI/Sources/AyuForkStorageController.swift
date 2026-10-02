@@ -25,16 +25,18 @@ private final class AyuForkStorageArguments {
     let clearAntiDelete: () -> Void
     let clearEditHistory: () -> Void
     let runCleanupNow: () -> Void
-    let openArchive: () -> Void
-    let openArchiveForPeer: (PeerId) -> Void
+    let openDeleted: () -> Void
+    let openEdited: () -> Void
+    let openChat: (AyuForkChatUsage) -> Void
 
-    init(clearGallery: @escaping () -> Void, runCleanupNow: @escaping () -> Void, clearAntiDelete: @escaping () -> Void, clearEditHistory: @escaping () -> Void, openArchive: @escaping () -> Void, openArchiveForPeer: @escaping (PeerId) -> Void) {
+    init(clearGallery: @escaping () -> Void, runCleanupNow: @escaping () -> Void, clearAntiDelete: @escaping () -> Void, clearEditHistory: @escaping () -> Void, openDeleted: @escaping () -> Void, openEdited: @escaping () -> Void, openChat: @escaping (AyuForkChatUsage) -> Void) {
         self.clearGallery = clearGallery
         self.runCleanupNow = runCleanupNow
         self.clearAntiDelete = clearAntiDelete
         self.clearEditHistory = clearEditHistory
-        self.openArchive = openArchive
-        self.openArchiveForPeer = openArchiveForPeer
+        self.openDeleted = openDeleted
+        self.openEdited = openEdited
+        self.openChat = openChat
     }
 }
 
@@ -50,6 +52,10 @@ private struct AyuForkChatUsage: Equatable {
     // nil для строки «Прочее» (файлы, у которых не удалось определить чат) —
     // по ней открывать нечего.
     let peerId: PeerId?
+    // Сохранённые форком сообщения этого чата: удалённые собеседником и с
+    // историей правок. Вкладки архива открываются по ним.
+    let deletedCount: Int
+    let editedCount: Int
 }
 
 private enum AyuForkStorageEntry: ItemListNodeEntry {
@@ -59,7 +65,7 @@ private enum AyuForkStorageEntry: ItemListNodeEntry {
 
     case galleryHeader
     case galleryEmpty
-    case chatRow(index: Int, title: String, sizeText: String, peerId: PeerId?)
+    case chatRow(index: Int, usage: AyuForkChatUsage)
     case clearGallery(enabled: Bool)
     case runCleanupNow
 
@@ -68,7 +74,6 @@ private enum AyuForkStorageEntry: ItemListNodeEntry {
     case clearAntiDelete(enabled: Bool)
     case editHistory(count: Int)
     case clearEditHistory(enabled: Bool)
-    case openArchive(enabled: Bool)
     case otherFooter
 
     var section: ItemListSectionId {
@@ -77,7 +82,7 @@ private enum AyuForkStorageEntry: ItemListNodeEntry {
             return AyuForkStorageSection.overview.rawValue
         case .galleryHeader, .galleryEmpty, .chatRow, .clearGallery, .runCleanupNow:
             return AyuForkStorageSection.gallery.rawValue
-        case .otherHeader, .antiDelete, .clearAntiDelete, .editHistory, .clearEditHistory, .openArchive, .otherFooter:
+        case .otherHeader, .antiDelete, .clearAntiDelete, .editHistory, .clearEditHistory, .otherFooter:
             return AyuForkStorageSection.other.rawValue
         }
     }
@@ -94,7 +99,7 @@ private enum AyuForkStorageEntry: ItemListNodeEntry {
             return 3
         case .galleryEmpty:
             return 4
-        case let .chatRow(index, _, _, _):
+        case let .chatRow(index, _):
             return 100 + Int32(index)
         case .runCleanupNow:
             return 999
@@ -110,8 +115,6 @@ private enum AyuForkStorageEntry: ItemListNodeEntry {
             return 1004
         case .clearEditHistory:
             return 1005
-        case .openArchive:
-            return 1006
         case .otherFooter:
             return 1007
         }
@@ -129,19 +132,25 @@ private enum AyuForkStorageEntry: ItemListNodeEntry {
         case let .totalSize(text):
             return ItemListDisclosureItem(presentationData: presentationData, title: "Сохранённые медиа на диске", label: text, sectionId: self.section, style: .blocks, disclosureStyle: .none, action: nil)
         case .overviewFooter:
-            return ItemListTextItem(presentationData: presentationData, text: .plain("Место, занятое приватной папкой сохранённых медиа. Медиа удалённых сообщений и история правок хранятся в общем кэше Telegram и показаны ниже как количество."), sectionId: self.section)
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Место, занятое приватной папкой сохранённых медиа: медиа удалённых сообщений, прежних версий правок и автосохранённых входящих."), sectionId: self.section)
         case .galleryHeader:
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "СОХРАНЁННЫЕ МЕДИА ПО ЧАТАМ", sectionId: self.section)
         case .galleryEmpty:
             return ItemListDisclosureItem(presentationData: presentationData, title: "Нет сохранённых медиа", label: "", sectionId: self.section, style: .blocks, disclosureStyle: .none, action: nil)
-        case let .chatRow(_, title, sizeText, peerId):
-            // По тапу — архив, отфильтрованный по этому чату. Для «Прочего»
-            // (peerId == nil) строка остаётся некликабельной, как была.
-            return ItemListDisclosureItem(presentationData: presentationData, title: title, label: sizeText, sectionId: self.section, style: .blocks, disclosureStyle: peerId != nil ? .arrow : .none, action: peerId.flatMap { peerId in
-                return {
-                    arguments.openArchiveForPeer(peerId)
-                }
-            })
+        case let .chatRow(_, usage):
+            // По тапу — удалённые / отредактированные этого чата. Для «Прочего»
+            // (peerId == nil) строка остаётся некликабельной.
+            var details: [String] = []
+            if usage.deletedCount > 0 {
+                details.append("удалено \(usage.deletedCount)")
+            }
+            if usage.editedCount > 0 {
+                details.append("правок \(usage.editedCount)")
+            }
+            let label = ([usage.sizeText] + details).filter { !$0.isEmpty }.joined(separator: " · ")
+            return ItemListDisclosureItem(presentationData: presentationData, title: usage.title, label: label, sectionId: self.section, style: .blocks, disclosureStyle: usage.peerId != nil ? .arrow : .none, action: usage.peerId != nil ? {
+                arguments.openChat(usage)
+            } : nil)
         case .runCleanupNow:
             return ItemListActionItem(presentationData: presentationData, title: "Запустить очистку сейчас", kind: .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: {
                 arguments.runCleanupNow()
@@ -155,7 +164,9 @@ private enum AyuForkStorageEntry: ItemListNodeEntry {
         case .otherHeader:
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "ДРУГИЕ ДАННЫЕ", sectionId: self.section)
         case let .antiDelete(count):
-            return ItemListDisclosureItem(presentationData: presentationData, title: "Удалённые сообщения", label: "\(count)", sectionId: self.section, style: .blocks, disclosureStyle: .none, action: nil)
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Удалённые сообщения", label: "\(count)", sectionId: self.section, style: .blocks, disclosureStyle: count > 0 ? .arrow : .none, action: count > 0 ? {
+                arguments.openDeleted()
+            } : nil)
         case let .clearAntiDelete(enabled):
             return ItemListActionItem(presentationData: presentationData, title: "Удалить сохранённые сообщения", kind: enabled ? .destructive : .disabled, alignment: .natural, sectionId: self.section, style: .blocks, action: {
                 if enabled {
@@ -163,21 +174,17 @@ private enum AyuForkStorageEntry: ItemListNodeEntry {
                 }
             })
         case let .editHistory(count):
-            return ItemListDisclosureItem(presentationData: presentationData, title: "Сообщения с историей правок", label: "\(count)", sectionId: self.section, style: .blocks, disclosureStyle: .none, action: nil)
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Отредактированные сообщения", label: "\(count)", sectionId: self.section, style: .blocks, disclosureStyle: count > 0 ? .arrow : .none, action: count > 0 ? {
+                arguments.openEdited()
+            } : nil)
         case let .clearEditHistory(enabled):
             return ItemListActionItem(presentationData: presentationData, title: "Очистить историю правок", kind: enabled ? .destructive : .disabled, alignment: .natural, sectionId: self.section, style: .blocks, action: {
                 if enabled {
                     arguments.clearEditHistory()
                 }
             })
-        case let .openArchive(enabled):
-            return ItemListActionItem(presentationData: presentationData, title: "Открыть архив", kind: enabled ? .generic : .disabled, alignment: .natural, sectionId: self.section, style: .blocks, action: {
-                if enabled {
-                    arguments.openArchive()
-                }
-            })
         case .otherFooter:
-            return ItemListTextItem(presentationData: presentationData, text: .plain("«Открыть архив» показывает все сохранённые сообщения одним списком, как обычный чат: удалённые собеседником и отредактированные, вместе с медиа. «Удалить сохранённые сообщения» убирает все сообщения, оставленные форком после удаления собеседником (освобождает и связанные медиа). «Очистить историю правок» удаляет сохранённые прежние версии из всех сообщений."), sectionId: self.section)
+            return ItemListTextItem(presentationData: presentationData, text: .plain("«Удалённые сообщения» — только то, что собеседник удалил, с медиа. «Отредактированные сообщения» — отдельная вкладка: сообщения с сохранёнными прежними версиями, история правок — в меню сообщения. «Удалить сохранённые сообщения» убирает все удалённые, оставленные форком (освобождает и их медиа). «Очистить историю правок» удаляет прежние версии из всех сообщений."), sectionId: self.section)
         }
     }
 }
@@ -201,7 +208,7 @@ private func ayuForkStorageEntries(data: AyuForkStorageData) -> [AyuForkStorageE
         entries.append(.galleryEmpty)
     } else {
         for (index, chat) in data.chats.enumerated() {
-            entries.append(.chatRow(index: index, title: chat.title, sizeText: chat.sizeText, peerId: chat.peerId))
+            entries.append(.chatRow(index: index, usage: chat))
         }
     }
     entries.append(.runCleanupNow)
@@ -212,7 +219,6 @@ private func ayuForkStorageEntries(data: AyuForkStorageData) -> [AyuForkStorageE
     entries.append(.clearAntiDelete(enabled: data.antiDeleteCount > 0))
     entries.append(.editHistory(count: data.editHistoryCount))
     entries.append(.clearEditHistory(enabled: data.editHistoryCount > 0))
-    entries.append(.openArchive(enabled: data.antiDeleteCount > 0 || data.editHistoryCount > 0))
     entries.append(.otherFooter)
 
     return entries
@@ -294,11 +300,47 @@ public func ayuForkStorageController(context: AccountContext) -> ViewController 
                 })
             ]), nil)
         },
-        openArchive: {
+        openDeleted: {
             pushControllerImpl?(ayuArchiveChatController(context: context))
         },
-        openArchiveForPeer: { peerId in
-            pushControllerImpl?(ayuArchiveChatController(context: context, peerId: peerId))
+        openEdited: {
+            pushControllerImpl?(ayuEditedArchiveChatController(context: context))
+        },
+        openChat: { usage in
+            guard let peerId = usage.peerId else {
+                return
+            }
+            // Одна вкладка — открываем сразу; обе — даём выбрать.
+            if usage.deletedCount > 0 && usage.editedCount > 0 {
+                let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+                let actionSheet = ActionSheetController(presentationData: presentationData)
+                actionSheet.setItemGroups([
+                    ActionSheetItemGroup(items: [
+                        ActionSheetTextItem(title: usage.title, parseMarkdown: false),
+                        ActionSheetButtonItem(title: "Удалённые (\(usage.deletedCount))", color: .accent, action: { [weak actionSheet] in
+                            actionSheet?.dismissAnimated()
+                            pushControllerImpl?(ayuArchiveChatController(context: context, peerId: peerId))
+                        }),
+                        ActionSheetButtonItem(title: "Отредактированные (\(usage.editedCount))", color: .accent, action: { [weak actionSheet] in
+                            actionSheet?.dismissAnimated()
+                            pushControllerImpl?(ayuEditedArchiveChatController(context: context, peerId: peerId))
+                        })
+                    ]),
+                    ActionSheetItemGroup(items: [ActionSheetButtonItem(title: presentationData.strings.Common_Cancel, color: .accent, font: .bold, action: { [weak actionSheet] in
+                        actionSheet?.dismissAnimated()
+                    })])
+                ])
+                presentControllerImpl?(actionSheet, nil)
+            } else if usage.editedCount > 0 {
+                pushControllerImpl?(ayuEditedArchiveChatController(context: context, peerId: peerId))
+            } else if usage.deletedCount > 0 {
+                pushControllerImpl?(ayuArchiveChatController(context: context, peerId: peerId))
+            } else {
+                let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+                presentControllerImpl?(textAlertController(context: context, title: nil, text: "В этом чате нет удалённых или отредактированных сообщений. Его вес — автосохранённые медиа.", actions: [
+                    TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})
+                ]), nil)
+            }
         }
     )
 
@@ -331,8 +373,20 @@ public func ayuForkStorageController(context: AccountContext) -> ViewController 
                 }
 
                 let formatting = DataSizeStringFormatting(presentationData: presentationData)
-                var sortable: [(size: Int64, usage: AyuForkChatUsage)] = []
-                for (peerIdValue, size) in byPeer {
+                let store = ayuForkStore(transaction: transaction)
+                var deletedByPeer: [Int64: Int] = [:]
+                for ref in store.keptDeleted {
+                    deletedByPeer[ref.peer, default: 0] += 1
+                }
+                var editedByPeer: [Int64: Int] = [:]
+                for ref in store.editHistory {
+                    editedByPeer[ref.peer, default: 0] += 1
+                }
+                // Чаты с медиа на диске и чаты, где есть только сохранённые
+                // сообщения без медиа, — иначе их удалённые не открыть.
+                let peerIds = Set(byPeer.keys).union(deletedByPeer.keys).union(editedByPeer.keys)
+                var sortable: [(size: Int64, count: Int, usage: AyuForkChatUsage)] = []
+                for peerIdValue in peerIds {
                     let peerId = PeerId(peerIdValue)
                     let title: String
                     if let peer = transaction.getPeer(peerId) {
@@ -340,14 +394,22 @@ public func ayuForkStorageController(context: AccountContext) -> ViewController 
                     } else {
                         title = "Чат \(peerIdValue)"
                     }
-                    sortable.append((size: size, usage: AyuForkChatUsage(title: title, sizeText: dataSizeString(size, formatting: formatting), peerId: peerId)))
+                    let size = byPeer[peerIdValue] ?? 0
+                    let deleted = deletedByPeer[peerIdValue] ?? 0
+                    let edited = editedByPeer[peerIdValue] ?? 0
+                    let usage = AyuForkChatUsage(title: title, sizeText: size > 0 ? dataSizeString(size, formatting: formatting) : "", peerId: peerId, deletedCount: deleted, editedCount: edited)
+                    sortable.append((size: size, count: deleted + edited, usage: usage))
+                }
+                sortable.sort { lhs, rhs in
+                    if lhs.size != rhs.size {
+                        return lhs.size > rhs.size
+                    }
+                    return lhs.count > rhs.count
                 }
                 if unknown > 0 {
-                    sortable.append((size: unknown, usage: AyuForkChatUsage(title: "Прочее", sizeText: dataSizeString(unknown, formatting: formatting), peerId: nil)))
+                    sortable.append((size: unknown, count: 0, usage: AyuForkChatUsage(title: "Прочее", sizeText: dataSizeString(unknown, formatting: formatting), peerId: nil, deletedCount: 0, editedCount: 0)))
                 }
-                sortable.sort { $0.size > $1.size }
 
-                let store = ayuForkStore(transaction: transaction)
                 return AyuForkStorageData(
                     totalText: dataSizeString(total, formatting: formatting),
                     chats: sortable.map { $0.usage },
