@@ -20,6 +20,8 @@ class DeviceAccessContracts(unittest.TestCase):
         self.assertIn("if status == errSecItemNotFound {", core)
         self.assertNotIn("SecItemDelete", core)
         self.assertIn("public static let adminPeerId: Int64 = 7878830498", core)
+        self.assertIn("folzy1092/tgfork/main/shadow-whitelist.json", core)
+        self.assertIn("github.com/folzy1092/tgfork/edit/main/shadow-whitelist.json", core)
 
     def test_gate_is_installed_at_launch_and_on_activation(self):
         app = read("TelegramUI/Sources/AppDelegate.swift")

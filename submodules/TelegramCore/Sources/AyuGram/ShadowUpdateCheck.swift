@@ -2,9 +2,10 @@ import Foundation
 
 // Shadow: in-app update check.
 //
-// Source of truth is the manifest `shadow-update.json` at the root of the
-// repository's master branch — edited by hand to decide which build is
-// announced. CI still publishes every successful master build as a GitHub
+// Source of truth is the manifest `shadow-update.json` in the public data
+// repository folzy1092/tgfork (branch main, next to the badge config.json) —
+// edited by hand to decide which build is announced. It lives there, not in
+// the Shadow repo, so the check keeps working if that repo goes private. CI still publishes every successful master build as a GitHub
 // Release tagged "build-<CFBundleVersion>"; that release list is only a
 // fallback when the manifest cannot be fetched.
 //
@@ -21,11 +22,11 @@ import Foundation
 //   "minimum_build": 0            // installed builds below it see "обязательное"
 // }
 public enum ShadowUpdateCheck {
-    public static let manifestURL = URL(string: "https://raw.githubusercontent.com/folzy1092/Shadow/master/shadow-update.json")!
+    public static let manifestURL = URL(string: "https://raw.githubusercontent.com/folzy1092/tgfork/main/shadow-update.json")!
     public static let latestReleaseURL = URL(string: "https://api.github.com/repos/folzy1092/Shadow/releases/latest")!
     public static let releasesPageURL = URL(string: "https://github.com/folzy1092/Shadow/releases")!
     // Per-build release notes in Russian, newest first (see shadow-changelog.json).
-    public static let changelogURL = URL(string: "https://raw.githubusercontent.com/folzy1092/Shadow/master/shadow-changelog.json")!
+    public static let changelogURL = URL(string: "https://raw.githubusercontent.com/folzy1092/tgfork/main/shadow-changelog.json")!
 
     public struct ChangelogEntry: Equatable {
         public let build: Int

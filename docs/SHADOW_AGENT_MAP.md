@@ -50,10 +50,16 @@ Postbox-рефакторинг. Этот файл описывает то, чт�
 - Успешная сборка `master` публикуется как GitHub Release `build-<номер>` с
   файлом `Shadow.ipa` (прямая ссылка `releases/download/build-N/Shadow.ipa`,
   всегда свежая — `releases/latest/download/Shadow.ipa`; её же присылает бот).
-  **Что объявлять пользователям, решает файл `shadow-update.json` в корне**
+  **Что объявлять пользователям, решает файл `shadow-update.json`**
   (`enabled`, `build`, `version`, `title`, `notes`, `url`, `minimum_build`);
   приложение читает его с raw.githubusercontent.com (кэш до ~5 минут), а
   к релизам GitHub обращается, только если файл недоступен.
+- **Данные для приложения лежат в публичном репо `folzy1092/tgfork`**
+  (ветка `main`, рядом с `config.json` бейджиков): `shadow-update.json`,
+  `shadow-changelog.json`, `shadow-whitelist.json`. Так проверки работают, даже
+  если репо Shadow станет закрытым. Сборки с 34730 читают только tgfork;
+  копии в корне Shadow оставлены для сборок до 34729 включительно — пока ими
+  пользуются, объявление обновления правьте в **обоих** местах.
 - **`shadow-changelog.json`** — изменения по сборкам на русском (новые сверху).
   При каждом выпуске добавляйте запись для объявляемой сборки: плашка
   обновления показывает все записи новее установленной сборки. Номер сборки =
@@ -127,12 +133,12 @@ UI-проекция настроек выбирается в `TelegramRootContro
 
 - Вайтлист: `ShadowDeviceAccess.swift` (ID устройства в Keychain,
   `AfterFirstUnlockThisDeviceOnly`, без Face ID; загрузка и кэш
-  `shadow-whitelist.json` с master) + `TelegramUI/Sources/ShadowDeviceAccessUI.swift`
+  `shadow-whitelist.json` из `folzy1092/tgfork`) + `TelegramUI/Sources/ShadowDeviceAccessUI.swift`
   (отдельное окно-заглушка поверх всего, ставится в `AppDelegate`).
   `"enabled": false` в файле — пускать всех. Залогиненный аккаунт
   `ShadowDeviceAccess.adminPeerId` (7878830498) проходит всегда.
   Правка списка: Shadow → «Доступ устройств» (только админ) → «Скопировать JSON»
-  → коммит файла на GitHub. Пуш только этого файла CI не запускает.
+  → коммит файла в `folzy1092/tgfork` («Открыть файл на GitHub» ведёт туда).
 - Фильтры: `ShadowMessageFilters.swift` (регулярка + флаги, matcher кэшируется
   в `AyuGramSettings`), поле `messageFilters` (ключ `messageFiltersV2`, старое
   `messageFilterPhrases` мигрирует), `messageFilterShowPlaceholder`. Скрытие —

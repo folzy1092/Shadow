@@ -6,8 +6,8 @@ import Security
 // by the same team, and compares it with shadow-whitelist.json on master.
 public enum ShadowDeviceAccess {
     public static let adminPeerId: Int64 = 7878830498
-    public static let whitelistURL = URL(string: "https://raw.githubusercontent.com/folzy1092/Shadow/master/shadow-whitelist.json")!
-    public static let editURL = URL(string: "https://github.com/folzy1092/Shadow/edit/master/shadow-whitelist.json")!
+    public static let whitelistURL = URL(string: "https://raw.githubusercontent.com/folzy1092/tgfork/main/shadow-whitelist.json")!
+    public static let editURL = URL(string: "https://github.com/folzy1092/tgfork/edit/main/shadow-whitelist.json")!
 
     public struct Device: Equatable {
         public let id: String

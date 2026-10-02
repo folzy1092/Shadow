@@ -86,7 +86,8 @@ class CleanInterfaceContracts(unittest.TestCase):
         check = read("TelegramCore/Sources/AyuGram/ShadowUpdateCheck.swift")
         self.assertIn('let prefix = "build-"', check)
         self.assertIn("releases/latest", check)
-        self.assertIn("master/shadow-update.json", check)
+        # Data lives in the public folzy1092/tgfork repo, next to the badges.
+        self.assertIn("folzy1092/tgfork/main/shadow-update.json", check)
         import json
         manifest = json.loads((ROOT / "shadow-update.json").read_text())
         self.assertIsInstance(manifest["enabled"], bool)
@@ -109,7 +110,7 @@ class CleanInterfaceContracts(unittest.TestCase):
         # The announced build must have release notes.
         self.assertIn(manifest["build"], builds)
         check = read("TelegramCore/Sources/AyuGram/ShadowUpdateCheck.swift")
-        self.assertIn("master/shadow-changelog.json", check)
+        self.assertIn("folzy1092/tgfork/main/shadow-changelog.json", check)
         hub = read("SettingsUI/Sources/AyuGramSettingsController.swift")
         self.assertIn("shadowUpdateNotesText(release)", hub)
         self.assertIn("let shown = release.changelog.prefix(5)", hub)
