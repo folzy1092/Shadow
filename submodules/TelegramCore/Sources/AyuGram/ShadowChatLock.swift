@@ -24,6 +24,7 @@ public final class ShadowChatLockStore {
         static let locked = "shadow.chatLock.locked.v1"
         static let password = "shadow.chatLock.password.v1"
         static let resetRequestedAt = "shadow.chatLock.resetRequestedAt.v1"
+        static let hidesPreview = "shadow.chatLock.hidesPreview.v1"
     }
 
     private let defaults: UserDefaults
@@ -90,6 +91,20 @@ public final class ShadowChatLockStore {
         map["\(accountPeerId)"] = peers.isEmpty ? nil : peers
         self.defaults.set(map, forKey: Key.locked)
         self.lock.unlock()
+        self.notifyChanged()
+    }
+
+    // MARK: Chat list preview
+
+    // On (default): the chat list shows a locked chat's last message, draft and
+    // media thumbnail under a spoiler. Off: the row looks like any other chat,
+    // so the lock does not draw attention to it.
+    public var hidesPreview: Bool {
+        return (self.defaults.object(forKey: Key.hidesPreview) as? Bool) ?? true
+    }
+
+    public func setHidesPreview(_ value: Bool) {
+        self.defaults.set(value, forKey: Key.hidesPreview)
         self.notifyChanged()
     }
 

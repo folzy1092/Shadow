@@ -172,6 +172,9 @@ private final class ShadowDeviceAccessViewController: UIViewController {
     func update(title: String, text: String) {
         self.titleLabel.text = title
         self.textLabel.text = text
+        // The id may be unavailable on a background launch before the first unlock.
+        let deviceId = ShadowDeviceAccess.deviceId
+        self.idLabel.text = deviceId.isEmpty ? "—" : deviceId
     }
 
     private func makeButton(title: String, filled: Bool, action: Selector) -> UIButton {

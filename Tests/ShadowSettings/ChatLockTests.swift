@@ -30,6 +30,12 @@ struct ChatLockTests {
         check(!store.isLocked(accountPeerId: 1, peerId: 10), "Unlocked permanently")
         check(!store.hasLockedChats, "No locks left")
 
+        check(store.hidesPreview, "Locked chats hide their preview by default")
+        store.setHidesPreview(false)
+        check(!store.hidesPreview, "Preview can be shown")
+        check(!ShadowChatLockStore(defaults: defaults).hidesPreview, "Preview setting persists")
+        store.setHidesPreview(true)
+
         check(!store.hasPassword, "No password initially")
         check(!store.setPassword("123"), "Too short password rejected")
         check(store.setPassword("1234"), "Password set")

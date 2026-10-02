@@ -15,6 +15,10 @@ class DeviceAccessContracts(unittest.TestCase):
         core = read("TelegramCore/Sources/AyuGram/ShadowDeviceAccess.swift")
         self.assertIn("kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly", core)
         self.assertNotIn("SecAccessControl", core)
+        # A locked Keychain (background launch before the first unlock) must
+        # not mint a new id or delete the stored one.
+        self.assertIn("if status == errSecItemNotFound {", core)
+        self.assertNotIn("SecItemDelete", core)
         self.assertIn("public static let adminPeerId: Int64 = 7878830498", core)
 
     def test_gate_is_installed_at_launch_and_on_activation(self):

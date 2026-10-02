@@ -18,6 +18,7 @@ private enum ShadowChatLocksSection: Int32 {
     case intruder
     case chats
     case reset
+    case preview
 }
 
 private enum ShadowChatLocksEntry: ItemListNodeEntry {
@@ -29,6 +30,8 @@ private enum ShadowChatLocksEntry: ItemListNodeEntry {
     case chat(index: Int, peerId: EnginePeer.Id, title: String)
     case chatsEmpty
     case chatsFooter
+    case hidePreview(Bool)
+    case hidePreviewFooter
     case resetAction
     case resetPending(String)
     case resetNow(enabled: Bool)
@@ -45,6 +48,8 @@ private enum ShadowChatLocksEntry: ItemListNodeEntry {
             return ShadowChatLocksSection.chats.rawValue
         case .resetAction, .resetPending, .resetNow, .resetCancel, .resetFooter:
             return ShadowChatLocksSection.reset.rawValue
+        case .hidePreview, .hidePreviewFooter:
+            return ShadowChatLocksSection.preview.rawValue
         }
     }
 
@@ -57,13 +62,15 @@ private enum ShadowChatLocksEntry: ItemListNodeEntry {
         case let .chat(index, _, _): return 100 + Int32(index)
         case .chatsEmpty: return 10_000
         case .chatsFooter: return 10_001
-        case .resetAction: return 10_002
-        case .resetPending: return 10_003
-        case .resetNow: return 10_004
-        case .resetCancel: return 10_005
-        case .resetFooter: return 10_006
-        case .intruderPhoto: return 10_007
-        case .intruderFooter: return 10_008
+        case .hidePreview: return 10_002
+        case .hidePreviewFooter: return 10_003
+        case .resetAction: return 10_004
+        case .resetPending: return 10_005
+        case .resetNow: return 10_006
+        case .resetCancel: return 10_007
+        case .resetFooter: return 10_008
+        case .intruderPhoto: return 10_009
+        case .intruderFooter: return 10_010
         }
     }
 
@@ -93,7 +100,13 @@ private enum ShadowChatLocksEntry: ItemListNodeEntry {
         case .chatsEmpty:
             return ItemListTextItem(presentationData: presentationData, text: .plain("Нет заблокированных чатов. Зажмите чат в списке и выберите «Заблокировать чат»."), sectionId: self.section)
         case .chatsFooter:
-            return ItemListTextItem(presentationData: presentationData, text: .plain("В списке чатов имя видно, а текст сообщения скрыт спойлером. После разблокировки чат остаётся открытым, пока приложение не уйдёт в фон."), sectionId: self.section)
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Имя закрытого чата в списке видно. После разблокировки чат остаётся открытым, пока приложение не уйдёт в фон."), sectionId: self.section)
+        case let .hidePreview(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Прятать последнее сообщение", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.setHidesPreview(value)
+            })
+        case .hidePreviewFooter:
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Включено — текст последнего сообщения, черновик и превью медиа закрытого чата в списке скрыты спойлером. Выключено — чат в списке выглядит как обычный и не привлекает внимания, но последнее сообщение видно."), sectionId: self.section)
         case .resetAction:
             return ItemListActionItem(presentationData: presentationData, title: "Сбросить все замки", kind: .destructive, alignment: .natural, sectionId: self.section, style: .blocks, action: arguments.reset)
         case let .resetPending(text):
@@ -115,6 +128,7 @@ private final class ShadowChatLocksArguments {
     let resetNow: () -> Void
     let cancelReset: () -> Void
     var setIntruderPhoto: (Bool) -> Void = { _ in }
+    var setHidesPreview: (Bool) -> Void = { _ in }
 
     init(changePassword: @escaping () -> Void, unlock: @escaping (EnginePeer.Id) -> Void, reset: @escaping () -> Void, resetNow: @escaping () -> Void, cancelReset: @escaping () -> Void) {
         self.changePassword = changePassword
@@ -206,6 +220,10 @@ func shadowChatLocksController(context: AccountContext, focus: ShadowSettingsSea
         store.cancelReset()
     })
 
+    arguments.setHidesPreview = { value in
+        store.setHidesPreview(value)
+    }
+
     arguments.setIntruderPhoto = { value in
         if !value {
             ShadowIntruderLog.shared.isEnabled = false
@@ -265,6 +283,8 @@ func shadowChatLocksController(context: AccountContext, focus: ShadowSettingsSea
             }
             entries.append(.chatsFooter)
         }
+        entries.append(.hidePreview(store.hidesPreview))
+        entries.append(.hidePreviewFooter)
         if let remaining = store.resetRemaining() {
             entries.append(.resetPending(shadowChatLockResetText(remaining: remaining)))
             entries.append(.resetNow(enabled: remaining <= 0.0))

@@ -81,27 +81,63 @@ public enum ShadowDeviceAccess {
     private static let lock = NSLock()
     private static var cachedDeviceId: String?
 
+    // Empty while the Keychain is unavailable (the app was woken in the
+    // background before the first unlock after a reboot). A new id is minted
+    // only when the item really does not exist; otherwise a locked Keychain
+    // would hand out a random id for the whole process lifetime.
     public static var deviceId: String {
         lock.lock()
         defer { lock.unlock() }
         if let cachedDeviceId {
             return cachedDeviceId
         }
-        let value = readKeychain() ?? {
-            let raw = UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(16)
-            var groups: [String] = []
-            var index = raw.startIndex
-            while index < raw.endIndex {
-                let end = raw.index(index, offsetBy: 4)
-                groups.append(String(raw[index ..< end]))
-                index = end
+        switch readKeychain() {
+        case let .value(value):
+            cachedDeviceId = value
+            return value
+        case .unavailable:
+            return ""
+        case .missing:
+            let generated = makeDeviceId()
+            switch addKeychain(generated) {
+            case .added:
+                cachedDeviceId = generated
+                return generated
+            case .duplicate:
+                // Another launch path stored one first; use it.
+                if case let .value(value) = readKeychain() {
+                    cachedDeviceId = value
+                    return value
+                }
+                return ""
+            case .failed:
+                return ""
             }
-            let generated = groups.joined(separator: "-")
-            writeKeychain(generated)
-            return generated
-        }()
-        cachedDeviceId = value
-        return value
+        }
+    }
+
+    private static func makeDeviceId() -> String {
+        let raw = UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(16)
+        var groups: [String] = []
+        var index = raw.startIndex
+        while index < raw.endIndex {
+            let end = raw.index(index, offsetBy: 4)
+            groups.append(String(raw[index ..< end]))
+            index = end
+        }
+        return groups.joined(separator: "-")
+    }
+
+    private enum KeychainRead {
+        case value(String)
+        case missing
+        case unavailable
+    }
+
+    private enum KeychainAdd {
+        case added
+        case duplicate
+        case failed
     }
 
     private static func baseQuery() -> [String: Any] {
@@ -112,24 +148,34 @@ public enum ShadowDeviceAccess {
         ]
     }
 
-    private static func readKeychain() -> String? {
+    private static func readKeychain() -> KeychainRead {
         var query = baseQuery()
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
         var result: AnyObject?
-        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess, let data = result as? Data else {
-            return nil
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        if status == errSecItemNotFound {
+            return .missing
+        }
+        guard status == errSecSuccess, let data = result as? Data else {
+            return .unavailable
         }
         let value = normalize(String(decoding: data, as: UTF8.self))
-        return value.isEmpty ? nil : value
+        return value.isEmpty ? .missing : .value(value)
     }
 
-    private static func writeKeychain(_ value: String) {
+    private static func addKeychain(_ value: String) -> KeychainAdd {
         var query = baseQuery()
-        SecItemDelete(query as CFDictionary)
         query[kSecValueData as String] = Data(value.utf8)
         query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-        SecItemAdd(query as CFDictionary, nil)
+        switch SecItemAdd(query as CFDictionary, nil) {
+        case errSecSuccess:
+            return .added
+        case errSecDuplicateItem:
+            return .duplicate
+        default:
+            return .failed
+        }
     }
 
     // MARK: - Whitelist cache and fetch

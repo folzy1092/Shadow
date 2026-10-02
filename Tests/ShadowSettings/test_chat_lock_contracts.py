@@ -80,7 +80,12 @@ class ChatLockContracts(unittest.TestCase):
     def test_chat_list_spoiler_and_menu(self):
         item = read("ChatListUI/Sources/Node/ChatListItem.swift")
         self.assertIn("private func shadowChatListItemIsLocked(item: ChatListItem, peerId: EnginePeer.Id) -> Bool", item)
-        self.assertIn("shadowIsLocked = shadowChatListItemIsLocked(item: item, peerId: itemPeer.peerId)", item)
+        self.assertIn("shadowIsLocked = ShadowChatLockStore.shared.hidesPreview && shadowChatListItemIsLocked(item: item, peerId: itemPeer.peerId)", item)
+        self.assertIn("ShadowChatLockStore.shared.hidesPreview && ShadowChatLockStore.shared.isLocked(", item)
+        locks = read("SettingsUI/Sources/ShadowChatLocksController.swift")
+        self.assertIn('title: "Прятать последнее сообщение"', locks)
+        self.assertIn("entries.append(.hidePreview(store.hidesPreview))", locks)
+        self.assertIn("public func setHidesPreview(_ value: Bool)", read("TelegramCore/Sources/AyuGram/ShadowChatLock.swift"))
         self.assertIn("spoilers = length > 0 ? [NSRange(location: 0, length: length)] : nil", item)
         menus = read("ChatListUI/Sources/ChatContextMenus.swift")
         self.assertIn("private func shadowStockChatContextMenuItems(", menus)
