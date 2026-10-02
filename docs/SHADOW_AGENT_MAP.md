@@ -140,6 +140,18 @@ UI-проекция настроек выбирается в `TelegramRootContro
   и меню @username (`ChatControllerOpenUsernameContextMenu`) через
   `ChatControllerInteraction.shadowAddMessageFilter`.
 
+## 5c. Быстрые ссылки и архив
+
+- `shadow://<команда>` = `tg://shadow/<команда>`. Разбор и поиск в тексте —
+  `ShadowLinks.swift` (Foundation, тест `LinksTests.swift`), подсветка в
+  сообщениях — `ShadowLinksEntities.swift` + `ChatMessageTextBubbleContentNode`,
+  вход — `OpenUrl.swift` (до разбора tg://) и `ChatController.openUrl`,
+  маршруты — `SettingsUI/Sources/ShadowLinkRouter.swift`. Список команд —
+  `docs/shadow-links.md` (контракт-тест сверяет его с маршрутизатором).
+- Архив: `ayuArchiveChatController` — только удалённые (с возвратом медиа из
+  папки форка, `AyuSavedMedia.restoreMessageMedia`), `ayuEditedArchiveChatController` —
+  отредактированные.
+
 ## 5a. Замки чатов и второе пространство
 
 - Замки: `ShadowChatLock.swift` (хранилище), `TelegramUI/Sources/ShadowChatLockUI.swift`

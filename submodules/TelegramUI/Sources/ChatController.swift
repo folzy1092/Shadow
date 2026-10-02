@@ -9933,6 +9933,16 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     ) {
         self.commitPurposefulAction()
         
+        // Shadow: quick links open fork screens right away, without resolving.
+        if ShadowLinks.isShadowLink(url) {
+            progress?.set(.single(false))
+            self.context.sharedContext.openExternalUrl(context: self.context, urlContext: .generic, url: url, forceExternal: false, presentationData: self.presentationData, navigationController: self.effectiveNavigationController, dismissInput: { [weak self] in
+                self?.chatDisplayNode.dismissInput()
+            })
+            commit()
+            return
+        }
+        
         if allowInlineWebpageResolution, let message, let webpage = message.media.first(where: { $0 is TelegramMediaWebpage }) as? TelegramMediaWebpage, case let .Loaded(content) = webpage.content, content.url == url {
             if content.instantPage != nil {
                 if let navigationController = self.navigationController as? NavigationController {

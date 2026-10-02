@@ -325,7 +325,8 @@ private func shadowUpdateNotesText(_ release: ShadowUpdateCheck.Release) -> Stri
     return blocks.joined(separator: "\n\n")
 }
 
-public func ayuGramSettingsController(context: AccountContext) -> ViewController {
+// autoCheckUpdates: start "Проверить обновления" right away (shadow://updates).
+public func ayuGramSettingsController(context: AccountContext, autoCheckUpdates: Bool = false) -> ViewController {
     var pushControllerImpl: ((ViewController) -> Void)?
     var presentControllerImpl: ((ViewController, ViewControllerPresentationArguments?) -> Void)?
     let query = ValuePromise<String>("", ignoreRepeated: true)
@@ -503,6 +504,9 @@ public func ayuGramSettingsController(context: AccountContext) -> ViewController
     presentControllerImpl = { [weak controller] c, a in
         controller?.present(c, in: .window(.root), with: a)
     }
+    if autoCheckUpdates {
+        arguments.checkUpdates()
+    }
     return controller
 }
 
@@ -602,7 +606,7 @@ private func shadowActiveAccounts(context: AccountContext) -> Signal<[ShadowActi
     }
 }
 
-private func shadowHiddenAccountsController(context: AccountContext) -> ViewController {
+func shadowHiddenAccountsController(context: AccountContext) -> ViewController {
     let arguments = ShadowHiddenAccountsArguments(updateHidden: { peerId, value in
         ShadowHiddenAccounts.setHidden(value, peerId: peerId)
     })
@@ -1309,7 +1313,7 @@ private func ayuCustomizationEntries(settings: AyuGramSettings) -> [AyuCustomiza
     return entries
 }
 
-private func ayuCustomizationController(context: AccountContext, focus: ShadowSettingsSearchItem? = nil) -> ViewController {
+func ayuCustomizationController(context: AccountContext, focus: ShadowSettingsSearchItem? = nil) -> ViewController {
     var focusedIndex: Int?
     var presentControllerImpl: ((ViewController, ViewControllerPresentationArguments?) -> Void)?
     var presentBannerImagePickerImpl: (() -> Void)?
@@ -1881,7 +1885,7 @@ private func ayuSpyEntries(settings: AyuGramSettings) -> [AyuSpyEntry] {
     return entries
 }
 
-private func ayuSpyController(context: AccountContext, focus: ShadowSettingsSearchItem? = nil) -> ViewController {
+func ayuSpyController(context: AccountContext, focus: ShadowSettingsSearchItem? = nil) -> ViewController {
     var focusedIndex: Int?
     var presentControllerImpl: ((ViewController, ViewControllerPresentationArguments?) -> Void)?
     var pushControllerImpl: ((ViewController) -> Void)?
@@ -2364,7 +2368,7 @@ private func ayuMiscEntries(settings: AyuGramSettings) -> [AyuMiscEntry] {
     return entries
 }
 
-private func ayuMiscController(context: AccountContext, focus: ShadowSettingsSearchItem? = nil) -> ViewController {
+func ayuMiscController(context: AccountContext, focus: ShadowSettingsSearchItem? = nil) -> ViewController {
     var focusedIndex: Int?
     let arguments = AyuMiscArguments(
         updateSpoofIdEnabled: { value in

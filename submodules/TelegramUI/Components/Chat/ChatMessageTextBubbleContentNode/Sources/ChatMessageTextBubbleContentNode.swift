@@ -522,6 +522,9 @@ public class ChatMessageTextBubbleContentNode: ChatMessageBubbleContentNode {
                         entities = entities?.filter { $0.type != .BotCommand }
                     }
                     
+                    // Shadow: shadow:// and tg://shadow/ links are clickable like web links.
+                    entities = ShadowLinks.addingLinkEntities(text: rawText, to: entities)
+                    
                     updatedCachedChatMessageText = CachedChatMessageText(text: rawText, inputEntities: messageEntities, entities: entities)
                 }
                 

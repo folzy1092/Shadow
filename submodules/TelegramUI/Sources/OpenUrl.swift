@@ -13,6 +13,7 @@ import OpenInExternalAppUI
 import BrowserUI
 import OverlayStatusController
 import PresentationDataUtils
+import SettingsUI
 
 public struct ParsedSecureIdUrl {
     public let peerId: EnginePeer.Id
@@ -371,6 +372,14 @@ func openExternalUrlImpl(context: AccountContext, urlContext: OpenURLContext, ur
             return
         }
         context.sharedContext.applicationBindings.openUrl(url)
+        return
+    }
+    
+    // Shadow: shadow:// and tg://shadow/ quick links (ShadowLinks) open the
+    // same fork screens, from a message, a bot button or another app.
+    if let shadowLink = ShadowLinks.parse(url) {
+        dismissInput()
+        shadowOpenLink(context: context, link: shadowLink, navigationController: navigationController)
         return
     }
     

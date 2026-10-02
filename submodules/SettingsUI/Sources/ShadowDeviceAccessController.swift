@@ -149,9 +149,15 @@ private enum ShadowDeviceAccessEntry: ItemListNodeEntry {
     }
 }
 
-public func shadowDeviceAccessController(context: AccountContext) -> ViewController {
-    let statePromise = ValuePromise(ShadowDeviceAccessState(), ignoreRepeated: true)
-    let stateValue = Atomic(value: ShadowDeviceAccessState())
+// prefillDeviceId: an id from an access request (shadow://access?id=…) put
+// into the "add" field, so adding it is one tap.
+public func shadowDeviceAccessController(context: AccountContext, prefillDeviceId: String? = nil) -> ViewController {
+    var initialState = ShadowDeviceAccessState()
+    if let prefillDeviceId {
+        initialState.newId = ShadowDeviceAccess.normalize(prefillDeviceId)
+    }
+    let statePromise = ValuePromise(initialState, ignoreRepeated: true)
+    let stateValue = Atomic(value: initialState)
     let updateState: ((ShadowDeviceAccessState) -> ShadowDeviceAccessState) -> Void = { f in
         statePromise.set(stateValue.modify { f($0) })
     }
