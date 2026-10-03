@@ -55,10 +55,12 @@ public enum ShadowUpdateCheck {
         public let downloadURL: URL?
         // The installed build is below the manifest's minimum_build.
         public let isRequired: Bool
+        // This release comes from the beta channel.
+        public let isBeta: Bool
         // Changes of every build newer than the installed one, newest first.
         public var changelog: [ChangelogEntry] = []
 
-        public init(build: Int, title: String, pageURL: URL, publishedAt: Date?, notes: String, downloadURL: URL? = nil, isRequired: Bool = false) {
+        public init(build: Int, title: String, pageURL: URL, publishedAt: Date?, notes: String, downloadURL: URL? = nil, isRequired: Bool = false, isBeta: Bool = false) {
             self.build = build
             self.title = title
             self.pageURL = pageURL
@@ -66,6 +68,7 @@ public enum ShadowUpdateCheck {
             self.notes = notes
             self.downloadURL = downloadURL
             self.isRequired = isRequired
+            self.isBeta = isBeta
         }
     }
 
@@ -96,20 +99,19 @@ public enum ShadowUpdateCheck {
         return Int(tag.dropFirst(prefix.count))
     }
 
-    public static func parseManifest(_ data: Data) -> Manifest? {
-        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            return nil
-        }
-        let enabled = (object["enabled"] as? Bool) ?? true
+    // One channel's fields, read from `object` (the whole manifest, a "stable"
+    // object, or a "beta" object). `enabled` and `minimum_build` are only read
+    // at the top level, so they are passed in.
+    private static func parseChannel(_ object: [String: Any], enabled: Bool, minimumBuild: Int) -> Manifest? {
         let build = (object["build"] as? Int) ?? 0
-        if enabled && build <= 0 {
+        if build <= 0 {
             return nil
         }
         var pageURL = releasesPageURL
         if let urlString = object["url"] as? String, let url = URL(string: urlString), url.scheme == "https" {
             pageURL = url
         }
-        var downloadURL: URL? = build > 0 ? ipaURL(build: build) : nil
+        var downloadURL: URL? = ipaURL(build: build)
         if let urlString = object["ipa_url"] as? String, let url = URL(string: urlString), url.scheme == "https" {
             downloadURL = url
         }
@@ -128,11 +130,41 @@ public enum ShadowUpdateCheck {
             notes: nonEmpty("notes") ?? "",
             pageURL: pageURL,
             downloadURL: downloadURL,
-            minimumBuild: max(0, (object["minimum_build"] as? Int) ?? 0)
+            minimumBuild: minimumBuild
         )
     }
 
-    public static func status(installedBuild: Int?, manifest: Manifest) -> Status {
+    // The stable channel: a "stable" object if present, otherwise the top-level
+    // flat fields (the old format). Disabled manifests still parse (enabled=false).
+    public static func parseManifest(_ data: Data) -> Manifest? {
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+        let enabled = (object["enabled"] as? Bool) ?? true
+        let minimumBuild = max(0, (object["minimum_build"] as? Int) ?? 0)
+        let source = (object["stable"] as? [String: Any]) ?? object
+        guard let manifest = parseChannel(source, enabled: enabled, minimumBuild: minimumBuild) else {
+            // A disabled manifest with no build is still a valid "announce nothing".
+            if !enabled {
+                return Manifest(enabled: false, build: 0, version: nil, title: nil, notes: "", pageURL: releasesPageURL, downloadURL: nil, minimumBuild: minimumBuild)
+            }
+            return nil
+        }
+        return manifest
+    }
+
+    // The beta channel, if the manifest carries one. nil when there is no beta.
+    public static func parseBetaManifest(_ data: Data) -> Manifest? {
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let beta = object["beta"] as? [String: Any] else {
+            return nil
+        }
+        let enabled = (object["enabled"] as? Bool) ?? true
+        let minimumBuild = max(0, (object["minimum_build"] as? Int) ?? 0)
+        return parseChannel(beta, enabled: enabled, minimumBuild: minimumBuild)
+    }
+
+    public static func status(installedBuild: Int?, manifest: Manifest, isBeta: Bool = false) -> Status {
         guard manifest.enabled else {
             return .upToDate(nil)
         }
@@ -141,11 +173,14 @@ public enum ShadowUpdateCheck {
             title += " \(version)"
         }
         title += " (\(manifest.build))"
+        if isBeta {
+            title += " · бета"
+        }
         if let headline = manifest.title {
             title += " — " + headline
         }
         let isRequired = installedBuild.map { $0 < manifest.minimumBuild } ?? false
-        let release = Release(build: manifest.build, title: title, pageURL: manifest.pageURL, publishedAt: nil, notes: manifest.notes, downloadURL: manifest.downloadURL, isRequired: isRequired)
+        let release = Release(build: manifest.build, title: title, pageURL: manifest.pageURL, publishedAt: nil, notes: manifest.notes, downloadURL: manifest.downloadURL, isRequired: isRequired, isBeta: isBeta)
         return self.status(installedBuild: installedBuild, latest: release)
     }
 
@@ -253,10 +288,18 @@ public enum ShadowUpdateCheck {
     }
 
     // Manifest first, GitHub Releases as a fallback. Calls `completion` on the main queue.
-    public static func check(completion: @escaping (Status) -> Void) {
+    public static func check(betaEnabled: Bool = false, completion: @escaping (Status) -> Void) {
         fetch(manifestURL) { data, statusCode, error in
-            if error == nil, let statusCode, (200 ..< 300).contains(statusCode), let data, let manifest = parseManifest(data) {
-                let result = status(installedBuild: installedBuild, manifest: manifest)
+            if error == nil, let statusCode, (200 ..< 300).contains(statusCode), let data, let stableManifest = parseManifest(data) {
+                // Beta channel: picked only when the user opted in and the beta
+                // build is newer than the stable one.
+                var manifest = stableManifest
+                var usingBeta = false
+                if betaEnabled, let beta = parseBetaManifest(data), beta.build > stableManifest.build {
+                    manifest = beta
+                    usingBeta = true
+                }
+                let result = status(installedBuild: installedBuild, manifest: manifest, isBeta: usingBeta)
                 guard case var .available(release) = result else {
                     DispatchQueue.main.async {
                         completion(result)

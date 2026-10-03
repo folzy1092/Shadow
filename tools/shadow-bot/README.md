@@ -56,3 +56,48 @@ ID: AB12-CD34-EF56-7890
 
 Через wrangler вместо панели: `npx wrangler deploy` в этой папке, затем
 `npx wrangler secret put BOT_TOKEN`.
+
+## Автокоммит из админ-меню (кнопка «Сохранить» и «Объявить»)
+
+Чтобы «Доступ устройств» в приложении коммитил список и объявлял сборки сам,
+воркеру нужны ещё два секрета:
+
+- `GITHUB_TOKEN` — fine-grained токен GitHub: https://github.com/settings/personal-access-tokens/new
+  → Repository access: Only select repositories → `folzy1092/tgfork` →
+  Permissions → Contents: **Read and write**. Скопируй токен (`github_pat_…`).
+- `ADMIN_SECRET` — любая длинная строка-пароль, придумай сам.
+
+Добавь оба в Workers → shadow-access-bot → Settings → Variables and Secrets
+(тип **Secret**).
+
+В приложении: «Доступ устройств» → поле «Ключ администратора» → введи тот же
+`ADMIN_SECRET` → «Сохранить ключ» (хранится в Keychain этого устройства).
+После этого:
+
+- «Сохранить» коммитит `shadow-whitelist.json` в tgfork сразу, без копирования
+  JSON вручную.
+- «Объявить сборку» (появляется под ключом) пишет `shadow-update.json`: номер
+  сборки, версия, заголовок, заметки и тумблер «В бету» (stable или beta).
+
+Чтобы в вайтлисте появились кнопки, в `shadow-whitelist.json` должен быть адрес
+админ-эндпоинта:
+
+```json
+{
+  "enabled": true,
+  "request_url": "https://shadow-access-bot.<ты>.workers.dev/request",
+  "admin_url": "https://shadow-access-bot.<ты>.workers.dev/admin",
+  "devices": [ … ]
+}
+```
+
+Безопасность: `GITHUB_TOKEN` и `ADMIN_SECRET` живут только в секретах воркера и
+в Keychain твоего телефона, в приложение не зашиты. Токен — строго на tgfork с
+правом Contents, чтобы утечка не затронула другие репозитории.
+
+## Админ по ID устройства
+
+В списке можно пометить устройство как админа (тап по устройству → «Сделать
+админом»). Админ-устройство видит «Доступ устройств» и может править список,
+даже если его Telegram-аккаунт не владелец. Владельцы по аккаунту (Folzy,
+matey) остаются админами всегда.

@@ -9,9 +9,10 @@ import PresentationDataUtils
 import AccountContext
 import UndoUI
 
-// Shadow: admin-only editor for shadow-whitelist.json (ShadowDeviceAccess).
-// Edits are a local draft; the admin copies the JSON and commits it on GitHub,
-// so no token lives in the app.
+// Shadow: admin editor for shadow-whitelist.json and release announcements
+// (ShadowDeviceAccess). When the whitelist carries an `admin_url` (the worker)
+// and the admin secret is stored, "Сохранить" commits straight to the repo via
+// the worker; otherwise it falls back to copy-JSON + open-on-GitHub by hand.
 
 private struct ShadowDeviceAccessState: Equatable {
     var remote: ShadowDeviceAccess.Whitelist?
@@ -22,6 +23,16 @@ private struct ShadowDeviceAccessState: Equatable {
     var newId: String = ""
     var newNote: String = ""
     var inputRevision: Int = 0
+    var saving: Bool = false
+    var hasSecret: Bool = ShadowDeviceAccess.hasAdminSecret
+    var secretDraft: String = ""
+    // Release announce draft.
+    var announceBuild: String = ""
+    var announceVersion: String = ""
+    var announceTitle: String = ""
+    var announceNotes: String = ""
+    var announceBeta: Bool = false
+    var announcing: Bool = false
 
     var devices: [ShadowDeviceAccess.Device] {
         return self.draft ?? self.remote?.devices ?? []
@@ -31,8 +42,12 @@ private struct ShadowDeviceAccessState: Equatable {
         return self.enabled ?? self.remote?.enabled ?? true
     }
 
+    var adminURL: URL? {
+        return self.remote?.adminURL
+    }
+
     var whitelist: ShadowDeviceAccess.Whitelist {
-        return ShadowDeviceAccess.Whitelist(enabled: self.isEnabled, devices: self.devices)
+        return ShadowDeviceAccess.Whitelist(enabled: self.isEnabled, devices: self.devices, requestURL: self.remote?.requestURL, adminURL: self.remote?.adminURL)
     }
 }
 
@@ -43,19 +58,42 @@ private final class ShadowDeviceAccessArguments {
     let updateNewId: (String) -> Void
     let updateNewNote: (String) -> Void
     let add: () -> Void
+    let save: () -> Void
     let copyJSON: () -> Void
     let openGitHub: () -> Void
+    let updateSecretDraft: (String) -> Void
+    let saveSecret: () -> Void
+    let clearSecret: () -> Void
+    let updateAnnounce: (String, String) -> Void
+    let setAnnounceBeta: (Bool) -> Void
+    let announce: () -> Void
 
-    init(copyDeviceId: @escaping () -> Void, setEnabled: @escaping (Bool) -> Void, openDevice: @escaping (ShadowDeviceAccess.Device) -> Void, updateNewId: @escaping (String) -> Void, updateNewNote: @escaping (String) -> Void, add: @escaping () -> Void, copyJSON: @escaping () -> Void, openGitHub: @escaping () -> Void) {
+    init(copyDeviceId: @escaping () -> Void, setEnabled: @escaping (Bool) -> Void, openDevice: @escaping (ShadowDeviceAccess.Device) -> Void, updateNewId: @escaping (String) -> Void, updateNewNote: @escaping (String) -> Void, add: @escaping () -> Void, save: @escaping () -> Void, copyJSON: @escaping () -> Void, openGitHub: @escaping () -> Void, updateSecretDraft: @escaping (String) -> Void, saveSecret: @escaping () -> Void, clearSecret: @escaping () -> Void, updateAnnounce: @escaping (String, String) -> Void, setAnnounceBeta: @escaping (Bool) -> Void, announce: @escaping () -> Void) {
         self.copyDeviceId = copyDeviceId
         self.setEnabled = setEnabled
         self.openDevice = openDevice
         self.updateNewId = updateNewId
         self.updateNewNote = updateNewNote
         self.add = add
+        self.save = save
         self.copyJSON = copyJSON
         self.openGitHub = openGitHub
+        self.updateSecretDraft = updateSecretDraft
+        self.saveSecret = saveSecret
+        self.clearSecret = clearSecret
+        self.updateAnnounce = updateAnnounce
+        self.setAnnounceBeta = setAnnounceBeta
+        self.announce = announce
     }
+}
+
+private enum ShadowDeviceAccessSection: Int32 {
+    case thisDevice
+    case list
+    case add
+    case save
+    case secret
+    case announce
 }
 
 private enum ShadowDeviceAccessEntry: ItemListNodeEntry {
@@ -67,20 +105,36 @@ private enum ShadowDeviceAccessEntry: ItemListNodeEntry {
     case newId(String, Int)
     case newNote(String, Int)
     case add
+    case save(Bool, Bool)
     case copyJSON
     case openGitHub
     case saveInfo
+    case secretField(String, Int)
+    case secretAction(Bool)
+    case secretInfo
+    case announceHeader
+    case announceBuild(String, Int)
+    case announceVersion(String, Int)
+    case announceTitle(String, Int)
+    case announceNotes(String, Int)
+    case announceBeta(Bool)
+    case announceAction(Bool)
+    case announceInfo
 
     var section: ItemListSectionId {
         switch self {
         case .thisDevice, .thisDeviceInfo:
-            return 0
+            return ShadowDeviceAccessSection.thisDevice.rawValue
         case .enabled, .status, .device:
-            return 1
+            return ShadowDeviceAccessSection.list.rawValue
         case .newId, .newNote, .add:
-            return 2
-        case .copyJSON, .openGitHub, .saveInfo:
-            return 3
+            return ShadowDeviceAccessSection.add.rawValue
+        case .save, .copyJSON, .openGitHub, .saveInfo:
+            return ShadowDeviceAccessSection.save.rawValue
+        case .secretField, .secretAction, .secretInfo:
+            return ShadowDeviceAccessSection.secret.rawValue
+        case .announceHeader, .announceBuild, .announceVersion, .announceTitle, .announceNotes, .announceBeta, .announceAction, .announceInfo:
+            return ShadowDeviceAccessSection.announce.rawValue
         }
     }
 
@@ -94,9 +148,21 @@ private enum ShadowDeviceAccessEntry: ItemListNodeEntry {
         case .newId: return 10000
         case .newNote: return 10001
         case .add: return 10002
-        case .copyJSON: return 10003
-        case .openGitHub: return 10004
-        case .saveInfo: return 10005
+        case .save: return 10003
+        case .copyJSON: return 10004
+        case .openGitHub: return 10005
+        case .saveInfo: return 10006
+        case .secretField: return 10007
+        case .secretAction: return 10008
+        case .secretInfo: return 10009
+        case .announceHeader: return 10010
+        case .announceBuild: return 10011
+        case .announceVersion: return 10012
+        case .announceTitle: return 10013
+        case .announceNotes: return 10014
+        case .announceBeta: return 10015
+        case .announceAction: return 10016
+        case .announceInfo: return 10017
         }
     }
 
@@ -120,7 +186,8 @@ private enum ShadowDeviceAccessEntry: ItemListNodeEntry {
         case let .status(text):
             return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
         case let .device(_, device):
-            return ItemListDisclosureItem(presentationData: presentationData, title: device.id, label: device.note.isEmpty ? "без заметки" : device.note, sectionId: self.section, style: .blocks, action: {
+            let label = (device.admin ? "админ · " : "") + (device.note.isEmpty ? "без заметки" : device.note)
+            return ItemListDisclosureItem(presentationData: presentationData, title: device.id, label: label, sectionId: self.section, style: .blocks, action: {
                 arguments.openDevice(device)
             })
         case let .newId(value, _):
@@ -135,6 +202,12 @@ private enum ShadowDeviceAccessEntry: ItemListNodeEntry {
             return ItemListActionItem(presentationData: presentationData, title: "Добавить в список", kind: .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: {
                 arguments.add()
             })
+        case let .save(enabled, saving):
+            return ItemListActionItem(presentationData: presentationData, title: saving ? "Сохраняю…" : "Сохранить", kind: enabled ? .generic : .disabled, alignment: .natural, sectionId: self.section, style: .blocks, action: {
+                if enabled {
+                    arguments.save()
+                }
+            })
         case .copyJSON:
             return ItemListActionItem(presentationData: presentationData, title: "Скопировать JSON", kind: .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: {
                 arguments.copyJSON()
@@ -144,7 +217,51 @@ private enum ShadowDeviceAccessEntry: ItemListNodeEntry {
                 arguments.openGitHub()
             })
         case .saveInfo:
-            return ItemListTextItem(presentationData: presentationData, text: .plain("Изменения здесь — черновик. Скопируй JSON, открой файл на GitHub, замени содержимое и нажми Commit. Приложения подхватят список в течение 5–10 минут."), sectionId: self.section)
+            return ItemListTextItem(presentationData: presentationData, text: .plain("«Сохранить» коммитит список в репозиторий через бота, если задан ключ администратора. Иначе скопируй JSON, открой файл на GitHub, вставь и нажми Commit. Приложения подхватят список за 5–10 минут."), sectionId: self.section)
+        case let .secretField(value, _):
+            return ItemListSingleLineInputItem(presentationData: presentationData, title: NSAttributedString(string: ""), text: value, placeholder: "Ключ администратора", type: .regular(capitalization: false, autocorrection: false), clearType: .always, sectionId: self.section, textUpdated: { value in
+                arguments.updateSecretDraft(value)
+            }, action: {})
+        case let .secretAction(hasSecret):
+            return ItemListActionItem(presentationData: presentationData, title: hasSecret ? "Удалить ключ" : "Сохранить ключ", kind: hasSecret ? .destructive : .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: {
+                if hasSecret {
+                    arguments.clearSecret()
+                } else {
+                    arguments.saveSecret()
+                }
+            })
+        case .secretInfo:
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Ключ бота для сохранения без GitHub. Вводится один раз, хранится в Keychain этого устройства."), sectionId: self.section)
+        case .announceHeader:
+            return ItemListSectionHeaderItem(presentationData: presentationData, text: "ОБЪЯВИТЬ СБОРКУ", sectionId: self.section)
+        case let .announceBuild(value, _):
+            return ItemListSingleLineInputItem(presentationData: presentationData, title: NSAttributedString(string: "Сборка"), text: value, placeholder: "номер сборки", type: .number, clearType: .always, sectionId: self.section, textUpdated: { value in
+                arguments.updateAnnounce("build", value)
+            }, action: {})
+        case let .announceVersion(value, _):
+            return ItemListSingleLineInputItem(presentationData: presentationData, title: NSAttributedString(string: "Версия"), text: value, placeholder: "12.9.2-1.0.0", type: .regular(capitalization: false, autocorrection: false), clearType: .always, sectionId: self.section, textUpdated: { value in
+                arguments.updateAnnounce("version", value)
+            }, action: {})
+        case let .announceTitle(value, _):
+            return ItemListSingleLineInputItem(presentationData: presentationData, title: NSAttributedString(string: "Заголовок"), text: value, placeholder: "что нового", type: .regular(capitalization: true, autocorrection: true), clearType: .always, sectionId: self.section, textUpdated: { value in
+                arguments.updateAnnounce("title", value)
+            }, action: {})
+        case let .announceNotes(value, _):
+            return ItemListSingleLineInputItem(presentationData: presentationData, title: NSAttributedString(string: "Заметки"), text: value, placeholder: "строки через \\n", type: .regular(capitalization: true, autocorrection: true), clearType: .always, sectionId: self.section, textUpdated: { value in
+                arguments.updateAnnounce("notes", value)
+            }, action: {})
+        case let .announceBeta(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "В бету", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.setAnnounceBeta(value)
+            })
+        case let .announceAction(announcing):
+            return ItemListActionItem(presentationData: presentationData, title: announcing ? "Объявляю…" : "Объявить", kind: announcing ? .disabled : .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: {
+                if !announcing {
+                    arguments.announce()
+                }
+            })
+        case .announceInfo:
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Объявляет сборку в выбранной ветке (stable или бета) через бота. Друзьям покажется обновление. Номер сборки смотри в заголовке релиза."), sectionId: self.section)
         }
     }
 }
@@ -156,6 +273,7 @@ public func shadowDeviceAccessController(context: AccountContext, prefillDeviceI
     if let prefillDeviceId {
         initialState.newId = ShadowDeviceAccess.normalize(prefillDeviceId)
     }
+    initialState.announceVersion = ShadowVersion.full
     let statePromise = ValuePromise(initialState, ignoreRepeated: true)
     let stateValue = Atomic(value: initialState)
     let updateState: ((ShadowDeviceAccessState) -> ShadowDeviceAccessState) -> Void = { f in
@@ -163,6 +281,7 @@ public func shadowDeviceAccessController(context: AccountContext, prefillDeviceI
     }
 
     var presentControllerImpl: ((ViewController) -> Void)?
+    var dismissInputImpl: (() -> Void)?
 
     let showToast: (String) -> Void = { text in
         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
@@ -181,6 +300,24 @@ public func shadowDeviceAccessController(context: AccountContext, prefillDeviceI
             }
             return state
         }
+    }
+
+    // Describe the result of a worker write to the user.
+    let handleAdminResult: (ShadowDeviceAccess.AdminResult, String) -> Bool = { result, successText in
+        switch result {
+        case .success:
+            showToast(successText)
+            return true
+        case .noEndpoint:
+            showToast("Нет адреса бота. Сохрани через GitHub вручную.")
+        case .noSecret:
+            showToast("Сначала задай ключ администратора.")
+        case .unauthorized:
+            showToast("Неверный ключ администратора.")
+        case let .failed(reason):
+            showToast("Не удалось: \(reason)")
+        }
+        return false
     }
 
     let arguments = ShadowDeviceAccessArguments(copyDeviceId: {
@@ -202,6 +339,16 @@ public func shadowDeviceAccessController(context: AccountContext, prefillDeviceI
                     actionSheet?.dismissAnimated()
                     UIPasteboard.general.string = device.id
                     showToast("ID скопирован")
+                }),
+                ActionSheetButtonItem(title: device.admin ? "Убрать из админов" : "Сделать админом", color: .accent, action: { [weak actionSheet] in
+                    actionSheet?.dismissAnimated()
+                    updateState { state in
+                        var state = state
+                        state.draft = state.devices.map { item in
+                            item.id == device.id ? ShadowDeviceAccess.Device(id: item.id, note: item.note, admin: !device.admin) : item
+                        }
+                        return state
+                    }
                 }),
                 ActionSheetButtonItem(title: "Удалить из списка", color: .destructive, action: { [weak actionSheet] in
                     actionSheet?.dismissAnimated()
@@ -246,11 +393,37 @@ public func shadowDeviceAccessController(context: AccountContext, prefillDeviceI
             state.newId = ""
             state.newNote = ""
             state.inputRevision += 1
-            message = "Добавлено. Не забудь сохранить JSON на GitHub"
+            message = "Добавлено. Нажми «Сохранить»"
             return state
         }
         if let message {
             showToast(message)
+        }
+    }, save: {
+        dismissInputImpl?()
+        let whitelist = stateValue.with { $0.whitelist }
+        if whitelist.adminURL != nil && ShadowDeviceAccess.hasAdminSecret {
+            updateState { state in var state = state; state.saving = true; return state }
+            ShadowDeviceAccess.saveWhitelist(whitelist) { result in
+                let ok = handleAdminResult(result, "Сохранено")
+                updateState { state in
+                    var state = state
+                    state.saving = false
+                    if ok {
+                        state.remote = whitelist
+                        state.draft = nil
+                        state.enabled = nil
+                    }
+                    return state
+                }
+                if ok {
+                    ShadowDeviceAccess.refresh { _ in }
+                }
+            }
+        } else {
+            UIPasteboard.general.string = ShadowDeviceAccess.encode(whitelist)
+            context.sharedContext.applicationBindings.openUrl(ShadowDeviceAccess.editURL.absoluteString)
+            showToast("JSON скопирован — вставь на GitHub и Commit")
         }
     }, copyJSON: {
         let whitelist = stateValue.with { $0.whitelist }
@@ -258,6 +431,70 @@ public func shadowDeviceAccessController(context: AccountContext, prefillDeviceI
         showToast("JSON скопирован")
     }, openGitHub: {
         context.sharedContext.applicationBindings.openUrl(ShadowDeviceAccess.editURL.absoluteString)
+    }, updateSecretDraft: { value in
+        updateState { state in var state = state; state.secretDraft = value; return state }
+    }, saveSecret: {
+        dismissInputImpl?()
+        let value = stateValue.with { $0.secretDraft }
+        ShadowDeviceAccess.setAdminSecret(value)
+        updateState { state in
+            var state = state
+            state.hasSecret = ShadowDeviceAccess.hasAdminSecret
+            state.secretDraft = ""
+            return state
+        }
+        showToast("Ключ сохранён")
+    }, clearSecret: {
+        ShadowDeviceAccess.setAdminSecret(nil)
+        updateState { state in
+            var state = state
+            state.hasSecret = false
+            return state
+        }
+        showToast("Ключ удалён")
+    }, updateAnnounce: { field, value in
+        updateState { state in
+            var state = state
+            switch field {
+            case "build": state.announceBuild = value
+            case "version": state.announceVersion = value
+            case "title": state.announceTitle = value
+            case "notes": state.announceNotes = value
+            default: break
+            }
+            return state
+        }
+    }, setAnnounceBeta: { value in
+        updateState { state in var state = state; state.announceBeta = value; return state }
+    }, announce: {
+        dismissInputImpl?()
+        let snapshot = stateValue.with { $0 }
+        guard let build = Int(snapshot.announceBuild.trimmingCharacters(in: .whitespaces)), build > 0 else {
+            showToast("Укажи номер сборки")
+            return
+        }
+        let title = snapshot.announceTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        if title.isEmpty {
+            showToast("Укажи заголовок")
+            return
+        }
+        let version = snapshot.announceVersion.trimmingCharacters(in: .whitespacesAndNewlines)
+        let notes = snapshot.announceNotes.replacingOccurrences(of: "\\n", with: "\n")
+        let channel = snapshot.announceBeta ? "beta" : "stable"
+        updateState { state in var state = state; state.announcing = true; return state }
+        ShadowDeviceAccess.announce(adminURL: snapshot.adminURL, channel: channel, build: build, version: version, title: title, notes: notes) { result in
+            let ok = handleAdminResult(result, snapshot.announceBeta ? "Бета объявлена" : "Сборка объявлена")
+            updateState { state in
+                var state = state
+                state.announcing = false
+                if ok {
+                    state.announceTitle = ""
+                    state.announceNotes = ""
+                    state.inputRevision += 1
+                }
+                return state
+            }
+        }
     })
 
     let signal = combineLatest(queue: .mainQueue(), context.sharedContext.presentationData, statePromise.get())
@@ -278,7 +515,26 @@ public func shadowDeviceAccessController(context: AccountContext, prefillDeviceI
         }
         entries.append(.newId(state.newId, state.inputRevision))
         entries.append(.newNote(state.newNote, state.inputRevision))
-        entries += [.add, .copyJSON, .openGitHub, .saveInfo]
+        entries.append(.add)
+        entries.append(.save(changed && !state.saving, state.saving))
+        entries += [.copyJSON, .openGitHub, .saveInfo]
+
+        // Admin secret and release announce only make sense with a worker endpoint.
+        if state.adminURL != nil {
+            entries.append(.secretField(state.secretDraft, state.inputRevision))
+            entries.append(.secretAction(state.hasSecret))
+            entries.append(.secretInfo)
+            if state.hasSecret {
+                entries.append(.announceHeader)
+                entries.append(.announceBuild(state.announceBuild, state.inputRevision))
+                entries.append(.announceVersion(state.announceVersion, state.inputRevision))
+                entries.append(.announceTitle(state.announceTitle, state.inputRevision))
+                entries.append(.announceNotes(state.announceNotes, state.inputRevision))
+                entries.append(.announceBeta(state.announceBeta))
+                entries.append(.announceAction(state.announcing))
+                entries.append(.announceInfo)
+            }
+        }
 
         let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Доступ устройств"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
         let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, animateChanges: true)
@@ -288,6 +544,9 @@ public func shadowDeviceAccessController(context: AccountContext, prefillDeviceI
     let controller = ItemListController(context: context, state: signal)
     presentControllerImpl = { [weak controller] c in
         controller?.present(c, in: .window(.root))
+    }
+    dismissInputImpl = { [weak controller] in
+        controller?.view.endEditing(true)
     }
     return controller
 }

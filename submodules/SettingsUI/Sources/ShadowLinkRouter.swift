@@ -57,7 +57,7 @@ public func shadowOpenLink(context: AccountContext, link: ShadowLinks.Link, navi
         push(ayuEditedArchiveChatController(context: context))
     case "access":
         // The device list is the admins'; for everyone else the link is a no-op.
-        if ShadowDeviceAccess.isAdmin(peerId: context.account.peerId.id._internalGetInt64Value()) {
+        if ShadowDeviceAccess.hasAdminAccess(peerId: context.account.peerId.id._internalGetInt64Value()) {
             push(shadowDeviceAccessController(context: context, prefillDeviceId: link.query["id"]))
         }
     case "folzy":

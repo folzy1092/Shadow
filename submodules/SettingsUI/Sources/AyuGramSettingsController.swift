@@ -420,7 +420,8 @@ public func ayuGramSettingsController(context: AccountContext, autoCheckUpdates:
     arguments.checkUpdates = {
         updateState.set(.checking)
         bannerDismissed.set(false)
-        ShadowUpdateCheck.check { status in
+        let betaEnabled = currentAyuGramSettings(accountId: context.account.id).updateChannelBeta
+        ShadowUpdateCheck.check(betaEnabled: betaEnabled) { status in
             updateState.set(.result(status))
         }
     }
@@ -434,14 +435,14 @@ public func ayuGramSettingsController(context: AccountContext, autoCheckUpdates:
         pushControllerImpl?(shadowDeviceAccessController(context: context))
     }
     // Shadow: the device whitelist editor is for the admins only.
-    let isAdmin = ShadowDeviceAccess.isAdmin(peerId: context.account.peerId.id._internalGetInt64Value())
+    let isAdmin = ShadowDeviceAccess.hasAdminAccess(peerId: context.account.peerId.id._internalGetInt64Value())
 
     let signal = combineLatest(queue: .mainQueue(), context.sharedContext.presentationData, query.get(), updateState.get(), bannerDismissed.get(), crashRevision.get())
     |> deliverOnMainQueue
     |> map { presentationData, query, updateState, bannerDismissed, _ -> (ItemListControllerState, (ItemListNodeState, Any)) in
         let installed = ShadowUpdateCheck.installedBuild.map { "\($0)" } ?? "?"
         var updateEnabled = true
-        var statusText = "Установлена сборка \(installed)"
+        var statusText = "Установлена \(ShadowVersion.full) · сборка \(installed)"
         var download: (String, String)?
         var notes: (String, String)?
         switch updateState {
@@ -453,7 +454,7 @@ public func ayuGramSettingsController(context: AccountContext, autoCheckUpdates:
         case let .result(status):
             switch status {
             case .upToDate:
-                statusText = "Актуально · сборка \(installed)"
+                statusText = "Актуально · \(ShadowVersion.full) · сборка \(installed)"
             case let .available(release):
                 statusText = "У тебя \(installed) → доступна \(release.build)"
                 if release.changelog.count > 1 {
@@ -462,7 +463,7 @@ public func ayuGramSettingsController(context: AccountContext, autoCheckUpdates:
                 if release.isRequired {
                     statusText = "Обязательное обновление. " + statusText
                 }
-                download = ("Скачать IPA (\(release.build))", (release.downloadURL ?? release.pageURL).absoluteString)
+                download = (release.isBeta ? "Скачать бету IPA (\(release.build))" : "Скачать IPA (\(release.build))", (release.downloadURL ?? release.pageURL).absoluteString)
                 if !bannerDismissed {
                     notes = (release.title, shadowUpdateNotesText(release))
                 }
@@ -2492,7 +2493,7 @@ private final class ShadowSystemColorPicker: NSObject, UIColorPickerViewControll
 // Shadow: sends crash reports (JSON from MetricKit) as files to a chat, then deletes them.
 private func shadowSendCrashReports(context: AccountContext, peerId: EnginePeer.Id, reports: [ShadowCrashReports.Report], completion: @escaping () -> Void) {
     var messages: [EnqueueMessage] = []
-    let info = "Shadow \(ShadowUpdateCheck.installedVersion) (\(ShadowUpdateCheck.installedBuild.map { "\($0)" } ?? "?")), iOS \(UIDevice.current.systemVersion)"
+    let info = "Shadow \(ShadowVersion.full) (\(ShadowUpdateCheck.installedBuild.map { "\($0)" } ?? "?")), iOS \(UIDevice.current.systemVersion)"
     for (index, report) in reports.enumerated() {
         guard let data = try? Data(contentsOf: report.url) else {
             continue

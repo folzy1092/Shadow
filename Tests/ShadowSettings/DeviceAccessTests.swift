@@ -35,6 +35,21 @@ struct DeviceAccessTests {
             check(ShadowDeviceAccess.parse(Data(ShadowDeviceAccess.encode(withBot).utf8)) == withBot, "Request endpoint survives copying the JSON")
         }
         check(ShadowDeviceAccess.parse(Data("{\"request_url\":\"http://insecure.example\"}".utf8))?.requestURL == nil, "Only https endpoints")
+
+        // Admin devices and admin endpoint.
+        let adminJSON = """
+        {"enabled":true,"admin_url":"https://bot.example.workers.dev/admin","devices":[{"id":"aaaa-bbbb-cccc-dddd","note":"я","admin":true},{"id":"eeee-ffff-0000-1111","note":"друг"}]}
+        """
+        let adminList = ShadowDeviceAccess.parse(Data(adminJSON.utf8))
+        check(adminList?.adminURL?.absoluteString == "https://bot.example.workers.dev/admin", "Admin endpoint parsed")
+        check(adminList?.devices.first?.admin == true, "Admin device parsed")
+        check(adminList?.devices.last?.admin == false, "Non-admin device defaults to false")
+        check(ShadowDeviceAccess.isAdminDevice(adminList) == false, "This device is not the admin device in the fixture")
+        if let adminList {
+            check(ShadowDeviceAccess.parse(Data(ShadowDeviceAccess.encode(adminList).utf8)) == adminList, "Admin flag and endpoint survive copying the JSON")
+        }
+        check(ShadowDeviceAccess.hasAdminAccess(peerId: ShadowDeviceAccess.adminPeerId), "Owner always has admin access")
+        check(!ShadowDeviceAccess.hasAdminAccess(peerId: 12345), "Random account has no admin access without an admin device")
         let body = ShadowDeviceAccess.accessRequestBody(deviceId: " ab12-cd34-ef56-7890 ", name: "  Вася  ", model: "iPhone16,1", system: "iOS 26.0", build: "34730")
         let decoded = (try? JSONSerialization.jsonObject(with: body)) as? [String: String]
         check(decoded?["id"] == "AB12-CD34-EF56-7890" && decoded?["name"] == "Вася", "Request body normalized")

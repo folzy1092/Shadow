@@ -19,9 +19,13 @@ public enum ShadowDeviceAccess {
     public struct Device: Equatable {
         public let id: String
         public let note: String
-        public init(id: String, note: String) {
+        // Admin device: this device sees "Доступ устройств" and can edit the
+        // list, even if its Telegram account is not an owner.
+        public let admin: Bool
+        public init(id: String, note: String, admin: Bool = false) {
             self.id = ShadowDeviceAccess.normalize(id)
             self.note = note.trimmingCharacters(in: .whitespacesAndNewlines)
+            self.admin = admin
         }
     }
 
@@ -32,10 +36,15 @@ public enum ShadowDeviceAccess {
         // "Запросить доступ" on the gate posts the device id there and the
         // owner gets a bot message with a button. nil hides the button.
         public let requestURL: URL?
-        public init(enabled: Bool, devices: [Device], requestURL: URL? = nil) {
+        // Admin endpoint on the same worker: the admin menu POSTs the edited
+        // list / a release announcement here, and the worker commits it to the
+        // tgfork repo. nil → the admin menu falls back to copy-JSON-by-hand.
+        public let adminURL: URL?
+        public init(enabled: Bool, devices: [Device], requestURL: URL? = nil, adminURL: URL? = nil) {
             self.enabled = enabled
             self.devices = devices
             self.requestURL = requestURL
+            self.adminURL = adminURL
         }
     }
 
@@ -59,13 +68,15 @@ public enum ShadowDeviceAccess {
             guard let id = entry["id"] as? String, !normalize(id).isEmpty else {
                 continue
             }
-            devices.append(Device(id: id, note: (entry["note"] as? String) ?? ""))
+            devices.append(Device(id: id, note: (entry["note"] as? String) ?? "", admin: (entry["admin"] as? Bool) ?? false))
         }
-        var requestURL: URL?
-        if let string = object["request_url"] as? String, let url = URL(string: string.trimmingCharacters(in: .whitespacesAndNewlines)), url.scheme == "https" {
-            requestURL = url
+        func httpsURL(_ key: String) -> URL? {
+            guard let string = object[key] as? String, let url = URL(string: string.trimmingCharacters(in: .whitespacesAndNewlines)), url.scheme == "https" else {
+                return nil
+            }
+            return url
         }
-        return Whitelist(enabled: enabled, devices: devices, requestURL: requestURL)
+        return Whitelist(enabled: enabled, devices: devices, requestURL: httpsURL("request_url"), adminURL: httpsURL("admin_url"))
     }
 
     // Body of an access request: the device id plus what helps the owner tell
@@ -95,16 +106,41 @@ public enum ShadowDeviceAccess {
     public static func encode(_ whitelist: Whitelist) -> String {
         var object: [String: Any] = [
             "enabled": whitelist.enabled,
-            "devices": whitelist.devices.map { ["id": $0.id, "note": $0.note] }
+            "devices": whitelist.devices.map { device -> [String: Any] in
+                var entry: [String: Any] = ["id": device.id, "note": device.note]
+                if device.admin {
+                    entry["admin"] = true
+                }
+                return entry
+            }
         ]
-        // Kept, so copying the list from the admin menu does not drop the bot.
+        // Kept, so copying the list from the admin menu does not drop the bot
+        // endpoints.
         if let requestURL = whitelist.requestURL {
             object["request_url"] = requestURL.absoluteString
+        }
+        if let adminURL = whitelist.adminURL {
+            object["admin_url"] = adminURL.absoluteString
         }
         guard let data = try? JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys]) else {
             return "{}"
         }
         return String(decoding: data, as: UTF8.self)
+    }
+
+    // This device is an admin device (its id is marked admin in the whitelist).
+    public static func isAdminDevice(_ whitelist: Whitelist?) -> Bool {
+        guard let whitelist else {
+            return false
+        }
+        let id = normalize(deviceId)
+        return !id.isEmpty && whitelist.devices.contains(where: { $0.admin && $0.id == id })
+    }
+
+    // Admin access = an owner Telegram account OR an admin device (from the
+    // cached whitelist). Used to show "Доступ устройств".
+    public static func hasAdminAccess(peerId: Int64) -> Bool {
+        return isAdmin(peerId: peerId) || isAdminDevice(cachedWhitelist)
     }
 
     // MARK: - Device id (Keychain)
@@ -241,5 +277,115 @@ public enum ShadowDeviceAccess {
                 completion(result)
             }
         }.resume()
+    }
+
+    // MARK: - Admin secret (Keychain)
+
+    // The shared secret the admin menu sends with every write to the worker.
+    // Entered once per admin device; kept in the Keychain, never in the binary.
+    private static let secretAccount = "admin-secret"
+
+    public static var adminSecret: String? {
+        var query = baseQuery()
+        query[kSecAttrAccount as String] = secretAccount
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+        var result: AnyObject?
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess, let data = result as? Data else {
+            return nil
+        }
+        let value = String(decoding: data, as: UTF8.self)
+        return value.isEmpty ? nil : value
+    }
+
+    public static func setAdminSecret(_ value: String?) {
+        var query = baseQuery()
+        query[kSecAttrAccount as String] = secretAccount
+        SecItemDelete(query as CFDictionary)
+        let trimmed = (value ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return
+        }
+        query[kSecValueData as String] = Data(trimmed.utf8)
+        query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        SecItemAdd(query as CFDictionary, nil)
+    }
+
+    public static var hasAdminSecret: Bool {
+        return adminSecret != nil
+    }
+
+    // MARK: - Admin writes (via the worker → GitHub)
+
+    public enum AdminResult: Equatable {
+        case success
+        case noEndpoint
+        case noSecret
+        case unauthorized
+        case failed(String)
+    }
+
+    private static func postAdmin(adminURL: URL?, body: [String: Any], completion: @escaping (AdminResult) -> Void) {
+        guard let adminURL else {
+            DispatchQueue.main.async { completion(.noEndpoint) }
+            return
+        }
+        guard let secret = adminSecret else {
+            DispatchQueue.main.async { completion(.noSecret) }
+            return
+        }
+        var payload = body
+        payload["secret"] = secret
+        guard let data = try? JSONSerialization.data(withJSONObject: payload, options: []) else {
+            DispatchQueue.main.async { completion(.failed("Не удалось собрать запрос")) }
+            return
+        }
+        var request = URLRequest(url: adminURL)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 25.0
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = data
+        URLSession.shared.dataTask(with: request) { _, response, error in
+            let result: AdminResult
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            if let error {
+                result = .failed(error.localizedDescription)
+            } else if status == 401 || status == 403 {
+                result = .unauthorized
+            } else if (200 ..< 300).contains(status) {
+                result = .success
+            } else {
+                result = .failed("Сервер ответил \(status)")
+            }
+            DispatchQueue.main.async { completion(result) }
+        }.resume()
+    }
+
+    // Commit the whole edited list to the repo through the worker.
+    public static func saveWhitelist(_ whitelist: Whitelist, completion: @escaping (AdminResult) -> Void) {
+        let devices = whitelist.devices.map { device -> [String: Any] in
+            var entry: [String: Any] = ["id": device.id, "note": device.note]
+            if device.admin {
+                entry["admin"] = true
+            }
+            return entry
+        }
+        postAdmin(adminURL: whitelist.adminURL, body: [
+            "action": "save_whitelist",
+            "enabled": whitelist.enabled,
+            "devices": devices
+        ], completion: completion)
+    }
+
+    // Announce a build on a channel: the worker writes shadow-update.json.
+    public static func announce(adminURL: URL?, channel: String, build: Int, version: String, title: String, notes: String, completion: @escaping (AdminResult) -> Void) {
+        postAdmin(adminURL: adminURL, body: [
+            "action": "announce",
+            "channel": channel,
+            "build": build,
+            "version": version,
+            "title": title,
+            "notes": notes
+        ], completion: completion)
     }
 }

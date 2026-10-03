@@ -80,6 +80,30 @@ struct UpdateCheckTests {
         check(ShadowUpdateCheck.changes(installedBuild: nil, announcedBuild: 34703, entries: entries).map { $0.build } == [34703], "Unknown installed build shows only the announced entry")
         check(ShadowUpdateCheck.changes(installedBuild: 34700, announcedBuild: 34703, entries: entries).map { $0.build } == [34703], "One skipped build, one entry")
 
+        // Stable/beta channels. Flat format still parses as stable.
+        let channelsJSON = """
+        {"enabled":true,"minimum_build":0,"stable":{"build":34732,"version":"12.9.2-1.0.0","title":"S","notes":"s"},"beta":{"build":34740,"version":"12.9.2-1.0.1","title":"B","notes":"b"},"build":34732,"version":"12.9.2-1.0.0"}
+        """
+        let stable = ShadowUpdateCheck.parseManifest(Data(channelsJSON.utf8))
+        check(stable?.build == 34732 && stable?.version == "12.9.2-1.0.0", "Stable channel parsed")
+        let betaManifest = ShadowUpdateCheck.parseBetaManifest(Data(channelsJSON.utf8))
+        check(betaManifest?.build == 34740, "Beta channel parsed")
+        check(ShadowUpdateCheck.parseBetaManifest(Data("{\"build\":1}".utf8)) == nil, "No beta when absent")
+        let flat = ShadowUpdateCheck.parseManifest(Data("{\"build\":34700,\"version\":\"12.9.2\"}".utf8))
+        check(flat?.build == 34700, "Flat manifest still parses as stable")
+        if let stable, let betaManifest {
+            if case let .available(release) = ShadowUpdateCheck.status(installedBuild: 34732, manifest: betaManifest, isBeta: true) {
+                check(release.build == 34740, "Beta offered over installed stable")
+                check(release.isBeta, "Beta release marked")
+                check(release.title.contains("бета"), "Beta title labelled")
+            } else {
+                preconditionFailure("Beta should be available over an older stable")
+            }
+            if case .upToDate = ShadowUpdateCheck.status(installedBuild: 34740, manifest: stable, isBeta: false) {
+            } else {
+                preconditionFailure("Installed newer than stable should be up to date")
+            }
+        }
         print("Shadow update check: \(count) checks passed")
     }
 }

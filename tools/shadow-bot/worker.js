@@ -49,72 +49,187 @@ async function sendMessage(env, chatId, text, keyboard) {
   });
 }
 
+// --- GitHub (the public data repo folzy1092/tgfork, branch main) ---
+
+const GH_REPO = "folzy1092/tgfork";
+const GH_BRANCH = "main";
+
+function b64encode(str) {
+  const bytes = new TextEncoder().encode(str);
+  let bin = "";
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin);
+}
+
+function b64decode(b64) {
+  const bin = atob(b64.replace(/\n/g, ""));
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
+
+function ghHeaders(env) {
+  return {
+    "Authorization": `Bearer ${env.GITHUB_TOKEN}`,
+    "Accept": "application/vnd.github+json",
+    "User-Agent": "shadow-bot",
+    "X-GitHub-Api-Version": "2022-11-28",
+  };
+}
+
+async function ghGetJSON(env, path) {
+  const r = await fetch(`https://api.github.com/repos/${GH_REPO}/contents/${path}?ref=${GH_BRANCH}`, { headers: ghHeaders(env) });
+  if (r.status === 404) return { sha: null, json: {} };
+  if (!r.ok) throw new Error(`github read ${r.status}`);
+  const data = await r.json();
+  let parsed = {};
+  try { parsed = JSON.parse(b64decode(data.content)); } catch { parsed = {}; }
+  return { sha: data.sha, json: parsed };
+}
+
+async function ghPutJSON(env, path, obj, message, sha) {
+  const body = {
+    message,
+    content: b64encode(JSON.stringify(obj, null, 2) + "\n"),
+    branch: GH_BRANCH,
+  };
+  if (sha) body.sha = sha;
+  const r = await fetch(`https://api.github.com/repos/${GH_REPO}/contents/${path}`, {
+    method: "PUT",
+    headers: ghHeaders(env),
+    body: JSON.stringify(body),
+  });
+  return r.ok;
+}
+
+async function handleRequest(request, env) {
+  if (!env.BOT_TOKEN || !env.OWNER_CHAT_ID) {
+    return json({ ok: false, error: "not_configured" }, 500);
+  }
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ ok: false, error: "bad_json" }, 400);
+  }
+  const id = clean(body.id, 32).toUpperCase();
+  if (!ID_PATTERN.test(id)) {
+    return json({ ok: false, error: "bad_id" }, 400);
+  }
+  const throttleKey = `request:${id}`;
+  if (env.THROTTLE && (await env.THROTTLE.get(throttleKey))) {
+    return json({ ok: false, error: "too_many" }, 429);
+  }
+  const name = clean(body.name, 64);
+  const model = clean(body.model, 32);
+  const system = clean(body.system, 32);
+  const build = clean(body.build, 16);
+  const text = [
+    "🔐 <b>Запрос доступа к Shadow</b>",
+    "",
+    `ID: <code>${escapeHtml(id)}</code>`,
+    `Кто: ${name ? escapeHtml(name) : "не указал"}`,
+    `Устройство: ${escapeHtml(model || "?")}, ${escapeHtml(system || "?")}`,
+    `Сборка: ${escapeHtml(build || "?")}`,
+    "",
+    `Открыть в Shadow: shadow://access?id=${escapeHtml(id)}`,
+  ].join("\n");
+  const keyboard = [[{ text: "Открыть в Shadow", url: `tg://shadow/access?id=${id}` }]];
+  const chatIds = String(env.OWNER_CHAT_ID).split(",").map((value) => value.trim()).filter(Boolean);
+  let delivered = 0;
+  for (const chatId of chatIds) {
+    let response = await sendMessage(env, chatId, text, keyboard);
+    if (!response.ok) {
+      response = await sendMessage(env, chatId, text, null);
+    }
+    if (response.ok) delivered += 1;
+  }
+  if (delivered === 0) {
+    return json({ ok: false, error: "telegram" }, 502);
+  }
+  if (env.THROTTLE) {
+    await env.THROTTLE.put(throttleKey, "1", { expirationTtl: THROTTLE_SECONDS });
+  }
+  return json({ ok: true });
+}
+
+// Admin writes from the app's "Доступ устройств" menu. Auth is the shared
+// ADMIN_SECRET; the worker commits to the tgfork repo with the owner's token.
+async function handleAdmin(request, env) {
+  if (!env.ADMIN_SECRET || !env.GITHUB_TOKEN) {
+    return json({ ok: false, error: "not_configured" }, 500);
+  }
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ ok: false, error: "bad_json" }, 400);
+  }
+  if (clean(body.secret, 200) !== env.ADMIN_SECRET) {
+    return json({ ok: false, error: "unauthorized" }, 401);
+  }
+
+  if (body.action === "save_whitelist") {
+    const devices = [];
+    for (const entry of Array.isArray(body.devices) ? body.devices : []) {
+      const id = clean(entry && entry.id, 32).toUpperCase();
+      if (!ID_PATTERN.test(id)) continue;
+      const device = { id, note: clean(entry.note, 64) };
+      if (entry.admin === true) device.admin = true;
+      devices.push(device);
+    }
+    const current = await ghGetJSON(env, "shadow-whitelist.json");
+    const next = current.json && typeof current.json === "object" ? current.json : {};
+    next.enabled = body.enabled === true;
+    next.devices = devices;
+    // Keep the endpoints that live only in the file.
+    const ok = await ghPutJSON(env, "shadow-whitelist.json", next, "Shadow: update device whitelist [skip ci]", current.sha);
+    return ok ? json({ ok: true }) : json({ ok: false, error: "github" }, 502);
+  }
+
+  if (body.action === "announce") {
+    const build = Number(body.build) | 0;
+    if (build <= 0) return json({ ok: false, error: "bad_build" }, 400);
+    const channel = body.channel === "beta" ? "beta" : "stable";
+    const version = clean(body.version, 40);
+    const title = clean(body.title, 200);
+    const notes = clean(body.notes, 2000);
+    const url = `https://github.com/${GH_REPO}/releases/tag/build-${build}`;
+    const ipaURL = `https://github.com/${GH_REPO}/releases/download/build-${build}/Shadow.ipa`;
+    const channelObj = { build, version, title, notes, url, ipa_url: ipaURL };
+    const current = await ghGetJSON(env, "shadow-update.json");
+    const next = current.json && typeof current.json === "object" ? current.json : {};
+    next.enabled = true;
+    if (typeof next.minimum_build !== "number") next.minimum_build = 0;
+    next[channel] = channelObj;
+    if (channel === "stable") {
+      // Mirror into the flat fields old builds read.
+      next.build = build;
+      next.version = version;
+      next.title = title;
+      next.notes = notes;
+      next.url = url;
+      next.ipa_url = ipaURL;
+    }
+    const ok = await ghPutJSON(env, "shadow-update.json", next, `Shadow: announce ${channel} ${build} [skip ci]`, current.sha);
+    return ok ? json({ ok: true }) : json({ ok: false, error: "github" }, 502);
+  }
+
+  return json({ ok: false, error: "bad_action" }, 400);
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (request.method === "GET") {
       return new Response("Shadow access bot is running", { status: 200 });
     }
-    if (request.method !== "POST" || url.pathname !== "/request") {
-      return json({ ok: false, error: "not_found" }, 404);
+    if (request.method === "POST" && url.pathname === "/request") {
+      return handleRequest(request, env);
     }
-    if (!env.BOT_TOKEN || !env.OWNER_CHAT_ID) {
-      return json({ ok: false, error: "not_configured" }, 500);
+    if (request.method === "POST" && url.pathname === "/admin") {
+      return handleAdmin(request, env);
     }
-
-    let body;
-    try {
-      body = await request.json();
-    } catch {
-      return json({ ok: false, error: "bad_json" }, 400);
-    }
-
-    const id = clean(body.id, 32).toUpperCase();
-    if (!ID_PATTERN.test(id)) {
-      return json({ ok: false, error: "bad_id" }, 400);
-    }
-
-    const throttleKey = `request:${id}`;
-    if (env.THROTTLE && (await env.THROTTLE.get(throttleKey))) {
-      return json({ ok: false, error: "too_many" }, 429);
-    }
-
-    const name = clean(body.name, 64);
-    const model = clean(body.model, 32);
-    const system = clean(body.system, 32);
-    const build = clean(body.build, 16);
-
-    const text = [
-      "🔐 <b>Запрос доступа к Shadow</b>",
-      "",
-      `ID: <code>${escapeHtml(id)}</code>`,
-      `Кто: ${name ? escapeHtml(name) : "не указал"}`,
-      `Устройство: ${escapeHtml(model || "?")}, ${escapeHtml(system || "?")}`,
-      `Сборка: ${escapeHtml(build || "?")}`,
-      "",
-      `Открыть в Shadow: shadow://access?id=${escapeHtml(id)}`,
-    ].join("\n");
-    const keyboard = [[{ text: "Открыть в Shadow", url: `tg://shadow/access?id=${id}` }]];
-
-    const chatIds = String(env.OWNER_CHAT_ID).split(",").map((value) => value.trim()).filter(Boolean);
-    let delivered = 0;
-    for (const chatId of chatIds) {
-      let response = await sendMessage(env, chatId, text, keyboard);
-      if (!response.ok) {
-        // A client that refuses the tg:// button still gets the text link.
-        response = await sendMessage(env, chatId, text, null);
-      }
-      if (response.ok) {
-        delivered += 1;
-      }
-    }
-    if (delivered === 0) {
-      return json({ ok: false, error: "telegram" }, 502);
-    }
-
-    if (env.THROTTLE) {
-      await env.THROTTLE.put(throttleKey, "1", { expirationTtl: THROTTLE_SECONDS });
-    }
-    return json({ ok: true });
+    return json({ ok: false, error: "not_found" }, 404);
   },
 };

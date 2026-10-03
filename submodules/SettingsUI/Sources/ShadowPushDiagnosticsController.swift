@@ -10,18 +10,23 @@ import AccountContext
 
 private enum ShadowMiscSection: Int32 {
     case gestures
+    case channel
     case tools
 }
 
 private enum ShadowMiscEntry: ItemListNodeEntry {
     case disableStoryCameraSwipe(Bool)
     case cameraSwipeFooter
+    case betaChannel(Bool)
+    case betaChannelFooter
     case pushDiagnostics
 
     var section: ItemListSectionId {
         switch self {
         case .disableStoryCameraSwipe, .cameraSwipeFooter:
             return ShadowMiscSection.gestures.rawValue
+        case .betaChannel, .betaChannelFooter:
+            return ShadowMiscSection.channel.rawValue
         case .pushDiagnostics:
             return ShadowMiscSection.tools.rawValue
         }
@@ -31,7 +36,9 @@ private enum ShadowMiscEntry: ItemListNodeEntry {
         switch self {
         case .disableStoryCameraSwipe: return 0
         case .cameraSwipeFooter: return 1
-        case .pushDiagnostics: return 2
+        case .betaChannel: return 2
+        case .betaChannelFooter: return 3
+        case .pushDiagnostics: return 4
         }
     }
 
@@ -46,6 +53,10 @@ private enum ShadowMiscEntry: ItemListNodeEntry {
             return ItemListSwitchItem(presentationData: presentationData, title: "Отключить свайп к камере", value: value, sectionId: self.section, style: .blocks, updated: arguments.updateDisableStoryCameraSwipe)
         case .cameraSwipeFooter:
             return ItemListTextItem(presentationData: presentationData, text: .plain("Отключает только жест, который открывает камеру истории из списка чатов. Кнопки камеры и создание историй продолжат работать."), sectionId: self.section)
+        case let .betaChannel(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Бета-версии", value: value, sectionId: self.section, style: .blocks, updated: arguments.updateBetaChannel)
+        case .betaChannelFooter:
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Проверка обновлений предложит бета-сборку, если она новее. Бета может работать нестабильно."), sectionId: self.section)
         case .pushDiagnostics:
             return ItemListDisclosureItem(presentationData: presentationData, title: "Диагностика push", label: "", sectionId: self.section, style: .blocks, action: arguments.openPushDiagnostics)
         }
@@ -54,10 +65,12 @@ private enum ShadowMiscEntry: ItemListNodeEntry {
 
 private final class ShadowMiscArguments {
     let updateDisableStoryCameraSwipe: (Bool) -> Void
+    let updateBetaChannel: (Bool) -> Void
     let openPushDiagnostics: () -> Void
 
-    init(updateDisableStoryCameraSwipe: @escaping (Bool) -> Void, openPushDiagnostics: @escaping () -> Void) {
+    init(updateDisableStoryCameraSwipe: @escaping (Bool) -> Void, updateBetaChannel: @escaping (Bool) -> Void, openPushDiagnostics: @escaping () -> Void) {
         self.updateDisableStoryCameraSwipe = updateDisableStoryCameraSwipe
+        self.updateBetaChannel = updateBetaChannel
         self.openPushDiagnostics = openPushDiagnostics
     }
 }
@@ -70,6 +83,12 @@ public func shadowMiscController(context: AccountContext) -> ViewController {
             settings.disableStoryCameraSwipe = value
             return settings
         }).startStandalone()
+    }, updateBetaChannel: { value in
+        let _ = updateAyuGramSettings(postbox: context.account.postbox, { settings in
+            var settings = settings
+            settings.updateChannelBeta = value
+            return settings
+        }).startStandalone()
     }, openPushDiagnostics: {
         pushControllerImpl?(shadowPushDiagnosticsController(context: context))
     })
@@ -79,6 +98,8 @@ public func shadowMiscController(context: AccountContext) -> ViewController {
         let entries: [ShadowMiscEntry] = [
             .disableStoryCameraSwipe(settings.disableStoryCameraSwipe),
             .cameraSwipeFooter,
+            .betaChannel(settings.updateChannelBeta),
+            .betaChannelFooter,
             .pushDiagnostics
         ]
         let state = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Разное"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))

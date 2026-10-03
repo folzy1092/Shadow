@@ -12,5 +12,10 @@ OWNER_CHAT_ID = "7878830498"
 # binding = "THROTTLE"
 # id = "<KV namespace id>"
 
-# BOT_TOKEN is a secret: `npx wrangler secret put BOT_TOKEN`
-# (or Workers → shadow-access-bot → Settings → Variables and Secrets).
+# Secrets (Workers → shadow-access-bot → Settings → Variables and Secrets,
+# or `npx wrangler secret put <NAME>`):
+#   BOT_TOKEN      — token from @BotFather (for access requests)
+#   GITHUB_TOKEN   — fine-grained token, Contents: read+write on folzy1092/tgfork
+#                    only (for the admin menu's "Сохранить" / "Объявить")
+#   ADMIN_SECRET   — shared secret; the same string is entered once in the app's
+#                    "Доступ устройств" → "Ключ администратора"

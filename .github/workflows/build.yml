@@ -106,11 +106,13 @@ jobs:
           BUILD_NUMBER_OFFSET="$(cat build_number_offset)"
 
           export APP_VERSION=$(cat versions.json | python3 -c 'import json,sys;obj=json.load(sys.stdin);print(obj["app"]);')
+          export FORK_VERSION=$(cat versions.json | python3 -c 'import json,sys;obj=json.load(sys.stdin);print(obj.get("fork","1.0.0"));')
           export COMMIT_COUNT=$(git rev-list --count HEAD)
           export COMMIT_COUNT="$(($COMMIT_COUNT+$BUILD_NUMBER_OFFSET))"
           export BUILD_NUMBER="$COMMIT_COUNT"
           echo "BUILD_NUMBER=$(echo $BUILD_NUMBER)" >> $GITHUB_ENV
           echo "APP_VERSION=$(echo $APP_VERSION)" >> $GITHUB_ENV
+          echo "FORK_VERSION=$(echo $FORK_VERSION)" >> $GITHUB_ENV
 
           python3 build-system/Make/ImportCertificates.py --path build-system/fake-codesigning/certs
           python3 -u build-system/Make/Make.py \
@@ -184,7 +186,7 @@ jobs:
           gh release create "$TAG" "$ASSET" \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
-            --title "Shadow ${APP_VERSION} (${BUILD_NUMBER})" \
+            --title "Shadow ${APP_VERSION}-${FORK_VERSION} (${BUILD_NUMBER})" \
             --notes "$NOTES"
 
       # The same release in the public data repo (folzy1092/tgfork), so IPA links
@@ -210,7 +212,7 @@ jobs:
           gh release create "$TAG" "$ASSET" \
             --repo folzy1092/tgfork \
             --target main \
-            --title "Shadow ${APP_VERSION} (${BUILD_NUMBER})" \
+            --title "Shadow ${APP_VERSION}-${FORK_VERSION} (${BUILD_NUMBER})" \
             --notes "$NOTES"
 
       - name: Upload debugging symbols
