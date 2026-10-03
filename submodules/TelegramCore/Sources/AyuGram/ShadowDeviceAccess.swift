@@ -367,7 +367,7 @@ public enum ShadowDeviceAccess {
             } else if (200 ..< 300).contains(status) {
                 result = .success
             } else if status == 500 {
-                result = .failed("бот без ключа — задай ADMIN_SECRET в воркере")
+                result = .failed("бот без токена GitHub или ключа — проверь секреты воркера")
             } else {
                 result = .failed("сервер ответил \(status)")
             }

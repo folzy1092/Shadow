@@ -181,7 +181,7 @@ async function handleRequest(request, env) {
 // ADMIN_SECRET; the worker commits to the tgfork repo with the owner's token.
 async function handleAdmin(request, env) {
   if (!env.ADMIN_SECRET || !env.GITHUB_TOKEN) {
-    return json({ ok: false, error: "not_configured" }, 500);
+    return json({ ok: false, error: !env.GITHUB_TOKEN ? "no_github_token" : "no_admin_secret" }, 500);
   }
   let body;
   try {

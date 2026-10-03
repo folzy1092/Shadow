@@ -7691,12 +7691,31 @@ private func shadowFilteredStorySubscriptions(context: AccountContext, _ signal:
         return settings.hideStoriesBar
     }
     |> distinctUntilChanged
-    return combineLatest(signal, hidden)
-    |> map { subscriptions, hidden -> EngineStorySubscriptions in
+    let accountPeerId = context.account.peerId.toInt64()
+    // Shadow: re-filter the stories bar when the active space / visibility changes,
+    // so a chat hidden in the current space hides its story too.
+    let spaceChanges = Signal<Void, NoError> { subscriber in
+        subscriber.putNext(Void())
+        let token = NotificationCenter.default.addObserver(forName: ShadowSpaceStore.didChangeNotification, object: nil, queue: .main, using: { _ in
+            subscriber.putNext(Void())
+        })
+        return ActionDisposable {
+            NotificationCenter.default.removeObserver(token)
+        }
+    }
+    return combineLatest(signal, hidden, spaceChanges)
+    |> map { subscriptions, hidden, _ -> EngineStorySubscriptions in
         if hidden {
             return EngineStorySubscriptions(accountItem: nil, items: [], hasMoreToken: nil)
         }
-        return subscriptions
+        // Only stories from peers visible in the current space (second space
+        // shows only its own chats' stories, main space hides second-only ones).
+        let store = ShadowSpaceStore.shared
+        let items = subscriptions.items.filter { !store.isHidden(accountPeerId: accountPeerId, peerId: $0.peer.id.toInt64()) }
+        if items.count == subscriptions.items.count {
+            return subscriptions
+        }
+        return EngineStorySubscriptions(accountItem: subscriptions.accountItem, items: items, hasMoreToken: subscriptions.hasMoreToken)
     }
 }
 
