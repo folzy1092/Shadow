@@ -258,7 +258,16 @@ public enum ShadowUpdateCheck {
     }
 
     private static func fetch(_ url: URL, completion: @escaping (Data?, Int?, Error?) -> Void) {
-        var request = URLRequest(url: url)
+        // A per-check query string gets past the raw.githubusercontent CDN cache
+        // (~5 min), so a freshly announced build appears at once, not minutes later.
+        var fetchURL = url
+        if var components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
+            var items = components.queryItems ?? []
+            items.append(URLQueryItem(name: "t", value: String(Int(Date().timeIntervalSince1970))))
+            components.queryItems = items
+            fetchURL = components.url ?? url
+        }
+        var request = URLRequest(url: fetchURL)
         request.cachePolicy = .reloadIgnoringLocalCacheData
         request.timeoutInterval = 20.0
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")

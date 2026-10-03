@@ -37,6 +37,10 @@ class ChannelContracts(unittest.TestCase):
         self.assertIn("betaEnabled", core)
         self.assertIn("public let isBeta: Bool", core)
 
+    def test_update_check_busts_cdn_cache(self):
+        core = read("TelegramCore/Sources/AyuGram/ShadowUpdateCheck.swift")
+        self.assertIn('URLQueryItem(name: "t"', core)
+
     def test_beta_toggle_and_setting(self):
         settings = read("TelegramCore/Sources/AyuGram/AyuGramSettings.swift")
         self.assertIn("public var updateChannelBeta: Bool = false", settings)
