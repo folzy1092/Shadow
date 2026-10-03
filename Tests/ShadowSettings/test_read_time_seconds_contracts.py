@@ -24,5 +24,14 @@ class ReadTimeSecondsContracts(unittest.TestCase):
         self.assertIn("showSeconds: true", readers)
 
 
+class AnonymousForwardContracts(unittest.TestCase):
+    def test_anonymous_forward_hides_author_keeps_captions(self):
+        display = read("TelegramUI/Sources/Chat/ChatControllerLoadDisplayNode.swift")
+        self.assertIn("forwardMessages(messageIds: forwardMessageIds, options: ChatInterfaceForwardOptionsState(hideNames: true, hideCaptions: false, unhideNamesOnCaptionChange: false))", display)
+        self.assertNotIn("hideCaptions: true", display)
+        forward = read("TelegramUI/Sources/ChatControllerForwardMessages.swift")
+        self.assertIn("attributes: savedAttributes, correlationId: correlationId", forward)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -666,10 +666,16 @@ extension ChatControllerImpl {
                     // Shadow: asCopy always returns earlier in peerSelected (see the
                     // "if asCopy { ...; return }" guard above), so this branch never
                     // sees asCopy == true — always a native forward here.
+                    // Shadow: "forward without author" keeps hiding the source in
+                    // Saved Messages too; captions stay.
+                    var savedAttributes: [EngineMessage.Attribute] = []
+                    if let options, options.hideNames || options.hideCaptions {
+                        savedAttributes.append(ForwardOptionsMessageAttribute(hideNames: options.hideNames, hideCaptions: options.hideCaptions))
+                    }
                     let mappedMessages: [EnqueueMessage] = messages.map { message -> EnqueueMessage in
                         let correlationId = Int64.random(in: Int64.min ... Int64.max)
                         correlationIds.append(correlationId)
-                        return .forward(source: message.id, threadId: nil, grouping: .auto, attributes: [], correlationId: correlationId)
+                        return .forward(source: message.id, threadId: nil, grouping: .auto, attributes: savedAttributes, correlationId: correlationId)
                     }
                     
                     let _ = (reactionItems
