@@ -117,7 +117,13 @@ async function ghPutJSON(env, path, obj, message, sha) {
     headers: ghHeaders(env),
     body: JSON.stringify(body),
   });
-  return r.ok;
+  if (!r.ok) {
+    let detail = "";
+    try { detail = (await r.json()).message || ""; } catch {}
+    console.log(`github PUT ${path} failed: ${r.status} ${detail}`);
+    return { ok: false, status: r.status, detail };
+  }
+  return { ok: true, status: r.status, detail: "" };
 }
 
 async function handleRequest(request, env) {
@@ -207,8 +213,8 @@ async function handleAdmin(request, env) {
     next.enabled = body.enabled === true;
     next.devices = devices;
     // Keep the endpoints that live only in the file.
-    const ok = await ghPutJSON(env, "shadow-whitelist.json", next, "Shadow: update device whitelist [skip ci]", current.sha);
-    return ok ? json({ ok: true }) : json({ ok: false, error: "github" }, 502);
+    const put = await ghPutJSON(env, "shadow-whitelist.json", next, "Shadow: update device whitelist [skip ci]", current.sha);
+    return put.ok ? json({ ok: true }) : json({ ok: false, error: "github", status: put.status, detail: put.detail }, 502);
   }
 
   if (body.action === "announce") {
@@ -235,8 +241,8 @@ async function handleAdmin(request, env) {
       next.url = url;
       next.ipa_url = ipaURL;
     }
-    const ok = await ghPutJSON(env, "shadow-update.json", next, `Shadow: announce ${channel} ${build} [skip ci]`, current.sha);
-    return ok ? json({ ok: true }) : json({ ok: false, error: "github" }, 502);
+    const put = await ghPutJSON(env, "shadow-update.json", next, `Shadow: announce ${channel} ${build} [skip ci]`, current.sha);
+    return put.ok ? json({ ok: true }) : json({ ok: false, error: "github", status: put.status, detail: put.detail }, 502);
   }
 
   return json({ ok: false, error: "bad_action" }, 400);
@@ -255,8 +261,8 @@ async function appendDevice(env, id, note) {
   if (note) device.note = note;
   next.devices.push(device);
   if (typeof next.enabled !== "boolean") next.enabled = true;
-  const ok = await ghPutJSON(env, "shadow-whitelist.json", next, `Shadow: accept device ${id} [skip ci]`, current.sha);
-  return ok ? "added" : "error";
+  const put = await ghPutJSON(env, "shadow-whitelist.json", next, `Shadow: accept device ${id} [skip ci]`, current.sha);
+  return put.ok ? "added" : "error";
 }
 
 // Telegram webhook: the "Принять" button. Only the owners (OWNER_CHAT_ID) may
