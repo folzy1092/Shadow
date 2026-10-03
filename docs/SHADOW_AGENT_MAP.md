@@ -164,6 +164,22 @@ UI-проекция настроек выбирается в `TelegramRootContro
   папки форка, `AyuSavedMedia.restoreMessageMedia`), `ayuEditedArchiveChatController` —
   отредактированные.
 
+## 5d. Версии, ветки обновлений, автокоммит вайтлиста
+
+- Версия форка — `ShadowVersion.fork` (Swift) и `versions.json` ключ `fork`
+  (CI, контракт-тест сверяет). Полная версия `ShadowVersion.full` = `12.9.2-1.0.0`.
+  CI пишет её в заголовок релиза `Shadow <app>-<fork> (<build>)`.
+- `shadow-update.json` поддерживает ветки `stable`/`beta` (плоские поля вверху =
+  stable, для старых сборок). `ShadowUpdateCheck.parseManifest`/`parseBetaManifest`;
+  тумблер `AyuGramSettings.updateChannelBeta` («Разное» → «Бета-версии»);
+  `check(betaEnabled:)` выбирает бету, если она новее.
+- Автокоммит: `ShadowDeviceAccess.saveWhitelist`/`announce` шлют POST на
+  `admin_url` воркера (`tools/shadow-bot`, эндпоинт `/admin`), тот коммитит в
+  tgfork токеном `GITHUB_TOKEN`, авторизация — `ADMIN_SECRET` (в Keychain
+  приложения, вводится в «Доступ устройств»). Админ по устройству — флаг
+  `admin` в вайтлисте (`ShadowDeviceAccess.isAdminDevice`/`hasAdminAccess`).
+  Объявление сборок — из того же меню (секция «Объявить сборку»).
+
 ## 5a. Замки чатов и второе пространство
 
 - Замки: `ShadowChatLock.swift` (хранилище), `TelegramUI/Sources/ShadowChatLockUI.swift`
