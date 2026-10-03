@@ -63,6 +63,15 @@ class DeviceAccessContracts(unittest.TestCase):
         # Fresh fetch gets past the raw CDN cache.
         self.assertIn('URLQueryItem(name: "t"', core)
 
+    def test_admin_url_derived_and_save_does_not_open_github(self):
+        core = read("TelegramCore/Sources/AyuGram/ShadowDeviceAccess.swift")
+        # admin endpoint derived from request_url when admin_url is absent.
+        self.assertIn('appendingPathComponent("admin")', core)
+        admin = read("SettingsUI/Sources/ShadowDeviceAccessController.swift")
+        # Save with a known bot but no key asks for the key instead of GitHub.
+        self.assertIn("} else if whitelist.adminURL != nil {", admin)
+        self.assertIn("Введи ключ администратора ниже и нажми «Сохранить ключ»", admin)
+
     def test_access_request_bot(self):
         gate = read("TelegramUI/Sources/ShadowDeviceAccessUI.swift")
         self.assertIn('"Запросить доступ"', gate)

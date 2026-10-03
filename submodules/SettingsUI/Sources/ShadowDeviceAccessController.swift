@@ -420,6 +420,9 @@ public func shadowDeviceAccessController(context: AccountContext, prefillDeviceI
                     ShadowDeviceAccess.refresh { _ in }
                 }
             }
+        } else if whitelist.adminURL != nil {
+            // Bot known, no key yet — ask for it instead of opening GitHub.
+            showToast("Введи ключ администратора ниже и нажми «Сохранить ключ»")
         } else {
             UIPasteboard.general.string = ShadowDeviceAccess.encode(whitelist)
             context.sharedContext.applicationBindings.openUrl(ShadowDeviceAccess.editURL.absoluteString)

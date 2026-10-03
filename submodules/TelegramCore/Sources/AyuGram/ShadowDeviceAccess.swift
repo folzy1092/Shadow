@@ -76,7 +76,15 @@ public enum ShadowDeviceAccess {
             }
             return url
         }
-        return Whitelist(enabled: enabled, devices: devices, requestURL: httpsURL("request_url"), adminURL: httpsURL("admin_url"))
+        let requestURL = httpsURL("request_url")
+        var adminURL = httpsURL("admin_url")
+        // The admin endpoint lives on the same worker as the request endpoint
+        // (.../request → .../admin), so a whitelist with only request_url still
+        // gets the "Сохранить"/announce autocommit without an extra field.
+        if adminURL == nil, let requestURL {
+            adminURL = requestURL.deletingLastPathComponent().appendingPathComponent("admin")
+        }
+        return Whitelist(enabled: enabled, devices: devices, requestURL: requestURL, adminURL: adminURL)
     }
 
     // Body of an access request: the device id plus what helps the owner tell
@@ -358,8 +366,10 @@ public enum ShadowDeviceAccess {
                 result = .unauthorized
             } else if (200 ..< 300).contains(status) {
                 result = .success
+            } else if status == 500 {
+                result = .failed("бот без ключа — задай ADMIN_SECRET в воркере")
             } else {
-                result = .failed("Сервер ответил \(status)")
+                result = .failed("сервер ответил \(status)")
             }
             DispatchQueue.main.async { completion(result) }
         }.resume()

@@ -776,15 +776,16 @@ public final class TextSelectionNode: ASDisplayNode {
                 self?.cancelSelection()
             }))
         }
-        if let shadowAddToFilter = self.shadowAddToFilter {
-            actions.append(ContextMenuAction(content: .text(title: "В фильтры", accessibilityLabel: "В фильтры"), action: { [weak self] in
-                shadowAddToFilter(string.string)
-                self?.cancelSelection()
-            }))
-        }
         if self.enableQuote {
             actions.append(ContextMenuAction(content: .text(title: self.strings.Conversation_ContextMenuQuote, accessibilityLabel: self.strings.Conversation_ContextMenuQuote), action: { [weak self] in
                 self?.performAction(string, .quote(range: adjustedRange.lowerBound ..< adjustedRange.upperBound))
+                self?.cancelSelection()
+            }))
+        }
+        // Shadow: "В фильтры" after Copy and Quote, before the rest.
+        if let shadowAddToFilter = self.shadowAddToFilter {
+            actions.append(ContextMenuAction(content: .text(title: "В фильтры", accessibilityLabel: "В фильтры"), action: { [weak self] in
+                shadowAddToFilter(string.string)
                 self?.cancelSelection()
             }))
         }
