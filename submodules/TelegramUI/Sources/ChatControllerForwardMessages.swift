@@ -604,6 +604,10 @@ extension ChatControllerImpl {
                     // download+upload continues in the background.
                     strongSelf.updateChatPresentationInterfaceState(animated: false, interactive: true, { $0.updatedInterfaceState({ $0.withoutSelectionState() }) })
                     strongController.dismiss()
+                    // The copy downloads every media item first, which can take a
+                    // while: say so, or it looks like nothing happened.
+                    let presentationData = strongSelf.context.sharedContext.currentPresentationData.with { $0 }
+                    strongSelf.present(UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: "Пересылка защищена — отправляю копией, скачиваю медиа…", timeout: nil, customUndoText: nil), elevatedLayout: false, action: { _ in return false }), in: .current)
                     let _ = (strongSelf.ayuBuildCopyMessages(messages, threadId: threadId)
                     |> deliverOnMainQueue).startStandalone(next: { copyBatch in
                         if copyBatch.failedCount > 0 {
@@ -614,6 +618,8 @@ extension ChatControllerImpl {
                             let _ = (enqueueMessages(account: strongSelf.context.account, peerId: peerId, messages: copyBatch.messages)
                             |> deliverOnMainQueue).startStandalone(next: { _ in
                                 strongSelf.ayuDisposeCopyBatch(copyBatch)
+                                let presentationData = strongSelf.context.sharedContext.currentPresentationData.with { $0 }
+                                strongSelf.present(UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: "Копия отправлена (\(copyBatch.messages.count))", timeout: nil, customUndoText: nil), elevatedLayout: false, action: { _ in return false }), in: .current)
                             })
                         } else {
                             strongSelf.ayuDisposeCopyBatch(copyBatch)

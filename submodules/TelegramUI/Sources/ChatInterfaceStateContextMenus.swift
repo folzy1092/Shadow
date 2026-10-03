@@ -1352,11 +1352,9 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         // option for protected chats — so without this the context menu would show
         // neither a working Forward action nor the "forwarding disabled" notice.
         let isServerCopyProtected = message.isServerCopyProtected()
-        let isPrivateChannel: Bool = {
-            guard let channel = message.peers[message.id.peerId] as? TelegramChannel, case .broadcast = channel.info else { return false }
-            return channel.addressName == nil
-        }()
-        let shouldForwardAsCopy = !shadowDisguiseFull && (isServerCopyProtected || isPrivateChannel)
+        // Only real copy protection needs the re-upload copy; a private channel
+        // without forwarding restrictions forwards natively (with attribution).
+        let shouldForwardAsCopy = !shadowDisguiseFull && isServerCopyProtected
         if !messageText.isEmpty || richMessageMarkdown != nil || (resourceAvailable && isImage) || diceEmoji != nil {
             if !isExpired {
                 if !isPoll {
@@ -3681,7 +3679,8 @@ private final class ChatReadReportContextItemNode: ASDisplayNode, ContextMenuCus
                     }
                 }
             } else if self.item.message.id.peerId.namespace == Namespaces.Peer.CloudUser, let timestamp = currentStats.readTimestamps.first?.value {
-                let dateText = humanReadableStringForTimestamp(strings: self.presentationData.strings, dateTimeFormat: self.presentationData.dateTimeFormat, timestamp: timestamp, alwaysShowTime: true, allowYesterday: true, format: HumanReadableStringFormat(
+                // Shadow: read time with seconds.
+                let dateText = humanReadableStringForTimestamp(strings: self.presentationData.strings, dateTimeFormat: self.presentationData.dateTimeFormat, timestamp: timestamp, alwaysShowTime: true, allowYesterday: true, showSeconds: true, format: HumanReadableStringFormat(
                     dateFormatString: { value in
                         return PresentationStrings.FormattedString(string: self.presentationData.strings.Chat_PrivateMessageSeenTimestamp_Date(value).string, ranges: [])
                     },

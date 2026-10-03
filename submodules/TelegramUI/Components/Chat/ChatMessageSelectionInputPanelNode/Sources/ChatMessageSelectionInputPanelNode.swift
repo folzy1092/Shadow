@@ -356,9 +356,8 @@ public final class ChatMessageSelectionInputPanelNode: ChatInputPanelNode {
         if let peer = self.presentationInterfaceState?.renderedPeer?.peer, peer.isCopyProtectionEnabled {
             return true
         }
-        if let channel = self.presentationInterfaceState?.renderedPeer?.peer as? TelegramChannel, case .broadcast = channel.info, channel.addressName == nil {
-            return true
-        }
+        // A private channel without forwarding restrictions forwards natively;
+        // only real copy protection needs the re-upload copy.
         return false
     }
 

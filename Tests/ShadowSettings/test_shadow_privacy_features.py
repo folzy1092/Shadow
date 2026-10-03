@@ -39,9 +39,14 @@ class ShadowPrivacyFeatures(unittest.TestCase):
         self.assertIn('text: "Прочитать на сервере"', source)
         self.assertIn("items[.shadowReads]", source)
 
-    def test_private_or_protected_forward_is_one_copy_action(self):
+    def test_protected_forward_is_one_copy_action(self):
         menu = (UI / "Sources/ChatInterfaceStateContextMenus.swift").read_text()
-        self.assertIn("let shouldForwardAsCopy = !shadowDisguiseFull && (isServerCopyProtected || isPrivateChannel)", menu)
+        # Only real copy protection forwards as a copy; a private channel without
+        # restrictions forwards natively.
+        self.assertIn("let shouldForwardAsCopy = !shadowDisguiseFull && isServerCopyProtected", menu)
+        self.assertNotIn("isPrivateChannel", menu)
+        panel = (UI / "Components/Chat/ChatMessageSelectionInputPanelNode/Sources/ChatMessageSelectionInputPanelNode.swift").read_text()
+        self.assertNotIn("channel.addressName == nil", panel.split("private var shouldForwardAsCopy")[1].split("@objc private func forwardButtonPressed")[0])
         protected = menu.split("if shouldForwardAsCopy {", 1)[1].split("} else if data.messageActions.options.contains(.forward)", 1)[0]
         self.assertEqual(protected.count("ContextMenuActionItem"), 1)
         self.assertIn("forwardMessagesAsCopy", protected)
