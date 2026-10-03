@@ -52,8 +52,8 @@ Postbox-рефакторинг. Этот файл описывает то, чт�
   всегда свежая — `releases/latest/download/Shadow.ipa`; её же присылает бот).
   **Что объявлять пользователям, решает файл `shadow-update.json`**
   (`enabled`, `build`, `version`, `title`, `notes`, `url`, `minimum_build`);
-  приложение читает его с raw.githubusercontent.com (кэш до ~5 минут), а
-  к релизам GitHub обращается, только если файл недоступен.
+  приложение читает его с raw.githubusercontent.com (запрос с меткой времени
+  обходит кэш CDN), а к релизам GitHub обращается, только если файл недоступен.
 - **Данные для приложения лежат в публичном репо `folzy1092/tgfork`**
   (ветка `main`, рядом с `config.json` бейджиков): `shadow-update.json`,
   `shadow-changelog.json`, `shadow-whitelist.json`. Так проверки работают, даже
@@ -132,14 +132,21 @@ UI-проекция настроек выбирается в `TelegramRootContro
 ## 5b. Вайтлист устройств и фильтры сообщений
 
 - Вайтлист: `ShadowDeviceAccess.swift` (ID устройства в Keychain,
-  `AfterFirstUnlockThisDeviceOnly`, без Face ID; загрузка и кэш
-  `shadow-whitelist.json` из `folzy1092/tgfork`) + `TelegramUI/Sources/ShadowDeviceAccessUI.swift`
+  `AfterFirstUnlockThisDeviceOnly`, без Face ID) + `TelegramUI/Sources/ShadowDeviceAccessUI.swift`
   (отдельное окно-заглушка поверх всего, ставится в `AppDelegate`).
-  `"enabled": false` в файле — пускать всех. Залогиненный аккаунт
-  `ShadowDeviceAccess.adminPeerId` (7878830498) проходит всегда.
-  Правка списка: Shadow → «Доступ устройств» (только админ) → «Скопировать JSON»
-  → коммит файла в `folzy1092/tgfork` («Открыть файл на GitHub» ведёт туда).
-  Админы — `ShadowDeviceAccess.adminPeerIds` (Folzy 7878830498, matey 1068369028).
+  Список читается **реальным запросом при каждом заходе**: сначала воркер
+  `GET /whitelist` (через GitHub API, `no-store`), запасной путь — raw
+  `folzy1092/tgfork/main/shadow-whitelist.json`; на диск (офлайн-кэш) пишется
+  только успешный ответ. Отказ из старого кэша не показывается до свежего
+  ответа, «Проверка доступа…» — только если ответ дольше 1,5 с, а пока экран
+  «Доступ ограничен» открыт, он сам перепроверяет доступ каждые 10 с.
+  `"enabled": false` в файле — пускать всех. Залогиненный аккаунт из
+  `ShadowDeviceAccess.adminPeerIds` (Folzy 7878830498, matey 1068369028) или
+  устройство с флагом `admin` проходит всегда и видит «Доступ устройств».
+  Правка списка: Shadow → «Доступ устройств» → «Сохранить» коммитит в
+  `folzy1092/tgfork` через воркер (нужен «Ключ администратора» = `ADMIN_SECRET`
+  воркера; без него — «Скопировать JSON» и ручной коммит). Кнопки «Принять» в
+  боте нет (убрана).
 - Запрос доступа: поле `request_url` в вайтлисте → на заглушке кнопка
   «Запросить доступ» → POST на Cloudflare Worker (`tools/shadow-bot`, инструкция
   в его README) → админам сообщение с кнопкой `tg://shadow/access?id=…`.
@@ -160,6 +167,9 @@ UI-проекция настроек выбирается в `TelegramRootContro
   вход — `OpenUrl.swift` (до разбора tg://) и `ChatController.openUrl`,
   маршруты — `SettingsUI/Sources/ShadowLinkRouter.swift`. Список команд —
   `docs/shadow-links.md` (контракт-тест сверяет его с маршрутизатором).
+- Второе пространство и истории: `shadowFilteredStorySubscriptions`
+  (`ChatListController.swift`) убирает истории тех, чьи чаты скрыты в текущем
+  пространстве, и перефильтровывает ленту по `ShadowSpaceStore.didChangeNotification`.
 - Архив: `ayuArchiveChatController` — только удалённые (с возвратом медиа из
   папки форка, `AyuSavedMedia.restoreMessageMedia`), `ayuEditedArchiveChatController` —
   отредактированные.
