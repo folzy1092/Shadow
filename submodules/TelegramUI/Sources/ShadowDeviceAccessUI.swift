@@ -20,6 +20,13 @@ final class ShadowDeviceAccessGate {
     // The "checking" screen waits a moment, so a fast answer never shows it.
     private var checkingWorkItem: DispatchWorkItem?
     private static let checkingDelay: TimeInterval = 1.5
+    // While the gate is on screen the whitelist is re-fetched on its own, so a
+    // device the owner just accepted gets in without reopening the app.
+    private var recheckTimer: Timer?
+    private static let recheckInterval: TimeInterval = 10.0
+    // A real request at every entry; this only drops duplicate calls fired
+    // within a few seconds of each other (activation + launch).
+    private static let minimumFetchSpacing: TimeInterval = 4.0
 
     init(windowScene: UIWindowScene?, adminLoggedIn: @escaping () -> Bool) {
         self.windowScene = windowScene
@@ -35,7 +42,7 @@ final class ShadowDeviceAccessGate {
         if self.fetching {
             return
         }
-        if !force, let lastFetch = self.lastFetch, Date().timeIntervalSince(lastFetch) < 600.0 {
+        if !force, self.controller == nil, let lastFetch = self.lastFetch, Date().timeIntervalSince(lastFetch) < ShadowDeviceAccessGate.minimumFetchSpacing {
             return
         }
         self.fetching = true
@@ -121,9 +128,27 @@ final class ShadowDeviceAccessGate {
         window.isHidden = false
         self.window = window
         self.controller = controller
+        self.startRecheckTimer()
+    }
+
+    private func startRecheckTimer() {
+        if self.recheckTimer != nil {
+            return
+        }
+        let timer = Timer(timeInterval: ShadowDeviceAccessGate.recheckInterval, repeats: true) { [weak self] _ in
+            self?.check(force: true)
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        self.recheckTimer = timer
+    }
+
+    private func stopRecheckTimer() {
+        self.recheckTimer?.invalidate()
+        self.recheckTimer = nil
     }
 
     private func hide() {
+        self.stopRecheckTimer()
         self.window?.isHidden = true
         self.window = nil
         self.controller = nil

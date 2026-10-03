@@ -49,24 +49,6 @@ async function sendMessage(env, chatId, text, keyboard) {
   });
 }
 
-async function answerCallbackQuery(env, callbackQueryId, text) {
-  return fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/answerCallbackQuery`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ callback_query_id: callbackQueryId, text: text || "" }),
-  });
-}
-
-// Replace the message text and drop its buttons (plain text — the original had
-// none a user name could break, and we re-send the untrusted text verbatim).
-async function editMessageText(env, chatId, messageId, text) {
-  return fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/editMessageText`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ chat_id: chatId, message_id: messageId, text, disable_web_page_preview: true }),
-  });
-}
-
 // --- GitHub (the public data repo folzy1092/tgfork, branch main) ---
 
 const GH_REPO = "folzy1092/tgfork";
@@ -158,13 +140,7 @@ async function handleRequest(request, env) {
     "",
     `Открыть в Shadow: shadow://access?id=${escapeHtml(id)}`,
   ].join("\n");
-  const rows = [];
-  // "Принять" commits the device straight away (needs the GitHub token + webhook).
-  if (env.GITHUB_TOKEN) {
-    rows.push([{ text: "✅ Принять", callback_data: `a:${id}` }]);
-  }
-  rows.push([{ text: "Открыть в Shadow", url: `tg://shadow/access?id=${id}` }]);
-  const keyboard = rows;
+  const keyboard = [[{ text: "Открыть в Shadow", url: `tg://shadow/access?id=${id}` }]];
   const chatIds = String(env.OWNER_CHAT_ID).split(",").map((value) => value.trim()).filter(Boolean);
   let delivered = 0;
   for (const chatId of chatIds) {
@@ -248,91 +224,33 @@ async function handleAdmin(request, env) {
   return json({ ok: false, error: "bad_action" }, 400);
 }
 
-// Add one device to the whitelist (used by the "Принять" button). Returns
-// "added", "exists", or "error".
-async function appendDevice(env, id, note) {
-  const current = await ghGetJSON(env, "shadow-whitelist.json");
-  const next = current.json && typeof current.json === "object" ? current.json : {};
-  if (!Array.isArray(next.devices)) next.devices = [];
-  if (next.devices.some((d) => String((d && d.id) || "").toUpperCase() === id)) {
-    return "exists";
+// GET /whitelist — the live list for the app. Read through the GitHub API (no
+// CDN cache), returned as is with no-store, so an accepted device is let in at
+// its very next check. Public data (the repo is public), so no auth is needed.
+async function handleWhitelist(env) {
+  if (!env.GITHUB_TOKEN) {
+    return json({ ok: false, error: "no_github_token" }, 500);
   }
-  const device = { id };
-  if (note) device.note = note;
-  next.devices.push(device);
-  if (typeof next.enabled !== "boolean") next.enabled = true;
-  const put = await ghPutJSON(env, "shadow-whitelist.json", next, `Shadow: accept device ${id} [skip ci]`, current.sha);
-  return put.ok ? "added" : "error";
-}
-
-// Telegram webhook: the "Принять" button. Only the owners (OWNER_CHAT_ID) may
-// accept; the device id is in callback_data, the name is read from the message.
-async function handleTelegram(request, env) {
-  if (env.WEBHOOK_SECRET && request.headers.get("X-Telegram-Bot-Api-Secret-Token") !== env.WEBHOOK_SECRET) {
-    return json({ ok: false }, 401);
-  }
-  let update;
   try {
-    update = await request.json();
+    const current = await ghGetJSON(env, "shadow-whitelist.json");
+    return new Response(JSON.stringify(current.json), {
+      status: 200,
+      headers: {
+        "content-type": "application/json; charset=utf-8",
+        "cache-control": "no-store",
+      },
+    });
   } catch {
-    return json({ ok: true });
+    return json({ ok: false, error: "github" }, 502);
   }
-  const cq = update.callback_query;
-  if (!cq) {
-    return json({ ok: true });
-  }
-  const admins = String(env.OWNER_CHAT_ID || "").split(",").map((v) => v.trim()).filter(Boolean);
-  const fromId = String((cq.from && cq.from.id) || "");
-  const data = String(cq.data || "");
-  const message = cq.message;
-
-  if (!admins.includes(fromId)) {
-    await answerCallbackQuery(env, cq.id, "Нет прав");
-    return json({ ok: true });
-  }
-  if (!data.startsWith("a:") || !env.GITHUB_TOKEN) {
-    await answerCallbackQuery(env, cq.id, env.GITHUB_TOKEN ? "" : "Бот не настроен");
-    return json({ ok: true });
-  }
-  const id = data.slice(2).toUpperCase();
-  if (!ID_PATTERN.test(id)) {
-    await answerCallbackQuery(env, cq.id, "Плохой ID");
-    return json({ ok: true });
-  }
-
-  let note = "";
-  const text = (message && message.text) || "";
-  const match = text.match(/Кто:\s*(.+)/);
-  if (match) {
-    const value = match[1].trim();
-    if (value && value !== "не указал") {
-      note = value.slice(0, 64);
-    }
-  }
-
-  let result;
-  try {
-    result = await appendDevice(env, id, note);
-  } catch {
-    result = "error";
-  }
-  if (result === "error") {
-    await answerCallbackQuery(env, cq.id, "Ошибка GitHub");
-    return json({ ok: true });
-  }
-
-  await answerCallbackQuery(env, cq.id, result === "added" ? "Принято" : "Уже в списке");
-  if (message) {
-    const who = (cq.from && (cq.from.first_name || cq.from.username)) || fromId;
-    const mark = result === "added" ? "✅ Принято" : "☑️ Уже в списке";
-    await editMessageText(env, message.chat.id, message.message_id, `${text}\n\n${mark} — ${who}`);
-  }
-  return json({ ok: true });
 }
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (request.method === "GET" && url.pathname === "/whitelist") {
+      return handleWhitelist(env);
+    }
     if (request.method === "GET") {
       return new Response("Shadow access bot is running", { status: 200 });
     }
@@ -341,9 +259,6 @@ export default {
     }
     if (request.method === "POST" && url.pathname === "/admin") {
       return handleAdmin(request, env);
-    }
-    if (request.method === "POST" && url.pathname === "/telegram") {
-      return handleTelegram(request, env);
     }
     return json({ ok: false, error: "not_found" }, 404);
   },

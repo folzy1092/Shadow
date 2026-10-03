@@ -78,14 +78,15 @@ class AutocommitContracts(unittest.TestCase):
         self.assertIn("folzy1092/tgfork", worker)
         self.assertIn("[skip ci]", worker)
 
-    def test_worker_accept_button(self):
+    def test_worker_whitelist_endpoint_and_no_accept_button(self):
         worker = (ROOT / "tools/shadow-bot/worker.js").read_text(encoding="utf-8")
-        self.assertIn('callback_data: `a:${id}`', worker)
-        self.assertIn('url.pathname === "/telegram"', worker)
-        self.assertIn("answerCallbackQuery", worker)
-        self.assertIn("editMessageText", worker)
-        self.assertIn("appendDevice", worker)
-        self.assertIn("admins.includes(fromId)", worker)
+        self.assertIn('url.pathname === "/whitelist"', worker)
+        self.assertIn('"cache-control": "no-store"', worker)
+        self.assertNotIn("callback_data", worker)
+        core = read("TelegramCore/Sources/AyuGram/ShadowDeviceAccess.swift")
+        self.assertIn("whitelistWorkerURL", core)
+        gate = read("TelegramUI/Sources/ShadowDeviceAccessUI.swift")
+        self.assertIn("recheckInterval", gate)
 
     def test_foundation_suite_compiles_version(self):
         script = (ROOT / "build-system/ci/test_shadow_foundation.py").read_text(encoding="utf-8")

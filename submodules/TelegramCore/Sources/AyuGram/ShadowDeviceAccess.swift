@@ -14,6 +14,10 @@ public enum ShadowDeviceAccess {
         return adminPeerIds.contains(peerId)
     }
     public static let whitelistURL = URL(string: "https://raw.githubusercontent.com/folzy1092/tgfork/main/shadow-whitelist.json")!
+    // The worker reads the file through the GitHub API (no CDN cache) and returns
+    // it as is: the real, current list at every entry. The raw URL above is the
+    // fallback when the worker is unreachable.
+    public static let whitelistWorkerURL = URL(string: "https://shadow-access-bot.denisvasilev817.workers.dev/whitelist")!
     public static let editURL = URL(string: "https://github.com/folzy1092/tgfork/edit/main/shadow-whitelist.json")!
 
     public struct Device: Equatable {
@@ -268,27 +272,44 @@ public enum ShadowDeviceAccess {
         return parse(data)
     }
 
-    public static func refresh(completion: @escaping (Whitelist?) -> Void) {
-        // The query string gets past the GitHub raw CDN cache (~5 min), so a
-        // device accepted a second ago is seen as accepted at once.
-        var components = URLComponents(url: whitelistURL, resolvingAgainstBaseURL: false)
-        components?.queryItems = [URLQueryItem(name: "t", value: String(Int(Date().timeIntervalSince1970)))]
-        var request = URLRequest(url: components?.url ?? whitelistURL)
+    private static func fetchWhitelist(_ url: URL, completion: @escaping (Whitelist?, Data?) -> Void) {
+        // A per-call query string gets past any intermediate cache.
+        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        components?.queryItems = [URLQueryItem(name: "t", value: String(Int(Date().timeIntervalSince1970 * 1000.0)))]
+        var request = URLRequest(url: components?.url ?? url)
         request.cachePolicy = .reloadIgnoringLocalCacheData
-        request.timeoutInterval = 15.0
+        request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
+        request.timeoutInterval = 12.0
         URLSession.shared.dataTask(with: request) { data, response, error in
-            var result: Whitelist?
             if error == nil, let status = (response as? HTTPURLResponse)?.statusCode, (200 ..< 300).contains(status), let data, let list = parse(data) {
-                result = list
-                if let url = cacheURL {
-                    try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-                    try? data.write(to: url, options: .atomic)
-                }
-            }
-            DispatchQueue.main.async {
-                completion(result)
+                completion(list, data)
+            } else {
+                completion(nil, nil)
             }
         }.resume()
+    }
+
+    // Always a real request: the worker first (live list), raw GitHub as the
+    // fallback. Only a successful answer is written to the offline cache.
+    public static func refresh(completion: @escaping (Whitelist?) -> Void) {
+        let finish: (Whitelist?, Data?) -> Void = { list, data in
+            if let data, let url = cacheURL {
+                try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try? data.write(to: url, options: .atomic)
+            }
+            DispatchQueue.main.async {
+                completion(list)
+            }
+        }
+        fetchWhitelist(whitelistWorkerURL) { list, data in
+            if list != nil {
+                finish(list, data)
+                return
+            }
+            fetchWhitelist(whitelistURL) { list, data in
+                finish(list, data)
+            }
+        }
     }
 
     // MARK: - Admin secret (Keychain)
