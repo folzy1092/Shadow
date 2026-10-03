@@ -74,6 +74,15 @@ class AutocommitContracts(unittest.TestCase):
         self.assertIn("folzy1092/tgfork", worker)
         self.assertIn("[skip ci]", worker)
 
+    def test_worker_accept_button(self):
+        worker = (ROOT / "tools/shadow-bot/worker.js").read_text(encoding="utf-8")
+        self.assertIn('callback_data: `a:${id}`', worker)
+        self.assertIn('url.pathname === "/telegram"', worker)
+        self.assertIn("answerCallbackQuery", worker)
+        self.assertIn("editMessageText", worker)
+        self.assertIn("appendDevice", worker)
+        self.assertIn("admins.includes(fromId)", worker)
+
     def test_foundation_suite_compiles_version(self):
         script = (ROOT / "build-system/ci/test_shadow_foundation.py").read_text(encoding="utf-8")
         self.assertIn("Tests/ShadowSettings/DeviceAccessTests.swift", script)
