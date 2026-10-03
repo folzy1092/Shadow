@@ -15,12 +15,21 @@ public func ayuTriggerOfflineReassert(network: Network) {
 
 // Reassert for the account that completed the request. A lost response still
 // makes this best-effort; client code cannot undo Telegram's send side effects.
+// A second "offline" a few seconds later clears an online mark the server sets
+// from a request that lands after the send (media upload, server-side delay).
+private let ayuOfflineReassertRepeatDelay: Double = 3.0
+
 public func ayuReassertOfflineAfterSendIfNeeded(postbox: Postbox, network: Network) {
     let _ = postbox.transaction { transaction in
         let settings = currentAyuGramSettings(transaction: transaction)
         return settings.effectiveSendViaScheduled || settings.effectiveSendWithoutOnline
     }.start(next: { enabled in
-        if enabled { ayuTriggerOfflineReassert(network: network) }
+        if enabled {
+            ayuTriggerOfflineReassert(network: network)
+            Queue.concurrentDefaultQueue().after(ayuOfflineReassertRepeatDelay, {
+                ayuTriggerOfflineReassert(network: network)
+            })
+        }
     })
 }
 

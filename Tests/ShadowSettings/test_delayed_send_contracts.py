@@ -61,6 +61,16 @@ class DelayedSendContracts(unittest.TestCase):
         self.assertGreaterEqual(MEDIA_RECORDING.count("AyuDelayedSend.willAutomaticallySchedule"), 3)
         self.assertGreaterEqual(MEDIA_RECORDING.count("clearGhostScheduledDraft()"), 3)
 
+    def test_ghost_send_never_flashes_online(self):
+        drafts = (ROOT / "submodules/TelegramCore/Sources/State/ManagedSynchronizeChatInputStateOperations.swift").read_text(encoding="utf-8")
+        body = drafts.split("private func synchronizeChatInputState(", 1)[1]
+        guard = body.split("var inputState", 1)[0]
+        self.assertIn("effectiveHideOnline", guard)
+        self.assertIn("return .complete()", guard)
+        delayed = (ROOT / "submodules/TelegramCore/Sources/AyuGram/AyuDelayedSend.swift").read_text(encoding="utf-8")
+        self.assertIn("ayuOfflineReassertRepeatDelay", delayed)
+        self.assertEqual(delayed.count("ayuTriggerOfflineReassert(network: network)"), 2)
+
 
 if __name__ == "__main__":
     unittest.main()

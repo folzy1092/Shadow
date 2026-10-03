@@ -153,6 +153,13 @@ func managedSynchronizeChatInputStateOperations(postbox: Postbox, network: Netwo
 }
 
 private func synchronizeChatInputState(transaction: Transaction, postbox: Postbox, network: Network, messageMediaPreuploadManager: MessageMediaPreuploadManager, auxiliaryMethods: AccountAuxiliaryMethods, helper: Atomic<ManagedSynchronizeChatInputStateOperationsHelper>, peerId: PeerId, threadId: Int64?, operation: SynchronizeChatInputStateOperation) -> Signal<Void, NoError> {
+    // Shadow: messages.saveDraft makes the server mark the account online. The
+    // composer clears right after every send, so with Ghost Mode the empty-draft
+    // sync flashed "online" at each (even scheduled) send. While online is hidden
+    // drafts stay on this device and are not synced to the cloud.
+    if currentAyuGramSettings(transaction: transaction).effectiveHideOnline {
+        return .complete()
+    }
     var inputState: SynchronizeableChatInputState?
     let peerChatInterfaceState: StoredPeerChatInterfaceState?
     if let threadId {
