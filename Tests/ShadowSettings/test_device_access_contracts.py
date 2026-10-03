@@ -52,6 +52,17 @@ class DeviceAccessContracts(unittest.TestCase):
         core = read("TelegramCore/Sources/AyuGram/ShadowDeviceAccess.swift")
         self.assertIn("public static let adminPeerIds: Set<Int64> = [adminPeerId, 1068369028]", core)
 
+    def test_gate_does_not_flash_for_accepted_devices(self):
+        gate = read("TelegramUI/Sources/ShadowDeviceAccessUI.swift")
+        # A stale cached "denied" waits for the server answer.
+        self.assertIn("if !fromServer && !self.resolved {", gate)
+        # "Checking" appears only if the answer is slow.
+        self.assertIn("checkingDelay: TimeInterval = 1.5", gate)
+        self.assertIn("self.cancelChecking()", gate)
+        core = read("TelegramCore/Sources/AyuGram/ShadowDeviceAccess.swift")
+        # Fresh fetch gets past the raw CDN cache.
+        self.assertIn('URLQueryItem(name: "t"', core)
+
     def test_access_request_bot(self):
         gate = read("TelegramUI/Sources/ShadowDeviceAccessUI.swift")
         self.assertIn('"Запросить доступ"', gate)

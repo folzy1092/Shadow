@@ -13,6 +13,13 @@ final class ShadowDeviceAccessGate {
     private var controller: ShadowDeviceAccessViewController?
     private var lastFetch: Date?
     private var fetching = false
+    // True once this process got an answer (or a failure) from the server. Until
+    // then a stale cached "denied" must not flash the gate: the device may have
+    // been accepted since the cache was written.
+    private var resolved = false
+    // The "checking" screen waits a moment, so a fast answer never shows it.
+    private var checkingWorkItem: DispatchWorkItem?
+    private static let checkingDelay: TimeInterval = 1.5
 
     init(windowScene: UIWindowScene?, adminLoggedIn: @escaping () -> Bool) {
         self.windowScene = windowScene
@@ -24,7 +31,7 @@ final class ShadowDeviceAccessGate {
             self.hide()
             return
         }
-        self.apply(whitelist: ShadowDeviceAccess.cachedWhitelist, offline: false)
+        self.apply(whitelist: ShadowDeviceAccess.cachedWhitelist, offline: false, fromServer: false)
         if self.fetching {
             return
         }
@@ -38,30 +45,56 @@ final class ShadowDeviceAccessGate {
             }
             self.fetching = false
             self.lastFetch = Date()
+            self.resolved = true
+            self.cancelChecking()
             if self.adminLoggedIn() {
                 self.hide()
                 return
             }
             if let whitelist {
-                self.apply(whitelist: whitelist, offline: false)
+                self.apply(whitelist: whitelist, offline: false, fromServer: true)
             } else {
-                self.apply(whitelist: ShadowDeviceAccess.cachedWhitelist, offline: true)
+                self.apply(whitelist: ShadowDeviceAccess.cachedWhitelist, offline: true, fromServer: false)
             }
         }
     }
 
-    private func apply(whitelist: ShadowDeviceAccess.Whitelist?, offline: Bool) {
+    private func cancelChecking() {
+        self.checkingWorkItem?.cancel()
+        self.checkingWorkItem = nil
+    }
+
+    // fromServer: `whitelist` was just fetched. A cached list is trusted for
+    // "allowed" at once (no gate, not even for a frame) but for "denied" only
+    // after the server has answered, or failed, in this process.
+    private func apply(whitelist: ShadowDeviceAccess.Whitelist?, offline: Bool, fromServer: Bool) {
         switch ShadowDeviceAccess.decide(deviceId: ShadowDeviceAccess.deviceId, whitelist: whitelist) {
         case .allowed:
+            self.cancelChecking()
             self.hide()
         case .denied:
+            if !fromServer && !self.resolved {
+                // Stale cache says denied; wait for the fresh answer.
+                return
+            }
+            self.cancelChecking()
             let hasRequest = whitelist?.requestURL != nil
             self.show(title: "Доступ ограничен", text: hasRequest ? "Это устройство не в списке разрешённых. Запроси доступ — владельцу Shadow придёт уведомление." : "Это устройство не в списке разрешённых. Отправь ID владельцу Shadow.", requestURL: whitelist?.requestURL)
         case .unknown:
             if offline {
+                self.cancelChecking()
                 self.show(title: "Нет связи", text: "Не удалось проверить доступ. Подключись к интернету и нажми «Проверить снова».", requestURL: nil)
-            } else {
-                self.show(title: "Проверка доступа…", text: "Секунду, проверяю, разрешено ли это устройство.", requestURL: nil)
+            } else if self.controller == nil && self.checkingWorkItem == nil {
+                // First launch, no cache: show "checking" only if the answer is slow.
+                let item = DispatchWorkItem { [weak self] in
+                    guard let self, !self.resolved, !self.adminLoggedIn() else {
+                        return
+                    }
+                    self.checkingWorkItem = nil
+                    self.show(title: "Проверка доступа…", text: "Секунду, проверяю, разрешено ли это устройство.", requestURL: nil)
+                }
+                self.checkingWorkItem = item
+                DispatchQueue.main.asyncAfter(deadline: .now() + ShadowDeviceAccessGate.checkingDelay, execute: item)
             }
         }
     }

@@ -261,7 +261,11 @@ public enum ShadowDeviceAccess {
     }
 
     public static func refresh(completion: @escaping (Whitelist?) -> Void) {
-        var request = URLRequest(url: whitelistURL)
+        // The query string gets past the GitHub raw CDN cache (~5 min), so a
+        // device accepted a second ago is seen as accepted at once.
+        var components = URLComponents(url: whitelistURL, resolvingAgainstBaseURL: false)
+        components?.queryItems = [URLQueryItem(name: "t", value: String(Int(Date().timeIntervalSince1970)))]
+        var request = URLRequest(url: components?.url ?? whitelistURL)
         request.cachePolicy = .reloadIgnoringLocalCacheData
         request.timeoutInterval = 15.0
         URLSession.shared.dataTask(with: request) { data, response, error in
