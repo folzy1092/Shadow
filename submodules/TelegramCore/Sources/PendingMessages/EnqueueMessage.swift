@@ -581,7 +581,11 @@ private func ayuEnqueueMessages(account: Account, peerId: PeerId, messages: [Enq
     // scheduled" is on, re-route eligible outgoing messages through Telegram's
     // native Scheduled Messages so the account never flashes online at send time.
     // This is a no-op when the feature is off or the peer can't be scheduled to.
-    let messages = AyuDelayedSend.transform(messages: messages, peerId: peerId, settings: settings, now: Int32(Date().timeIntervalSince1970))
+    // schedule_date is compared with the SERVER clock. With the device clock
+    // behind by more than the delay, "now + 12 s" was already in the past: the
+    // server published the message at once, as a plain send that marks the
+    // account online. The MTProto-synced server time keeps the delay real.
+    let messages = AyuDelayedSend.transform(messages: messages, peerId: peerId, settings: settings, now: account.network.getApproximateRemoteTimestamp())
     // Shadow fork: the "offline" re-assert after a send now fires from
     // PendingMessageManager once the real send RPC's round trip actually
     // completes (see `ayuReassertOfflineAfterSendIfNeeded`), not from here —

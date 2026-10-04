@@ -71,6 +71,12 @@ class DelayedSendContracts(unittest.TestCase):
         self.assertIn("ayuOfflineReassertRepeatDelay", delayed)
         self.assertEqual(delayed.count("ayuTriggerOfflineReassert(network: network)"), 2)
 
+    def test_schedule_time_uses_server_clock(self):
+        enqueue = (ROOT / "submodules/TelegramCore/Sources/PendingMessages/EnqueueMessage.swift").read_text(encoding="utf-8")
+        call = enqueue.split("AyuDelayedSend.transform(", 1)[1].split(chr(10), 1)[0]
+        self.assertIn("now: account.network.getApproximateRemoteTimestamp()", call)
+        self.assertNotIn("Date()", call)
+
 
 if __name__ == "__main__":
     unittest.main()
