@@ -177,7 +177,12 @@ UI-проекция настроек выбирается в `TelegramRootContro
 ## 5d. Версии, ветки обновлений, автокоммит вайтлиста
 
 - Версия форка — `ShadowVersion.fork` (Swift) и `versions.json` ключ `fork`
-  (CI, контракт-тест сверяет). Полная версия `ShadowVersion.full` = `12.9.2-1.0.0`.
+  (CI, контракт-тест сверяет). Полная версия `ShadowVersion.full` = `12.9.2-1.1.0`.
+- **Версию форка поднимать в коммите с изменениями**, оба места сразу
+  (`ShadowVersion.fork` и `versions.json` → `fork`): новые фичи — minor
+  (1.1.0 → 1.2.0), исправление крупных багов — patch (1.1.0 → 1.1.1).
+  Мелкие правки, служебные коммиты и объявления версию не меняют.
+  В `shadow-update.json` поле `version` = новая полная версия.
   CI пишет её в заголовок релиза `Shadow <app>-<fork> (<build>)`.
 - `shadow-update.json` поддерживает ветки `stable`/`beta` (плоские поля вверху =
   stable, для старых сборок). `ShadowUpdateCheck.parseManifest`/`parseBetaManifest`;
