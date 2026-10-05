@@ -24,6 +24,10 @@
 - (void)setPlayButtonHidden:(bool)hidden animated:(bool)animated;
 - (void)toggleSendAsGif:(bool)showTooltip;
 
+// Shadow: send this video as a round video message (кружок).
+- (bool)isRoundVideo;
+- (void)toggleSendAsRound;
+
 - (void)setScrubbingPanelApperanceLocked:(bool)locked;
 - (void)setScrubbingPanelHidden:(bool)hidden animated:(bool)animated;
 - (void)presentScrubbingPanelAfterReload:(bool)afterReload;

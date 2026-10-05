@@ -806,7 +806,26 @@ public func legacyAssetPickerEnqueueMessages(
                                 default:
                                     break
                             }
-                        case let .video(data, thumbnail, cover, adjustments, caption, asFile, asAnimation, stickers):
+                        case .video(let data, let thumbnail, let cover, var adjustments, var caption, let asFile, let asAnimation, let stickers):
+                            // Shadow: "send as round video" (кружок) from the gallery editor.
+                            // The editor stores it as the VideoMessage preset; here the crop
+                            // becomes a centered square and the trim is limited to 60 s.
+                            // Round videos have no caption and can't be grouped into albums.
+                            var isRoundVideo = false
+                            if let roundAdjustments = adjustments, roundAdjustments.isRoundVideo(), !asFile, !asAnimation, item.price == nil {
+                                let sourceDuration: Double
+                                switch data {
+                                case let .asset(asset):
+                                    sourceDuration = asset.videoDuration
+                                case let .tempFile(_, _, duration):
+                                    sourceDuration = duration
+                                }
+                                if let converted = roundAdjustments.roundVideoAdjustments(withDuration: sourceDuration) {
+                                    adjustments = converted
+                                    caption = nil
+                                    isRoundVideo = true
+                                }
+                            }
                             var finalDimensions: CGSize
                             var finalDuration: Double
                             switch data {
@@ -839,7 +858,10 @@ public func legacyAssetPickerEnqueueMessages(
                             }*/
                             
                             var previewRepresentations: [TelegramMediaImageRepresentation] = []
-                            if let thumbnail = thumbnail {
+                            if var thumbnail = thumbnail {
+                                if isRoundVideo, let squareThumbnail = shadowCenterSquareImage(thumbnail) {
+                                    thumbnail = squareThumbnail
+                                }
                                 let resource = LocalFileMediaResource(fileId: Int64.random(in: Int64.min ... Int64.max))
                                 let thumbnailSize = finalDimensions.aspectFitted(CGSize(width: 320.0, height: 320.0))
                                 let thumbnailImage = TGScaleImageToPixelSize(thumbnail, thumbnailSize)!
@@ -880,7 +902,9 @@ public func legacyAssetPickerEnqueueMessages(
                             if asAnimation {
                                 preset = TGMediaVideoConversionPresetAnimation
                             }
-                            if !asAnimation {
+                            if isRoundVideo {
+                                finalDimensions = TGMediaVideoConverter.dimensions(for: finalDimensions, adjustments: adjustments, preset: TGMediaVideoConversionPresetVideoMessage)
+                            } else if !asAnimation {
                                 finalDimensions = TGMediaVideoConverter.dimensions(for: finalDimensions, adjustments: adjustments, preset: TGMediaVideoConversionPresetCompressedMedium)
                             }
                             
@@ -926,7 +950,7 @@ public func legacyAssetPickerEnqueueMessages(
                                 fileAttributes.append(.Animated)
                             }
                             if !asFile {
-                                let flags: TelegramMediaVideoFlags = [.supportsStreaming]
+                                let flags: TelegramMediaVideoFlags = isRoundVideo ? [.instantRoundVideo] : [.supportsStreaming]
                                 fileAttributes.append(.Video(duration: finalDuration, size: PixelDimensions(finalDimensions), flags: flags, preloadSize: nil, coverTime: nil, videoCodec: nil))
                                 if let adjustments = adjustments {
                                     if adjustments.sendAsGif {
@@ -1021,7 +1045,7 @@ public func legacyAssetPickerEnqueueMessages(
                                     )
                                 }
                             } else {
-                                messages.append(LegacyAssetPickerEnqueueMessage(message: .message(text: text.string, attributes: attributes, inlineStickers: [:], mediaReference: mediaReference, threadId: nil, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: item.groupedId, correlationId: nil, bubbleUpEmojiOrStickersets: bubbleUpEmojiOrStickersets), uniqueId: item.uniqueId, isFile: asFile))
+                                messages.append(LegacyAssetPickerEnqueueMessage(message: .message(text: text.string, attributes: attributes, inlineStickers: [:], mediaReference: mediaReference, threadId: nil, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: isRoundVideo ? nil : item.groupedId, correlationId: nil, bubbleUpEmojiOrStickersets: bubbleUpEmojiOrStickersets), uniqueId: item.uniqueId, isFile: asFile))
                             }
                     }
                 }
@@ -1065,5 +1089,21 @@ public func legacyAssetPickerEnqueueMessages(
         return ActionDisposable {
             disposable?.dispose()
         }
+    }
+}
+
+// Shadow: the thumbnail of a round video (кружок) is the centered square of
+// the edited frame, matching TGVideoEditAdjustments.roundVideoCropRect.
+private func shadowCenterSquareImage(_ image: UIImage) -> UIImage? {
+    let size = image.size
+    let side = floor(min(size.width, size.height))
+    if side < 1.0 || abs(size.width - size.height) < 1.0 {
+        return nil
+    }
+    let rect = CGRect(x: floor((size.width - side) / 2.0), y: floor((size.height - side) / 2.0), width: side, height: side)
+    let format = UIGraphicsImageRendererFormat()
+    format.scale = image.scale
+    return UIGraphicsImageRenderer(size: CGSize(width: side, height: side), format: format).image { _ in
+        image.draw(at: CGPoint(x: -rect.origin.x, y: -rect.origin.y))
     }
 }

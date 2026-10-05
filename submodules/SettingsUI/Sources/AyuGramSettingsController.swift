@@ -112,6 +112,7 @@ private enum AyuHubEntry: ItemListNodeEntry {
     case backup
     case filters
     case hiddenAccounts
+    case settingsSync
     case pushDiagnostics
     case quickReplies
     case chatLocks
@@ -135,7 +136,7 @@ private enum AyuHubEntry: ItemListNodeEntry {
             return AyuHubSection.privacy.rawValue
         case .noResults:
             return AyuHubSection.info.rawValue
-        case .customization, .spy, .ghost, .filters, .misc, .hiddenAccounts, .backup, .pushDiagnostics, .quickReplies, .chatLocks, .secondSpace, .emergency, .crashReports:
+        case .customization, .spy, .ghost, .filters, .misc, .hiddenAccounts, .settingsSync, .backup, .pushDiagnostics, .quickReplies, .chatLocks, .secondSpace, .emergency, .crashReports:
             return AyuHubSection.tools.rawValue
         case .infoFooter:
             return AyuHubSection.info.rawValue
@@ -178,6 +179,8 @@ private enum AyuHubEntry: ItemListNodeEntry {
             return 6
         case .hiddenAccounts:
             return 5
+        case .settingsSync:
+            return 8
         case .pushDiagnostics:
             return 7
         }
@@ -220,6 +223,8 @@ private enum AyuHubEntry: ItemListNodeEntry {
             return ItemListDisclosureItem(presentationData: presentationData, title: "Фильтры", label: "", sectionId: self.section, style: .blocks, action: arguments.openFilters)
         case .hiddenAccounts:
             return ItemListDisclosureItem(presentationData: presentationData, title: "Скрытие аккаунтов", label: "", sectionId: self.section, style: .blocks, action: arguments.openHiddenAccounts)
+        case .settingsSync:
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Синхронизация аккаунтов", label: "", sectionId: self.section, style: .blocks, action: arguments.openSettingsSync)
         case .pushDiagnostics:
             return ItemListDisclosureItem(presentationData: presentationData, title: "Разное", label: "", sectionId: self.section, style: .blocks, action: arguments.openPushDiagnostics)
         case .quickReplies:
@@ -271,6 +276,7 @@ private final class AyuHubArguments {
     var openUrl: (String) -> Void = { _ in }
     var openCrashReports: () -> Void = {}
     var openDeviceAccess: () -> Void = {}
+    var openSettingsSync: () -> Void = {}
 
     init(updateQuery: @escaping (String) -> Void, openResult: @escaping (ShadowSettingsSearchItem) -> Void, openCustomization: @escaping () -> Void, openSpy: @escaping () -> Void, openGhost: @escaping () -> Void, openMisc: @escaping () -> Void, openBackup: @escaping () -> Void, openFilters: @escaping () -> Void, openHiddenAccounts: @escaping () -> Void, openPushDiagnostics: @escaping () -> Void) {
         self.updateQuery = updateQuery
@@ -361,6 +367,10 @@ public func ayuGramSettingsController(context: AccountContext, autoCheckUpdates:
             pushControllerImpl?(shadowMiscController(context: context))
         }
     )
+
+    arguments.openSettingsSync = {
+        pushControllerImpl?(shadowSettingsSyncController(context: context))
+    }
 
     arguments.openFeature = { destination in
         switch destination {
@@ -480,7 +490,7 @@ public func ayuGramSettingsController(context: AccountContext, autoCheckUpdates:
         }
         entries.append(.query(query))
         if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            entries += [.customization, .spy, .ghost, .filters, .misc, .hiddenAccounts, .backup, .pushDiagnostics, .quickReplies, .chatLocks, .secondSpace, .emergency, .infoFooter]
+            entries += [.customization, .spy, .ghost, .filters, .misc, .hiddenAccounts, .settingsSync, .backup, .pushDiagnostics, .quickReplies, .chatLocks, .secondSpace, .emergency, .infoFooter]
             let crashCount = ShadowCrashReports.shared.reports().count
             if crashCount > 0 {
                 entries.insert(.crashReports(crashCount), at: entries.firstIndex(where: { if case .infoFooter = $0 { return true } else { return false } }) ?? entries.count)
@@ -636,6 +646,142 @@ func shadowHiddenAccountsController(context: AccountContext) -> ViewController {
     return ItemListController(context: context, state: signal)
 }
 
+// MARK: - Синхронизация аккаунтов (ShadowSettingsSync)
+
+private enum ShadowSettingsSyncSection: Int32 {
+    case accounts
+    case info
+}
+
+private final class ShadowSettingsSyncArguments {
+    let updateSynced: (Int64, Bool) -> Void
+
+    init(updateSynced: @escaping (Int64, Bool) -> Void) {
+        self.updateSynced = updateSynced
+    }
+}
+
+private enum ShadowSettingsSyncEntry: ItemListNodeEntry {
+    case header
+    case account(Int32, Int64, String, Bool, Bool)
+    case info
+
+    var section: ItemListSectionId {
+        switch self {
+        case .header, .account:
+            return ShadowSettingsSyncSection.accounts.rawValue
+        case .info:
+            return ShadowSettingsSyncSection.info.rawValue
+        }
+    }
+
+    var stableId: Int32 {
+        switch self {
+        case .header:
+            return -1
+        case let .account(index, _, _, _, _):
+            return index
+        case .info:
+            return 10_000
+        }
+    }
+
+    static func <(lhs: ShadowSettingsSyncEntry, rhs: ShadowSettingsSyncEntry) -> Bool {
+        return lhs.stableId < rhs.stableId
+    }
+
+    func item(presentationData: ItemListPresentationData, arguments: Any) -> ListViewItem {
+        let arguments = arguments as! ShadowSettingsSyncArguments
+        switch self {
+        case .header:
+            return ItemListSectionHeaderItem(presentationData: presentationData, text: "СИНХРОНИЗИРОВАТЬ НАСТРОЙКИ SHADOW", sectionId: self.section)
+        case let .account(_, peerId, title, isCurrent, isSynced):
+            let suffix = isCurrent ? " · текущий" : ""
+            return ItemListCheckboxItem(presentationData: presentationData, title: "\(title)\(suffix)", style: .left, checked: isSynced, zeroSeparatorInsets: false, sectionId: self.section, action: {
+                arguments.updateSynced(peerId, !isSynced)
+            })
+        case .info:
+            return ItemListTextItem(presentationData: presentationData, text: .plain("У отмеченных аккаунтов все настройки Shadow одинаковые: изменение на одном сразу повторяется на остальных. При включении настройки текущего аккаунта копируются на все отмеченные — их прежние настройки заменятся. Работает только на этом устройстве."), sectionId: self.section)
+        }
+    }
+}
+
+func shadowSettingsSyncController(context: AccountContext) -> ViewController {
+    var presentControllerImpl: ((ViewController) -> Void)?
+    var latestAccounts: [ShadowActiveAccount] = []
+    let currentPeerId = context.account.peerId.toInt64()
+
+    let arguments = ShadowSettingsSyncArguments(updateSynced: { peerId, value in
+        var ids = ShadowSettingsSync.ids()
+        guard value else {
+            ids.remove(peerId)
+            ShadowSettingsSync.setIds(ids)
+            return
+        }
+        // The current account's settings become the group's settings.
+        var updatedIds = ids
+        updatedIds.insert(peerId)
+        updatedIds.insert(currentPeerId)
+        let targets = latestAccounts.filter { account in
+            let id = account.context.account.peerId.toInt64()
+            return id != currentPeerId && updatedIds.contains(id)
+        }
+        let apply: () -> Void = {
+            let _ = (shadowStoredAyuGramSettingsOnce(postbox: context.account.postbox)
+            |> mapToSignal { source -> Signal<Never, NoError> in
+                var writes: Signal<Never, NoError> = .complete()
+                for target in targets {
+                    writes = writes |> then(shadowApplySyncedAyuGramSettings(source, to: target.context.account.postbox))
+                }
+                return writes
+            }
+            |> deliverOnMainQueue).startStandalone(completed: {
+                ShadowSettingsSync.setIds(updatedIds)
+            })
+        }
+        if targets.isEmpty {
+            ShadowSettingsSync.setIds(updatedIds)
+            return
+        }
+        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+        let names = targets.map { $0.peer.compactDisplayTitle }.joined(separator: ", ")
+        presentControllerImpl?(textAlertController(context: context, title: "Синхронизировать?", text: "Настройки Shadow на аккаунтах \(names) заменятся настройками текущего аккаунта. Дальше изменения будут общими.", actions: [
+            TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {}),
+            TextAlertAction(type: .defaultAction, title: "Синхронизировать", action: {
+                apply()
+            })
+        ]))
+    })
+
+    let signal = combineLatest(queue: .mainQueue(),
+        context.sharedContext.presentationData,
+        shadowActiveAccounts(context: context),
+        ShadowSettingsSync.signal()
+    )
+    |> deliverOnMainQueue
+    |> map { presentationData, accounts, syncedIds -> (ItemListControllerState, (ItemListNodeState, Any)) in
+        latestAccounts = accounts
+        var entries: [ShadowSettingsSyncEntry] = [.header]
+        var index: Int32 = 0
+        for account in accounts {
+            let peerId = account.context.account.peerId.toInt64()
+            entries.append(.account(index, peerId, account.peer.compactDisplayTitle, account.isCurrent, syncedIds.contains(peerId)))
+            index += 1
+        }
+        entries.append(.info)
+
+        let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Синхронизация аккаунтов"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
+        let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, animateChanges: true)
+        return (controllerState, (listState, arguments))
+    }
+
+    let controller = ItemListController(context: context, state: signal)
+    presentControllerImpl = { [weak controller] c in
+        controller?.present(c, in: .window(.root))
+    }
+    return controller
+}
+
 // A small shared helper for the sub-controllers.
 private func ayuUpdateSettings(context: AccountContext, _ f: @escaping (AyuGramSettings) -> AyuGramSettings) {
     let _ = updateAyuGramSettings(postbox: context.account.postbox, { current in
@@ -647,6 +793,7 @@ private func ayuUpdateSettings(context: AccountContext, _ f: @escaping (AyuGramS
 
 private final class AyuCustomizationArguments {
     var openMessageScreenshot: () -> Void = {}
+    var openHeaderButtons: () -> Void = {}
     var updateSetting: (@escaping (inout AyuGramSettings) -> Void) -> Void = { _ in }
     // true: background color, false: glyph color.
     var pickSettingsIconColor: (Bool) -> Void = { _ in }
@@ -781,6 +928,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
     case buildInfo
     case appearanceHeader
     case messageScreenshot
+    case headerButtons(String)
     case preferUsernameForNonContacts(Bool)
     case preferUsernameForBots(Bool)
     case showMessageSeconds(Bool)
@@ -867,6 +1015,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
             return AyuCustomizationSection.settingsIcons.rawValue
         case .appearanceHeader, .showMessageSeconds, .editedIndicatorAsPencil, .editedIndicatorText, .deletedIndicatorText, .regularEmojiFirst, .doubleTapToEdit, .showExactLastSeen, .showExactLastSeenSeconds, .wideChannelPosts, .showExactViewCounts, .showForwardCount, .appearanceFooter:
             return AyuCustomizationSection.appearance.rawValue
+        case .headerButtons: return AyuCustomizationSection.chats.rawValue
         case .chatsHeader, .hideAllChatsFolder, .hideStoriesBar, .hideGiftButton, .hidePremiumBadges, .hideSponsoredMessages, .unlimitedPinnedChats, .compactChatList, .chatsFooter:
             return AyuCustomizationSection.chats.rawValue
         case .bottomBarHeader, .foldersAtBottom, .hideBottomSearch, .compactBottomBar, .bottomBarScrollMode, .bottomBarFooter:
@@ -891,6 +1040,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
     var stableId: Int32 {
         switch self {
         case .messageScreenshot: return 93
+        case .headerButtons: return 111
         case .preferUsernameForNonContacts: return 94
         case .preferUsernameForBots: return 95
         case .buildInfo: return -1
@@ -964,6 +1114,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
     private var sortKey: (Int32, Int) {
         switch self {
         case .messageScreenshot: return (9, 1)
+        case .headerButtons: return (11, 1)
         case .preferUsernameForNonContacts: return (9, 2)
         case .preferUsernameForBots: return (9, 3)
         case .editedIndicatorText: return (2, 1)
@@ -996,6 +1147,8 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         switch self {
         case .messageScreenshot:
             return ItemListDisclosureItem(presentationData: presentationData, title: "Скриншоты сообщений", label: "", sectionId: self.section, style: .blocks, action: arguments.openMessageScreenshot)
+        case let .headerButtons(label):
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Кнопки шапки", label: label, sectionId: self.section, style: .blocks, action: arguments.openHeaderButtons)
         case let .preferUsernameForNonContacts(value):
             return ItemListSwitchItem(presentationData: presentationData, title: "@username вместо имени незнакомых", value: value, sectionId: self.section, style: .blocks, updated: arguments.updatePreferUsernameForNonContacts)
         case let .preferUsernameForBots(value):
@@ -1253,6 +1406,7 @@ private func ayuCustomizationEntries(settings: AyuGramSettings) -> [AyuCustomiza
     entries.append(.settingsIconsFooter)
 
     entries.append(.chatsHeader)
+    entries.append(.headerButtons(settings.headerButtons.isStock ? "Стандартные" : "Свои"))
     entries.append(.hideAllChatsFolder(settings.hideAllChatsFolder))
     entries.append(.hideStoriesBar(settings.hideStoriesBar))
     entries.append(.hideGiftButton(settings.hideGiftButton))
@@ -1528,6 +1682,9 @@ func ayuCustomizationController(context: AccountContext, focus: ShadowSettingsSe
     }
     arguments.openMessageScreenshot = { [weak controller] in
         controller?.push(shadowMessageScreenshotSettingsController(context: context))
+    }
+    arguments.openHeaderButtons = { [weak controller] in
+        controller?.push(shadowHeaderButtonsController(context: context))
     }
     arguments.updatePreferUsernameForBots = { value in
         ayuUpdateSettings(context: context) { var s = $0; s.preferUsernameForBots = value; return s }

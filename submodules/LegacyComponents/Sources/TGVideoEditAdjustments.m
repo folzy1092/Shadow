@@ -14,6 +14,8 @@
 
 const NSTimeInterval TGVideoEditMinimumTrimmableDuration = 1.5;
 const NSTimeInterval TGVideoEditMaximumGifDuration = 30.5;
+// Shadow: Telegram accepts round videos up to one minute.
+const NSTimeInterval TGVideoEditMaximumRoundVideoDuration = 60.0;
 
 @implementation TGVideoEditAdjustments
 
@@ -258,6 +260,45 @@ const NSTimeInterval TGVideoEditMaximumGifDuration = 30.5;
     adjustments->_toolValues = _toolValues;
     adjustments->_videoStartValue = videoStartValue;
   
+    return adjustments;
+}
+
+// Shadow: round video (кружок) — see the header.
+- (bool)isRoundVideo
+{
+    return _preset == TGMediaVideoConversionPresetVideoMessage && !_sendAsGif;
+}
+
++ (CGRect)roundVideoCropRectForCropRect:(CGRect)cropRect originalSize:(CGSize)originalSize
+{
+    CGRect base = cropRect;
+    if (base.size.width < FLT_EPSILON || base.size.height < FLT_EPSILON)
+        base = CGRectMake(0.0f, 0.0f, originalSize.width, originalSize.height);
+
+    CGFloat side = floor(MIN(base.size.width, base.size.height));
+    if (side < 1.0f)
+        return base;
+
+    return CGRectMake(base.origin.x + floor((base.size.width - side) / 2.0f), base.origin.y + floor((base.size.height - side) / 2.0f), side, side);
+}
+
+- (instancetype)roundVideoAdjustmentsWithDuration:(NSTimeInterval)duration
+{
+    TGVideoEditAdjustments *adjustments = [self editAdjustmentsWithPreset:TGMediaVideoConversionPresetVideoMessage videoStartValue:_videoStartValue trimStartValue:_trimStartValue trimEndValue:_trimEndValue];
+    adjustments->_cropRect = [TGVideoEditAdjustments roundVideoCropRectForCropRect:_cropRect originalSize:_originalSize];
+    adjustments->_sendAsGif = false;
+
+    NSTimeInterval trimStart = MAX(0.0, _trimStartValue);
+    NSTimeInterval trimEnd = _trimEndValue;
+    if (trimEnd < DBL_EPSILON || (duration > DBL_EPSILON && trimEnd > duration))
+        trimEnd = duration;
+    if (trimEnd > DBL_EPSILON && trimStart >= trimEnd)
+        trimStart = 0.0;
+    if (trimEnd - trimStart > TGVideoEditMaximumRoundVideoDuration)
+        trimEnd = trimStart + TGVideoEditMaximumRoundVideoDuration;
+    adjustments->_trimStartValue = trimStart;
+    adjustments->_trimEndValue = trimEnd;
+
     return adjustments;
 }
 

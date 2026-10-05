@@ -51,6 +51,10 @@ public func shadowOpenLink(context: AccountContext, link: ShadowLinks.Link, navi
         push(shadowEmergencyController(context: context))
     case "storage":
         push(ayuForkStorageController(context: context))
+    case "header", "buttons":
+        push(shadowHeaderButtonsController(context: context))
+    case "sync":
+        push(shadowSettingsSyncController(context: context))
     case "deleted":
         push(ayuArchiveChatController(context: context))
     case "edited":

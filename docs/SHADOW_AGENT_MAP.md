@@ -190,6 +190,29 @@ UI-проекция настроек выбирается в `TelegramRootContro
   `admin` в вайтлисте (`ShadowDeviceAccess.isAdminDevice`/`hasAdminAccess`).
   Объявление сборок — из того же меню (секция «Объявить сборку»).
 
+## 5e. Кнопки шапки, кружок из галереи, синхронизация аккаунтов
+
+- Кнопки шапки списка чатов: модель `ShadowHeaderButtons.swift` (Foundation,
+  тест `HeaderButtonsTests.swift`), поле `AyuGramSettings.headerButtons`
+  (ключ `headerButtonsV1`, действия хранятся строками — не enum). Отрисовка и
+  действия — конец `ChatListController.swift` (`applyShadowHeaderButtons`,
+  `shadowPerformHeaderAction`); стандартная раскладка и маскировка Full идут
+  старым кодом. Левых кнопок может быть две: `ChatListHeaderComponent.Content.extraLeftButtons`.
+  Экран — `SettingsUI/ShadowHeaderButtonsController.swift`, ссылка `shadow://header`.
+  Новое действие = case в `ShadowHeaderAction` + иконка + ветка в `shadowPerformHeaderAction`
+  (контракт-тест проверяет все три).
+- Кружок из галереи: флаг — пресет `VideoMessage` в `TGVideoEditAdjustments`
+  (`isRoundVideo`), кнопка справа от кнопки звука (`TGMediaPickerGalleryInterfaceView`),
+  превью — квадрат по центру + круглая маска (`TGMediaPickerGalleryVideoItemView`).
+  Квадрат и лимит 60 с применяет `roundVideoAdjustmentsWithDuration:` перед
+  отправкой (`LegacyMediaPickers.swift`: флаг `.instantRoundVideo`, без подписи и альбома).
+- Синхронизация настроек между аккаунтами: список — `ShadowSettingsSync.swift`
+  (UserDefaults, id пользователей), раздача изменений — `TelegramUI/ShadowSettingsSyncManager.swift`
+  (ставится в `SharedAccountContextImpl`), экран — `shadowSettingsSyncController`
+  в `AyuGramSettingsController.swift`, ссылка `shadow://sync`. Читает только
+  сохранённые значения (`shadowStoredAyuGramSettings`), не маску маскировки.
+  Не синхронизируется только `ghostLastSeenTimestamp`.
+
 ## 5a. Замки чатов и второе пространство
 
 - Замки: `ShadowChatLock.swift` (хранилище), `TelegramUI/Sources/ShadowChatLockUI.swift`

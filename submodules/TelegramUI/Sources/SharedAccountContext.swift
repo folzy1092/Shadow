@@ -1063,6 +1063,8 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         if applicationBindings.isMainApp {
             // Shadow: duress-code logout and the panic gesture (ShadowDuress).
             ShadowDuressCoordinator.install(sharedContext: self, mainWindow: mainWindow)
+            // Shadow: settings shared between ticked accounts (ShadowSettingsSync).
+            ShadowSettingsSyncManager.install(sharedContext: self)
             
             self.widgetDataContext = WidgetDataContext(basePath: self.basePath, inForeground: self.applicationBindings.applicationInForeground, activeAccounts: self.activeAccountContexts
             |> map { _, accounts, _ in

@@ -513,6 +513,8 @@
             
             id<TGMediaEditAdjustments> baseAdjustments = [strongSelf.item.editingContext adjustmentsForItem:strongSelf.item.editableMediaItem];
             strongSelf->_sendAsGif = baseAdjustments.sendAsGif;
+            // Shadow: a round video can't be longer than 60 s.
+            strongSelf->_scrubberView.maximumLength = [strongSelf _isRoundVideoAdjustments:(TGVideoEditAdjustments *)baseAdjustments] ? TGVideoEditMaximumRoundVideoDuration : 0.0;
             [strongSelf _mutePlayer:baseAdjustments.sendAsGif];
             
             if (baseAdjustments.sendAsGif)
@@ -840,7 +842,80 @@
         mirrored = adjustments.cropMirrored;
     }
     
+    // Shadow: a round video (кружок) previews the same centered square the
+    // converter will cut, clipped to a circle.
+    bool isRound = [self _isRoundVideoAdjustments:adjustments];
+    if (isRound)
+    {
+        cropRect = [TGVideoEditAdjustments roundVideoCropRectForCropRect:cropRect originalSize:_videoDimensions];
+        videoFrameSize = cropRect.size;
+    }
+    
     [self _layoutPlayerViewWithCropRect:cropRect videoFrameSize:videoFrameSize orientation:orientation mirrored:mirrored];
+    
+    _playerView.layer.cornerRadius = isRound ? _playerView.bounds.size.width / 2.0f : 0.0f;
+}
+
+- (bool)_isRoundVideoAdjustments:(TGVideoEditAdjustments *)adjustments
+{
+    return [adjustments isKindOfClass:[TGVideoEditAdjustments class]] && [adjustments isRoundVideo];
+}
+
+- (bool)isRoundVideo
+{
+    TGVideoEditAdjustments *adjustments = (TGVideoEditAdjustments *)[self.item.editingContext adjustmentsForItem:self.item.editableMediaItem];
+    return [self _isRoundVideoAdjustments:adjustments];
+}
+
+// Shadow: turns "send as round video" on or off for this item only. On:
+// VideoMessage preset, gif off, trim limited to 60 s. Off: the default preset;
+// the user's crop and trim stay as they were.
+- (void)toggleSendAsRound
+{
+    TGVideoEditAdjustments *adjustments = (TGVideoEditAdjustments *)[self.item.editingContext adjustmentsForItem:self.item.editableMediaItem];
+    bool round = ![self _isRoundVideoAdjustments:adjustments];
+    
+    CGRect cropRect = CGRectMake(0, 0, _videoDimensions.width, _videoDimensions.height);
+    NSTimeInterval trimStartValue = 0.0;
+    NSTimeInterval trimEndValue = _videoDuration;
+    if (adjustments != nil)
+    {
+        if (adjustments.cropRect.size.width > FLT_EPSILON && adjustments.cropRect.size.height > FLT_EPSILON)
+            cropRect = adjustments.cropRect;
+        if (fabs(adjustments.trimEndValue - adjustments.trimStartValue) > DBL_EPSILON)
+        {
+            trimStartValue = adjustments.trimStartValue;
+            trimEndValue = adjustments.trimEndValue;
+        }
+    }
+    
+    if (round && trimEndValue - trimStartValue > TGVideoEditMaximumRoundVideoDuration)
+        trimEndValue = trimStartValue + TGVideoEditMaximumRoundVideoDuration;
+    
+    TGMediaVideoConversionPreset preset = round ? TGMediaVideoConversionPresetVideoMessage : TGMediaVideoConversionPresetCompressedDefault;
+    TGVideoEditAdjustments *updatedAdjustments = [TGVideoEditAdjustments editAdjustmentsWithOriginalSize:_videoDimensions cropRect:cropRect cropOrientation:adjustments.cropOrientation cropRotation:adjustments.cropRotation cropLockedAspectRatio:adjustments.cropLockedAspectRatio cropMirrored:adjustments.cropMirrored trimStartValue:trimStartValue trimEndValue:trimEndValue toolValues:adjustments.toolValues paintingData:adjustments.paintingData sendAsGif:false preset:preset];
+    if (updatedAdjustments == nil)
+        return;
+    
+    [self.item.editingContext setAdjustments:updatedAdjustments forItem:self.item.editableMediaItem];
+    [_editableItemVariable set:[SSignal single:[self editableMediaItem]]];
+    
+    _scrubberView.maximumLength = round ? TGVideoEditMaximumRoundVideoDuration : 0.0;
+    if (_videoDuration > DBL_EPSILON)
+    {
+        _scrubberView.trimStartValue = trimStartValue;
+        _scrubberView.trimEndValue = trimEndValue;
+        [_scrubberView setTrimApplied:(trimStartValue > DBL_EPSILON || trimEndValue < _videoDuration)];
+        [_scrubberView _layoutTrimCurtainViews];
+        _coverScrubberView.trimStartValue = trimStartValue;
+        _coverScrubberView.trimEndValue = trimEndValue;
+        [_coverScrubberView _layoutTrimCurtainViews];
+        [self updatePlayerRange:trimEndValue];
+    }
+    
+    _sendAsGif = false;
+    [self _mutePlayer:false];
+    [self _layoutPlayerView];
 }
 
 - (void)_layoutPlayerViewWithCropRect:(CGRect)cropRect videoFrameSize:(CGSize)videoFrameSize orientation:(UIImageOrientation)orientation mirrored:(bool)mirrored
@@ -1560,7 +1635,11 @@
     }
     
     bool sendAsGif = !adjustments.sendAsGif;
-    TGVideoEditAdjustments *updatedAdjustments = [TGVideoEditAdjustments editAdjustmentsWithOriginalSize:_videoDimensions cropRect:cropRect cropOrientation:adjustments.cropOrientation cropRotation:adjustments.cropRotation cropLockedAspectRatio:adjustments.cropLockedAspectRatio cropMirrored:adjustments.cropMirrored trimStartValue:trimStartValue trimEndValue:trimEndValue toolValues:adjustments.toolValues paintingData:adjustments.paintingData sendAsGif:sendAsGif preset:adjustments.preset];
+    // Shadow: gif and round video (кружок) exclude each other.
+    TGMediaVideoConversionPreset gifTogglePreset = adjustments.preset;
+    if (sendAsGif && gifTogglePreset == TGMediaVideoConversionPresetVideoMessage)
+        gifTogglePreset = TGMediaVideoConversionPresetCompressedDefault;
+    TGVideoEditAdjustments *updatedAdjustments = [TGVideoEditAdjustments editAdjustmentsWithOriginalSize:_videoDimensions cropRect:cropRect cropOrientation:adjustments.cropOrientation cropRotation:adjustments.cropRotation cropLockedAspectRatio:adjustments.cropLockedAspectRatio cropMirrored:adjustments.cropMirrored trimStartValue:trimStartValue trimEndValue:trimEndValue toolValues:adjustments.toolValues paintingData:adjustments.paintingData sendAsGif:sendAsGif preset:gifTogglePreset];
     [self.item.editingContext setAdjustments:updatedAdjustments forItem:self.item.editableMediaItem];
     
     [_editableItemVariable set:[SSignal single:[self editableMediaItem]]];
@@ -1594,6 +1673,8 @@
     }
     
     [self _mutePlayer:sendAsGif];
+    _scrubberView.maximumLength = 0.0;
+    [self _layoutPlayerView];
 }
 
 - (void)_mutePlayer:(bool)mute

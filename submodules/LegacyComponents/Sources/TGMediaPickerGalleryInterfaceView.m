@@ -123,6 +123,7 @@ static TGMediaLivePhotoMode TGMediaPickerGalleryResolvedLivePhotoMode(NSNumber *
     TGPhotoCaptionInputMixin *_captionMixin;
     
     TGModernButton *_muteButton;
+    TGModernButton *_roundButton; // Shadow: send as round video (кружок)
     TGCheckButtonView *_checkButton;
     bool _ignoreSetSelected;
     TGMediaPickerPhotoCounterButton *_photoCounterButton;
@@ -254,6 +255,18 @@ static TGMediaLivePhotoMode TGMediaPickerGalleryResolvedLivePhotoMode(NSNumber *
         [_muteButton setImage:[TGPhotoEditorInterfaceAssets muteActiveIcon]  forState:UIControlStateSelected | UIControlStateHighlighted];
         [_muteButton addTarget:self action:@selector(toggleSendAsGif) forControlEvents:UIControlEventTouchUpInside];
         [_wrapperView addSubview:_muteButton];
+        
+        // Shadow: the round video (кружок) toggle sits opposite the mute button.
+        _roundButton = [[TGModernButton alloc] initWithFrame:CGRectMake(0, 0, 40.0f, 40.0f)];
+        _roundButton.hidden = true;
+        _roundButton.adjustsImageWhenHighlighted = false;
+        [_roundButton setBackgroundImage:[TGPhotoEditorInterfaceAssets gifBackgroundImage] forState:UIControlStateNormal];
+        [_roundButton setImage:[TGMediaPickerGalleryInterfaceView shadowRoundVideoIcon:false] forState:UIControlStateNormal];
+        [_roundButton setImage:[TGMediaPickerGalleryInterfaceView shadowRoundVideoIcon:true] forState:UIControlStateSelected];
+        [_roundButton setImage:[TGMediaPickerGalleryInterfaceView shadowRoundVideoIcon:true] forState:UIControlStateSelected | UIControlStateHighlighted];
+        _roundButton.accessibilityLabel = @"Кружок";
+        [_roundButton addTarget:self action:@selector(toggleSendAsRound) forControlEvents:UIControlEventTouchUpInside];
+        [_wrapperView addSubview:_roundButton];
         
         if (recipientName.length > 0)
         {
@@ -766,6 +779,20 @@ static TGMediaLivePhotoMode TGMediaPickerGalleryResolvedLivePhotoMode(NSNumber *
             }
             strongSelf->_muteButton.hidden = !sendableAsGif;
             
+            // Shadow: round video (кружок) only for a real video sent as media.
+            bool sendableAsRound = sendableAsGif;
+            if (sendableAsRound) {
+                TGMediaPickerGalleryVideoItemView *videoItemView = (TGMediaPickerGalleryVideoItemView *)strongItemView;
+                id<TGMediaEditableItem> editableItem = videoItemView.editableMediaItem;
+                if (![editableItem respondsToSelector:@selector(isVideo)] || !editableItem.isVideo) {
+                    sendableAsRound = false;
+                }
+                if ([videoItemView.item isKindOfClass:[TGMediaPickerGalleryVideoItem class]] && ((TGMediaPickerGalleryVideoItem *)videoItemView.item).asFile) {
+                    sendableAsRound = false;
+                }
+            }
+            strongSelf->_roundButton.hidden = !sendableAsRound;
+            
             bool canHaveCover = false;
             if ([strongItemView isKindOfClass:[TGMediaPickerGalleryVideoItemView class]]) {
                 TGMediaPickerGalleryVideoItemView *itemView = (TGMediaPickerGalleryVideoItemView *)strongItemView;
@@ -1206,6 +1233,8 @@ static TGMediaLivePhotoMode TGMediaPickerGalleryResolvedLivePhotoMode(NSNumber *
     TGPhotoEditorTab disabledButtons = TGPhotoEditorNoneTab;
     
     _muteButton.selected = adjustments.sendAsGif;
+    bool isRoundVideo = [adjustments isKindOfClass:[TGVideoEditAdjustments class]] && [(TGVideoEditAdjustments *)adjustments isRoundVideo];
+    _roundButton.selected = isRoundVideo;
     
     UIView *qualityButton = [_portraitToolbarView viewForTab:TGPhotoEditorQualityTab];
     if (qualityButton != nil)
@@ -1265,7 +1294,7 @@ static TGMediaLivePhotoMode TGMediaPickerGalleryResolvedLivePhotoMode(NSNumber *
         });
     }
     
-    if (adjustments.sendAsGif)
+    if (adjustments.sendAsGif || isRoundVideo)
         disabledButtons |= TGPhotoEditorQualityTab;
     
     [_portraitToolbarView setEditButtonsHighlighted:highlightedButtons];
@@ -1416,6 +1445,7 @@ static TGMediaLivePhotoMode TGMediaPickerGalleryResolvedLivePhotoMode(NSNumber *
         {
             _checkButton.alpha = alpha;
             _muteButton.alpha = alpha;
+            _roundButton.alpha = alpha;
             _coverButton.alpha = alpha;
             _arrowView.alpha = alpha * 0.6f;
             _recipientLabel.alpha = alpha * 0.6;
@@ -1426,6 +1456,7 @@ static TGMediaLivePhotoMode TGMediaPickerGalleryResolvedLivePhotoMode(NSNumber *
             {
                 _checkButton.userInteractionEnabled = !hidden;
                 _muteButton.userInteractionEnabled = !hidden;
+                _roundButton.userInteractionEnabled = !hidden;
                 _coverButton.userInteractionEnabled = !hidden;
                 _captionMixin.livePhotoButtonView.userInteractionEnabled = !hidden;
             }
@@ -1449,7 +1480,9 @@ static TGMediaLivePhotoMode TGMediaPickerGalleryResolvedLivePhotoMode(NSNumber *
         _checkButton.userInteractionEnabled = !hidden;
         
         _muteButton.alpha = alpha;
+        _roundButton.alpha = alpha;
         _muteButton.userInteractionEnabled = !hidden;
+        _roundButton.userInteractionEnabled = !hidden;
         
         _coverButton.alpha = alpha;
         _coverButton.userInteractionEnabled = !hidden;
@@ -1486,6 +1519,7 @@ static TGMediaLivePhotoMode TGMediaPickerGalleryResolvedLivePhotoMode(NSNumber *
         {
             _checkButton.alpha = alpha;
             _muteButton.alpha = alpha;
+            _roundButton.alpha = alpha;
             _coverButton.alpha = alpha;
             _arrowView.alpha = alpha * 0.6;
             _recipientLabel.alpha = alpha * 0.6;
@@ -1499,6 +1533,7 @@ static TGMediaLivePhotoMode TGMediaPickerGalleryResolvedLivePhotoMode(NSNumber *
             {
                 _checkButton.userInteractionEnabled = !hidden;
                 _muteButton.userInteractionEnabled = !hidden;
+                _roundButton.userInteractionEnabled = !hidden;
                 _coverButton.userInteractionEnabled = !hidden;
                 _portraitToolbarView.userInteractionEnabled = !hidden;
                 _landscapeToolbarView.userInteractionEnabled = !hidden;
@@ -1525,7 +1560,9 @@ static TGMediaLivePhotoMode TGMediaPickerGalleryResolvedLivePhotoMode(NSNumber *
         _checkButton.userInteractionEnabled = !hidden;
         
         _muteButton.alpha = alpha;
+        _roundButton.alpha = alpha;
         _muteButton.userInteractionEnabled = !hidden;
+        _roundButton.userInteractionEnabled = !hidden;
         
         _coverButton.alpha = alpha;
         _coverButton.userInteractionEnabled = !hidden;
@@ -1607,6 +1644,7 @@ static TGMediaLivePhotoMode TGMediaPickerGalleryResolvedLivePhotoMode(NSNumber *
         [(TGMediaPickerGalleryVideoItemView *)currentItemView toggleSendAsGif:false];
     
     [_muteButton removeFromSuperview];
+    [_roundButton removeFromSuperview];
 }
 
 - (void)toggleSendAsGif
@@ -1618,6 +1656,41 @@ static TGMediaLivePhotoMode TGMediaPickerGalleryResolvedLivePhotoMode(NSNumber *
     bool sendableAsGif = [currentItemView isKindOfClass:[TGMediaPickerGalleryVideoItemView class]];
     if (sendableAsGif)
         [(TGMediaPickerGalleryVideoItemView *)currentItemView toggleSendAsGif:true];
+}
+
+- (void)toggleSendAsRound
+{
+    if (![_currentItem conformsToProtocol:@protocol(TGModernGalleryEditableItem)])
+        return;
+    
+    TGModernGalleryItemView *currentItemView = _currentItemView;
+    if ([currentItemView isKindOfClass:[TGMediaPickerGalleryVideoItemView class]])
+        [(TGMediaPickerGalleryVideoItemView *)currentItemView toggleSendAsRound];
+}
+
+// Shadow: icon for the round video (кружок) toggle — a ring, filled when on.
++ (UIImage *)shadowRoundVideoIcon:(bool)active
+{
+    static UIImage *images[2] = { nil, nil };
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^
+    {
+        for (int i = 0; i < 2; i++)
+        {
+            CGSize size = CGSizeMake(24.0f, 24.0f);
+            UIGraphicsBeginImageContextWithOptions(size, false, 0.0f);
+            CGContextRef context = UIGraphicsGetCurrentContext();
+            CGContextSetStrokeColorWithColor(context, [UIColor whiteColor].CGColor);
+            CGContextSetFillColorWithColor(context, [UIColor whiteColor].CGColor);
+            CGContextSetLineWidth(context, 2.0f);
+            CGContextStrokeEllipseInRect(context, CGRectMake(3.0f, 3.0f, 18.0f, 18.0f));
+            if (i == 1)
+                CGContextFillEllipseInRect(context, CGRectMake(7.0f, 7.0f, 10.0f, 10.0f));
+            images[i] = UIGraphicsGetImageFromCurrentImageContext();
+            UIGraphicsEndImageContext();
+        }
+    });
+    return images[active ? 1 : 0];
 }
 
 - (void)toggleGrouping
@@ -1798,6 +1871,7 @@ static TGMediaLivePhotoMode TGMediaPickerGalleryResolvedLivePhotoMode(NSNumber *
         if (view == _photoCounterButton
             || view == _checkButton
             || view == _muteButton
+            || view == _roundButton
             || view == _groupButton
             || view == _cameraButton
             || view == _coverButton
@@ -1849,6 +1923,22 @@ static TGMediaLivePhotoMode TGMediaPickerGalleryResolvedLivePhotoMode(NSNumber *
 - (bool)shouldAutorotate
 {
     return true;
+}
+
+// Shadow: portrait — same row as the mute button, at the right edge;
+// landscape — right above the mute button.
+- (CGRect)_roundButtonFrameForOrientation:(UIInterfaceOrientation)orientation muteFrame:(CGRect)muteFrame screenEdges:(UIEdgeInsets)screenEdges
+{
+    CGSize size = _roundButton.frame.size;
+    switch (orientation)
+    {
+        case UIInterfaceOrientationLandscapeLeft:
+        case UIInterfaceOrientationLandscapeRight:
+            return CGRectMake(muteFrame.origin.x, muteFrame.origin.y - size.height - 8.0f, size.width, size.height);
+            
+        default:
+            return CGRectMake(screenEdges.right - _safeAreaInset.right - 5.0f - size.width, muteFrame.origin.y, size.width, size.height);
+    }
 }
 
 - (CGRect)_muteButtonFrameForOrientation:(UIInterfaceOrientation)orientation screenEdges:(UIEdgeInsets)screenEdges hasHeaderView:(bool)hasHeaderView
@@ -2183,6 +2273,7 @@ static TGMediaLivePhotoMode TGMediaPickerGalleryResolvedLivePhotoMode(NSNumber *
     }
     
     _muteButton.frame = [self _muteButtonFrameForOrientation:orientation screenEdges:screenEdges hasHeaderView:true];
+    _roundButton.frame = [self _roundButtonFrameForOrientation:orientation muteFrame:_muteButton.frame screenEdges:screenEdges];
     _checkButton.frame = [self _checkButtonFrameForOrientation:orientation screenEdges:screenEdges hasHeaderView:hasHeaderView];
     _groupButton.frame = [self _groupButtonFrameForOrientation:orientation screenEdges:screenEdges hasHeaderView:hasHeaderView];
     _coverButton.frame = [self _coverButtonFrameForOrientation:orientation screenEdges:screenEdges hasHeaderView:hasHeaderView];

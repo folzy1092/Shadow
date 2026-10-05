@@ -109,6 +109,8 @@ public struct AyuGramSettings: Codable, Equatable {
     public var unlimitedPinnedChats: Bool = true
     // On-device transcription of voice messages for accounts without Premium.
     public var localVoiceTranscription: Bool = true
+    // Shadow: buttons of the root chat list header (ShadowHeaderButtons.swift).
+    public var headerButtons: ShadowHeaderButtons = .stock
     // Local quick reply templates inserted into the composer.
     public var quickReplyTemplates: [String] = []
     public static let quickReplyTemplatesLimit = 50
@@ -654,6 +656,11 @@ public struct AyuGramSettings: Codable, Equatable {
         self.unlimitedPinnedChats = ((try container.decodeIfPresent(Int32.self, forKey: "unlimitedPinnedChats")) ?? 1) != 0
         self.localVoiceTranscription = ((try container.decodeIfPresent(Int32.self, forKey: "localVoiceTranscription")) ?? 1) != 0
         self.quickReplyTemplates = (try container.decodeIfPresent([String].self, forKey: "quickReplyTemplates")) ?? []
+        if let headerButtons = try? container.decodeIfPresent(ShadowHeaderButtons.self, forKey: "headerButtonsV1") {
+            self.headerButtons = headerButtons.normalized()
+        } else {
+            self.headerButtons = .stock
+        }
         self.monochromeSettingsIcons = ((try container.decodeIfPresent(Int32.self, forKey: "monochromeSettingsIcons")) ?? 0) != 0
         self.compactChatList = ((try container.decodeIfPresent(Int32.self, forKey: "compactChatList")) ?? 0) != 0
         self.onlineHistory = ((try container.decodeIfPresent(Int32.self, forKey: "onlineHistory")) ?? 0) != 0
@@ -743,6 +750,7 @@ public struct AyuGramSettings: Codable, Equatable {
         try container.encode((self.unlimitedPinnedChats ? 1 : 0) as Int32, forKey: "unlimitedPinnedChats")
         try container.encode((self.localVoiceTranscription ? 1 : 0) as Int32, forKey: "localVoiceTranscription")
         try container.encode(self.quickReplyTemplates, forKey: "quickReplyTemplates")
+        try container.encode(self.headerButtons, forKey: "headerButtonsV1")
         try container.encode((self.monochromeSettingsIcons ? 1 : 0) as Int32, forKey: "monochromeSettingsIcons")
         try container.encode((self.compactChatList ? 1 : 0) as Int32, forKey: "compactChatList")
         try container.encode((self.onlineHistory ? 1 : 0) as Int32, forKey: "onlineHistory")
@@ -1006,6 +1014,31 @@ public func updateAyuGramSettings(postbox: Postbox, _ f: @escaping (AyuGramSetti
         updateAyuGramSettings(transaction: transaction, f)
     }
     |> ignoreValues
+}
+
+// Shadow: settings sync between accounts (ShadowSettingsSync.swift). These
+// read the STORED values, never the disguise mask, so the Full disguise can
+// never copy its stock values into another account.
+public func shadowStoredAyuGramSettings(postbox: Postbox) -> Signal<AyuGramSettings, NoError> {
+    return postbox.preferencesView(keys: [PreferencesKeys.ayuGramSettings])
+    |> map { view -> AyuGramSettings in
+        return view.values[PreferencesKeys.ayuGramSettings]?.get(AyuGramSettings.self) ?? AyuGramSettings.defaultSettings
+    }
+    |> distinctUntilChanged
+}
+
+public func shadowStoredAyuGramSettingsOnce(postbox: Postbox) -> Signal<AyuGramSettings, NoError> {
+    return postbox.transaction { transaction -> AyuGramSettings in
+        return storedAyuGramSettings(transaction: transaction)
+    }
+}
+
+// Writes `source` (stored values) into the target account, keeping that
+// account's own runtime state (ShadowSettingsSync.applying).
+public func shadowApplySyncedAyuGramSettings(_ source: AyuGramSettings, to postbox: Postbox) -> Signal<Never, NoError> {
+    return updateAyuGramSettings(postbox: postbox, { current in
+        return ShadowSettingsSync.applying(source, to: current)
+    })
 }
 
 // Reactive stream — used by the UI (settings screen) and the presence wiring.

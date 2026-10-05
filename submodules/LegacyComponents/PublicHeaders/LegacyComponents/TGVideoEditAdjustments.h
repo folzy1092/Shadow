@@ -45,6 +45,15 @@ typedef enum
 
 - (NSDictionary *)dictionary;
 
+// Shadow: "send as round video" (кружок). The flag is the VideoMessage preset
+// (the gif toggle keeps working as before). The editor keeps the user's crop
+// and trim; the centered square crop and the 60 s limit are applied by
+// -roundVideoAdjustmentsWithDuration: right before sending, so the preview and
+// the converter use the same rect (+roundVideoCropRectForCropRect:originalSize:).
+- (bool)isRoundVideo;
+- (instancetype)roundVideoAdjustmentsWithDuration:(NSTimeInterval)duration;
++ (CGRect)roundVideoCropRectForCropRect:(CGRect)cropRect originalSize:(CGSize)originalSize;
+
 - (instancetype)editAdjustmentsWithPreset:(TGMediaVideoConversionPreset)preset maxDuration:(NSTimeInterval)maxDuration;
 - (instancetype)editAdjustmentsWithPreset:(TGMediaVideoConversionPreset)preset videoStartValue:(NSTimeInterval)videoStartValue trimStartValue:(NSTimeInterval)trimStartValue trimEndValue:(NSTimeInterval)trimEndValue;
 + (instancetype)editAdjustmentsWithOriginalSize:(CGSize)originalSize preset:(TGMediaVideoConversionPreset)preset;
@@ -74,3 +83,4 @@ typedef TGVideoEditAdjustments TGMediaVideoEditAdjustments;
 
 extern const NSTimeInterval TGVideoEditMinimumTrimmableDuration;
 extern const NSTimeInterval TGVideoEditMaximumGifDuration;
+extern const NSTimeInterval TGVideoEditMaximumRoundVideoDuration;

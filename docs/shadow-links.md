@@ -14,6 +14,8 @@
 | `shadow://settings` | настройки Shadow |
 | `shadow://updates` | настройки Shadow и сразу запускает проверку обновлений |
 | `shadow://customization` | Кастомизация |
+| `shadow://header` | Кастомизация → Кнопки шапки |
+| `shadow://sync` | Синхронизация настроек между аккаунтами |
 | `shadow://spy` | Шпион |
 | `shadow://ghost` | Призрак |
 | `shadow://filters` | Фильтры |

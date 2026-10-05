@@ -2899,6 +2899,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                 titleComponent: primaryContext.chatTitleComponent.flatMap { AnyComponent<Empty>($0) },
                 chatListTitle: primaryContext.chatListTitle,
                 leftButton: primaryContext.leftButton,
+                extraLeftButtons: primaryContext.extraLeftButtons,
                 rightButtons: primaryContext.rightButtons,
                 backPressed: displayBackButton ? { [weak self] in
                     guard let self else {
@@ -6841,8 +6842,20 @@ private final class ChatListLocationContext {
     var storyButton: AnyComponentWithIdentity<NavigationButtonComponentEnvironment>?
     // AyuGram: Ghost Mode master toggle, shown on the root chat list navbar.
     var ghostButton: AnyComponentWithIdentity<NavigationButtonComponentEnvironment>?
+    // Shadow: custom header buttons (ShadowHeaderButtons). Left: the second
+    // button after `leftButton`. Right: when set, replaces compose/ghost/story
+    // (right to left, like `rightButtons`); the proxy indicator stays.
+    var extraLeftButtons: [AnyComponentWithIdentity<NavigationButtonComponentEnvironment>] = []
+    var shadowRightButtons: [AnyComponentWithIdentity<NavigationButtonComponentEnvironment>]?
 
     var rightButtons: [AnyComponentWithIdentity<NavigationButtonComponentEnvironment>] {
+        if let shadowRightButtons = self.shadowRightButtons {
+            var result = shadowRightButtons
+            if let proxyButton = self.proxyButton {
+                result.append(proxyButton)
+            }
+            return result
+        }
         var result: [AnyComponentWithIdentity<NavigationButtonComponentEnvironment>] = []
         if let rightButton = self.rightButton {
             result.append(rightButton)
@@ -6966,15 +6979,17 @@ private final class ChatListLocationContext {
                 // flip) the master flag reactively.
                 // Shadow: the disguise mode (ShadowDisguise) also redraws the navbar.
                 // Typed steps: one chained expression is too slow to type-check.
-                let ghostSettingsSignal: Signal<Bool, NoError> = ayuGramSettings(postbox: context.account.postbox)
-                |> map { settings -> Bool in
-                    return settings.ghostMode
+                // Shadow: the custom header buttons (and their on/off icons) ride
+                // on the same stream.
+                let ghostSettingsSignal: Signal<ShadowChatListHeaderState, NoError> = ayuGramSettings(postbox: context.account.postbox)
+                |> map { settings -> ShadowChatListHeaderState in
+                    return ShadowChatListHeaderState(settings: settings)
                 }
                 |> distinctUntilChanged
                 let ghostDisguiseSignal: Signal<ShadowDisguise.Mode, NoError> = shadowDisguiseModeSignal()
-                let ghostModeSignal: Signal<Bool, NoError> = combineLatest(ghostSettingsSignal, ghostDisguiseSignal)
-                |> map { ghostMode, _ -> Bool in
-                    return ghostMode
+                let ghostModeSignal: Signal<ShadowChatListHeaderState, NoError> = combineLatest(ghostSettingsSignal, ghostDisguiseSignal)
+                |> map { headerState, _ -> ShadowChatListHeaderState in
+                    return headerState
                 }
                 self.titleDisposable = combineLatest(queue: .mainQueue(),
                     networkState,
@@ -6986,7 +7001,7 @@ private final class ChatListLocationContext {
                     parentController.updatedPresentationData.1,
                     storyPostingAvailable,
                     ghostModeSignal
-                ).startStrict(next: { [weak self] networkState, proxy, passcode, stateAndFilterId, isReorderingTabs, peerStatus, presentationData, storyPostingAvailable, ghostMode in
+                ).startStrict(next: { [weak self] networkState, proxy, passcode, stateAndFilterId, isReorderingTabs, peerStatus, presentationData, storyPostingAvailable, headerState in
                     guard let self else {
                         return
                     }
@@ -7000,7 +7015,8 @@ private final class ChatListLocationContext {
                         peerStatus: peerStatus,
                         presentationData: presentationData,
                         storyPostingAvailable: storyPostingAvailable,
-                        ghostMode: ghostMode
+                        ghostMode: headerState.ghostMode,
+                        shadowHeader: headerState
                     )
                 })
             } else {
@@ -7228,7 +7244,8 @@ private final class ChatListLocationContext {
         peerStatus: NetworkStatusTitle.Status?,
         presentationData: PresentationData,
         storyPostingAvailable: Bool,
-        ghostMode: Bool = false
+        ghostMode: Bool = false,
+        shadowHeader: ShadowChatListHeaderState = ShadowChatListHeaderState()
     ) {
         let defaultTitle: String
         switch location {
@@ -7283,6 +7300,8 @@ private final class ChatListLocationContext {
                 }
                 self.proxyButton = nil
                 self.ghostButton = nil
+                self.extraLeftButtons = []
+                self.shadowRightButtons = nil
             }
             let title = !stateAndFilterId.state.selectedPeerIds.isEmpty ? presentationData.strings.ChatList_SelectedChats(Int32(stateAndFilterId.state.selectedPeerIds.count)) : defaultTitle
             
@@ -7300,6 +7319,8 @@ private final class ChatListLocationContext {
                 self.storyButton = nil
                 self.proxyButton = nil
                 self.ghostButton = nil
+                self.extraLeftButtons = []
+                self.shadowRightButtons = nil
             }
             self.leftButton = AnyComponentWithIdentity(id: "done", component: AnyComponent(NavigationButtonComponent(
                 content: .text(title: presentationData.strings.Common_Done, isBold: true),
@@ -7421,7 +7442,18 @@ private final class ChatListLocationContext {
                     contextAction: ghostContextAction
                 )))
                 }
+
+                // Shadow: custom header buttons. The stock layout keeps the code
+                // above as is; the Full disguise always shows stock buttons.
+                if !isReorderingTabs && !stateAndFilterId.state.editing && !ShadowDisguise.shared.isFull && !shadowHeader.buttons.isStock {
+                    self.applyShadowHeaderButtons(state: shadowHeader, presentationData: presentationData, storyPostingAvailable: storyPostingAvailable, proxy: proxy, isPasscodeSet: passcode.0)
+                } else {
+                    self.extraLeftButtons = []
+                    self.shadowRightButtons = nil
+                }
             } else {
+                self.extraLeftButtons = []
+                self.shadowRightButtons = nil
                 let parentController = self.parentController
                 self.rightButton = AnyComponentWithIdentity(id: "more", component: AnyComponent(NavigationButtonComponent(
                     content: .more,
@@ -7794,6 +7826,358 @@ extension ChatListControllerImpl {
                         lockRest()
                     }
                 })
+            }
+        }
+    }
+}
+
+// MARK: - Shadow: custom header buttons (ShadowHeaderButtons)
+
+struct ShadowChatListHeaderState: Equatable {
+    var ghostMode: Bool = false
+    var hideOnline: Bool = false
+    var hideReadReceipts: Bool = false
+    var hideTyping: Bool = false
+    var buttons: ShadowHeaderButtons = .stock
+
+    init() {
+    }
+
+    init(settings: AyuGramSettings) {
+        self.ghostMode = settings.ghostMode
+        self.hideOnline = settings.hideOnlineStatus
+        self.hideReadReceipts = settings.hideReadReceipts
+        self.hideTyping = settings.hideTyping
+        self.buttons = settings.headerButtons
+    }
+}
+
+// The icon of a header button and whether its toggle is on (part of the
+// button identity, so the header redraws the icon when the state flips).
+private func shadowHeaderButtonIcon(_ button: ShadowHeaderButton, state: ShadowChatListHeaderState, isDark: Bool, proxyEnabled: Bool) -> (String, Bool) {
+    switch button.tap {
+    case .none, .edit:
+        return ("sf:circle", false)
+    case .newStory:
+        return ("Chat List/AddStoryIcon", false)
+    case .ghostMode:
+        return state.ghostMode ? ("Chat List/GhostActiveIcon", true) : ("Chat List/GhostIcon", false)
+    case .ghostSettings:
+        return ("Chat List/GhostIcon", false)
+    case .compose:
+        return ("Chat List/ComposeIcon", false)
+    case .search:
+        return ("sf:magnifyingglass", false)
+    case .readAllServer:
+        return ("sf:checkmark.circle", false)
+    case .readAllLocal:
+        return ("sf:checkmark.shield", false)
+    case .readFolder:
+        return ("sf:folder", false)
+    case .toggleHideOnline:
+        return state.hideOnline ? ("sf:person.crop.circle.badge.xmark", true) : ("sf:person.crop.circle", false)
+    case .toggleHideReadReceipts:
+        return state.hideReadReceipts ? ("sf:eye.slash", true) : ("sf:eye", false)
+    case .toggleHideTyping:
+        return state.hideTyping ? ("sf:pencil.slash", true) : ("sf:pencil", false)
+    case .savedMessages:
+        return ("sf:bookmark", false)
+    case .archive:
+        return ("sf:archivebox", false)
+    case .deletedArchive:
+        return ("sf:trash", false)
+    case .editedArchive:
+        return ("sf:pencil.and.outline", false)
+    case .shadowSettings:
+        return ("sf:gear", false)
+    case .quickReplies:
+        return ("sf:text.bubble", false)
+    case .lockApp:
+        return ("sf:lock", false)
+    case .switchAccount:
+        return ("sf:person.2", false)
+    case .proxy:
+        return proxyEnabled ? ("sf:shield.fill", true) : ("sf:shield", false)
+    case .nightMode:
+        return isDark ? ("sf:moon.fill", true) : ("sf:moon", false)
+    case .storage:
+        return ("sf:square.stack.3d.up", false)
+    case .customLink:
+        return ("sf:" + (button.icon.isEmpty ? "link" : button.icon), false)
+    }
+}
+
+extension ChatListLocationContext {
+    fileprivate func applyShadowHeaderButtons(state: ShadowChatListHeaderState, presentationData: PresentationData, storyPostingAvailable: Bool, proxy: (Bool, Bool), isPasscodeSet: Bool) {
+        let buttons = state.buttons.normalized()
+        let proxyEnabled = proxy.0 && proxy.1
+
+        var left: [AnyComponentWithIdentity<NavigationButtonComponentEnvironment>] = []
+        for (index, button) in buttons.left.enumerated() {
+            if let component = self.shadowHeaderButtonComponent(button: button, key: "l\(index)", state: state, presentationData: presentationData, storyPostingAvailable: storyPostingAvailable, proxyEnabled: proxyEnabled) {
+                left.append(component)
+            }
+        }
+        self.leftButton = left.first
+        self.extraLeftButtons = Array(left.dropFirst())
+
+        var right: [AnyComponentWithIdentity<NavigationButtonComponentEnvironment>] = []
+        for (index, button) in buttons.right.enumerated() {
+            if let component = self.shadowHeaderButtonComponent(button: button, key: "r\(index)", state: state, presentationData: presentationData, storyPostingAvailable: storyPostingAvailable, proxyEnabled: proxyEnabled) {
+                right.append(component)
+            }
+        }
+        // `rightButtons` goes right to left; the settings list left to right.
+        self.shadowRightButtons = Array(right.reversed())
+        let _ = isPasscodeSet
+    }
+
+    private func shadowHeaderButtonComponent(button: ShadowHeaderButton, key: String, state: ShadowChatListHeaderState, presentationData: PresentationData, storyPostingAvailable: Bool, proxyEnabled: Bool) -> AnyComponentWithIdentity<NavigationButtonComponentEnvironment>? {
+        let tap = button.tap
+        if tap == .none {
+            return nil
+        }
+        if tap == .newStory && !storyPostingAvailable {
+            return nil
+        }
+
+        let content: NavigationButtonComponent.Content
+        var stateKey = "off"
+        if tap == .edit {
+            content = .text(title: presentationData.strings.Common_Edit, isBold: false)
+        } else {
+            let (imageName, isActive) = shadowHeaderButtonIcon(button, state: state, isDark: presentationData.theme.overallDarkAppearance, proxyEnabled: proxyEnabled)
+            content = .icon(imageName: imageName)
+            stateKey = isActive ? "on" : "off"
+        }
+
+        let tapLink = button.tapLink
+        let longPress = button.longPress
+        let longPressLink = button.longPressLink
+        var contextAction: ((UIView, ContextGesture?) -> Void)?
+        if longPress != .none {
+            contextAction = { [weak self] sourceView, _ in
+                self?.parentController?.shadowPerformHeaderAction(longPress, link: longPressLink, sourceView: sourceView)
+            }
+        }
+
+        // The header keeps the first closures for an unchanged identity, so
+        // everything the closures capture is part of the id.
+        let id = "shadow_\(key)_\(button.identityKey)_\(stateKey)"
+        return AnyComponentWithIdentity(id: id, component: AnyComponent(NavigationButtonComponent(
+            content: content,
+            pressed: { [weak self] sourceView in
+                self?.parentController?.shadowPerformHeaderAction(tap, link: tapLink, sourceView: sourceView)
+            },
+            contextAction: contextAction
+        )))
+    }
+}
+
+extension ChatListControllerImpl {
+    private func shadowHeaderToast(_ text: String) {
+        self.present(UndoOverlayController(presentationData: self.presentationData, content: .info(title: nil, text: text, timeout: nil, customUndoText: nil), elevatedLayout: false, animateInAsReplacement: true, action: { _ in return false }), in: .window(.root))
+    }
+
+    private func shadowOpenHeaderUrl(_ url: String) {
+        let context = self.context
+        context.sharedContext.openExternalUrl(context: context, urlContext: .generic, url: url, forceExternal: false, presentationData: context.sharedContext.currentPresentationData.with { $0 }, navigationController: self.navigationController as? NavigationController, dismissInput: {})
+    }
+
+    private func shadowToggleGhostFlag(title: String, _ f: @escaping (inout AyuGramSettings) -> Bool) {
+        let context = self.context
+        let _ = (context.account.postbox.transaction { transaction -> (Bool, Bool) in
+            var isOn = false
+            var ghostMode = false
+            updateAyuGramSettings(transaction: transaction, { current in
+                var settings = current
+                isOn = f(&settings)
+                ghostMode = settings.ghostMode
+                return settings
+            })
+            return (isOn, ghostMode)
+        }
+        |> deliverOnMainQueue).startStandalone(next: { [weak self] isOn, ghostMode in
+            guard let self else {
+                return
+            }
+            var text = "\(title): \(isOn ? "вкл" : "выкл")"
+            if isOn && !ghostMode {
+                text += ". Работает, когда включён Призрак."
+            }
+            self.shadowHeaderToast(text)
+        })
+    }
+
+    fileprivate func shadowPerformHeaderAction(_ action: ShadowHeaderAction, link: String, sourceView: UIView) {
+        let context = self.context
+        let _ = sourceView
+        switch action {
+        case .none:
+            break
+        case .edit:
+            if self.chatListDisplayNode.isEditing {
+                self.donePressed()
+            } else {
+                self.editPressed()
+            }
+        case .newStory:
+            if let componentView = self.chatListHeaderView(), let storyPeerListView = componentView.storyPeerListView(), storyPeerListView.isLiveStreaming {
+                self.displayContinueLiveStream()
+            } else {
+                self.openStoryCamera(fromList: false)
+            }
+        case .ghostMode:
+            let _ = updateAyuGramSettings(postbox: context.account.postbox, { settings in
+                var settings = settings
+                settings.ghostMode = !settings.ghostMode
+                settings.ghostAccountMode = .manual
+                return settings
+            }).startStandalone()
+        case .ghostSettings:
+            if !ShadowDisguise.shared.hidesSettings {
+                self.push(context.sharedContext.makeShadowGhostSettingsController(context: context))
+            }
+        case .compose:
+            self.composePressed()
+        case .search:
+            self.activateSearch()
+        case .readAllServer:
+            let alert = textAlertController(context: context, title: "Прочитать на сервере?", text: "Прочтения будут отправлены для всех обычных чатов аккаунта. Это работает и при включённом Призраке.", actions: [
+                TextAlertAction(type: .genericAction, title: self.presentationData.strings.Common_Cancel, action: {}),
+                TextAlertAction(type: .defaultAction, title: "Прочитать", action: { [weak self] in
+                    guard let self else {
+                        return
+                    }
+                    let progress = OverlayStatusController(theme: self.presentationData.theme, type: .loading(cancelled: nil))
+                    self.present(progress, in: .window(.root))
+                    let _ = (context.engine.messages.markAllChatsAsReadOnServerExplicitly()
+                    |> deliverOnMainQueue).startStandalone(next: { [weak self, weak progress] result in
+                        progress?.dismiss()
+                        guard let self else {
+                            return
+                        }
+                        if result.failed == 0 {
+                            self.shadowHeaderToast("Прочитано на сервере: \(result.succeeded) чатов.")
+                        } else {
+                            self.shadowHeaderToast("Прочитано: \(result.succeeded), не удалось: \(result.failed). Проверьте соединение.")
+                        }
+                    })
+                })
+            ])
+            self.present(alert, in: .window(.root))
+        case .readAllLocal:
+            let _ = context.engine.messages.markAllChatsAsReadLocally(items: [(.root, nil), (.archive, nil)]).startStandalone()
+            self.shadowHeaderToast("Все чаты прочитаны локально. Сервер об этом не знает.")
+        case .readFolder:
+            if let filter = self.chatListDisplayNode.mainContainerNode.currentItemNode.chatListFilter {
+                self.readAllInFilter(id: filter.id)
+            } else {
+                let _ = context.engine.messages.markAllChatsAsReadInteractively(items: [(.root, nil)]).startStandalone()
+            }
+            self.shadowHeaderToast("Папка прочитана.")
+        case .toggleHideOnline:
+            self.shadowToggleGhostFlag(title: "Скрывать онлайн", { settings in
+                settings.hideOnlineStatus = !settings.hideOnlineStatus
+                return settings.hideOnlineStatus
+            })
+        case .toggleHideReadReceipts:
+            self.shadowToggleGhostFlag(title: "Не отправлять прочтения", { settings in
+                settings.hideReadReceipts = !settings.hideReadReceipts
+                return settings.hideReadReceipts
+            })
+        case .toggleHideTyping:
+            self.shadowToggleGhostFlag(title: "Скрывать набор текста", { settings in
+                settings.hideTyping = !settings.hideTyping
+                return settings.hideTyping
+            })
+        case .savedMessages:
+            let _ = (context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: context.account.peerId))
+            |> deliverOnMainQueue).startStandalone(next: { [weak self] peer in
+                guard let self, let peer, let navigationController = self.navigationController as? NavigationController else {
+                    return
+                }
+                self.context.sharedContext.navigateToChatController(NavigateToChatControllerParams(navigationController: navigationController, context: self.context, chatLocation: .peer(peer)))
+            })
+        case .archive:
+            if let navigationController = self.navigationController as? NavigationController {
+                let chatListController = ChatListControllerImpl(context: context, location: .chatList(groupId: .archive), controlsHistoryPreload: false, enableDebugActions: false)
+                chatListController.navigationPresentation = .master
+                navigationController.pushViewController(chatListController)
+            }
+        case .deletedArchive:
+            self.shadowOpenHeaderUrl("shadow://deleted")
+        case .editedArchive:
+            self.shadowOpenHeaderUrl("shadow://edited")
+        case .shadowSettings:
+            self.shadowOpenHeaderUrl("shadow://settings")
+        case .quickReplies:
+            self.shadowOpenHeaderUrl("shadow://templates")
+        case .lockApp:
+            let _ = (context.sharedContext.accountManager.accessChallengeData()
+            |> take(1)
+            |> deliverOnMainQueue).startStandalone(next: { [weak self] view in
+                guard let self else {
+                    return
+                }
+                if view.data.isLockable {
+                    self.context.sharedContext.appLockContext.lock()
+                } else {
+                    self.shadowHeaderToast("Код-пароль не установлен: Настройки → Конфиденциальность → Код-пароль.")
+                }
+            })
+        case .switchAccount:
+            let hiddenIds = ShadowHiddenAccounts.ids()
+            let _ = (context.sharedContext.activeAccountContexts
+            |> take(1)
+            |> deliverOnMainQueue).startStandalone(next: { [weak self] _, accounts, _ in
+                guard let self else {
+                    return
+                }
+                let candidates = accounts
+                    .sorted { $0.2 < $1.2 }
+                    .filter { $0.1.account.id == self.context.account.id || !hiddenIds.contains($0.1.account.peerId.toInt64()) }
+                guard candidates.count > 1, let index = candidates.firstIndex(where: { $0.1.account.id == self.context.account.id }) else {
+                    self.shadowHeaderToast("Других аккаунтов нет.")
+                    return
+                }
+                let next = candidates[(index + 1) % candidates.count]
+                self.context.sharedContext.switchToAccount(id: next.0, fromSettingsController: nil, withChatListController: nil)
+            })
+        case .proxy:
+            let _ = (context.sharedContext.accountManager.sharedData(keys: [SharedDataKeys.proxySettings])
+            |> take(1)
+            |> deliverOnMainQueue).startStandalone(next: { [weak self] sharedData in
+                guard let self else {
+                    return
+                }
+                let settings = sharedData.entries[SharedDataKeys.proxySettings]?.get(ProxySettings.self)
+                guard let settings, !settings.servers.isEmpty else {
+                    (self.navigationController as? NavigationController)?.pushViewController(self.context.sharedContext.makeProxySettingsController(context: self.context))
+                    return
+                }
+                let enabled = !settings.enabled
+                let _ = updateProxySettingsInteractively(accountManager: self.context.sharedContext.accountManager, { current in
+                    var current = current
+                    current.enabled = enabled
+                    return current
+                }).startStandalone()
+                self.shadowHeaderToast(enabled ? "Прокси включён." : "Прокси выключен.")
+            })
+        case .nightMode:
+            let forceNight = !self.presentationData.theme.overallDarkAppearance
+            let _ = updatePresentationThemeSettingsInteractively(accountManager: context.sharedContext.accountManager, { settings in
+                var automaticThemeSwitchSetting = settings.automaticThemeSwitchSetting
+                automaticThemeSwitchSetting.force = forceNight
+                return settings.withUpdatedAutomaticThemeSwitchSetting(automaticThemeSwitchSetting)
+            }).startStandalone()
+        case .storage:
+            context.sharedContext.openStorageUsage(context: context)
+        case .customLink:
+            if let url = ShadowHeaderButtons.normalizedLink(link) {
+                self.shadowOpenHeaderUrl(url)
+            } else {
+                self.shadowHeaderToast("Ссылка для кнопки не задана: Shadow → Кастомизация → Кнопки шапки.")
             }
         }
     }
