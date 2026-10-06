@@ -2409,6 +2409,15 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             }
             actions.insert(.custom(ChatReadReportContextItem(context: context, message: message, hasReadReports: false, isEdit: true, stats: MessageReadStats(reactionCount: 0, peers: [], readTimestamps: [:]), action: nil), false), at: 0)
         }
+
+        // Shadow: a kept deleted message shows when it was deleted, on top,
+        // where "read at" / "edited at" usually are.
+        if let deleted = message.attributes.first(where: { $0 is DeletedMessageAttribute }) as? DeletedMessageAttribute, deleted.date > 0 {
+            if !actions.isEmpty {
+                actions.insert(.separator, at: 0)
+            }
+            actions.insert(.custom(ChatReadReportContextItem(context: context, message: message, hasReadReports: false, isEdit: true, stats: MessageReadStats(reactionCount: 0, peers: [], readTimestamps: [:]), deletedTime: deleted.date, action: nil), false), at: 0)
+        }
         
         if !actions.isEmpty, case .separator = actions[0] {
             actions.removeFirst()
@@ -3357,14 +3366,17 @@ final class ChatReadReportContextItem: ContextMenuCustomItem {
     fileprivate let message: EngineRawMessage
     fileprivate let hasReadReports: Bool
     fileprivate let isEdit: Bool
+    // Shadow: "удалено …" row for a kept deleted message (shown like isEdit).
+    fileprivate let deletedTime: Int32?
     fileprivate let stats: MessageReadStats?
     fileprivate let action: ((ContextControllerProtocol, @escaping (ContextMenuActionResult) -> Void, MessageReadStats?, [StickerPackCollectionInfo], TelegramMediaFile?) -> Void)?
 
-    init(context: AccountContext, message: EngineRawMessage, hasReadReports: Bool, isEdit: Bool, stats: MessageReadStats?, action: ((ContextControllerProtocol, @escaping (ContextMenuActionResult) -> Void, MessageReadStats?, [StickerPackCollectionInfo], TelegramMediaFile?) -> Void)?) {
+    init(context: AccountContext, message: EngineRawMessage, hasReadReports: Bool, isEdit: Bool, stats: MessageReadStats?, deletedTime: Int32? = nil, action: ((ContextControllerProtocol, @escaping (ContextMenuActionResult) -> Void, MessageReadStats?, [StickerPackCollectionInfo], TelegramMediaFile?) -> Void)?) {
         self.context = context
         self.message = message
         self.hasReadReports = hasReadReports
         self.isEdit = isEdit
+        self.deletedTime = deletedTime
         self.stats = stats
         self.action = action
     }
@@ -3438,7 +3450,9 @@ private final class ChatReadReportContextItemNode: ASDisplayNode, ContextMenuCus
         self.buttonNode.accessibilityLabel = presentationData.strings.VoiceChat_StopRecording
 
         self.iconNode = ASImageNode()
-        if self.item.isEdit {
+        if self.item.deletedTime != nil {
+            self.iconNode.image = generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Delete"), color: presentationData.theme.contextMenu.primaryColor)
+        } else if self.item.isEdit {
             if let useEditedTimestamp = self.item.context.getAppConfigValue("message_primary_edited_date") as? Bool, useEditedTimestamp {
                 self.iconNode.image = generateScaledImage(image: generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Time"), color: presentationData.theme.contextMenu.primaryColor), size: CGSize(width: 20.0, height: 20.0), opaque: false)
             } else {
@@ -3617,7 +3631,24 @@ private final class ChatReadReportContextItemNode: ASDisplayNode, ContextMenuCus
             reactionCount = currentStats.reactionCount
             
             if currentStats.peers.isEmpty {
-                if self.item.isEdit, let editedTime = self.item.message.editedTime, editedTime != 0 {
+                if let deletedTime = self.item.deletedTime {
+                    // Shadow: when the message was deleted, with seconds like the read time.
+                    let dateText = humanReadableStringForTimestamp(strings: self.presentationData.strings, dateTimeFormat: self.presentationData.dateTimeFormat, timestamp: deletedTime, alwaysShowTime: true, allowYesterday: true, showSeconds: true, format: HumanReadableStringFormat(
+                        dateFormatString: { value in
+                            return PresentationStrings.FormattedString(string: "удалено \(value)", ranges: [])
+                        },
+                        tomorrowFormatString: { value in
+                            return PresentationStrings.FormattedString(string: "удалено сегодня в \(value)", ranges: [])
+                        },
+                        todayFormatString: { value in
+                            return PresentationStrings.FormattedString(string: "удалено сегодня в \(value)", ranges: [])
+                        },
+                        yesterdayFormatString: { value in
+                            return PresentationStrings.FormattedString(string: "удалено вчера в \(value)", ranges: [])
+                        }
+                    )).string
+                    self.textNode.attributedText = NSAttributedString(string: dateText, font: Font.regular(floor(self.presentationData.listsFontSize.baseDisplaySize * 0.8)), textColor: self.presentationData.theme.contextMenu.primaryColor)
+                } else if self.item.isEdit, let editedTime = self.item.message.editedTime, editedTime != 0 {
                     let dateText: String
                     if let useEditedTimestamp = self.item.context.getAppConfigValue("message_primary_edited_date") as? Bool, useEditedTimestamp {
                         dateText = humanReadableStringForTimestamp(strings: self.presentationData.strings, dateTimeFormat: self.presentationData.dateTimeFormat, timestamp: self.item.message.timestamp, alwaysShowTime: true, allowYesterday: true, format: HumanReadableStringFormat(

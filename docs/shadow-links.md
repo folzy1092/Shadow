@@ -76,6 +76,7 @@
 | `shadow://ghost/typing` | Не показывать набор текста |
 | `shadow://ghost/read` | Не отправлять прочтения |
 | `shadow://ghost/stories` | Скрывать просмотры историй |
+| `shadow://ghost/offer-stories` | Предлагать призрак перед историями |
 | `shadow://ghost/scheduled` | Отправлять через отложенные |
 | `shadow://ghost/send-offline` | Отправлять без появления онлайн |
 
@@ -117,6 +118,7 @@
 | `shadow://customization/hide-all-chats` | Скрыть папку «Все чаты» |
 | `shadow://customization/hide-stories` | Скрыть истории |
 | `shadow://customization/hide-gift` | Скрыть кнопку подарка |
+| `shadow://customization/hide-greeting` | Скрыть приветственный стикер |
 | `shadow://customization/hide-premium` | Скрыть значки Premium у имён |
 | `shadow://customization/hide-ads` | Скрыть рекламу в каналах |
 | `shadow://customization/unlimited-pins` | Безлимитные закрепы |

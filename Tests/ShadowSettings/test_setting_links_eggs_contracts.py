@@ -111,10 +111,15 @@ class EasterEggContracts(unittest.TestCase):
         # AV1 videos: pick an H.264/HEVC alternative AVPlayer can play.
         self.assertIn("let file = playableFile(mainFile)", eggs)
         self.assertIn("file.alternativeRepresentations.filter { isPlayableCodec(videoCodec($0)) }", eggs)
-        # A failed item, a video that never becomes ready, or a missing end
-        # notification closes the window instead of leaving it black.
-        self.assertIn("case .failed:\n                    self.close(animated: true)", eggs)
+        # A failed item or a video that never becomes ready shows the reason
+        # on screen (nothing else logs it), then closes on a tap or after 10 s.
+        self.assertIn("case .failed:\n                    self.fail(", eggs)
+        self.assertIn('self.fail("Видео не запустилось за 10 с.")', eggs)
         self.assertIn("self.restartWatchdog(after: 10.0)", eggs)
+        self.assertIn("self.failed || !self.isActuallyPlaying", eggs)
+        # A hard link or a copy, not a symlink, gives AVPlayer its .mp4 name.
+        self.assertIn("FileManager.default.linkItem(atPath: path, toPath: linkPath)", eggs)
+        self.assertNotIn("createSymbolicLink", eggs)
         self.assertIn("duration + 3.0", eggs)
         self.assertIn('"tg://ayu/\\(name)"', eggs)
 

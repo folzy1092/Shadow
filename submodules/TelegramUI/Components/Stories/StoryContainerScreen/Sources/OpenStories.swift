@@ -181,6 +181,53 @@ public extension StoryContainerScreen {
         // effectiveAskBeforeStoryView/effectiveHideStoryViews — with the master
         // switch off, this prompt never appears regardless of the raw toggles.
         let ayuSettings = ayuGramSettingsCurrent
+        // Shadow: with Ghost Mode off the author would see the view; offer to
+        // turn Ghost Mode on (with story views hidden) first.
+        if ayuSettings.offerGhostBeforeStories, !ayuSettings.ghostMode, peerId != context.account.peerId {
+            let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+            let proceed = { [weak parentController] in
+                guard let parentController else {
+                    return
+                }
+                openPeerStoriesCustomProceed(
+                    context: context,
+                    peerId: peerId,
+                    focusOnId: focusOnId,
+                    isHidden: isHidden,
+                    initialOrder: initialOrder,
+                    singlePeer: singlePeer,
+                    parentController: parentController,
+                    transitionIn: transitionIn,
+                    transitionOut: transitionOut,
+                    setFocusedItem: setFocusedItem,
+                    setProgress: setProgress,
+                    completion: completion
+                )
+            }
+            let alertController = standardTextAlertController(
+                theme: AlertControllerTheme(presentationData: presentationData),
+                title: "Режим призрака выключен",
+                text: "Автор увидит, что вы смотрели историю. Включить призрак?",
+                actions: [
+                    TextAlertAction(type: .genericAction, title: "Смотреть так", action: {
+                        proceed()
+                    }),
+                    TextAlertAction(type: .defaultAction, title: "Включить призрак", action: {
+                        let _ = updateAyuGramSettings(postbox: context.account.postbox, { settings in
+                            var settings = settings
+                            settings.ghostMode = true
+                            settings.hideStoryViews = true
+                            settings.ghostAccountMode = .manual
+                            return settings
+                        }).start(completed: {
+                            proceed()
+                        })
+                    })
+                ]
+            )
+            parentController.present(alertController, in: .window(.root))
+            return
+        }
         if ayuSettings.effectiveAskBeforeStoryView, !ayuSettings.effectiveHideStoryViews, peerId != context.account.peerId {
             let presentationData = context.sharedContext.currentPresentationData.with { $0 }
             let proceed = { [weak parentController] in

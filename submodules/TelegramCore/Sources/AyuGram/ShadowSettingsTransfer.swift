@@ -64,6 +64,8 @@ public enum ShadowSettingsTransfer {
         "hideOwnPhoneNumber": \.hideOwnPhoneNumber,
         "hideStoriesBar": \.hideStoriesBar,
         "hideGiftButton": \.hideGiftButton,
+        "hideGreetingSticker": \.hideGreetingSticker,
+        "offerGhostBeforeStories": \.offerGhostBeforeStories,
         "hidePremiumBadges": \.hidePremiumBadges,
         "hideSponsoredMessages": \.hideSponsoredMessages,
         "messageFilterShowPlaceholder": \.messageFilterShowPlaceholder,

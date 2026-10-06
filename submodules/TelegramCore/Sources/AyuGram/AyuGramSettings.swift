@@ -103,6 +103,12 @@ public struct AyuGramSettings: Codable, Equatable {
     // Clean interface (all off by default).
     public var hideStoriesBar: Bool = false
     public var hideGiftButton: Bool = false
+    // Shadow: an empty private chat shows plain "no messages" instead of the
+    // greeting sticker card (one tap there sends the sticker).
+    public var hideGreetingSticker: Bool = false
+    // Shadow: before someone else's story, while Ghost Mode is off, offer to
+    // turn it on (the view would otherwise be visible to the author).
+    public var offerGhostBeforeStories: Bool = false
     public var hidePremiumBadges: Bool = false
     public var hideSponsoredMessages: Bool = false
     // Pin more chats than the server limit. Extra pins live on this device only.
@@ -662,6 +668,8 @@ public struct AyuGramSettings: Codable, Equatable {
         self.updateChannelBeta = ((try container.decodeIfPresent(Int32.self, forKey: "updateChannelBeta")) ?? 0) != 0
         self.hideStoriesBar = ((try container.decodeIfPresent(Int32.self, forKey: "hideStoriesBar")) ?? 0) != 0
         self.hideGiftButton = ((try container.decodeIfPresent(Int32.self, forKey: "hideGiftButton")) ?? 0) != 0
+        self.hideGreetingSticker = ((try container.decodeIfPresent(Int32.self, forKey: "hideGreetingSticker")) ?? 0) != 0
+        self.offerGhostBeforeStories = ((try container.decodeIfPresent(Int32.self, forKey: "offerGhostBeforeStories")) ?? 0) != 0
         self.hidePremiumBadges = ((try container.decodeIfPresent(Int32.self, forKey: "hidePremiumBadges")) ?? 0) != 0
         self.hideSponsoredMessages = ((try container.decodeIfPresent(Int32.self, forKey: "hideSponsoredMessages")) ?? 0) != 0
         self.unlimitedPinnedChats = ((try container.decodeIfPresent(Int32.self, forKey: "unlimitedPinnedChats")) ?? 1) != 0
@@ -760,6 +768,8 @@ public struct AyuGramSettings: Codable, Equatable {
         try container.encode((self.updateChannelBeta ? 1 : 0) as Int32, forKey: "updateChannelBeta")
         try container.encode((self.hideStoriesBar ? 1 : 0) as Int32, forKey: "hideStoriesBar")
         try container.encode((self.hideGiftButton ? 1 : 0) as Int32, forKey: "hideGiftButton")
+        try container.encode((self.hideGreetingSticker ? 1 : 0) as Int32, forKey: "hideGreetingSticker")
+        try container.encode((self.offerGhostBeforeStories ? 1 : 0) as Int32, forKey: "offerGhostBeforeStories")
         try container.encode((self.hidePremiumBadges ? 1 : 0) as Int32, forKey: "hidePremiumBadges")
         try container.encode((self.hideSponsoredMessages ? 1 : 0) as Int32, forKey: "hideSponsoredMessages")
         try container.encode((self.unlimitedPinnedChats ? 1 : 0) as Int32, forKey: "unlimitedPinnedChats")

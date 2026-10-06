@@ -172,6 +172,7 @@ public enum ShadowSettingLinks {
         ShadowSettingLink(screen: "ghost", slug: "typing", entryId: 3, key: "hideTyping", title: "Не показывать набор текста", icon: "pencil.circle"),
         ShadowSettingLink(screen: "ghost", slug: "read", entryId: 4, key: "hideReadReceipts", title: "Не отправлять прочтения", icon: "eye.slash"),
         ShadowSettingLink(screen: "ghost", slug: "stories", entryId: 5, key: "hideStoryViews", title: "Скрывать просмотры историй", icon: "circle.dashed"),
+        ShadowSettingLink(screen: "ghost", slug: "offer-stories", entryId: 12, key: "offerGhostBeforeStories", title: "Предлагать призрак перед историями", icon: "questionmark.circle"),
         ShadowSettingLink(screen: "ghost", slug: "scheduled", entryId: 8, key: "sendViaScheduled", title: "Отправлять через отложенные", icon: "clock"),
         ShadowSettingLink(screen: "ghost", slug: "send-offline", entryId: 9, key: "sendWithoutOnline", title: "Отправлять без появления онлайн", icon: "paperplane"),
 
@@ -221,6 +222,7 @@ public enum ShadowSettingLinks {
         ShadowSettingLink(screen: "customization", slug: "hide-ads", entryId: 102, key: "hideSponsoredMessages", title: "Скрыть рекламу в каналах"),
         ShadowSettingLink(screen: "customization", slug: "unlimited-pins", entryId: 104, key: "unlimitedPinnedChats", title: "Безлимитные закрепы", icon: "pin"),
         ShadowSettingLink(screen: "customization", slug: "compact-chats", entryId: 110, key: "compactChatList", title: "Компактный список чатов"),
+        ShadowSettingLink(screen: "customization", slug: "hide-greeting", entryId: 116, key: "hideGreetingSticker", title: "Скрыть приветственный стикер"),
         ShadowSettingLink(screen: "customization", slug: "voice-transcription", entryId: 103, key: "localVoiceTranscription", title: "Расшифровка голосовых на устройстве", icon: "waveform"),
         ShadowSettingLink(screen: "customization", slug: "voice-time", entryId: 112, key: "voiceTimeFormat", title: "Время на голосовых", icon: "timer", choices: ShadowVoiceTime.formats.map { ShadowVoiceTime.title($0) }),
         ShadowSettingLink(screen: "customization", slug: "voice-time-round", entryId: 113, key: "voiceTimeRoundVideos", title: "Время на голосовых: также на кружках"),

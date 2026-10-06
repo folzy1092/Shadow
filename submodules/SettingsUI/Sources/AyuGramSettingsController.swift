@@ -1192,6 +1192,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
     case hideAllChatsFolder(Bool)
     case hideStoriesBar(Bool)
     case hideGiftButton(Bool)
+    case hideGreetingSticker(Bool)
     case hidePremiumBadges(Bool)
     case hideSponsoredMessages(Bool)
     case unlimitedPinnedChats(Bool)
@@ -1258,7 +1259,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .appearanceHeader, .showMessageSeconds, .editedIndicatorAsPencil, .editedIndicatorText, .deletedIndicatorText, .regularEmojiFirst, .doubleTapToEdit, .showExactLastSeen, .showExactLastSeenSeconds, .wideChannelPosts, .showExactViewCounts, .showForwardCount, .appearanceFooter:
             return AyuCustomizationSection.appearance.rawValue
         case .headerButtons: return AyuCustomizationSection.chats.rawValue
-        case .chatsHeader, .hideAllChatsFolder, .hideStoriesBar, .hideGiftButton, .hidePremiumBadges, .hideSponsoredMessages, .unlimitedPinnedChats, .compactChatList, .chatsFooter:
+        case .chatsHeader, .hideAllChatsFolder, .hideStoriesBar, .hideGiftButton, .hideGreetingSticker, .hidePremiumBadges, .hideSponsoredMessages, .unlimitedPinnedChats, .compactChatList, .chatsFooter:
             return AyuCustomizationSection.chats.rawValue
         case .bottomBarHeader, .foldersAtBottom, .hideBottomSearch, .compactBottomBar, .bottomBarScrollMode, .bottomBarFooter:
             return AyuCustomizationSection.bottomBar.rawValue
@@ -1304,6 +1305,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .chatsFooter: return 13
         case .hideStoriesBar: return 99
         case .hideGiftButton: return 100
+        case .hideGreetingSticker: return 116
         case .hidePremiumBadges: return 101
         case .hideSponsoredMessages: return 102
         case .localVoiceTranscription: return 103
@@ -1372,6 +1374,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .hideSponsoredMessages: return (12, 4)
         case .unlimitedPinnedChats: return (12, 5)
         case .compactChatList: return (12, 6)
+        case .hideGreetingSticker: return (12, 7)
         case .cameraTileCompact: return (28, 1)
         case .localVoiceTranscription: return (28, 2)
         case .voiceTimeFormat: return (28, 3)
@@ -1504,6 +1507,10 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
             return ItemListSwitchItem(presentationData: presentationData, title: "Скрыть истории", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 arguments.updateSetting { $0.hideStoriesBar = value }
             })
+        case let .hideGreetingSticker(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Скрыть приветственный стикер", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.updateSetting { $0.hideGreetingSticker = value }
+            })
         case let .hideGiftButton(value):
             return ItemListSwitchItem(presentationData: presentationData, title: "Скрыть кнопку подарка", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 arguments.updateSetting { $0.hideGiftButton = value }
@@ -1539,7 +1546,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
                 arguments.updateSetting { $0.voiceTimeInPlayer = value }
             })
         case .chatsFooter:
-            return ItemListTextItem(presentationData: presentationData, text: .plain("«Скрыть папку «Все чаты»» убирает эту вкладку, остальные папки работают. «Скрыть истории» убирает ленту историй над списком чатов. «Скрыть кнопку подарка» убирает подарок из поля ввода. «Скрыть значки Premium» убирает звёздочку и эмодзи-статус рядом с именами (галочки верификации остаются). «Скрыть рекламу в каналах» — спонсорские сообщения не загружаются; применяется при следующем открытии канала. «Безлимитные закрепы» снимают ограничение на закрепы в списке чатов, архиве, папках, «Избранном» и темах форумов; всё сверх лимита Telegram хранится только на этом устройстве."), sectionId: self.section)
+            return ItemListTextItem(presentationData: presentationData, text: .plain("«Скрыть папку «Все чаты»» убирает эту вкладку, остальные папки работают. «Скрыть истории» убирает ленту историй над списком чатов. «Скрыть кнопку подарка» убирает подарок из поля ввода. «Скрыть приветственный стикер» убирает карточку со стикером в пустом чате с незнакомым. «Скрыть значки Premium» убирает звёздочку и эмодзи-статус рядом с именами (галочки верификации остаются). «Скрыть рекламу в каналах» — спонсорские сообщения не загружаются; применяется при следующем открытии канала. «Безлимитные закрепы» снимают ограничение на закрепы в списке чатов, архиве, папках, «Избранном» и темах форумов; всё сверх лимита Telegram хранится только на этом устройстве."), sectionId: self.section)
         case .bottomBarHeader:
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "НИЖНИЙ ИНТЕРФЕЙС", sectionId: self.section)
         case let .foldersAtBottom(value):
@@ -1698,6 +1705,7 @@ private func ayuCustomizationEntries(settings: AyuGramSettings) -> [AyuCustomiza
     entries.append(.hideSponsoredMessages(settings.hideSponsoredMessages))
     entries.append(.unlimitedPinnedChats(settings.unlimitedPinnedChats))
     entries.append(.compactChatList(settings.compactChatList))
+    entries.append(.hideGreetingSticker(settings.hideGreetingSticker))
     entries.append(.chatsFooter)
 
     entries.append(.bottomBarHeader)
@@ -2484,6 +2492,7 @@ private final class AyuGhostArguments {
     let updateHideTyping: (Bool) -> Void
     let updateHideReadReceipts: (Bool) -> Void
     let updateHideStoryViews: (Bool) -> Void
+    let updateOfferGhostBeforeStories: (Bool) -> Void
     let updateSendViaScheduled: (Bool) -> Void
     let updateSendWithoutOnline: (Bool) -> Void
 
@@ -2494,6 +2503,7 @@ private final class AyuGhostArguments {
         updateHideTyping: @escaping (Bool) -> Void,
         updateHideReadReceipts: @escaping (Bool) -> Void,
         updateHideStoryViews: @escaping (Bool) -> Void,
+        updateOfferGhostBeforeStories: @escaping (Bool) -> Void,
         updateSendViaScheduled: @escaping (Bool) -> Void,
         updateSendWithoutOnline: @escaping (Bool) -> Void
     ) {
@@ -2503,6 +2513,7 @@ private final class AyuGhostArguments {
         self.updateHideTyping = updateHideTyping
         self.updateHideReadReceipts = updateHideReadReceipts
         self.updateHideStoryViews = updateHideStoryViews
+        self.updateOfferGhostBeforeStories = updateOfferGhostBeforeStories
         self.updateSendViaScheduled = updateSendViaScheduled
         self.updateSendWithoutOnline = updateSendWithoutOnline
     }
@@ -2521,6 +2532,7 @@ private enum AyuGhostEntry: ItemListNodeEntry {
     case hideTyping(Bool)
     case hideReadReceipts(Bool)
     case hideStoryViews(Bool)
+    case offerGhostBeforeStories(Bool)
     case ghostFooter
 
     case sendingHeader
@@ -2530,7 +2542,7 @@ private enum AyuGhostEntry: ItemListNodeEntry {
 
     var section: ItemListSectionId {
         switch self {
-        case .ghostHeader, .ghostMode, .accountMode, .hideOnline, .hideTyping, .hideReadReceipts, .hideStoryViews, .ghostFooter:
+        case .ghostHeader, .ghostMode, .accountMode, .hideOnline, .hideTyping, .hideReadReceipts, .hideStoryViews, .offerGhostBeforeStories, .ghostFooter:
             return AyuGhostSection.ghost.rawValue
         case .sendingHeader, .sendViaScheduled, .sendWithoutOnline, .sendingFooter:
             return AyuGhostSection.sending.rawValue
@@ -2551,13 +2563,21 @@ private enum AyuGhostEntry: ItemListNodeEntry {
         case .sendViaScheduled: return 8
         case .sendWithoutOnline: return 9
         case .sendingFooter: return 10
+        case .offerGhostBeforeStories: return 12
+        }
+    }
+
+    // Display order; stable ids of later-added rows do not follow it.
+    private var sortKey: Double {
+        switch self {
+        case .accountMode: return 1.5
+        case .offerGhostBeforeStories: return 5.5
+        default: return Double(self.stableId)
         }
     }
 
     static func <(lhs: AyuGhostEntry, rhs: AyuGhostEntry) -> Bool {
-        if case .accountMode = lhs { return rhs.stableId > 1 }
-        if case .accountMode = rhs { return lhs.stableId <= 1 }
-        return lhs.stableId < rhs.stableId
+        return lhs.sortKey < rhs.sortKey
     }
 
     func item(presentationData: ItemListPresentationData, arguments: Any) -> ListViewItem {
@@ -2596,8 +2616,12 @@ private enum AyuGhostEntry: ItemListNodeEntry {
             return ItemListSwitchItem(presentationData: presentationData, title: "Скрывать просмотры историй", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 arguments.updateHideStoryViews(value)
             })
+        case let .offerGhostBeforeStories(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Предлагать призрак перед историями", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.updateOfferGhostBeforeStories(value)
+            })
         case .ghostFooter:
-            return ItemListTextItem(presentationData: presentationData, text: .plain("«Режим призрака» — главный переключатель. Пока он выключен, ни один из переключателей ниже не действует, даже если включён — онлайн, прочтения, набор текста, запись, загрузка и просмотры историй сообщаются как обычно. Включите «Режим призрака», чтобы переключатели ниже вступили в силу.\n\n«Не отправлять прочтения» не даёт чтению чата отмечать вас онлайн — вы остаётесь офлайн даже после открытия сообщений — и скрывает галочки прочтения от отправителя (счётчики непрочитанного при этом обнуляются локально). «Скрывать просмотры историй» убирает вас из списка зрителей. Чужой статус вы продолжаете видеть как обычно."), sectionId: self.section)
+            return ItemListTextItem(presentationData: presentationData, text: .plain("«Предлагать призрак перед историями»: если призрак выключен, перед чужой историей спросит, включить ли его.\n\n«Режим призрака» — главный переключатель. Пока он выключен, ни один из переключателей ниже не действует, даже если включён — онлайн, прочтения, набор текста, запись, загрузка и просмотры историй сообщаются как обычно. Включите «Режим призрака», чтобы переключатели ниже вступили в силу.\n\n«Не отправлять прочтения» не даёт чтению чата отмечать вас онлайн — вы остаётесь офлайн даже после открытия сообщений — и скрывает галочки прочтения от отправителя (счётчики непрочитанного при этом обнуляются локально). «Скрывать просмотры историй» убирает вас из списка зрителей. Чужой статус вы продолжаете видеть как обычно."), sectionId: self.section)
         case .sendingHeader:
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "ОТЛОЖЕННАЯ ОТПРАВКА", sectionId: self.section)
         case let .sendViaScheduled(value):
@@ -2623,6 +2647,7 @@ private func ayuGhostEntries(settings: AyuGramSettings) -> [AyuGhostEntry] {
         .hideTyping(settings.hideTyping),
         .hideReadReceipts(settings.hideReadReceipts),
         .hideStoryViews(settings.hideStoryViews),
+        .offerGhostBeforeStories(settings.offerGhostBeforeStories),
         .ghostFooter,
         .sendingHeader,
         .sendViaScheduled(settings.sendViaScheduled),
@@ -2672,6 +2697,9 @@ private func ayuGhostController(context: AccountContext, focus: ShadowSettingsSe
         },
         updateHideStoryViews: { value in
             ayuUpdateSettings(context: context) { var s = $0; s.hideStoryViews = value; return s }
+        },
+        updateOfferGhostBeforeStories: { value in
+            ayuUpdateSettings(context: context) { var s = $0; s.offerGhostBeforeStories = value; return s }
         },
         updateSendViaScheduled: { value in
             ayuUpdateSettings(context: context) { var s = $0; s.sendViaScheduled = value; return s }

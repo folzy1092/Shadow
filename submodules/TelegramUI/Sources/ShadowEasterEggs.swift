@@ -73,6 +73,18 @@ enum ShadowEasterEggs {
         return alternatives.max(by: { ($0.size ?? 0) < ($1.size ?? 0) }) ?? file
     }
 
+    // "h264 · video/mp4 · 527 КБ" (+ how many alternatives the post has).
+    static func fileDescription(_ file: TelegramMediaFile) -> String {
+        var parts: [String] = [videoCodec(file) ?? "кодек ?", file.mimeType]
+        if let size = file.size {
+            parts.append("\(size / 1024) КБ")
+        }
+        if !file.alternativeRepresentations.isEmpty {
+            parts.append("вариантов: \(file.alternativeRepresentations.count)")
+        }
+        return parts.joined(separator: " · ")
+    }
+
     private static func search(context: AccountContext, channel: String, name: String) -> Signal<Message?, NoError> {
         return context.engine.peers.resolvePeerByName(name: channel, referrer: nil)
         |> mapToSignal { result -> Signal<EnginePeer?, NoError> in
@@ -145,6 +157,7 @@ enum ShadowEasterEggs {
                 return
             }
             let file = playableFile(mainFile)
+            let fileInfo = fileDescription(file)
             let postbox = context.account.postbox
             let reference = AnyMediaReference.message(message: MessageReference(message), media: file)
             let data = Signal<MediaResourceData, NoError> { subscriber in
@@ -164,10 +177,10 @@ enum ShadowEasterEggs {
             |> take(1)
             |> timeout(60.0, queue: .mainQueue(), alternate: .complete())
             |> deliverOnMainQueue).startStrict(next: { data in
-                player.play(path: data.path, isAnimation: file.isAnimated)
+                player.play(path: data.path, isAnimation: file.isAnimated, fileInfo: fileInfo)
             }, completed: {
                 if !player.didStartPlaying {
-                    player.close(animated: true)
+                    player.fail("Видео не скачалось за 60 с.\n\(fileInfo)")
                 }
             }))
         })
@@ -189,6 +202,8 @@ private final class ShadowEasterEggPlayer {
     private var closed = false
     private var statusObservation: NSKeyValueObservation?
     private var watchdog: Foundation.Timer?
+    private var fileInfo = ""
+    private var failed = false
 
     init(windowScene: UIWindowScene?, finished: @escaping () -> Void) {
         if let windowScene {
@@ -203,7 +218,7 @@ private final class ShadowEasterEggPlayer {
         // Before the first frame (loading, or a video that will not play) a tap
         // closes it; once it really plays, nothing does.
         self.controller.cancelLoading = { [weak self] in
-            guard let self, !self.isActuallyPlaying else {
+            guard let self, self.failed || !self.isActuallyPlaying else {
                 return
             }
             self.close(animated: true)
@@ -226,14 +241,26 @@ private final class ShadowEasterEggPlayer {
         return item.status == .readyToPlay && item.currentTime().seconds > 0.05
     }
 
-    func play(path: String, isAnimation: Bool) {
+    func play(path: String, isAnimation: Bool, fileInfo: String) {
         guard !self.closed else {
             return
         }
-        // AVPlayer needs a file extension: the media cache has none.
+        // AVPlayer needs a file extension: the media cache has none. A hard
+        // link (or a copy) instead of a symlink: AVFoundation does not always
+        // follow a symlink into the media cache.
         let linkPath = NSTemporaryDirectory() + "shadow-egg-\(Int64.random(in: 1 ... Int64.max)).mp4"
-        try? FileManager.default.createSymbolicLink(atPath: linkPath, withDestinationPath: path)
+        do {
+            try FileManager.default.linkItem(atPath: path, toPath: linkPath)
+        } catch {
+            do {
+                try FileManager.default.copyItem(atPath: path, toPath: linkPath)
+            } catch {
+                self.fail("Не удалось подготовить файл: \(error.localizedDescription)\n\(fileInfo)")
+                return
+            }
+        }
         self.linkPath = linkPath
+        self.fileInfo = fileInfo
 
         let item = AVPlayerItem(url: URL(fileURLWithPath: linkPath))
         let player = AVPlayer(playerItem: item)
@@ -242,8 +269,9 @@ private final class ShadowEasterEggPlayer {
         self.endObserver = NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main, using: { [weak self] _ in
             self?.close(animated: true)
         })
-        self.failObserver = NotificationCenter.default.addObserver(forName: .AVPlayerItemFailedToPlayToEndTime, object: item, queue: .main, using: { [weak self] _ in
-            self?.close(animated: true)
+        self.failObserver = NotificationCenter.default.addObserver(forName: .AVPlayerItemFailedToPlayToEndTime, object: item, queue: .main, using: { [weak self] notification in
+            let error = notification.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey] as? Error
+            self?.fail("Воспроизведение прервалось.\n" + ShadowEasterEggPlayer.describe(error))
         })
         // A file AVPlayer cannot open only flips the item to .failed (no
         // notification): without this the black window stayed forever.
@@ -254,7 +282,7 @@ private final class ShadowEasterEggPlayer {
                 }
                 switch item.status {
                 case .failed:
-                    self.close(animated: true)
+                    self.fail("AVPlayer не открыл видео.\n" + ShadowEasterEggPlayer.describe(item.error))
                 case .readyToPlay:
                     // Never longer than the video itself (plus a margin).
                     let duration = item.duration.seconds
@@ -265,8 +293,14 @@ private final class ShadowEasterEggPlayer {
                 }
             }
         }
-        // Not ready within 10 s: give up.
-        self.restartWatchdog(after: 10.0)
+        // Not ready within 10 s: give up and say so.
+        self.watchdog?.invalidate()
+        self.watchdog = Foundation.Timer.scheduledTimer(withTimeInterval: 10.0, repeats: false, block: { [weak self] _ in
+            guard let self, !self.isActuallyPlaying else {
+                return
+            }
+            self.fail("Видео не запустилось за 10 с.")
+        })
         self.controller.setLoading(false)
         self.controller.attach(player: player)
         self.didStartPlaying = true
@@ -312,6 +346,34 @@ private final class ShadowEasterEggPlayer {
 }
 
 extension ShadowEasterEggPlayer {
+    // Shadow: a failed egg stays on screen with the reason (there is no other
+    // log of it) until a tap or 10 s.
+    func fail(_ reason: String) {
+        guard !self.closed, !self.failed else {
+            return
+        }
+        self.failed = true
+        self.player?.pause()
+        self.controller.setLoading(false)
+        var text = "Пасхалка не воспроизвелась\n\n" + reason
+        if !self.fileInfo.isEmpty, !reason.contains(self.fileInfo) {
+            text += "\n" + self.fileInfo
+        }
+        self.controller.showMessage(text)
+        self.restartWatchdog(after: 10.0)
+    }
+
+    static func describe(_ error: Error?) -> String {
+        guard let error = error as NSError? else {
+            return "Без текста ошибки."
+        }
+        var text = "\(error.domain) \(error.code): \(error.localizedDescription)"
+        if let underlying = error.userInfo[NSUnderlyingErrorKey] as? NSError {
+            text += "\n← \(underlying.domain) \(underlying.code)"
+        }
+        return text
+    }
+
     fileprivate func restartWatchdog(after seconds: Double) {
         self.watchdog?.invalidate()
         self.watchdog = Foundation.Timer.scheduledTimer(withTimeInterval: seconds, repeats: false, block: { [weak self] _ in
@@ -324,6 +386,7 @@ private final class ShadowEasterEggViewController: UIViewController {
     var cancelLoading: (() -> Void)?
     private let playerLayer = AVPlayerLayer()
     private let spinner = UIActivityIndicatorView(style: .large)
+    private let messageLabel = UILabel()
 
     override var prefersStatusBarHidden: Bool {
         return true
@@ -340,6 +403,12 @@ private final class ShadowEasterEggViewController: UIViewController {
         self.view.layer.addSublayer(self.playerLayer)
         self.spinner.color = .white
         self.view.addSubview(self.spinner)
+        self.messageLabel.textColor = UIColor(white: 1.0, alpha: 0.85)
+        self.messageLabel.font = UIFont.systemFont(ofSize: 14.0)
+        self.messageLabel.numberOfLines = 0
+        self.messageLabel.textAlignment = .center
+        self.messageLabel.isHidden = true
+        self.view.addSubview(self.messageLabel)
         self.view.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(self.tapped)))
     }
 
@@ -347,6 +416,16 @@ private final class ShadowEasterEggViewController: UIViewController {
         super.viewDidLayoutSubviews()
         self.playerLayer.frame = self.view.bounds
         self.spinner.center = CGPoint(x: self.view.bounds.midX, y: self.view.bounds.midY)
+        let width = self.view.bounds.width - 48.0
+        let size = self.messageLabel.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
+        self.messageLabel.frame = CGRect(x: 24.0, y: floor((self.view.bounds.height - size.height) / 2.0), width: width, height: ceil(size.height))
+    }
+
+    func showMessage(_ text: String) {
+        self.playerLayer.isHidden = true
+        self.messageLabel.text = text + "\n\nНажмите, чтобы закрыть"
+        self.messageLabel.isHidden = false
+        self.view.setNeedsLayout()
     }
 
     func setLoading(_ loading: Bool) {

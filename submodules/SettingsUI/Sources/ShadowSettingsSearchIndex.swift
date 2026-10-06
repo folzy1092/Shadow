@@ -88,6 +88,8 @@ enum ShadowSettingsSearchIndex {
         ShadowSettingsSearchItem(destination: .spy, entryId: 21, title: "Не очищать каналы", description: "Исключить каналы из очистки", keywords: "keep channels cleanup"),
         ShadowSettingsSearchItem(destination: .spy, entryId: 22, title: "Не очищать ботов", description: "Исключить ботов из очистки", keywords: "keep bots cleanup"),
         ShadowSettingsSearchItem(destination: .spy, entryId: 23, title: "Хранилище Shadow", description: "Галерея, история и очистка", keywords: "storage archive gallery cache кэш"),
+        ShadowSettingsSearchItem(destination: .ghost, entryId: 12, title: "Предлагать призрак перед историями", description: "Если призрак выключен, спросить перед чужой историей, включить ли его", keywords: "ghost stories история просмотр спросить предложить призрак"),
+        ShadowSettingsSearchItem(destination: .customization, entryId: 116, title: "Скрыть приветственный стикер", description: "В пустом чате с незнакомым — без карточки со стикером, чтобы не отправить случайно", keywords: "greeting sticker hello привет стикер пустой чат незнакомый"),
         ShadowSettingsSearchItem(destination: .ghost, entryId: 1, title: "Режим призрака", description: "Главный переключатель скрытия активности", keywords: "ghost mode приватность"),
         ShadowSettingsSearchItem(destination: .ghost, entryId: 2, title: "Не показывать онлайн", description: "Скрывать свой статус при включённом призраке", keywords: "hide online status"),
         ShadowSettingsSearchItem(destination: .ghost, entryId: 3, title: "Не показывать набор текста", description: "Не отправлять статус печати", keywords: "hide typing"),

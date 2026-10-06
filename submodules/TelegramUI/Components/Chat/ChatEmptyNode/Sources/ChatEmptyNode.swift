@@ -1686,6 +1686,9 @@ public final class ChatEmptyNode: ASDisplayNode {
                     } else {
                         if peer.isDeleted || peer.botInfo != nil || peer.flags.contains(.isSupport) || peer.isScam || interfaceState.peerIsBlocked {
                             contentType = .regular
+                        } else if currentAyuGramSettings(accountId: self.context.account.id).hideGreetingSticker {
+                            // Shadow: no greeting sticker card (one tap would send it).
+                            contentType = .regular
                         } else {
                             contentType = .greeting
                             if interfaceState.businessIntro != nil {
