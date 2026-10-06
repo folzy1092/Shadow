@@ -83,6 +83,12 @@ public enum ShadowSettingsTransfer {
         "screenshotTime": \.messageScreenshot.showTime
     ]
 
+    // The export allowlist's key path for `key` (settings links reuse it,
+    // ShadowSettingLinksApply.swift).
+    static func exportBooleanPath(_ key: String) -> WritableKeyPath<AyuGramSettings, Bool>? {
+        return self.booleanFields[key]
+    }
+
     public static func document(from settings: AyuGramSettings) throws -> ShadowSettingsDocument {
         var values: [String: ShadowSettingValue] = [:]
         for (key, path) in self.booleanFields {

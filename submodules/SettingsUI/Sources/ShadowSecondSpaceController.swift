@@ -206,6 +206,7 @@ enum ShadowSecondSpaceCodePrompt {
 }
 
 func shadowSecondSpaceController(context: AccountContext, focus: ShadowSettingsSearchItem? = nil) -> ViewController {
+    let linkRows = ShadowSettingsLinkRows()
     let store = ShadowSpaceStore.shared
     let accountPeerId = context.account.peerId.toInt64()
     var presentControllerImpl: ((ViewController) -> Void)?
@@ -381,6 +382,7 @@ func shadowSecondSpaceController(context: AccountContext, focus: ShadowSettingsS
             }
             entries.append(.chatsFooter(inSecond ? "Здесь все чаты, у которых видимость не «Везде»: сначала «Только второе», потом «Только основное». Чаты «Только второе» не видны в основном пространстве и не присылают уведомлений. Чаты «Только основное» не видны во втором. Изменить видимость можно и долгим нажатием на чат или перечёркнутым глазом в режиме «Изменить»." : "Из основного пространства здесь видны только чаты «Только основное», чтобы список не выдавал второе. Полный список — во втором пространстве."))
         }
+        linkRows.stableIds = entries.map { $0.stableId }
         focusedIndex = shadowSettingsFocusIndex(stableIds: entries.map { $0.stableId }, target: focus)
         let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Второе пространство"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
         let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, initialScrollToItem: shadowSettingsInitialScroll(index: focusedIndex), animateChanges: false)
@@ -391,6 +393,7 @@ func shadowSecondSpaceController(context: AccountContext, focus: ShadowSettingsS
     }
 
     let controller = ItemListController(context: context, state: signal)
+    shadowSettingsInstallLinkMenu(controller: controller, context: context, screen: "space", rows: linkRows)
     presentControllerImpl = { [weak controller] c in
         controller?.present(c, in: .window(.root))
     }
@@ -398,7 +401,7 @@ func shadowSecondSpaceController(context: AccountContext, focus: ShadowSettingsS
         (controller?.navigationController as? NavigationController)?.pushViewController(c)
     }
     if focus != nil {
-        shadowSettingsInstallFocus(controller: controller, index: { focusedIndex }, color: context.sharedContext.currentPresentationData.with { $0 }.theme.list.itemAccentColor)
+        shadowSettingsInstallFocus(controller: controller, index: { focusedIndex }, color: shadowSettingsPulseColor(context.sharedContext.currentPresentationData.with { $0 }.theme))
     }
     return controller
 }

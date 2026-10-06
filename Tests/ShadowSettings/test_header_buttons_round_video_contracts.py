@@ -22,7 +22,7 @@ class HeaderButtonsContracts(unittest.TestCase):
         # Postbox's Codable adapter traps on raw enums (test_shadow_postbox.py).
         model = read("TelegramCore/Sources/AyuGram/ShadowHeaderButtons.swift")
         self.assertNotIn("ShadowHeaderAction: String, Codable", model)
-        self.assertIn("public var tapValue: String", model)
+        self.assertIn("public var actionValue: String", model)
         self.assertIn("Foundation", model)
         self.assertNotIn("import Postbox", model)
 

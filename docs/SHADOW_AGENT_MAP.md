@@ -177,7 +177,7 @@ UI-проекция настроек выбирается в `TelegramRootContro
 ## 5d. Версии, ветки обновлений, автокоммит вайтлиста
 
 - Версия форка — `ShadowVersion.fork` (Swift) и `versions.json` ключ `fork`
-  (CI, контракт-тест сверяет). Полная версия `ShadowVersion.full` = `12.9.2-1.1.0`.
+  (CI, контракт-тест сверяет). Полная версия `ShadowVersion.full` = `12.9.2-1.2.0`.
 - **Версию форка поднимать в коммите с изменениями**, оба места сразу
   (`ShadowVersion.fork` и `versions.json` → `fork`): новые фичи — minor
   (1.1.0 → 1.2.0), исправление крупных багов — patch (1.1.0 → 1.1.1).
@@ -217,6 +217,29 @@ UI-проекция настроек выбирается в `TelegramRootContro
   в `AyuGramSettingsController.swift`, ссылка `shadow://sync`. Читает только
   сохранённые значения (`shadowStoredAyuGramSettings`), не маску маскировки.
   Не синхронизируется только `ghostLastSeenTimestamp`.
+
+## 5f. Ссылки на тумблеры, шаги кнопок шапки, пасхалки
+
+- Каждый тумблер настроек Shadow: `ShadowSettingLinks.swift` (Foundation, тест
+  `SettingLinksTests.swift`) — экран, slug, stableId строки, ключ настройки.
+  Чтение/запись по ключу — `ShadowSettingLinksApply.swift` (ключи экспорта +
+  `linkOnlyBooleanFields`, которые не экспортируются). **Новый тумблер = строка
+  в реестре** (контракт-тест сверяет stableId с экраном и ключ с настройками).
+- Экран тумблера: `ShadowSettingLinkUI.swift` — открыть с фокусом (плавная
+  прокрутка `ItemListController.shadowScrollToItem` + один импульс), подтверждение
+  смены из ссылок, меню по зажатию (`shadowSettingsInstallLinkMenu`; экран пишет
+  `linkRows.stableIds` в своём сигнале). Защитные (`isProtected`) только открываются.
+- Кнопки шапки: у жеста список `ShadowHeaderStep` (до 5), действие `.setting` —
+  тумблер по ссылке; тумблеры одной кнопки переключаются вместе
+  (`ShadowSettingsTransfer.applying(links:)`). Кнопки шапки меняют без подтверждения.
+- Пасхалки: `TelegramUI/ShadowEasterEggs.swift`, вход — `default` в
+  `ShadowLinkRouter` через `SharedAccountContext.shadowOpenEasterEgg`. Каналы —
+  `easter_egg_channels` в `shadow-whitelist.json` (по умолчанию kartinki5222,
+  ayugram_easter), правятся в «Доступ устройств» через действие воркера
+  `save_easter_eggs` (воркер передеплоить: `npx wrangler deploy`).
+- Баннеры в синхронизации: `AyuSavedMedia.bannersDidChangeNotification` →
+  `ShadowSettingsSyncManager` копирует файлы (`copyBanners`), флаг
+  `ShadowSettingsSync.syncBanners`.
 
 ## 5a. Замки чатов и второе пространство
 

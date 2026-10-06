@@ -24,6 +24,7 @@
 | `shadow://accounts` | Скрытие аккаунтов |
 | `shadow://backup` | Резервная копия настроек |
 | `shadow://misc` | Разное |
+| `shadow://screenshot` | Скриншоты сообщений |
 | `shadow://templates` | Шаблоны ответов |
 | `shadow://locks` | Замки чатов |
 | `shadow://space` | Второе пространство |
@@ -35,6 +36,153 @@
 | `shadow://folzy` | профиль Folzy |
 | `shadow://matey` | профиль matey |
 
-Неизвестная команда открывает настройки Shadow. Код: разбор —
+Неизвестная команда — это имя пасхалки (см. ниже); если пасхалки с таким
+именем нет, открываются настройки Shadow. Код: разбор —
 `TelegramCore/Sources/AyuGram/ShadowLinks.swift`, маршруты —
 `SettingsUI/Sources/ShadowLinkRouter.swift`.
+
+## Ссылки на тумблеры
+
+У каждого тумблера Shadow есть ссылка `shadow://<экран>/<тумблер>`. Зажатие
+тумблера в настройках копирует её (ссылка-переключатель, путь, текущее значение).
+
+- без параметра — открыть экран, плавно прокрутить к тумблеру и один раз подсветить;
+- `?on` / `?off` — включить / выключить;
+- `?switch` — переключить.
+
+Из сообщений, браузера и других приложений смена значения спрашивает
+подтверждение; с кнопок шапки — без вопроса. Защитные тумблеры (замки чатов,
+второе пространство) по ссылке только открываются. Список — в
+`TelegramCore/Sources/AyuGram/ShadowSettingLinks.swift`.
+
+**Призрак**
+
+| Ссылка | Тумблер |
+|---|---|
+| `shadow://ghost/mode` | Режим призрака |
+| `shadow://ghost/online` | Не показывать онлайн |
+| `shadow://ghost/typing` | Не показывать набор текста |
+| `shadow://ghost/read` | Не отправлять прочтения |
+| `shadow://ghost/stories` | Скрывать просмотры историй |
+| `shadow://ghost/scheduled` | Отправлять через отложенные |
+| `shadow://ghost/send-offline` | Отправлять без появления онлайн |
+
+**Шпион**
+
+| Ссылка | Тумблер |
+|---|---|
+| `shadow://spy/deleted` | Сохранять удалённые |
+| `shadow://spy/deleted-secret` | Сохранять удалённые в секретных чатах |
+| `shadow://spy/view-once` | Сохранять «одноразовые» |
+| `shadow://spy/edit-history` | Сохранять историю правок |
+| `shadow://spy/edit-compare` | Показывать «Сравнить правки» |
+| `shadow://spy/save-restricted` | Разрешить сохранение |
+| `shadow://spy/ask-story-view` | Спросить перед просмотром истории |
+| `shadow://spy/save-destructing` | Сохранять самоуничтожающиеся |
+| `shadow://spy/save-all-media` | Сохранять все входящие медиа |
+| `shadow://spy/clean-keep-pinned` | Не очищать закреплённые |
+| `shadow://spy/clean-skip-channels` | Исключить каналы |
+| `shadow://spy/clean-skip-bots` | Исключить ботов |
+| `shadow://spy/online-history` | Записывать, когда контакты в сети |
+| `shadow://spy/save-stories` | Сохранять просмотренные истории |
+
+**Кастомизация**
+
+| Ссылка | Тумблер |
+|---|---|
+| `shadow://customization/seconds` | Секунды в метках времени |
+| `shadow://customization/edited-pencil` | Значок ✎ вместо «Изменено» |
+| `shadow://customization/emoji-first` | Обычные эмодзи в начале клавиатуры |
+| `shadow://customization/double-tap-edit` | Двойной тап — редактирование |
+| `shadow://customization/exact-last-seen` | Точное время последнего захода |
+| `shadow://customization/last-seen-seconds` | Секунды у последнего захода |
+| `shadow://customization/wide-posts` | Широкие посты в каналах |
+| `shadow://customization/exact-views` | Точные просмотры на постах |
+| `shadow://customization/forward-count` | Счётчик пересылок |
+| `shadow://customization/username` | @username вместо имени незнакомых |
+| `shadow://customization/username-bots` | @username также для ботов |
+| `shadow://customization/mono-icons` | Одноцветные иконки |
+| `shadow://customization/hide-all-chats` | Скрыть папку «Все чаты» |
+| `shadow://customization/hide-stories` | Скрыть истории |
+| `shadow://customization/hide-gift` | Скрыть кнопку подарка |
+| `shadow://customization/hide-premium` | Скрыть значки Premium у имён |
+| `shadow://customization/hide-ads` | Скрыть рекламу в каналах |
+| `shadow://customization/unlimited-pins` | Безлимитные закрепы |
+| `shadow://customization/compact-chats` | Компактный список чатов |
+| `shadow://customization/voice-transcription` | Расшифровка голосовых на устройстве |
+| `shadow://customization/folders-bottom` | Папки снизу |
+| `shadow://customization/hide-bottom-search` | Убрать поиск снизу |
+| `shadow://customization/compact-bottom` | Уменьшить интерфейс снизу |
+| `shadow://customization/profile-id` | ID профиля (Bot API) |
+| `shadow://customization/profile-dc` | Дата-центр (DC) |
+| `shadow://customization/registration-date` | Дата регистрации |
+| `shadow://customization/hide-phone` | Скрыть свой номер |
+| `shadow://customization/round-back-camera` | Кружки на заднюю камеру |
+| `shadow://customization/camera-tile` | Камера в галерее |
+| `shadow://customization/camera-live` | Живой предпросмотр камеры |
+| `shadow://customization/round-speed` | Кастомная скорость кружков |
+| `shadow://customization/confirm-calls` | Подтверждение звонков |
+| `shadow://customization/banner` | Кастомный баннер |
+| `shadow://customization/profile-background` | Кастомный фон профиля |
+| `shadow://customization/profile-background-all` | Фон для всех профилей |
+| `shadow://customization/profile-background-settings` | Фон в настройках |
+
+**Скриншоты сообщений**
+
+| Ссылка | Тумблер |
+|---|---|
+| `shadow://screenshot/button` | Кнопка скриншота при выделении |
+| `shadow://screenshot/anonymize` | Анонимный скриншот |
+| `shadow://screenshot/avatars` | Скриншот: аватары |
+| `shadow://screenshot/names` | Скриншот: имена авторов |
+| `shadow://screenshot/badges` | Скриншот: значки у имени |
+| `shadow://screenshot/time` | Скриншот: время и статус |
+| `shadow://screenshot/reactions` | Скриншот: реакции |
+| `shadow://screenshot/own-name` | Скриншот: своё имя |
+| `shadow://screenshot/peer-names` | Скриншот: имена собеседников |
+| `shadow://screenshot/own-avatar` | Скриншот: своя аватарка |
+| `shadow://screenshot/peer-avatars` | Скриншот: аватарки собеседников |
+
+**Фильтры**
+
+| Ссылка | Тумблер |
+|---|---|
+| `shadow://filters/placeholder` | Плашка «Скрыто локальным фильтром» |
+
+**Подмена профиля**
+
+| Ссылка | Тумблер |
+|---|---|
+| `shadow://profile/spoof-id` | Подменить ID |
+| `shadow://profile/spoof-dc` | Подменить DC |
+| `shadow://profile/spoof-phone` | Подменить номер |
+
+**Разное**
+
+| Ссылка | Тумблер |
+|---|---|
+| `shadow://misc/story-camera-swipe` | Отключить свайп к камере |
+| `shadow://misc/beta` | Бета-версии |
+
+**Замки чатов**
+
+| Ссылка | Тумблер |
+|---|---|
+| `shadow://locks/hide-preview` | Прятать последнее сообщение (только открыть) |
+| `shadow://locks/intruder-photo` | Фото при неверном пароле (только открыть) |
+
+**Второе пространство**
+
+| Ссылка | Тумблер |
+|---|---|
+| `shadow://space/exclusive` | Во втором — только его чаты (только открыть) |
+
+## Пасхалки
+
+`shadow://<имя>` — если `<имя>` не команда из таблицы выше, Shadow ищет пост с
+видео или гифкой, подпись которого начинается с `shadow://<имя>` или
+`tg://ayu/<имя>`, в публичных каналах из `easter_egg_channels`
+(`shadow-whitelist.json` в tgfork, правится в «Доступ устройств»). Видео
+открывается на весь экран, закрыть его нельзя, после конца само исчезает.
+Код — `TelegramUI/Sources/ShadowEasterEggs.swift`.
+

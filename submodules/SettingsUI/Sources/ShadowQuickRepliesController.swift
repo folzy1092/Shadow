@@ -186,7 +186,7 @@ func shadowQuickRepliesController(context: AccountContext, focus: ShadowSettings
         controller?.present(c, in: .window(.root))
     }
     if focus != nil {
-        shadowSettingsInstallFocus(controller: controller, index: { focusedIndex }, color: context.sharedContext.currentPresentationData.with { $0 }.theme.list.itemAccentColor)
+        shadowSettingsInstallFocus(controller: controller, index: { focusedIndex }, color: shadowSettingsPulseColor(context.sharedContext.currentPresentationData.with { $0 }.theme))
     }
     return controller
 }

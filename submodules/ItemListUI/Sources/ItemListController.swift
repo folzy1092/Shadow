@@ -703,6 +703,13 @@ open class ItemListController: ViewController, KeyShortcutResponder, Presentable
         self.controllerNode.listNode.ensureItemNodeVisible(itemNode, animated: animated, overflow: overflow, atTop: atTop, curve: curve)
     }
     
+    // Shadow: smooth scroll to a row by index (settings links and search focus).
+    public func shadowScrollToItem(index: Int, completion: @escaping () -> Void) {
+        self.controllerNode.listNode.transaction(deleteIndices: [], insertIndicesAndItems: [], updateIndicesAndItems: [], options: [.Synchronous, .LowLatency], scrollToItem: ListViewScrollToItem(index: index, position: .center(.top), animated: true, curve: .Spring(duration: 0.55), directionHint: .Down), updateSizeAndInsets: nil, stationaryItemRange: nil, updateOpaqueState: nil, completion: { _ in
+            completion()
+        })
+    }
+
     public func afterLayout(_ f: @escaping () -> Void) {
         self.controllerNode.afterLayout(f)
     }

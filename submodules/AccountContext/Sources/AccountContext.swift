@@ -1456,6 +1456,8 @@ public protocol SharedAccountContext: AnyObject {
     func makeArchiveSettingsController(context: AccountContext) -> ViewController
     func makeShadowGhostSettingsController(context: AccountContext) -> ViewController
     // Shadow chat lock (ShadowChatLockUI in TelegramUI).
+    // Shadow: easter egg video (ShadowEasterEggs). notFound runs when the name is not an egg.
+    func shadowOpenEasterEgg(context: AccountContext, name: String, notFound: @escaping () -> Void)
     func shadowChatLockAuthenticate(reason: String, completion: @escaping (Bool) -> Void)
     // Shadow disguise (debug menu): Face ID / Touch ID, else the chat-lock password.
     func shadowDisguiseAuthenticate(reason: String, completion: @escaping (Bool) -> Void)

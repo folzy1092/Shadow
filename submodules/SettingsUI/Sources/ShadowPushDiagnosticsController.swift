@@ -76,7 +76,13 @@ private final class ShadowMiscArguments {
 }
 
 public func shadowMiscController(context: AccountContext) -> ViewController {
+    return shadowMiscController(context: context, focus: nil)
+}
+
+func shadowMiscController(context: AccountContext, focus: ShadowSettingsSearchItem?) -> ViewController {
     var pushControllerImpl: ((ViewController) -> Void)?
+    let linkRows = ShadowSettingsLinkRows()
+    var focusedIndex: Int?
     let arguments = ShadowMiscArguments(updateDisableStoryCameraSwipe: { value in
         let _ = updateAyuGramSettings(postbox: context.account.postbox, { settings in
             var settings = settings
@@ -102,10 +108,16 @@ public func shadowMiscController(context: AccountContext) -> ViewController {
             .betaChannelFooter,
             .pushDiagnostics
         ]
+        linkRows.stableIds = entries.map { $0.stableId }
+        focusedIndex = shadowSettingsFocusIndex(stableIds: entries.map { $0.stableId }, target: focus)
         let state = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Разное"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
         return (state, (ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, animateChanges: false), arguments))
     }
     let controller = ItemListController(context: context, state: signal)
+    shadowSettingsInstallLinkMenu(controller: controller, context: context, screen: "misc", rows: linkRows)
+    if focus != nil {
+        shadowSettingsInstallFocus(controller: controller, index: { focusedIndex }, color: shadowSettingsPulseColor(context.sharedContext.currentPresentationData.with { $0 }.theme))
+    }
     pushControllerImpl = { [weak controller] value in
         (controller?.navigationController as? NavigationController)?.pushViewController(value)
     }

@@ -141,7 +141,13 @@ public func shadowToggleShadowBan(context: AccountContext, peerId: EnginePeer.Id
 // MARK: - Screen
 
 public func shadowMessageFiltersController(context: AccountContext) -> ViewController {
+    return shadowMessageFiltersController(context: context, focus: nil)
+}
+
+func shadowMessageFiltersController(context: AccountContext, focus: ShadowSettingsSearchItem?) -> ViewController {
     var pushControllerImpl: ((ViewController) -> Void)?
+    let linkRows = ShadowSettingsLinkRows()
+    var focusedIndex: Int?
     var presentControllerImpl: ((ViewController) -> Void)?
 
     let arguments = ShadowMessageFiltersArguments(setShowPlaceholder: { value in
@@ -196,10 +202,16 @@ public func shadowMessageFiltersController(context: AccountContext) -> ViewContr
             entries.append(.banned(Int32(index), item.0, item.1))
         }
         entries.append(.banInfo)
+        linkRows.stableIds = entries.map { $0.stableId }
+        focusedIndex = shadowSettingsFocusIndex(stableIds: entries.map { $0.stableId }, target: focus)
         let state = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Фильтры"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
         return (state, (ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, animateChanges: true), arguments))
     }
     let controller = ItemListController(context: context, state: signal)
+    shadowSettingsInstallLinkMenu(controller: controller, context: context, screen: "filters", rows: linkRows)
+    if focus != nil {
+        shadowSettingsInstallFocus(controller: controller, index: { focusedIndex }, color: shadowSettingsPulseColor(context.sharedContext.currentPresentationData.with { $0 }.theme))
+    }
     pushControllerImpl = { [weak controller] c in
         controller?.push(c)
     }

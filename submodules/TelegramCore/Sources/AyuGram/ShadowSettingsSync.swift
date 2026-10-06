@@ -37,6 +37,28 @@ public enum ShadowSettingsSync {
         self.value.set(ids)
     }
 
+    // Also copy the chat-list banner and the profile background images
+    // (AyuSavedMedia). On unless the user turns it off.
+    private static let bannersKey = "shadow.settingsSyncBanners.v1"
+    private static let bannersValue = ValuePromise<Bool>(ShadowSettingsSync.storedSyncBanners(), ignoreRepeated: true)
+
+    private static func storedSyncBanners() -> Bool {
+        return (UserDefaults.standard.object(forKey: self.bannersKey) as? Bool) ?? true
+    }
+
+    public static var syncBanners: Bool {
+        return self.storedSyncBanners()
+    }
+
+    public static func syncBannersSignal() -> Signal<Bool, NoError> {
+        return self.bannersValue.get()
+    }
+
+    public static func setSyncBanners(_ value: Bool) {
+        UserDefaults.standard.set(value, forKey: self.bannersKey)
+        self.bannersValue.set(value)
+    }
+
     // The part of the settings that is compared between accounts.
     public static func syncedValue(_ settings: AyuGramSettings) -> AyuGramSettings {
         var result = settings

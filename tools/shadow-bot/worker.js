@@ -193,6 +193,20 @@ async function handleAdmin(request, env) {
     return put.ok ? json({ ok: true }) : json({ ok: false, error: "github", status: put.status, detail: put.detail }, 502);
   }
 
+  if (body.action === "save_easter_eggs") {
+    // Public channel usernames searched for shadow://<name> easter eggs.
+    const channels = [];
+    for (const entry of Array.isArray(body.channels) ? body.channels : []) {
+      const name = clean(entry, 40).replace(/^@/, "");
+      if (/^[A-Za-z0-9_]{4,32}$/.test(name) && !channels.includes(name)) channels.push(name);
+    }
+    const current = await ghGetJSON(env, "shadow-whitelist.json");
+    const next = current.json && typeof current.json === "object" ? current.json : {};
+    next.easter_egg_channels = channels.slice(0, 10);
+    const put = await ghPutJSON(env, "shadow-whitelist.json", next, "Shadow: update easter egg channels [skip ci]", current.sha);
+    return put.ok ? json({ ok: true }) : json({ ok: false, error: "github", status: put.status, detail: put.detail }, 502);
+  }
+
   if (body.action === "announce") {
     const build = Number(body.build) | 0;
     if (build <= 0) return json({ ok: false, error: "bad_build" }, 400);

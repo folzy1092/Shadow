@@ -651,10 +651,12 @@ func shadowHiddenAccountsController(context: AccountContext) -> ViewController {
 private enum ShadowSettingsSyncSection: Int32 {
     case accounts
     case info
+    case banners
 }
 
 private final class ShadowSettingsSyncArguments {
     let updateSynced: (Int64, Bool) -> Void
+    var updateBanners: (Bool) -> Void = { _ in }
 
     init(updateSynced: @escaping (Int64, Bool) -> Void) {
         self.updateSynced = updateSynced
@@ -665,6 +667,8 @@ private enum ShadowSettingsSyncEntry: ItemListNodeEntry {
     case header
     case account(Int32, Int64, String, Bool, Bool)
     case info
+    case banners(Bool)
+    case bannersFooter
 
     var section: ItemListSectionId {
         switch self {
@@ -672,11 +676,17 @@ private enum ShadowSettingsSyncEntry: ItemListNodeEntry {
             return ShadowSettingsSyncSection.accounts.rawValue
         case .info:
             return ShadowSettingsSyncSection.info.rawValue
+        case .banners, .bannersFooter:
+            return ShadowSettingsSyncSection.banners.rawValue
         }
     }
 
     var stableId: Int32 {
         switch self {
+        case .banners:
+            return 20_000
+        case .bannersFooter:
+            return 20_001
         case .header:
             return -1
         case let .account(index, _, _, _, _):
@@ -702,6 +712,12 @@ private enum ShadowSettingsSyncEntry: ItemListNodeEntry {
             })
         case .info:
             return ItemListTextItem(presentationData: presentationData, text: .plain("У отмеченных аккаунтов все настройки Shadow одинаковые: изменение на одном сразу повторяется на остальных. При включении настройки текущего аккаунта копируются на все отмеченные — их прежние настройки заменятся. Работает только на этом устройстве."), sectionId: self.section)
+        case let .banners(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Синхронизировать баннеры", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.updateBanners(value)
+            })
+        case .bannersFooter:
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Картинка над списком чатов и фон профиля/настроек тоже станут общими. Выключите, чтобы на аккаунтах были разные картинки."), sectionId: self.section)
         }
     }
 }
@@ -736,6 +752,12 @@ func shadowSettingsSyncController(context: AccountContext) -> ViewController {
                 return writes
             }
             |> deliverOnMainQueue).startStandalone(completed: {
+                if ShadowSettingsSync.syncBanners {
+                    let source = context.account.postbox.mediaBox.basePath
+                    for target in targets {
+                        AyuSavedMedia.copyBanners(fromBasePath: source, toBasePath: target.context.account.postbox.mediaBox.basePath)
+                    }
+                }
                 ShadowSettingsSync.setIds(updatedIds)
             })
         }
@@ -753,13 +775,30 @@ func shadowSettingsSyncController(context: AccountContext) -> ViewController {
         ]))
     })
 
+    arguments.updateBanners = { value in
+        ShadowSettingsSync.setSyncBanners(value)
+        // Turning it on: the current account's images become everyone's.
+        if value {
+            let ids = ShadowSettingsSync.ids()
+            let currentId = context.account.peerId.toInt64()
+            guard ids.contains(currentId) else {
+                return
+            }
+            let source = context.account.postbox.mediaBox.basePath
+            for account in latestAccounts where ids.contains(account.context.account.peerId.toInt64()) {
+                AyuSavedMedia.copyBanners(fromBasePath: source, toBasePath: account.context.account.postbox.mediaBox.basePath)
+            }
+        }
+    }
+
     let signal = combineLatest(queue: .mainQueue(),
         context.sharedContext.presentationData,
         shadowActiveAccounts(context: context),
-        ShadowSettingsSync.signal()
+        ShadowSettingsSync.signal(),
+        ShadowSettingsSync.syncBannersSignal()
     )
     |> deliverOnMainQueue
-    |> map { presentationData, accounts, syncedIds -> (ItemListControllerState, (ItemListNodeState, Any)) in
+    |> map { presentationData, accounts, syncedIds, syncBanners -> (ItemListControllerState, (ItemListNodeState, Any)) in
         latestAccounts = accounts
         var entries: [ShadowSettingsSyncEntry] = [.header]
         var index: Int32 = 0
@@ -769,6 +808,8 @@ func shadowSettingsSyncController(context: AccountContext) -> ViewController {
             index += 1
         }
         entries.append(.info)
+        entries.append(.banners(syncBanners))
+        entries.append(.bannersFooter)
 
         let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Синхронизация аккаунтов"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
         let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, animateChanges: true)
@@ -1469,6 +1510,7 @@ private func ayuCustomizationEntries(settings: AyuGramSettings) -> [AyuCustomiza
 }
 
 func ayuCustomizationController(context: AccountContext, focus: ShadowSettingsSearchItem? = nil) -> ViewController {
+    let linkRows = ShadowSettingsLinkRows()
     var focusedIndex: Int?
     var presentControllerImpl: ((ViewController, ViewControllerPresentationArguments?) -> Void)?
     var presentBannerImagePickerImpl: (() -> Void)?
@@ -1605,14 +1647,16 @@ func ayuCustomizationController(context: AccountContext, focus: ShadowSettingsSe
     |> map { presentationData, settings -> (ItemListControllerState, (ItemListNodeState, Any)) in
         let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Кастомизация"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
         let entries = ayuCustomizationEntries(settings: settings)
+        linkRows.stableIds = entries.map { $0.stableId }
         focusedIndex = shadowSettingsFocusIndex(stableIds: entries.map { $0.stableId }, target: focus)
         let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, initialScrollToItem: shadowSettingsInitialScroll(index: focusedIndex), animateChanges: true)
         return (controllerState, (listState, arguments))
     }
 
     let controller = ItemListController(context: context, state: signal)
+    shadowSettingsInstallLinkMenu(controller: controller, context: context, screen: "customization", rows: linkRows)
     if focus != nil {
-        shadowSettingsInstallFocus(controller: controller, index: { focusedIndex }, color: context.sharedContext.currentPresentationData.with { $0 }.theme.list.itemAccentColor)
+        shadowSettingsInstallFocus(controller: controller, index: { focusedIndex }, color: shadowSettingsPulseColor(context.sharedContext.currentPresentationData.with { $0 }.theme))
     }
     presentControllerImpl = { [weak controller] c, a in
         controller?.present(c, in: .window(.root), with: a)
@@ -2044,6 +2088,7 @@ private func ayuSpyEntries(settings: AyuGramSettings) -> [AyuSpyEntry] {
 }
 
 func ayuSpyController(context: AccountContext, focus: ShadowSettingsSearchItem? = nil) -> ViewController {
+    let linkRows = ShadowSettingsLinkRows()
     var focusedIndex: Int?
     var presentControllerImpl: ((ViewController, ViewControllerPresentationArguments?) -> Void)?
     var pushControllerImpl: ((ViewController) -> Void)?
@@ -2147,14 +2192,16 @@ func ayuSpyController(context: AccountContext, focus: ShadowSettingsSearchItem? 
     |> map { presentationData, settings -> (ItemListControllerState, (ItemListNodeState, Any)) in
         let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Шпион"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
         let entries = ayuSpyEntries(settings: settings)
+        linkRows.stableIds = entries.map { $0.stableId }
         focusedIndex = shadowSettingsFocusIndex(stableIds: entries.map { $0.stableId }, target: focus)
         let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, initialScrollToItem: shadowSettingsInitialScroll(index: focusedIndex), animateChanges: true)
         return (controllerState, (listState, arguments))
     }
 
     let controller = ItemListController(context: context, state: signal)
+    shadowSettingsInstallLinkMenu(controller: controller, context: context, screen: "spy", rows: linkRows)
     if focus != nil {
-        shadowSettingsInstallFocus(controller: controller, index: { focusedIndex }, color: context.sharedContext.currentPresentationData.with { $0 }.theme.list.itemAccentColor)
+        shadowSettingsInstallFocus(controller: controller, index: { focusedIndex }, color: shadowSettingsPulseColor(context.sharedContext.currentPresentationData.with { $0 }.theme))
     }
     presentControllerImpl = { [weak controller] c, a in
         controller?.present(c, in: .window(.root), with: a)
@@ -2326,6 +2373,7 @@ public func ayuGhostController(context: AccountContext) -> ViewController {
 }
 
 private func ayuGhostController(context: AccountContext, focus: ShadowSettingsSearchItem?) -> ViewController {
+    let linkRows = ShadowSettingsLinkRows()
     var focusedIndex: Int?
     var presentControllerImpl: ((ViewController, ViewControllerPresentationArguments?) -> Void)?
     let arguments = AyuGhostArguments(
@@ -2378,17 +2426,19 @@ private func ayuGhostController(context: AccountContext, focus: ShadowSettingsSe
     |> map { presentationData, settings -> (ItemListControllerState, (ItemListNodeState, Any)) in
         let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Призрак"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
         let entries = ayuGhostEntries(settings: settings)
+        linkRows.stableIds = entries.map { $0.stableId }
         focusedIndex = shadowSettingsFocusIndex(stableIds: entries.map { $0.stableId }, target: focus)
         let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, initialScrollToItem: shadowSettingsInitialScroll(index: focusedIndex), animateChanges: true)
         return (controllerState, (listState, arguments))
     }
 
     let controller = ItemListController(context: context, state: signal)
+    shadowSettingsInstallLinkMenu(controller: controller, context: context, screen: "ghost", rows: linkRows)
     presentControllerImpl = { [weak controller] c, a in
         controller?.present(c, in: .window(.root), with: a)
     }
     if focus != nil {
-        shadowSettingsInstallFocus(controller: controller, index: { focusedIndex }, color: context.sharedContext.currentPresentationData.with { $0 }.theme.list.itemAccentColor)
+        shadowSettingsInstallFocus(controller: controller, index: { focusedIndex }, color: shadowSettingsPulseColor(context.sharedContext.currentPresentationData.with { $0 }.theme))
     }
     return controller
 }
@@ -2527,6 +2577,7 @@ private func ayuMiscEntries(settings: AyuGramSettings) -> [AyuMiscEntry] {
 }
 
 func ayuMiscController(context: AccountContext, focus: ShadowSettingsSearchItem? = nil) -> ViewController {
+    let linkRows = ShadowSettingsLinkRows()
     var focusedIndex: Int?
     let arguments = AyuMiscArguments(
         updateSpoofIdEnabled: { value in
@@ -2557,14 +2608,16 @@ func ayuMiscController(context: AccountContext, focus: ShadowSettingsSearchItem?
     |> map { presentationData, settings -> (ItemListControllerState, (ItemListNodeState, Any)) in
         let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Подмена профиля"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
         let entries = ayuMiscEntries(settings: settings)
+        linkRows.stableIds = entries.map { $0.stableId }
         focusedIndex = shadowSettingsFocusIndex(stableIds: entries.map { $0.stableId }, target: focus)
         let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, initialScrollToItem: shadowSettingsInitialScroll(index: focusedIndex), animateChanges: true)
         return (controllerState, (listState, arguments))
     }
 
     let controller = ItemListController(context: context, state: signal)
+    shadowSettingsInstallLinkMenu(controller: controller, context: context, screen: "profile", rows: linkRows)
     if focus != nil {
-        shadowSettingsInstallFocus(controller: controller, index: { focusedIndex }, color: context.sharedContext.currentPresentationData.with { $0 }.theme.list.itemAccentColor)
+        shadowSettingsInstallFocus(controller: controller, index: { focusedIndex }, color: shadowSettingsPulseColor(context.sharedContext.currentPresentationData.with { $0 }.theme))
     }
     return controller
 }

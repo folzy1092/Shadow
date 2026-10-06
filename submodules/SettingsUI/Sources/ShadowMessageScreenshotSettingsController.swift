@@ -366,8 +366,10 @@ extension ScreenshotSettingsActions: UIColorPickerViewControllerDelegate {
     }
 }
 
-func shadowMessageScreenshotSettingsController(context: AccountContext) -> ViewController {
+func shadowMessageScreenshotSettingsController(context: AccountContext, focus: ShadowSettingsSearchItem? = nil) -> ViewController {
     let actions = ScreenshotSettingsActions(context: context)
+    let linkRows = ShadowSettingsLinkRows()
+    var focusedIndex: Int?
     let state = combineLatest(context.sharedContext.presentationData, ayuGramSettings(postbox: context.account.postbox))
     |> deliverOnMainQueue
     |> map { data, settings -> (ItemListControllerState, (ItemListNodeState, Any)) in
@@ -390,6 +392,8 @@ func shadowMessageScreenshotSettingsController(context: AccountContext) -> ViewC
             .info,
             .anonymize(options.anonymize)
         ]
+        linkRows.stableIds = entries.map { $0.stableId }
+        focusedIndex = shadowSettingsFocusIndex(stableIds: entries.map { $0.stableId }, target: focus)
         let presentation = ItemListPresentationData(data)
         return (
             ItemListControllerState(
@@ -412,5 +416,9 @@ func shadowMessageScreenshotSettingsController(context: AccountContext) -> ViewC
     }
     let controller = ItemListController(context: context, state: state)
     actions.controller = controller
+    shadowSettingsInstallLinkMenu(controller: controller, context: context, screen: "screenshot", rows: linkRows)
+    if focus != nil {
+        shadowSettingsInstallFocus(controller: controller, index: { focusedIndex }, color: shadowSettingsPulseColor(context.sharedContext.currentPresentationData.with { $0 }.theme))
+    }
     return controller
 }

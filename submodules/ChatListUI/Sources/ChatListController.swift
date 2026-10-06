@@ -7834,29 +7834,79 @@ extension ChatListControllerImpl {
 // MARK: - Shadow: custom header buttons (ShadowHeaderButtons)
 
 struct ShadowChatListHeaderState: Equatable {
+    var settings: AyuGramSettings = AyuGramSettings.defaultSettings
     var ghostMode: Bool = false
-    var hideOnline: Bool = false
-    var hideReadReceipts: Bool = false
-    var hideTyping: Bool = false
     var buttons: ShadowHeaderButtons = .stock
 
     init() {
     }
 
     init(settings: AyuGramSettings) {
+        self.settings = settings
         self.ghostMode = settings.ghostMode
-        self.hideOnline = settings.hideOnlineStatus
-        self.hideReadReceipts = settings.hideReadReceipts
-        self.hideTyping = settings.hideTyping
         self.buttons = settings.headerButtons
     }
+}
+
+// A step as a settings toggle: `.setting` steps, and custom links that are
+// settings links with ?on/?off/?switch.
+func shadowHeaderSettingStep(_ step: ShadowHeaderStep) -> (ShadowSettingLink, ShadowSettingLinks.Mode)? {
+    guard step.action == .setting || step.action == .customLink else {
+        return nil
+    }
+    guard let resolved = ShadowSettingLinks.resolve(step.link), resolved.1 != .open else {
+        return nil
+    }
+    return resolved
+}
+
+// All toggles of the tap steps are on (the button shows its "on" icon).
+private func shadowHeaderSettingsActive(_ steps: [ShadowHeaderStep], settings: AyuGramSettings) -> Bool? {
+    let toggles = steps.compactMap { shadowHeaderSettingStep($0) }.filter { $0.0.isSwitchable }
+    if toggles.isEmpty {
+        return nil
+    }
+    return toggles.allSatisfy { item in
+        guard let key = item.0.key else {
+            return false
+        }
+        return ShadowSettingsTransfer.boolValue(key, in: settings) ?? false
+    }
+}
+
+// "sf:<name>.fill" when that variant exists (the on state), else "sf:<name>".
+private func shadowHeaderSymbol(_ name: String, active: Bool) -> String {
+    // Fork glyphs (ShadowHeaderButtons.iconPresets "shadow" / "ghost").
+    if name == "shadow" {
+        return "Item List/Icons/Shadow"
+    }
+    if name == "ghost" {
+        return active ? "Chat List/GhostActiveIcon" : "Chat List/GhostIcon"
+    }
+    if active, UIImage(systemName: name + ".fill") != nil {
+        return "sf:" + name + ".fill"
+    }
+    return "sf:" + name
 }
 
 // The icon of a header button and whether its toggle is on (part of the
 // button identity, so the header redraws the icon when the state flips).
 private func shadowHeaderButtonIcon(_ button: ShadowHeaderButton, state: ShadowChatListHeaderState, isDark: Bool, proxyEnabled: Bool) -> (String, Bool) {
+    let settingsActive = shadowHeaderSettingsActive(button.tapSteps, settings: state.settings)
+    // A user-chosen icon: filled while the button's toggles are on.
+    if !button.icon.isEmpty {
+        let active = settingsActive ?? false
+        return (shadowHeaderSymbol(button.icon, active: active), active)
+    }
+    if let settingsActive, let first = button.tapSteps.compactMap({ shadowHeaderSettingStep($0) }).first {
+        let icon = first.0.icon
+        if icon.isEmpty {
+            return (settingsActive ? "sf:checkmark.circle.fill" : "sf:circle", settingsActive)
+        }
+        return (shadowHeaderSymbol(icon, active: settingsActive), settingsActive)
+    }
     switch button.tap {
-    case .none, .edit:
+    case .none, .edit, .setting:
         return ("sf:circle", false)
     case .newStory:
         return ("Chat List/AddStoryIcon", false)
@@ -7875,11 +7925,11 @@ private func shadowHeaderButtonIcon(_ button: ShadowHeaderButton, state: ShadowC
     case .readFolder:
         return ("sf:folder", false)
     case .toggleHideOnline:
-        return state.hideOnline ? ("sf:person.crop.circle.badge.xmark", true) : ("sf:person.crop.circle", false)
+        return state.settings.hideOnlineStatus ? ("sf:person.crop.circle.badge.xmark", true) : ("sf:person.crop.circle", false)
     case .toggleHideReadReceipts:
-        return state.hideReadReceipts ? ("sf:eye.slash", true) : ("sf:eye", false)
+        return state.settings.hideReadReceipts ? ("sf:eye.slash", true) : ("sf:eye", false)
     case .toggleHideTyping:
-        return state.hideTyping ? ("sf:pencil.slash", true) : ("sf:pencil", false)
+        return state.settings.hideTyping ? ("sf:pencil.slash", true) : ("sf:pencil", false)
     case .savedMessages:
         return ("sf:bookmark", false)
     case .archive:
@@ -7889,7 +7939,7 @@ private func shadowHeaderButtonIcon(_ button: ShadowHeaderButton, state: ShadowC
     case .editedArchive:
         return ("sf:pencil.and.outline", false)
     case .shadowSettings:
-        return ("sf:gear", false)
+        return ("Item List/Icons/Shadow", false)
     case .quickReplies:
         return ("sf:text.bubble", false)
     case .lockApp:
@@ -7903,7 +7953,7 @@ private func shadowHeaderButtonIcon(_ button: ShadowHeaderButton, state: ShadowC
     case .storage:
         return ("sf:square.stack.3d.up", false)
     case .customLink:
-        return ("sf:" + (button.icon.isEmpty ? "link" : button.icon), false)
+        return ("sf:link", false)
     }
 }
 
@@ -7933,17 +7983,17 @@ extension ChatListLocationContext {
     }
 
     private func shadowHeaderButtonComponent(button: ShadowHeaderButton, key: String, state: ShadowChatListHeaderState, presentationData: PresentationData, storyPostingAvailable: Bool, proxyEnabled: Bool) -> AnyComponentWithIdentity<NavigationButtonComponentEnvironment>? {
-        let tap = button.tap
-        if tap == .none {
+        let tapSteps = button.tapSteps
+        if tapSteps.isEmpty {
             return nil
         }
-        if tap == .newStory && !storyPostingAvailable {
+        if tapSteps.count == 1 && button.tap == .newStory && !storyPostingAvailable {
             return nil
         }
 
         let content: NavigationButtonComponent.Content
         var stateKey = "off"
-        if tap == .edit {
+        if tapSteps.count == 1 && button.tap == .edit && button.icon.isEmpty {
             content = .text(title: presentationData.strings.Common_Edit, isBold: false)
         } else {
             let (imageName, isActive) = shadowHeaderButtonIcon(button, state: state, isDark: presentationData.theme.overallDarkAppearance, proxyEnabled: proxyEnabled)
@@ -7951,13 +8001,11 @@ extension ChatListLocationContext {
             stateKey = isActive ? "on" : "off"
         }
 
-        let tapLink = button.tapLink
-        let longPress = button.longPress
-        let longPressLink = button.longPressLink
+        let longPressSteps = button.longPressSteps
         var contextAction: ((UIView, ContextGesture?) -> Void)?
-        if longPress != .none {
+        if !longPressSteps.isEmpty {
             contextAction = { [weak self] sourceView, _ in
-                self?.parentController?.shadowPerformHeaderAction(longPress, link: longPressLink, sourceView: sourceView)
+                self?.parentController?.shadowPerformHeaderSteps(longPressSteps, sourceView: sourceView)
             }
         }
 
@@ -7967,7 +8015,7 @@ extension ChatListLocationContext {
         return AnyComponentWithIdentity(id: id, component: AnyComponent(NavigationButtonComponent(
             content: content,
             pressed: { [weak self] sourceView in
-                self?.parentController?.shadowPerformHeaderAction(tap, link: tapLink, sourceView: sourceView)
+                self?.parentController?.shadowPerformHeaderSteps(tapSteps, sourceView: sourceView)
             },
             contextAction: contextAction
         )))
@@ -7975,7 +8023,7 @@ extension ChatListLocationContext {
 }
 
 extension ChatListControllerImpl {
-    private func shadowHeaderToast(_ text: String) {
+    fileprivate func shadowHeaderToast(_ text: String) {
         self.present(UndoOverlayController(presentationData: self.presentationData, content: .info(title: nil, text: text, timeout: nil, customUndoText: nil), elevatedLayout: false, animateInAsReplacement: true, action: { _ in return false }), in: .window(.root))
     }
 
@@ -8003,6 +8051,68 @@ extension ChatListControllerImpl {
             }
             var text = "\(title): \(isOn ? "вкл" : "выкл")"
             if isOn && !ghostMode {
+                text += ". Работает, когда включён Призрак."
+            }
+            self.shadowHeaderToast(text)
+        })
+    }
+
+    // Runs a button's steps: settings toggles change together in one write
+    // (no confirmation — the user set the button up), the rest run in order.
+    fileprivate func shadowPerformHeaderSteps(_ steps: [ShadowHeaderStep], sourceView: UIView) {
+        var toggles: [(ShadowSettingLink, ShadowSettingLinks.Mode)] = []
+        var others: [ShadowHeaderStep] = []
+        for step in steps {
+            if let toggle = shadowHeaderSettingStep(step) {
+                toggles.append(toggle)
+            } else {
+                others.append(step)
+            }
+        }
+        if !toggles.isEmpty {
+            self.shadowApplyHeaderToggles(toggles)
+        }
+        for step in others {
+            self.shadowPerformHeaderAction(step.action, link: step.link, sourceView: sourceView)
+        }
+    }
+
+    private func shadowApplyHeaderToggles(_ toggles: [(ShadowSettingLink, ShadowSettingLinks.Mode)]) {
+        let locked = toggles.filter { !$0.0.isSwitchable }
+        let switchable = toggles.filter { $0.0.isSwitchable }
+        if !locked.isEmpty && switchable.isEmpty {
+            self.shadowHeaderToast("«\(locked[0].0.title)» меняется только вручную.")
+            return
+        }
+        let context = self.context
+        let _ = (context.account.postbox.transaction { transaction -> ([Bool], Bool) in
+            var values: [Bool] = []
+            var ghostMode = false
+            updateAyuGramSettings(transaction: transaction, { current in
+                let (updated, newValues) = ShadowSettingsTransfer.applying(links: switchable, to: current)
+                values = newValues
+                ghostMode = updated.ghostMode
+                return updated
+            })
+            return (values, ghostMode)
+        }
+        |> deliverOnMainQueue).startStandalone(next: { [weak self] values, ghostMode in
+            guard let self, !values.isEmpty else {
+                return
+            }
+            let names = switchable.map { $0.0.title }
+            let allOn = values.allSatisfy { $0 }
+            let allOff = values.allSatisfy { !$0 }
+            var text: String
+            if names.count == 1 {
+                text = "\(names[0]): \(values[0] ? "вкл" : "выкл")"
+            } else if allOn || allOff {
+                text = "\(allOn ? "Включено" : "Выключено"): \(names.joined(separator: ", "))"
+            } else {
+                text = zip(names, values).map { "\($0.0): \($0.1 ? "вкл" : "выкл")" }.joined(separator: "; ")
+            }
+            let needsGhost = switchable.contains { $0.0.screen == "ghost" && $0.0.slug != "mode" }
+            if needsGhost && !ghostMode && values.contains(true) {
                 text += ". Работает, когда включён Призрак."
             }
             self.shadowHeaderToast(text)
@@ -8173,6 +8283,11 @@ extension ChatListControllerImpl {
             }).startStandalone()
         case .storage:
             context.sharedContext.openStorageUsage(context: context)
+        case .setting:
+            // Only "open" links get here (toggles run in shadowPerformHeaderSteps).
+            if let resolved = ShadowSettingLinks.resolve(link) {
+                self.shadowOpenHeaderUrl(resolved.0.path)
+            }
         case .customLink:
             if let url = ShadowHeaderButtons.normalizedLink(link) {
                 self.shadowOpenHeaderUrl(url)

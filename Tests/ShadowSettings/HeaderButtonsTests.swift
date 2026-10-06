@@ -57,7 +57,23 @@ struct HeaderButtonsTests {
 
         check(Set(ShadowHeaderAction.selectable).count == ShadowHeaderAction.selectable.count, "No duplicate actions")
         check(!ShadowHeaderAction.selectable.contains(.none), "None is not selectable as a tap")
-        check(ShadowHeaderAction.selectable.count == ShadowHeaderAction.allCases.count - 1, "Every action except none is offered")
+        check(ShadowHeaderAction.selectable.count == ShadowHeaderAction.allCases.count - 4, "Every action except none and the three legacy toggles is offered")
+        check(ShadowHeaderAction.selectable.contains(.setting), "Toggles can be put on a button")
+
+        // Several steps per gesture.
+        var multi = ShadowHeaderButton(tapSteps: [ShadowHeaderStep(.setting, link: "shadow://ghost/typing?switch"), ShadowHeaderStep(.setting, link: "shadow://ghost/scheduled?switch")], icon: "pencil.circle")
+        let multiData = try! JSONEncoder().encode(multi)
+        check(try! JSONDecoder().decode(ShadowHeaderButton.self, from: multiData) == multi, "Steps round-trip")
+        let legacyView = try! JSONSerialization.jsonObject(with: multiData) as! [String: Any]
+        check(legacyView["tap"] as? String == "setting", "First step is also written the 1.1.0 way")
+        let old = "{\"tap\":\"readAllLocal\",\"longPress\":\"compose\"}".data(using: .utf8)!
+        let oldButton = try! JSONDecoder().decode(ShadowHeaderButton.self, from: old)
+        check(oldButton.tapSteps.map { $0.action } == [.readAllLocal] && oldButton.longPressSteps.map { $0.action } == [.compose], "1.1.0 buttons decode")
+        multi.tapSteps = Array(repeating: ShadowHeaderStep(.search), count: 9)
+        check(multi.normalized().tapSteps.count == ShadowHeaderButton.maxSteps, "Step limit")
+        multi.tap = .compose
+        check(multi.tapSteps.first?.action == .compose, "Setting tap replaces the first step")
+        check(ShadowHeaderButtons.iconPresets.count >= 12 && ShadowHeaderButtons.iconPresets.contains("shadow"), "Icon presets include the Shadow logo")
 
         print("Header buttons: \(count) checks passed")
     }

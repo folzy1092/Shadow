@@ -22,7 +22,15 @@ public func shadowOpenLink(context: AccountContext, link: ShadowLinks.Link, navi
         navigationController.pushViewController(controller)
     }
 
+    // shadow://<screen>/<toggle>[?on|?off|?switch] (ShadowSettingLinks).
+    if let slug = link.arguments.first, let setting = ShadowSettingLinks.find(screen: link.command, slug: slug) {
+        shadowOpenSettingLink(context: context, setting: setting, mode: ShadowSettingLinks.mode(query: link.query), navigationController: navigationController)
+        return
+    }
+
     switch link.command {
+    case "settings":
+        push(ayuGramSettingsController(context: context))
     case "updates", "update":
         push(ayuGramSettingsController(context: context, autoCheckUpdates: true))
     case "customization":
@@ -41,6 +49,8 @@ public func shadowOpenLink(context: AccountContext, link: ShadowLinks.Link, navi
         push(shadowSettingsBackupController(context: context))
     case "misc":
         push(shadowMiscController(context: context))
+    case "screenshot":
+        push(shadowMessageScreenshotSettingsController(context: context))
     case "templates":
         push(shadowQuickRepliesController(context: context))
     case "locks":
@@ -69,7 +79,11 @@ public func shadowOpenLink(context: AccountContext, link: ShadowLinks.Link, navi
     case "matey":
         shadowOpenDeveloperProfile(context: context, peerId: 1068369028, username: "helbooyy", push: push)
     default:
-        push(ayuGramSettingsController(context: context))
+        // Shadow: an unknown command is an easter egg name (ShadowEasterEggs);
+        // when there is no such egg, Shadow settings open as before.
+        context.sharedContext.shadowOpenEasterEgg(context: context, name: link.command, notFound: {
+            push(ayuGramSettingsController(context: context))
+        })
     }
 }
 

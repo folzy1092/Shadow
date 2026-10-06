@@ -137,12 +137,42 @@ private final class ShadowHeaderButtonsArguments {
     }
 }
 
-private func shadowHeaderActionTitle(_ action: ShadowHeaderAction, link: String) -> String {
-    if action == .customLink {
-        let trimmed = link.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? "Своя ссылка (не задана)" : "Ссылка: \(trimmed)"
+private struct ShadowSheetEntry {
+    let title: String
+    let color: ActionSheetButtonColor
+    let action: () -> Void
+}
+
+private func shadowHeaderModeTitle(_ mode: ShadowSettingLinks.Mode) -> String {
+    switch mode {
+    case .toggle: return "переключать"
+    case .on: return "включать"
+    case .off: return "выключать"
+    case .open: return "открыть"
     }
-    return action.title
+}
+
+func shadowHeaderStepTitle(_ step: ShadowHeaderStep) -> String {
+    switch step.action {
+    case .customLink, .setting:
+        if let (setting, mode) = ShadowSettingLinks.resolve(step.link) {
+            return "\(setting.title) (\(shadowHeaderModeTitle(mode)))"
+        }
+        let trimmed = step.link.trimmingCharacters(in: .whitespacesAndNewlines)
+        if step.action == .setting {
+            return "Тумблер (не задан)"
+        }
+        return trimmed.isEmpty ? "Своя ссылка (не задана)" : "Ссылка: \(trimmed)"
+    default:
+        return step.action.title
+    }
+}
+
+private func shadowHeaderStepsTitle(_ steps: [ShadowHeaderStep]) -> String {
+    if steps.isEmpty {
+        return "Ничего"
+    }
+    return steps.map { shadowHeaderStepTitle($0) }.joined(separator: " + ")
 }
 
 private func shadowHeaderButtonsEntries(_ value: ShadowHeaderButtons) -> [ShadowHeaderButtonsEntry] {
@@ -151,12 +181,12 @@ private func shadowHeaderButtonsEntries(_ value: ShadowHeaderButtons) -> [Shadow
         let buttons = side.buttons(value)
         entries.append(.header(side: side.rawValue, text: "\(side.title.uppercased()) (ДО \(side.limit))"))
         for (index, button) in buttons.enumerated() {
-            let label = button.longPress == .none ? "" : "удерж.: \(shadowHeaderActionTitle(button.longPress, link: button.longPressLink))"
-            entries.append(.button(side: side.rawValue, index: index, title: shadowHeaderActionTitle(button.tap, link: button.tapLink), label: label))
+            let label = button.longPressSteps.isEmpty ? "" : "удерж.: \(shadowHeaderStepsTitle(button.longPressSteps))"
+            entries.append(.button(side: side.rawValue, index: index, title: shadowHeaderStepsTitle(button.tapSteps), label: label))
         }
         entries.append(.add(side: side.rawValue, enabled: buttons.count < side.limit))
         if side == .right {
-            entries.append(.footer(side: side.rawValue, text: "Кнопки идут в том же порядке, что и в шапке: сверху — левая. Нажмите на кнопку, чтобы задать нажатие, удержание, иконку, порядок или удалить её. Пустая сторона — без кнопок."))
+            entries.append(.footer(side: side.rawValue, text: "Кнопки идут в том же порядке, что и в шапке: сверху — левая. На одно нажатие или удержание можно поставить до \(ShadowHeaderButton.maxSteps) действий; тумблеры в одной кнопке переключаются вместе: если все включены — выключаются, иначе включаются все."))
         }
     }
     entries.append(.reset(enabled: !value.isStock))
@@ -190,7 +220,35 @@ func shadowHeaderButtonsController(context: AccountContext, focus: ShadowSetting
         }
     }
 
-    // Asks for a custom link; nil when cancelled. Invalid input shows an alert.
+    // Every sheet button closes its sheet before running its action.
+    let presentSheet: (String?, [ShadowSheetEntry]) -> Void = { title, buttons in
+        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+        let actionSheet = ActionSheetController(presentationData: presentationData)
+        var items: [ActionSheetItem] = []
+        if let title {
+            items.append(ActionSheetTextItem(title: title, parseMarkdown: false))
+        }
+        for entry in buttons {
+            items.append(ActionSheetButtonItem(title: entry.title, color: entry.color, action: { [weak actionSheet] in
+                actionSheet?.dismissAnimated()
+                entry.action()
+            }))
+        }
+        actionSheet.setItemGroups([
+            ActionSheetItemGroup(items: items),
+            ActionSheetItemGroup(items: [
+                ActionSheetButtonItem(title: presentationData.strings.Common_Cancel, color: .accent, font: .bold, action: { [weak actionSheet] in
+                    actionSheet?.dismissAnimated()
+                })
+            ])
+        ])
+        presentControllerImpl?(actionSheet)
+    }
+    let sheetButton: (String, ActionSheetButtonColor, @escaping () -> Void) -> ShadowSheetEntry = { title, color, action in
+        return ShadowSheetEntry(title: title, color: color, action: action)
+    }
+
+    // Asks for a custom link. Invalid input shows an alert.
     let askLink: (String, @escaping (String) -> Void) -> Void = { initial, completion in
         let controller = promptController(context: context, text: "Ссылка для кнопки", subtitle: "https://…, t.me/…, @username, tg://… или shadow://…", value: initial, placeholder: "t.me/username", characterLimit: 512, apply: { value in
             guard let value else {
@@ -206,90 +264,100 @@ func shadowHeaderButtonsController(context: AccountContext, focus: ShadowSetting
         presentControllerImpl?(controller)
     }
 
-    // Action picker. `allowNone`: offer "Ничего" (long press only).
-    let pickAction: (String, ShadowHeaderAction, Bool, @escaping (ShadowHeaderAction) -> Void) -> Void = { title, current, allowNone, completion in
-        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-        let actionSheet = ActionSheetController(presentationData: presentationData)
-        var items: [ActionSheetItem] = [ActionSheetTextItem(title: title, parseMarkdown: false)]
-        var actions: [ShadowHeaderAction] = []
-        if allowNone {
-            actions.append(.none)
-        }
-        actions.append(contentsOf: ShadowHeaderAction.selectable)
-        for action in actions {
-            let itemTitle = (action == current ? "✓ " : "") + action.title
-            items.append(ActionSheetButtonItem(title: itemTitle, color: .accent, action: { [weak actionSheet] in
-                actionSheet?.dismissAnimated()
-                completion(action)
+    // Toggle picker: screen → toggle → mode.
+    let pickSetting: (@escaping (ShadowHeaderStep) -> Void) -> Void = { completion in
+        var screens: [ShadowSheetEntry] = []
+        for screen in ShadowSettingLinks.screenOrder {
+            let toggles = ShadowSettingLinks.all.filter { $0.screen == screen && $0.isSwitchable }
+            if toggles.isEmpty {
+                continue
+            }
+            screens.append(ShadowSheetEntry(title: ShadowSettingLinks.screenTitles[screen] ?? screen, color: .accent, action: {
+                var items: [ShadowSheetEntry] = []
+                for setting in toggles {
+                    items.append(ShadowSheetEntry(title: setting.title, color: .accent, action: {
+                        presentSheet("«\(setting.title)»: что делать при нажатии", [
+                            ShadowSheetEntry(title: "Переключать (вкл ↔ выкл)", color: .accent, action: { completion(ShadowHeaderStep(.setting, link: setting.link(.toggle))) }),
+                            ShadowSheetEntry(title: "Только включать", color: .accent, action: { completion(ShadowHeaderStep(.setting, link: setting.link(.on))) }),
+                            ShadowSheetEntry(title: "Только выключать", color: .accent, action: { completion(ShadowHeaderStep(.setting, link: setting.link(.off))) })
+                        ])
+                    }))
+                }
+                presentSheet(ShadowSettingLinks.screenTitles[screen], items)
             }))
         }
-        actionSheet.setItemGroups([
-            ActionSheetItemGroup(items: items),
-            ActionSheetItemGroup(items: [
-                ActionSheetButtonItem(title: presentationData.strings.Common_Cancel, color: .accent, font: .bold, action: { [weak actionSheet] in
-                    actionSheet?.dismissAnimated()
-                })
-            ])
-        ])
-        presentControllerImpl?(actionSheet)
+        presentSheet("Какой тумблер", screens)
+    }
+
+    // One action: the action list, then a link or a toggle when needed.
+    let pickStep: (String, @escaping (ShadowHeaderStep) -> Void) -> Void = { title, completion in
+        var items: [ShadowSheetEntry] = []
+        for action in ShadowHeaderAction.selectable {
+            items.append(ShadowSheetEntry(title: action.title, color: .accent, action: {
+                switch action {
+                case .customLink:
+                    askLink("", { link in
+                        completion(ShadowHeaderStep(.customLink, link: link))
+                    })
+                case .setting:
+                    pickSetting(completion)
+                default:
+                    completion(ShadowHeaderStep(action))
+                }
+            }))
+        }
+        presentSheet(title, items)
     }
 
     let pickIcon: (String, @escaping (String) -> Void) -> Void = { current, completion in
-        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-        let actionSheet = ActionSheetController(presentationData: presentationData)
-        var items: [ActionSheetItem] = [ActionSheetTextItem(title: "Иконка кнопки (SF Symbols)", parseMarkdown: false)]
-        let effectiveCurrent = current.isEmpty ? "link" : current
-        for icon in ShadowHeaderButtons.customLinkIcons {
-            items.append(ActionSheetButtonItem(title: (icon == effectiveCurrent ? "✓ " : "") + icon, color: .accent, action: { [weak actionSheet] in
-                actionSheet?.dismissAnimated()
+        var items: [ShadowSheetEntry] = []
+        for icon in [""] + ShadowHeaderButtons.iconPresets {
+            items.append(ShadowSheetEntry(title: (icon == current ? "✓ " : "") + ShadowHeaderButtons.iconTitle(icon), color: .accent, action: {
                 completion(icon)
             }))
         }
-        actionSheet.setItemGroups([
-            ActionSheetItemGroup(items: items),
-            ActionSheetItemGroup(items: [
-                ActionSheetButtonItem(title: presentationData.strings.Common_Cancel, color: .accent, font: .bold, action: { [weak actionSheet] in
-                    actionSheet?.dismissAnimated()
-                })
-            ])
-        ])
-        presentControllerImpl?(actionSheet)
+        presentSheet("Иконка кнопки", items)
     }
 
-    let setTap: (ShadowHeaderSide, Int, ShadowHeaderAction) -> Void = { side, index, action in
-        if action == .customLink {
-            let buttons = side.buttons(currentButtons())
-            let initial = index < buttons.count ? buttons[index].tapLink : ""
-            askLink(initial, { link in
-                updateButton(side, index, { button in
-                    button.tap = .customLink
-                    button.tapLink = link
-                })
-            })
-        } else {
+    // Editor of one gesture's steps.
+    let editSteps: (ShadowHeaderSide, Int, Bool) -> Void = { side, index, isLongPress in
+        let buttons = side.buttons(currentButtons())
+        guard index < buttons.count else {
+            return
+        }
+        let steps = isLongPress ? buttons[index].longPressSteps : buttons[index].tapSteps
+        let setSteps: ([ShadowHeaderStep]) -> Void = { newSteps in
             updateButton(side, index, { button in
-                button.tap = action
-                button.tapLink = ""
+                if isLongPress {
+                    button.longPressSteps = newSteps
+                } else if !newSteps.isEmpty {
+                    button.tapSteps = newSteps
+                }
             })
         }
-    }
-
-    let setLongPress: (ShadowHeaderSide, Int, ShadowHeaderAction) -> Void = { side, index, action in
-        if action == .customLink {
-            let buttons = side.buttons(currentButtons())
-            let initial = index < buttons.count ? buttons[index].longPressLink : ""
-            askLink(initial, { link in
-                updateButton(side, index, { button in
-                    button.longPress = .customLink
-                    button.longPressLink = link
+        var items: [ShadowSheetEntry] = []
+        items.append(sheetButton(steps.isEmpty ? "Выбрать действие…" : "Заменить всё одним действием…", .accent, {
+            pickStep(isLongPress ? "Что делает удержание" : "Что делает нажатие", { step in
+                setSteps([step])
+            })
+        }))
+        if !steps.isEmpty && steps.count < ShadowHeaderButton.maxSteps {
+            items.append(sheetButton("Добавить действие…", .accent, {
+                pickStep("Ещё одно действие", { step in
+                    setSteps(steps + [step])
                 })
-            })
-        } else {
-            updateButton(side, index, { button in
-                button.longPress = action
-                button.longPressLink = ""
-            })
+            }))
         }
+        if steps.count > 1 || (isLongPress && !steps.isEmpty) {
+            for (stepIndex, step) in steps.enumerated() {
+                items.append(sheetButton("Убрать: \(shadowHeaderStepTitle(step))", .destructive, {
+                    var newSteps = steps
+                    newSteps.remove(at: stepIndex)
+                    setSteps(newSteps)
+                }))
+            }
+        }
+        presentSheet((isLongPress ? "Удержание: " : "Нажатие: ") + shadowHeaderStepsTitle(steps), items)
     }
 
     let arguments = ShadowHeaderButtonsArguments(open: { side, index in
@@ -299,34 +367,22 @@ func shadowHeaderButtonsController(context: AccountContext, focus: ShadowSetting
             return
         }
         let button = buttons[index]
-        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-        let actionSheet = ActionSheetController(presentationData: presentationData)
-        var items: [ActionSheetItem] = []
-        items.append(ActionSheetButtonItem(title: "Нажатие: \(shadowHeaderActionTitle(button.tap, link: button.tapLink))", color: .accent, action: { [weak actionSheet] in
-            actionSheet?.dismissAnimated()
-            pickAction("Что делает нажатие", button.tap, false, { action in
-                setTap(side, index, action)
-            })
+        var items: [ShadowSheetEntry] = []
+        items.append(sheetButton("Нажатие: \(shadowHeaderStepsTitle(button.tapSteps))", .accent, {
+            editSteps(side, index, false)
         }))
-        items.append(ActionSheetButtonItem(title: "Удержание: \(shadowHeaderActionTitle(button.longPress, link: button.longPressLink))", color: .accent, action: { [weak actionSheet] in
-            actionSheet?.dismissAnimated()
-            pickAction("Что делает удержание", button.longPress, true, { action in
-                setLongPress(side, index, action)
-            })
+        items.append(sheetButton("Удержание: \(shadowHeaderStepsTitle(button.longPressSteps))", .accent, {
+            editSteps(side, index, true)
         }))
-        if button.tap == .customLink {
-            items.append(ActionSheetButtonItem(title: "Иконка: \(button.icon.isEmpty ? "link" : button.icon)", color: .accent, action: { [weak actionSheet] in
-                actionSheet?.dismissAnimated()
-                pickIcon(button.icon, { icon in
-                    updateButton(side, index, { button in
-                        button.icon = icon
-                    })
+        items.append(sheetButton("Иконка: \(ShadowHeaderButtons.iconTitle(button.icon))", .accent, {
+            pickIcon(button.icon, { icon in
+                updateButton(side, index, { button in
+                    button.icon = icon
                 })
-            }))
-        }
+            })
+        }))
         if index > 0 {
-            items.append(ActionSheetButtonItem(title: "Сдвинуть левее", color: .accent, action: { [weak actionSheet] in
-                actionSheet?.dismissAnimated()
+            items.append(sheetButton("Сдвинуть левее", .accent, {
                 updateButtons { value in
                     var value = value
                     var buttons = side.buttons(value)
@@ -339,8 +395,7 @@ func shadowHeaderButtonsController(context: AccountContext, focus: ShadowSetting
             }))
         }
         if index + 1 < buttons.count {
-            items.append(ActionSheetButtonItem(title: "Сдвинуть правее", color: .accent, action: { [weak actionSheet] in
-                actionSheet?.dismissAnimated()
+            items.append(sheetButton("Сдвинуть правее", .accent, {
                 updateButtons { value in
                     var value = value
                     var buttons = side.buttons(value)
@@ -353,8 +408,7 @@ func shadowHeaderButtonsController(context: AccountContext, focus: ShadowSetting
             }))
         }
         if side.other.buttons(value).count < side.other.limit {
-            items.append(ActionSheetButtonItem(title: side == .left ? "Перенести направо" : "Перенести налево", color: .accent, action: { [weak actionSheet] in
-                actionSheet?.dismissAnimated()
+            items.append(sheetButton(side == .left ? "Перенести направо" : "Перенести налево", .accent, {
                 updateButtons { value in
                     var value = value
                     var buttons = side.buttons(value)
@@ -375,8 +429,7 @@ func shadowHeaderButtonsController(context: AccountContext, focus: ShadowSetting
                 }
             }))
         }
-        items.append(ActionSheetButtonItem(title: "Удалить кнопку", color: .destructive, action: { [weak actionSheet] in
-            actionSheet?.dismissAnimated()
+        items.append(sheetButton("Удалить кнопку", .destructive, {
             updateButtons { value in
                 var value = value
                 var buttons = side.buttons(value)
@@ -387,37 +440,21 @@ func shadowHeaderButtonsController(context: AccountContext, focus: ShadowSetting
                 return value
             }
         }))
-        actionSheet.setItemGroups([
-            ActionSheetItemGroup(items: items),
-            ActionSheetItemGroup(items: [
-                ActionSheetButtonItem(title: presentationData.strings.Common_Cancel, color: .accent, font: .bold, action: { [weak actionSheet] in
-                    actionSheet?.dismissAnimated()
-                })
-            ])
-        ])
-        presentControllerImpl?(actionSheet)
+        presentSheet(nil, items)
     }, add: { side in
         guard side.buttons(currentButtons()).count < side.limit else {
             return
         }
-        pickAction("Новая кнопка: что делает нажатие", .none, false, { action in
-            let append: (ShadowHeaderButton) -> Void = { button in
-                updateButtons { value in
-                    var value = value
-                    var buttons = side.buttons(value)
-                    if buttons.count < side.limit {
-                        buttons.append(button)
-                    }
-                    side.setButtons(buttons, in: &value)
-                    return value
+        pickStep("Новая кнопка: что делает нажатие", { step in
+            let longPress: [ShadowHeaderStep] = step.action == .ghostMode ? [ShadowHeaderStep(.ghostSettings)] : []
+            updateButtons { value in
+                var value = value
+                var buttons = side.buttons(value)
+                if buttons.count < side.limit {
+                    buttons.append(ShadowHeaderButton(tapSteps: [step], longPressSteps: longPress))
                 }
-            }
-            if action == .customLink {
-                askLink("", { link in
-                    append(ShadowHeaderButton(tap: .customLink, tapLink: link))
-                })
-            } else {
-                append(ShadowHeaderButton(tap: action, longPress: action == .ghostMode ? .ghostSettings : .none))
+                side.setButtons(buttons, in: &value)
+                return value
             }
         })
     }, reset: {
@@ -447,7 +484,7 @@ func shadowHeaderButtonsController(context: AccountContext, focus: ShadowSetting
         controller?.present(c, in: .window(.root))
     }
     if focus != nil {
-        shadowSettingsInstallFocus(controller: controller, index: { focusedIndex }, color: context.sharedContext.currentPresentationData.with { $0 }.theme.list.itemAccentColor)
+        shadowSettingsInstallFocus(controller: controller, index: { focusedIndex }, color: shadowSettingsPulseColor(context.sharedContext.currentPresentationData.with { $0 }.theme))
     }
     return controller
 }

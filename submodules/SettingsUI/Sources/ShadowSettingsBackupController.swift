@@ -237,7 +237,7 @@ func shadowSettingsBackupController(context: AccountContext, focus: ShadowSettin
     let controller = ItemListController(context: context, state: signal)
     coordinator.controller = controller
     if focus != nil {
-        shadowSettingsInstallFocus(controller: controller, index: { focusedIndex }, color: context.sharedContext.currentPresentationData.with { $0 }.theme.list.itemAccentColor)
+        shadowSettingsInstallFocus(controller: controller, index: { focusedIndex }, color: shadowSettingsPulseColor(context.sharedContext.currentPresentationData.with { $0 }.theme))
     }
     return controller
 }

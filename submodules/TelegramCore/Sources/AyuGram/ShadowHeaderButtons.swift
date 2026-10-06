@@ -39,6 +39,8 @@ public enum ShadowHeaderAction: String, CaseIterable {
     case nightMode
     case storage
     case customLink
+    // A Shadow settings toggle: the step link is shadow://<screen>/<slug>?on|off|switch.
+    case setting
 
     public init(storedValue: String) {
         self = ShadowHeaderAction(rawValue: storedValue) ?? .none
@@ -71,14 +73,17 @@ public enum ShadowHeaderAction: String, CaseIterable {
         case .nightMode: return "Ночная тема вкл/выкл"
         case .storage: return "Хранилище и кэш"
         case .customLink: return "Своя ссылка…"
+        case .setting: return "Тумблер настройки…"
         }
     }
 
     // Actions offered in the picker, in display order. `.none` is offered
     // separately (it means "no long-press action").
+    // The three toggleHide* actions are kept for buttons saved by 1.1.0;
+    // new buttons use `.setting` (any toggle, several per button).
     public static let selectable: [ShadowHeaderAction] = [
-        .edit, .compose, .newStory, .search,
-        .ghostMode, .ghostSettings, .toggleHideOnline, .toggleHideReadReceipts, .toggleHideTyping,
+        .setting, .edit, .compose, .newStory, .search,
+        .ghostMode, .ghostSettings,
         .readAllServer, .readAllLocal, .readFolder,
         .savedMessages, .archive, .deletedArchive, .editedArchive,
         .shadowSettings, .quickReplies, .lockApp, .switchAccount,
@@ -86,29 +91,87 @@ public enum ShadowHeaderAction: String, CaseIterable {
     ]
 }
 
+// One action of a button. A button runs all its steps in order; settings
+// toggles among them flip together (ShadowSettingLinks.groupTarget).
+public struct ShadowHeaderStep: Codable, Equatable {
+    public var actionValue: String
+    public var link: String
+
+    public var action: ShadowHeaderAction {
+        get { return ShadowHeaderAction(storedValue: self.actionValue) }
+        set { self.actionValue = newValue.rawValue }
+    }
+
+    public init(_ action: ShadowHeaderAction, link: String = "") {
+        self.actionValue = action.rawValue
+        self.link = link
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case action
+        case link
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.actionValue = (try container.decodeIfPresent(String.self, forKey: .action)) ?? ShadowHeaderAction.none.rawValue
+        self.link = (try container.decodeIfPresent(String.self, forKey: .link)) ?? ""
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(self.actionValue, forKey: .action)
+        try container.encode(self.link, forKey: .link)
+    }
+}
+
 public struct ShadowHeaderButton: Codable, Equatable {
-    public var tapValue: String
-    public var tapLink: String
-    public var longPressValue: String
-    public var longPressLink: String
-    // SF Symbol name for a custom link button; empty = default icon.
+    public static let maxSteps = 5
+
+    public var tapSteps: [ShadowHeaderStep]
+    public var longPressSteps: [ShadowHeaderStep]
+    // SF Symbol chosen by the user (ShadowHeaderButtons.iconPresets); empty = automatic.
     public var icon: String
 
+    // The first step (what 1.1.0 stored as the only action).
     public var tap: ShadowHeaderAction {
-        get { return ShadowHeaderAction(storedValue: self.tapValue) }
-        set { self.tapValue = newValue.rawValue }
+        get { return self.tapSteps.first?.action ?? .none }
+        set { let step = ShadowHeaderStep(newValue, link: self.tapLink); ShadowHeaderButton.setFirst(&self.tapSteps, step) }
+    }
+
+    public var tapLink: String {
+        get { return self.tapSteps.first?.link ?? "" }
+        set { let step = ShadowHeaderStep(self.tap, link: newValue); ShadowHeaderButton.setFirst(&self.tapSteps, step) }
     }
 
     public var longPress: ShadowHeaderAction {
-        get { return ShadowHeaderAction(storedValue: self.longPressValue) }
-        set { self.longPressValue = newValue.rawValue }
+        get { return self.longPressSteps.first?.action ?? .none }
+        set { let step = ShadowHeaderStep(newValue, link: self.longPressLink); ShadowHeaderButton.setFirst(&self.longPressSteps, step) }
+    }
+
+    public var longPressLink: String {
+        get { return self.longPressSteps.first?.link ?? "" }
+        set { let step = ShadowHeaderStep(self.longPress, link: newValue); ShadowHeaderButton.setFirst(&self.longPressSteps, step) }
+    }
+
+    private static func setFirst(_ steps: inout [ShadowHeaderStep], _ step: ShadowHeaderStep) {
+        if steps.isEmpty {
+            steps = [step]
+        } else {
+            steps[0] = step
+        }
+        steps = steps.filter { $0.action != .none }
     }
 
     public init(tap: ShadowHeaderAction, longPress: ShadowHeaderAction = .none, tapLink: String = "", longPressLink: String = "", icon: String = "") {
-        self.tapValue = tap.rawValue
-        self.tapLink = tapLink
-        self.longPressValue = longPress.rawValue
-        self.longPressLink = longPressLink
+        self.tapSteps = tap == .none ? [] : [ShadowHeaderStep(tap, link: tapLink)]
+        self.longPressSteps = longPress == .none ? [] : [ShadowHeaderStep(longPress, link: longPressLink)]
+        self.icon = icon
+    }
+
+    public init(tapSteps: [ShadowHeaderStep], longPressSteps: [ShadowHeaderStep] = [], icon: String = "") {
+        self.tapSteps = tapSteps
+        self.longPressSteps = longPressSteps
         self.icon = icon
     }
 
@@ -117,32 +180,58 @@ public struct ShadowHeaderButton: Codable, Equatable {
         case tapLink
         case longPress
         case longPressLink
+        case tapSteps
+        case longPressSteps
         case icon
     }
 
+    // 1.1.0 stored one action per gesture (tap/tapLink); newer builds store the
+    // step lists and keep writing the first step the old way for downgrades.
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.tapValue = (try container.decodeIfPresent(String.self, forKey: .tap)) ?? ShadowHeaderAction.none.rawValue
-        self.tapLink = (try container.decodeIfPresent(String.self, forKey: .tapLink)) ?? ""
-        self.longPressValue = (try container.decodeIfPresent(String.self, forKey: .longPress)) ?? ShadowHeaderAction.none.rawValue
-        self.longPressLink = (try container.decodeIfPresent(String.self, forKey: .longPressLink)) ?? ""
+        if let steps = try container.decodeIfPresent([ShadowHeaderStep].self, forKey: .tapSteps) {
+            self.tapSteps = steps
+        } else {
+            let tap = ShadowHeaderAction(storedValue: (try container.decodeIfPresent(String.self, forKey: .tap)) ?? "")
+            let link = (try container.decodeIfPresent(String.self, forKey: .tapLink)) ?? ""
+            self.tapSteps = tap == .none ? [] : [ShadowHeaderStep(tap, link: link)]
+        }
+        if let steps = try container.decodeIfPresent([ShadowHeaderStep].self, forKey: .longPressSteps) {
+            self.longPressSteps = steps
+        } else {
+            let longPress = ShadowHeaderAction(storedValue: (try container.decodeIfPresent(String.self, forKey: .longPress)) ?? "")
+            let link = (try container.decodeIfPresent(String.self, forKey: .longPressLink)) ?? ""
+            self.longPressSteps = longPress == .none ? [] : [ShadowHeaderStep(longPress, link: link)]
+        }
         self.icon = (try container.decodeIfPresent(String.self, forKey: .icon)) ?? ""
     }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(self.tapValue, forKey: .tap)
+        try container.encode(self.tapSteps, forKey: .tapSteps)
+        try container.encode(self.longPressSteps, forKey: .longPressSteps)
+        try container.encode(self.tap.rawValue, forKey: .tap)
         try container.encode(self.tapLink, forKey: .tapLink)
-        try container.encode(self.longPressValue, forKey: .longPress)
+        try container.encode(self.longPress.rawValue, forKey: .longPress)
         try container.encode(self.longPressLink, forKey: .longPressLink)
         try container.encode(self.icon, forKey: .icon)
+    }
+
+    // Unknown actions dropped, at most maxSteps per gesture.
+    public func normalized() -> ShadowHeaderButton {
+        var result = self
+        result.tapSteps = Array(self.tapSteps.filter { $0.action != .none }.prefix(ShadowHeaderButton.maxSteps))
+        result.longPressSteps = Array(self.longPressSteps.filter { $0.action != .none }.prefix(ShadowHeaderButton.maxSteps))
+        return result
     }
 
     // A stable string for the header button identity: when the button's
     // configuration changes, the header must rebuild it (NavigationButtonComponent
     // keeps the first closure for an unchanged identity).
     public var identityKey: String {
-        return [self.tapValue, self.tapLink, self.longPressValue, self.longPressLink, self.icon].joined(separator: "|")
+        let tap = self.tapSteps.map { $0.actionValue + ">" + $0.link }.joined(separator: ",")
+        let longPress = self.longPressSteps.map { $0.actionValue + ">" + $0.link }.joined(separator: ",")
+        return [tap, longPress, self.icon].joined(separator: "|")
     }
 }
 
@@ -174,8 +263,8 @@ public struct ShadowHeaderButtons: Codable, Equatable {
 
     // Drops buttons without a tap action and enforces the per-side limits.
     public func normalized() -> ShadowHeaderButtons {
-        let left = self.left.filter { $0.tap != .none }
-        let right = self.right.filter { $0.tap != .none }
+        let left = self.left.map { $0.normalized() }.filter { $0.tap != .none }
+        let right = self.right.map { $0.normalized() }.filter { $0.tap != .none }
         return ShadowHeaderButtons(left: Array(left.prefix(ShadowHeaderButtons.maxLeft)), right: Array(right.prefix(ShadowHeaderButtons.maxRight)))
     }
 
@@ -196,11 +285,35 @@ public struct ShadowHeaderButtons: Codable, Equatable {
         try container.encode(self.right, forKey: .right)
     }
 
-    // Icons offered for a custom link button (SF Symbols available on iOS 13).
-    public static let customLinkIcons: [String] = [
-        "link", "star", "heart", "bolt", "flame", "paperplane",
-        "person", "bell", "music.note", "gamecontroller", "cart", "globe"
+    // Icons a button can use instead of its automatic one: the Shadow logo,
+    // the Ghost, and SF Symbols with a ".fill" variant (iOS 13), drawn while
+    // the button's toggles are on.
+    public static let iconPresets: [String] = [
+        "shadow", "ghost", "pencil.circle", "clock", "eye.slash", "moon", "bolt", "flame",
+        "star", "heart", "bell", "shield", "paperplane", "person"
     ]
+
+    public static func iconTitle(_ icon: String) -> String {
+        switch icon {
+        case "": return "Автоматически"
+        case "shadow": return "Логотип Shadow"
+        case "ghost": return "Призрак"
+        case "pencil.circle": return "Карандаш"
+        case "clock": return "Часы"
+        case "eye.slash": return "Перечёркнутый глаз"
+        case "moon": return "Луна"
+        case "bolt": return "Молния"
+        case "flame": return "Огонь"
+        case "star": return "Звезда"
+        case "heart": return "Сердце"
+        case "bell": return "Колокольчик"
+        case "shield": return "Щит"
+        case "paperplane": return "Самолётик"
+        case "person": return "Человек"
+        case "link": return "Ссылка"
+        default: return icon
+        }
+    }
 
     // What a custom link opens. Accepts http(s)://, tg://, shadow://,
     // t.me/<name>, @<name> and a bare username; nil when the text is not a link.

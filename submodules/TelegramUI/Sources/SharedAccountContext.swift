@@ -2879,6 +2879,10 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         return PeerInfoStoryGridScreen(context: context, peerId: peerId, scope: .saved, excludeIds: excludeIds, selectionModeCompletion: completion)
     }
     
+    public func shadowOpenEasterEgg(context: AccountContext, name: String, notFound: @escaping () -> Void) {
+        ShadowEasterEggs.open(context: context, name: name, notFound: notFound)
+    }
+
     public func shadowChatLockAuthenticate(reason: String, completion: @escaping (Bool) -> Void) {
         ShadowChatLockUI.authenticate(sharedContext: self, reason: reason, completion: completion)
     }

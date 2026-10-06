@@ -415,6 +415,33 @@ public enum AyuSavedMedia {
     // MediaBox cache) under a fixed name, so there is at most one at a time.
     private static let bannerFileName = "shadow-banner.jpg"
 
+    // Shadow: posted (userInfo["basePath"]) when the user changes the banner or
+    // the profile background, so ShadowSettingsSync can copy them.
+    public static let bannersDidChangeNotification = Notification.Name("ShadowBannersDidChange")
+
+    private static func postBannersChanged(basePath: String) {
+        NotificationCenter.default.post(name: bannersDidChangeNotification, object: nil, userInfo: ["basePath": basePath])
+    }
+
+    // Copies both images from one account to another (a missing image is
+    // removed). No notification: this is the sync itself.
+    public static func copyBanners(fromBasePath: String, toBasePath: String) {
+        if fromBasePath == toBasePath {
+            return
+        }
+        let pairs: [(String, String)] = [
+            (bannerPath(basePath: fromBasePath), bannerPath(basePath: toBasePath)),
+            (profileBackgroundPath(basePath: fromBasePath), profileBackgroundPath(basePath: toBasePath))
+        ]
+        for (source, destination) in pairs {
+            if let data = try? Data(contentsOf: URL(fileURLWithPath: source)) {
+                try? data.write(to: URL(fileURLWithPath: destination), options: .atomic)
+            } else {
+                try? FileManager.default.removeItem(atPath: destination)
+            }
+        }
+    }
+
     public static func bannerPath(basePath: String) -> String {
         return ensureDirectory(basePath: basePath) + "/" + bannerFileName
     }
@@ -431,6 +458,7 @@ public enum AyuSavedMedia {
         let path = bannerPath(basePath: basePath)
         do {
             try jpegData.write(to: URL(fileURLWithPath: path), options: .atomic)
+            postBannersChanged(basePath: basePath)
             return true
         } catch {
             return false
@@ -447,7 +475,9 @@ public enum AyuSavedMedia {
     @discardableResult
     public static func removeBanner(basePath: String) -> Bool {
         let path = bannerPath(basePath: basePath)
-        return (try? FileManager.default.removeItem(atPath: path)) != nil
+        let removed = (try? FileManager.default.removeItem(atPath: path)) != nil
+        postBannersChanged(basePath: basePath)
+        return removed
     }
 
     // MARK: - Custom "My Profile" background (single fixed image, visual-only)
@@ -469,6 +499,7 @@ public enum AyuSavedMedia {
         let path = profileBackgroundPath(basePath: basePath)
         do {
             try jpegData.write(to: URL(fileURLWithPath: path), options: .atomic)
+            postBannersChanged(basePath: basePath)
             return true
         } catch {
             return false
@@ -483,7 +514,9 @@ public enum AyuSavedMedia {
     @discardableResult
     public static func removeProfileBackground(basePath: String) -> Bool {
         let path = profileBackgroundPath(basePath: basePath)
-        return (try? FileManager.default.removeItem(atPath: path)) != nil
+        let removed = (try? FileManager.default.removeItem(atPath: path)) != nil
+        postBannersChanged(basePath: basePath)
+        return removed
     }
 
     // Remove everything in the gallery. Returns freed bytes.

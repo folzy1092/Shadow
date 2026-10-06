@@ -20,6 +20,9 @@ final class ShadowSettingsSyncManager {
     // Main queue only.
     private var known: [Int64: AyuGramSettings] = [:]
     private var members: Set<Int64> = Set()
+    // Synced accounts' media paths, for the banner images.
+    private var basePaths: [Int64: String] = [:]
+    private var bannersObserver: NSObjectProtocol?
 
     static func install(sharedContext: SharedAccountContext) {
         if self.shared != nil {
@@ -55,9 +58,27 @@ final class ShadowSettingsSyncManager {
         self.disposable.set(values.start(next: { [weak self] values in
             self?.process(values)
         }))
+
+        // The banner and the profile background are files, not settings.
+        self.bannersObserver = NotificationCenter.default.addObserver(forName: AyuSavedMedia.bannersDidChangeNotification, object: nil, queue: .main, using: { [weak self] notification in
+            guard let self, ShadowSettingsSync.syncBanners, let basePath = notification.userInfo?["basePath"] as? String else {
+                return
+            }
+            guard self.basePaths.values.contains(basePath) else {
+                return
+            }
+            for (_, target) in self.basePaths where target != basePath {
+                AyuSavedMedia.copyBanners(fromBasePath: basePath, toBasePath: target)
+            }
+        })
     }
 
     private func process(_ values: [(Int64, AccountContext, AyuGramSettings)]) {
+        var basePaths: [Int64: String] = [:]
+        for (peerId, context, _) in values {
+            basePaths[peerId] = context.account.postbox.mediaBox.basePath
+        }
+        self.basePaths = basePaths
         let members = Set(values.map { $0.0 })
         if members != self.members {
             // A different group: record everyone, propagate nothing.

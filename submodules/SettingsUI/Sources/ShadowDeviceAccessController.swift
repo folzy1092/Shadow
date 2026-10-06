@@ -8,6 +8,7 @@ import ItemListUI
 import PresentationDataUtils
 import AccountContext
 import UndoUI
+import PromptUI
 
 // Shadow: admin editor for shadow-whitelist.json and release announcements
 // (ShadowDeviceAccess). When the whitelist carries an `admin_url` (the worker)
@@ -47,7 +48,7 @@ private struct ShadowDeviceAccessState: Equatable {
     }
 
     var whitelist: ShadowDeviceAccess.Whitelist {
-        return ShadowDeviceAccess.Whitelist(enabled: self.isEnabled, devices: self.devices, requestURL: self.remote?.requestURL, adminURL: self.remote?.adminURL)
+        return ShadowDeviceAccess.Whitelist(enabled: self.isEnabled, devices: self.devices, requestURL: self.remote?.requestURL, adminURL: self.remote?.adminURL, easterEggChannels: self.remote?.easterEggChannels ?? ShadowDeviceAccess.defaultEasterEggChannels)
     }
 }
 
@@ -67,6 +68,7 @@ private final class ShadowDeviceAccessArguments {
     let updateAnnounce: (String, String) -> Void
     let setAnnounceBeta: (Bool) -> Void
     let announce: () -> Void
+    var editEasterEggs: () -> Void = {}
 
     init(copyDeviceId: @escaping () -> Void, setEnabled: @escaping (Bool) -> Void, openDevice: @escaping (ShadowDeviceAccess.Device) -> Void, updateNewId: @escaping (String) -> Void, updateNewNote: @escaping (String) -> Void, add: @escaping () -> Void, save: @escaping () -> Void, copyJSON: @escaping () -> Void, openGitHub: @escaping () -> Void, updateSecretDraft: @escaping (String) -> Void, saveSecret: @escaping () -> Void, clearSecret: @escaping () -> Void, updateAnnounce: @escaping (String, String) -> Void, setAnnounceBeta: @escaping (Bool) -> Void, announce: @escaping () -> Void) {
         self.copyDeviceId = copyDeviceId
@@ -94,6 +96,7 @@ private enum ShadowDeviceAccessSection: Int32 {
     case save
     case secret
     case announce
+    case easterEggs
 }
 
 private enum ShadowDeviceAccessEntry: ItemListNodeEntry {
@@ -120,6 +123,9 @@ private enum ShadowDeviceAccessEntry: ItemListNodeEntry {
     case announceBeta(Bool)
     case announceAction(Bool)
     case announceInfo
+    case easterEggsHeader
+    case easterEggsChannels(String)
+    case easterEggsInfo
 
     var section: ItemListSectionId {
         switch self {
@@ -135,6 +141,8 @@ private enum ShadowDeviceAccessEntry: ItemListNodeEntry {
             return ShadowDeviceAccessSection.secret.rawValue
         case .announceHeader, .announceBuild, .announceVersion, .announceTitle, .announceNotes, .announceBeta, .announceAction, .announceInfo:
             return ShadowDeviceAccessSection.announce.rawValue
+        case .easterEggsHeader, .easterEggsChannels, .easterEggsInfo:
+            return ShadowDeviceAccessSection.easterEggs.rawValue
         }
     }
 
@@ -163,6 +171,9 @@ private enum ShadowDeviceAccessEntry: ItemListNodeEntry {
         case .announceBeta: return 10015
         case .announceAction: return 10016
         case .announceInfo: return 10017
+        case .easterEggsHeader: return 10018
+        case .easterEggsChannels: return 10019
+        case .easterEggsInfo: return 10020
         }
     }
 
@@ -260,6 +271,14 @@ private enum ShadowDeviceAccessEntry: ItemListNodeEntry {
                     arguments.announce()
                 }
             })
+        case .easterEggsHeader:
+            return ItemListSectionHeaderItem(presentationData: presentationData, text: "ПАСХАЛКИ", sectionId: self.section)
+        case let .easterEggsChannels(value):
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Каналы", label: value, sectionId: self.section, style: .blocks, action: {
+                arguments.editEasterEggs()
+            })
+        case .easterEggsInfo:
+            return ItemListTextItem(presentationData: presentationData, text: .plain("shadow://<имя> ищет пост с видео или гифкой, в подписи которого есть shadow://<имя> или tg://ayu/<имя>, — по каналам по порядку. Каналы должны быть публичными. Изменение сохраняется в tgfork через бота."), sectionId: self.section)
         case .announceInfo:
             return ItemListTextItem(presentationData: presentationData, text: .plain("Объявляет сборку в выбранной ветке (stable или бета) через бота. Друзьям покажется обновление. Номер сборки смотри в заголовке релиза."), sectionId: self.section)
         }
@@ -536,12 +555,44 @@ public func shadowDeviceAccessController(context: AccountContext, prefillDeviceI
                 entries.append(.announceBeta(state.announceBeta))
                 entries.append(.announceAction(state.announcing))
                 entries.append(.announceInfo)
+                let channels = state.remote?.easterEggChannels ?? ShadowDeviceAccess.defaultEasterEggChannels
+                entries.append(.easterEggsHeader)
+                entries.append(.easterEggsChannels(channels.isEmpty ? "нет" : channels.map { "@" + $0 }.joined(separator: ", ")))
+                entries.append(.easterEggsInfo)
             }
         }
 
         let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Доступ устройств"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
         let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, animateChanges: true)
         return (controllerState, (listState, arguments))
+    }
+
+    arguments.editEasterEggs = {
+        let snapshot = stateValue.with { $0 }
+        let current = (snapshot.remote?.easterEggChannels ?? ShadowDeviceAccess.defaultEasterEggChannels).map { "@" + $0 }.joined(separator: ", ")
+        presentControllerImpl?(promptController(context: context, text: "Каналы с пасхалками", subtitle: "Юзернеймы через запятую, по порядку поиска", value: current, placeholder: "@kartinki5222, @ayugram_easter", characterLimit: 400, apply: { value in
+            guard let value else {
+                return
+            }
+            let parts = value.split(whereSeparator: { $0 == "," || $0 == " " || $0 == "\n" }).map(String.init)
+            var channels: [String] = []
+            for part in parts {
+                if let name = ShadowDeviceAccess.normalizeChannelUsername(part), !channels.contains(where: { $0.lowercased() == name.lowercased() }) {
+                    channels.append(name)
+                }
+            }
+            ShadowDeviceAccess.saveEasterEggChannels(adminURL: snapshot.adminURL, channels: channels) { result in
+                if handleAdminResult(result, "Каналы пасхалок сохранены") {
+                    updateState { state in
+                        var state = state
+                        if let remote = state.remote {
+                            state.remote = ShadowDeviceAccess.Whitelist(enabled: remote.enabled, devices: remote.devices, requestURL: remote.requestURL, adminURL: remote.adminURL, easterEggChannels: channels)
+                        }
+                        return state
+                    }
+                }
+            }
+        }))
     }
 
     let controller = ItemListController(context: context, state: signal)

@@ -148,6 +148,7 @@ private func shadowChatLockResetText(remaining: TimeInterval) -> String {
 }
 
 func shadowChatLocksController(context: AccountContext, focus: ShadowSettingsSearchItem? = nil) -> ViewController {
+    let linkRows = ShadowSettingsLinkRows()
     let store = ShadowChatLockStore.shared
     let accountPeerId = context.account.peerId.toInt64()
     var presentControllerImpl: ((ViewController) -> Void)?
@@ -295,6 +296,7 @@ func shadowChatLocksController(context: AccountContext, focus: ShadowSettingsSea
         entries.append(.resetFooter)
         entries.append(.intruderPhoto(ShadowIntruderLog.shared.isEnabled))
         entries.append(.intruderFooter)
+        linkRows.stableIds = entries.map { $0.stableId }
         focusedIndex = shadowSettingsFocusIndex(stableIds: entries.map { $0.stableId }, target: focus)
         let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Замки чатов"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
         let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, initialScrollToItem: shadowSettingsInitialScroll(index: focusedIndex), animateChanges: false)
@@ -305,11 +307,12 @@ func shadowChatLocksController(context: AccountContext, focus: ShadowSettingsSea
     }
 
     let controller = ItemListController(context: context, state: signal)
+    shadowSettingsInstallLinkMenu(controller: controller, context: context, screen: "locks", rows: linkRows)
     presentControllerImpl = { [weak controller] c in
         controller?.present(c, in: .window(.root))
     }
     if focus != nil {
-        shadowSettingsInstallFocus(controller: controller, index: { focusedIndex }, color: context.sharedContext.currentPresentationData.with { $0 }.theme.list.itemAccentColor)
+        shadowSettingsInstallFocus(controller: controller, index: { focusedIndex }, color: shadowSettingsPulseColor(context.sharedContext.currentPresentationData.with { $0 }.theme))
     }
     return controller
 }

@@ -44,11 +44,15 @@ public enum ShadowDeviceAccess {
         // list / a release announcement here, and the worker commits it to the
         // tgfork repo. nil → the admin menu falls back to copy-JSON-by-hand.
         public let adminURL: URL?
-        public init(enabled: Bool, devices: [Device], requestURL: URL? = nil, adminURL: URL? = nil) {
+        // Shadow: public channels (usernames) searched for easter eggs
+        // (shadow://<name>), in order. Edited from the admin menu.
+        public let easterEggChannels: [String]
+        public init(enabled: Bool, devices: [Device], requestURL: URL? = nil, adminURL: URL? = nil, easterEggChannels: [String] = ShadowDeviceAccess.defaultEasterEggChannels) {
             self.enabled = enabled
             self.devices = devices
             self.requestURL = requestURL
             self.adminURL = adminURL
+            self.easterEggChannels = easterEggChannels
         }
     }
 
@@ -56,6 +60,30 @@ public enum ShadowDeviceAccess {
         case allowed
         case denied
         case unknown
+    }
+
+    public static let defaultEasterEggChannels = ["kartinki5222", "ayugram_easter"]
+
+    // "@name", "t.me/name", "https://t.me/name" → "name"; nil when not a username.
+    public static func normalizeChannelUsername(_ value: String) -> String? {
+        var name = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        for prefix in ["https://", "http://"] where name.lowercased().hasPrefix(prefix) {
+            name = String(name.dropFirst(prefix.count))
+        }
+        for prefix in ["t.me/", "telegram.me/"] where name.lowercased().hasPrefix(prefix) {
+            name = String(name.dropFirst(prefix.count))
+        }
+        if name.hasPrefix("@") {
+            name.removeFirst()
+        }
+        if let slash = name.firstIndex(of: "/") {
+            name = String(name[..<slash])
+        }
+        let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_")
+        guard name.count >= 4, name.count <= 32, name.unicodeScalars.allSatisfy({ allowed.contains($0) }) else {
+            return nil
+        }
+        return name
     }
 
     public static func normalize(_ id: String) -> String {
@@ -88,7 +116,11 @@ public enum ShadowDeviceAccess {
         if adminURL == nil, let requestURL {
             adminURL = requestURL.deletingLastPathComponent().appendingPathComponent("admin")
         }
-        return Whitelist(enabled: enabled, devices: devices, requestURL: requestURL, adminURL: adminURL)
+        var easterEggChannels = defaultEasterEggChannels
+        if let channels = object["easter_egg_channels"] as? [String] {
+            easterEggChannels = channels.compactMap { normalizeChannelUsername($0) }
+        }
+        return Whitelist(enabled: enabled, devices: devices, requestURL: requestURL, adminURL: adminURL, easterEggChannels: easterEggChannels)
     }
 
     // Body of an access request: the device id plus what helps the owner tell
@@ -134,6 +166,7 @@ public enum ShadowDeviceAccess {
         if let adminURL = whitelist.adminURL {
             object["admin_url"] = adminURL.absoluteString
         }
+        object["easter_egg_channels"] = whitelist.easterEggChannels
         guard let data = try? JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys]) else {
             return "{}"
         }
@@ -409,6 +442,14 @@ public enum ShadowDeviceAccess {
             "action": "save_whitelist",
             "enabled": whitelist.enabled,
             "devices": devices
+        ], completion: completion)
+    }
+
+    // Easter egg channels (usernames, in search order) → shadow-whitelist.json.
+    public static func saveEasterEggChannels(adminURL: URL?, channels: [String], completion: @escaping (AdminResult) -> Void) {
+        postAdmin(adminURL: adminURL, body: [
+            "action": "save_easter_eggs",
+            "channels": channels
         ], completion: completion)
     }
 
