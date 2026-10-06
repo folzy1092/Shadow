@@ -103,8 +103,19 @@ class EasterEggContracts(unittest.TestCase):
 
     def test_player_cannot_be_closed_while_playing(self):
         eggs = read("TelegramUI/Sources/ShadowEasterEggs.swift")
-        self.assertIn("guard let self, !self.didStartPlaying else", eggs)
+        self.assertIn("guard let self, !self.isActuallyPlaying else", eggs)
         self.assertIn(".AVPlayerItemDidPlayToEndTime", eggs)
+
+    def test_player_never_hangs_on_a_black_screen(self):
+        eggs = read("TelegramUI/Sources/ShadowEasterEggs.swift")
+        # AV1 videos: pick an H.264/HEVC alternative AVPlayer can play.
+        self.assertIn("let file = playableFile(mainFile)", eggs)
+        self.assertIn("file.alternativeRepresentations.filter { isPlayableCodec(videoCodec($0)) }", eggs)
+        # A failed item, a video that never becomes ready, or a missing end
+        # notification closes the window instead of leaving it black.
+        self.assertIn("case .failed:\n                    self.close(animated: true)", eggs)
+        self.assertIn("self.restartWatchdog(after: 10.0)", eggs)
+        self.assertIn("duration + 3.0", eggs)
         self.assertIn('"tg://ayu/\\(name)"', eggs)
 
     def test_channels_come_from_the_whitelist(self):

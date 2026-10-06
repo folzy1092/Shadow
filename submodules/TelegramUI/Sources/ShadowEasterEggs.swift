@@ -45,6 +45,34 @@ enum ShadowEasterEggs {
         return nil
     }
 
+    private static func videoCodec(_ file: TelegramMediaFile) -> String? {
+        for attribute in file.attributes {
+            if case let .Video(_, _, _, _, _, videoCodec) = attribute {
+                return videoCodec?.lowercased()
+            }
+        }
+        return nil
+    }
+
+    // AVPlayer plays H.264/HEVC; channel videos may come as AV1 with the other
+    // codecs among alternativeRepresentations (relax: a black screen, no sound).
+    static func isPlayableCodec(_ codec: String?) -> Bool {
+        guard let codec else {
+            return true
+        }
+        return ["h264", "avc", "avc1", "h265", "hevc", "hvc1", "hev1"].contains(codec)
+    }
+
+    // The main file when AVPlayer can play it, else the largest playable
+    // alternative representation.
+    static func playableFile(_ file: TelegramMediaFile) -> TelegramMediaFile {
+        if isPlayableCodec(videoCodec(file)) {
+            return file
+        }
+        let alternatives = file.alternativeRepresentations.filter { isPlayableCodec(videoCodec($0)) }
+        return alternatives.max(by: { ($0.size ?? 0) < ($1.size ?? 0) }) ?? file
+    }
+
     private static func search(context: AccountContext, channel: String, name: String) -> Signal<Message?, NoError> {
         return context.engine.peers.resolvePeerByName(name: channel, referrer: nil)
         |> mapToSignal { result -> Signal<EnginePeer?, NoError> in
@@ -111,11 +139,12 @@ enum ShadowEasterEggs {
         player.showLoading()
         let _ = (find(context: context, name: name)
         |> deliverOnMainQueue).startStandalone(next: { message in
-            guard let message, let file = videoFile(message) else {
+            guard let message, let mainFile = videoFile(message) else {
                 player.close(animated: false)
                 notFound()
                 return
             }
+            let file = playableFile(mainFile)
             let postbox = context.account.postbox
             let reference = AnyMediaReference.message(message: MessageReference(message), media: file)
             let data = Signal<MediaResourceData, NoError> { subscriber in
@@ -158,6 +187,8 @@ private final class ShadowEasterEggPlayer {
     private var failObserver: NSObjectProtocol?
     private var linkPath: String?
     private var closed = false
+    private var statusObservation: NSKeyValueObservation?
+    private var watchdog: Timer?
 
     init(windowScene: UIWindowScene?, finished: @escaping () -> Void) {
         if let windowScene {
@@ -169,8 +200,10 @@ private final class ShadowEasterEggPlayer {
         self.window.windowLevel = UIWindow.Level(rawValue: UIWindow.Level.alert.rawValue + 5.0)
         self.window.backgroundColor = .clear
         self.window.rootViewController = self.controller
+        // Before the first frame (loading, or a video that will not play) a tap
+        // closes it; once it really plays, nothing does.
         self.controller.cancelLoading = { [weak self] in
-            guard let self, !self.didStartPlaying else {
+            guard let self, !self.isActuallyPlaying else {
                 return
             }
             self.close(animated: true)
@@ -184,6 +217,13 @@ private final class ShadowEasterEggPlayer {
             self.controller.view.alpha = 1.0
         }
         self.controller.setLoading(true)
+    }
+
+    private var isActuallyPlaying: Bool {
+        guard let item = self.player?.currentItem else {
+            return false
+        }
+        return item.status == .readyToPlay && item.currentTime().seconds > 0.05
     }
 
     func play(path: String, isAnimation: Bool) {
@@ -205,6 +245,28 @@ private final class ShadowEasterEggPlayer {
         self.failObserver = NotificationCenter.default.addObserver(forName: .AVPlayerItemFailedToPlayToEndTime, object: item, queue: .main, using: { [weak self] _ in
             self?.close(animated: true)
         })
+        // A file AVPlayer cannot open only flips the item to .failed (no
+        // notification): without this the black window stayed forever.
+        self.statusObservation = item.observe(\.status, options: [.new]) { [weak self] item, _ in
+            DispatchQueue.main.async {
+                guard let self else {
+                    return
+                }
+                switch item.status {
+                case .failed:
+                    self.close(animated: true)
+                case .readyToPlay:
+                    // Never longer than the video itself (plus a margin).
+                    let duration = item.duration.seconds
+                    let limit = duration.isFinite && duration > 0.0 ? duration + 3.0 : 60.0
+                    self.restartWatchdog(after: limit)
+                default:
+                    break
+                }
+            }
+        }
+        // Not ready within 10 s: give up.
+        self.restartWatchdog(after: 10.0)
         self.controller.setLoading(false)
         self.controller.attach(player: player)
         self.didStartPlaying = true
@@ -217,6 +279,10 @@ private final class ShadowEasterEggPlayer {
         }
         self.closed = true
         self.loadDisposable.dispose()
+        self.watchdog?.invalidate()
+        self.watchdog = nil
+        self.statusObservation?.invalidate()
+        self.statusObservation = nil
         self.player?.pause()
         if let endObserver = self.endObserver {
             NotificationCenter.default.removeObserver(endObserver)
@@ -242,6 +308,15 @@ private final class ShadowEasterEggPlayer {
         } else {
             cleanup()
         }
+    }
+}
+
+extension ShadowEasterEggPlayer {
+    fileprivate func restartWatchdog(after seconds: Double) {
+        self.watchdog?.invalidate()
+        self.watchdog = Timer.scheduledTimer(withTimeInterval: seconds, repeats: false, block: { [weak self] _ in
+            self?.close(animated: true)
+        })
     }
 }
 
