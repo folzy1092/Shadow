@@ -25,6 +25,19 @@ struct BuildStatusTests {
         {"workflow_runs":[{"id":1,"status":"completed","conclusion":"success","head_sha":"abc"}]}
         """))
         check(completed?.isActive == false, "Completed run is not active")
+        // Duplicate runs for one push (build 34769): a cancelled twin listed first.
+        let twins = ShadowBuildStatus.parseLatestRun(data("""
+        {"workflow_runs":[{"id":37486657790,"status":"completed","conclusion":"cancelled","head_sha":"d39"},{"id":37486658604,"status":"in_progress","head_sha":"d39"},{"id":37486655419,"status":"completed","conclusion":"cancelled","head_sha":"d39"}]}
+        """))
+        check(twins?.id == 37486658604 && twins?.isActive == true, "The running twin wins over a cancelled one")
+        let queuedTwin = ShadowBuildStatus.parseLatestRun(data("""
+        {"workflow_runs":[{"id":2,"status":"completed","conclusion":"cancelled","head_sha":"x"},{"id":3,"status":"queued","head_sha":"x"}]}
+        """))
+        check(queuedTwin?.id == 3 && queuedTwin?.isQueued == true, "A queued twin wins over a cancelled one")
+        let allDone = ShadowBuildStatus.parseLatestRun(data("""
+        {"workflow_runs":[{"id":5,"status":"completed","head_sha":"new"},{"id":4,"status":"completed","head_sha":"old"}]}
+        """))
+        check(allDone?.id == 5 && allDone?.isActive == false, "Nothing running: the newest run")
         check(ShadowBuildStatus.parseLatestRun(data(#"{"workflow_runs":[]}"#)) == nil, "No runs")
         check(ShadowBuildStatus.parseLatestRun(data("garbage")) == nil, "Bad JSON")
 

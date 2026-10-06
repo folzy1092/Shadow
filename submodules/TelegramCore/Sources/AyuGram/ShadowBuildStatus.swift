@@ -47,10 +47,19 @@ public enum ShadowBuildStatus {
         return ISO8601DateFormatter().date(from: string)
     }
 
-    // GET /repos/{repo}/actions/workflows/build.yml/runs?branch=master&per_page=1
+    // GET /repos/{repo}/actions/workflows/build.yml/runs?branch=master&per_page=5
+    // GitHub sometimes starts several runs for one push in the same second;
+    // concurrency cancels all but one, and the list order between them is
+    // arbitrary. So the running run wins, then a queued one, then the newest.
     public static func parseLatestRun(_ data: Data) -> Run? {
         guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let run = (object["workflow_runs"] as? [[String: Any]])?.first,
+              let runs = object["workflow_runs"] as? [[String: Any]] else {
+            return nil
+        }
+        let run = runs.first(where: { ($0["status"] as? String) == "in_progress" })
+            ?? runs.first(where: { ($0["status"] as? String).map { $0 != "completed" } ?? false })
+            ?? runs.first
+        guard let run,
               let id = (run["id"] as? NSNumber)?.int64Value,
               let status = run["status"] as? String,
               let sha = run["head_sha"] as? String else {
@@ -161,7 +170,7 @@ public enum ShadowBuildStatus {
                 completion(info)
             }
         }
-        get("actions/workflows/build.yml/runs?branch=master&per_page=1") { data in
+        get("actions/workflows/build.yml/runs?branch=master&per_page=5") { data in
             guard let data, let run = parseLatestRun(data), run.isActive else {
                 finish(nil)
                 return
