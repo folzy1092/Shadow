@@ -57,6 +57,11 @@ struct DocumentTests {
         let restoredScroll = try ShadowSettingsDocument.decode(bothDirections.encoded())
         check(restoredScroll.settings["bottomBarScrollMode"] == .integer(3), "Bidirectional scroll mode is portable")
         expectFailure("Unsupported scroll mode") { _ = try ShadowSettingsDocument(settings: ["bottomBarScrollMode": .integer(4)]) }
+        let voiceTime = try ShadowSettingsDocument(settings: ["voiceTimeFormat": .integer(5), "voiceTimeRoundVideos": .bool(false), "voiceTimeInPlayer": .bool(true)])
+        let restoredVoiceTime = try ShadowSettingsDocument.decode(voiceTime.encoded())
+        check(restoredVoiceTime.settings["voiceTimeFormat"] == .integer(5), "Voice time format is portable")
+        check(restoredVoiceTime.settings["voiceTimeInPlayer"] == .bool(true), "Voice time in player is portable")
+        expectFailure("Unsupported voice time format") { _ = try ShadowSettingsDocument(settings: ["voiceTimeFormat": .integer(6)]) }
         let ghostPolicy = try ShadowSettingsDocument(settings: ["ghostAccountMode": .integer(3)])
         let restoredGhostPolicy = try ShadowSettingsDocument.decode(ghostPolicy.encoded())
         check(restoredGhostPolicy.settings["ghostAccountMode"] == .integer(3), "Ghost account policy is portable")

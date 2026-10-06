@@ -848,6 +848,7 @@ private func ayuUpdateSettings(context: AccountContext, _ f: @escaping (AyuGramS
 private final class AyuCustomizationArguments {
     var openMessageScreenshot: () -> Void = {}
     var openHeaderButtons: () -> Void = {}
+    var selectVoiceTimeFormat: () -> Void = {}
     var updateSetting: (@escaping (inout AyuGramSettings) -> Void) -> Void = { _ in }
     // true: background color, false: glyph color.
     var pickSettingsIconColor: (Bool) -> Void = { _ in }
@@ -1013,6 +1014,9 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
     case unlimitedPinnedChats(Bool)
     case compactChatList(Bool)
     case localVoiceTranscription(Bool)
+    case voiceTimeFormat(Int32)
+    case voiceTimeRoundVideos(Bool)
+    case voiceTimeInPlayer(Bool)
     case chatsFooter
 
     case bottomBarHeader
@@ -1076,7 +1080,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
             return AyuCustomizationSection.bottomBar.rawValue
         case .profilesHeader, .showProfileId, .showProfileDC, .showRegistrationDate, .hideOwnPhoneNumber, .profilesFooter:
             return AyuCustomizationSection.profiles.rawValue
-        case .mediaHeader, .roundVideoBackCamera, .showCameraTile, .cameraTileLivePreview, .localVoiceTranscription, .mediaFooter:
+        case .mediaHeader, .roundVideoBackCamera, .showCameraTile, .cameraTileLivePreview, .localVoiceTranscription, .voiceTimeFormat, .voiceTimeRoundVideos, .voiceTimeInPlayer, .mediaFooter:
             return AyuCustomizationSection.media.rawValue
         case .customRoundVideosHeader, .customVideoMessageSpeed, .customRoundVideosFooter:
             return AyuCustomizationSection.customRoundVideos.rawValue
@@ -1119,6 +1123,9 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .hidePremiumBadges: return 101
         case .hideSponsoredMessages: return 102
         case .localVoiceTranscription: return 103
+        case .voiceTimeFormat: return 112
+        case .voiceTimeRoundVideos: return 113
+        case .voiceTimeInPlayer: return 114
         case .unlimitedPinnedChats: return 104
         case .settingsIconsHeader: return 105
         case .compactChatList: return 110
@@ -1181,6 +1188,9 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .unlimitedPinnedChats: return (12, 5)
         case .compactChatList: return (12, 6)
         case .localVoiceTranscription: return (28, 1)
+        case .voiceTimeFormat: return (28, 2)
+        case .voiceTimeRoundVideos: return (28, 3)
+        case .voiceTimeInPlayer: return (28, 4)
         // Right after the appearance section.
         case .settingsIconsHeader: return (10, 1)
         case .monochromeSettingsIcons: return (10, 2)
@@ -1312,6 +1322,16 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
             return ItemListSwitchItem(presentationData: presentationData, title: "Расшифровка голосовых на устройстве", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 arguments.updateSetting { $0.localVoiceTranscription = value }
             })
+        case let .voiceTimeFormat(format):
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Время на голосовых", label: ShadowVoiceTime.title(format), labelStyle: .detailText, sectionId: self.section, style: .blocks, action: arguments.selectVoiceTimeFormat)
+        case let .voiceTimeRoundVideos(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Также на кружках", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.updateSetting { $0.voiceTimeRoundVideos = value }
+            })
+        case let .voiceTimeInPlayer(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Время в верхнем плеере", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.updateSetting { $0.voiceTimeInPlayer = value }
+            })
         case .chatsFooter:
             return ItemListTextItem(presentationData: presentationData, text: .plain("«Скрыть папку «Все чаты»» убирает эту вкладку, остальные папки работают. «Скрыть истории» убирает ленту историй над списком чатов. «Скрыть кнопку подарка» убирает подарок из поля ввода. «Скрыть значки Premium» убирает звёздочку и эмодзи-статус рядом с именами (галочки верификации остаются). «Скрыть рекламу в каналах» — спонсорские сообщения не загружаются; применяется при следующем открытии канала. «Безлимитные закрепы» снимают ограничение на закрепы в списке чатов, архиве, папках, «Избранном» и темах форумов; всё сверх лимита Telegram хранится только на этом устройстве."), sectionId: self.section)
         case .bottomBarHeader:
@@ -1365,7 +1385,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
                 arguments.updateCameraTileLivePreview(value)
             })
         case .mediaFooter:
-            return ItemListTextItem(presentationData: presentationData, text: .plain("Начинать запись видеосообщений («кружков») с задней камеры. Во время записи можно переключиться на фронтальную. «Камера в галерее» показывает плитку камеры первой ячейкой в галерее вложений. «Живой предпросмотр камеры» запускает в этой плитке видео с камеры вживую вместо статичной иконки. «Расшифровка голосовых на устройстве» без Premium распознаёт речь прямо на телефоне — аудио никуда не отправляется."), sectionId: self.section)
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Начинать запись видеосообщений («кружков») с задней камеры. Во время записи можно переключиться на фронтальную. «Камера в галерее» показывает плитку камеры первой ячейкой в галерее вложений. «Живой предпросмотр камеры» запускает в этой плитке видео с камеры вживую вместо статичной иконки. «Расшифровка голосовых на устройстве» без Premium распознаёт речь прямо на телефоне — аудио никуда не отправляется. «Время на голосовых» меняет время под голосовым во время прослушивания: сколько осталось (как в Telegram), сколько прошло, «прошло / всего», «-осталось / всего» или процент; пока голосовое не играет, видна его длина. «Также на кружках» применяет тот же формат к видеосообщениям, «Время в верхнем плеере» добавляет его в полоску плеера над чатом."), sectionId: self.section)
         case .customRoundVideosHeader:
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "КАСТОМНЫЕ КРУЖКИ", sectionId: self.section)
         case let .customVideoMessageSpeed(value):
@@ -1489,6 +1509,9 @@ private func ayuCustomizationEntries(settings: AyuGramSettings) -> [AyuCustomiza
     entries.append(.showCameraTile(settings.showCameraTile))
     entries.append(.cameraTileLivePreview(settings.cameraTileLivePreview))
     entries.append(.localVoiceTranscription(settings.localVoiceTranscription))
+    entries.append(.voiceTimeFormat(settings.voiceTimeFormat))
+    entries.append(.voiceTimeRoundVideos(settings.voiceTimeRoundVideos))
+    entries.append(.voiceTimeInPlayer(settings.voiceTimeInPlayer))
     entries.append(.mediaFooter)
 
     entries.append(.customRoundVideosHeader)
@@ -1742,6 +1765,22 @@ func ayuCustomizationController(context: AccountContext, focus: ShadowSettingsSe
     }
     arguments.openHeaderButtons = { [weak controller] in
         controller?.push(shadowHeaderButtonsController(context: context))
+    }
+    arguments.selectVoiceTimeFormat = {
+        let data = context.sharedContext.currentPresentationData.with { $0 }
+        let sheet = ActionSheetController(presentationData: data)
+        var items: [ActionSheetItem] = [ActionSheetTextItem(title: "Пример: голосовое 1:14, прослушано 0:22", parseMarkdown: false)]
+        for format in ShadowVoiceTime.formats {
+            items.append(ActionSheetButtonItem(title: "\(ShadowVoiceTime.title(format)) — \(ShadowVoiceTime.example(format))", action: { [weak sheet] in
+                sheet?.dismissAnimated()
+                ayuUpdateSettings(context: context) { var settings = $0; settings.voiceTimeFormat = format; return settings }
+            }))
+        }
+        sheet.setItemGroups([
+            ActionSheetItemGroup(items: items),
+            ActionSheetItemGroup(items: [ActionSheetButtonItem(title: data.strings.Common_Cancel, action: { [weak sheet] in sheet?.dismissAnimated() })])
+        ])
+        presentControllerImpl?(sheet, nil)
     }
     arguments.updatePreferUsernameForBots = { value in
         ayuUpdateSettings(context: context) { var s = $0; s.preferUsernameForBots = value; return s }

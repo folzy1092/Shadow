@@ -997,6 +997,13 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
                         minLayoutWidth += 30.0 + 8.0
                     }
                     minLayoutWidth = max(descriptionAndStatusWidth + 56, minLayoutWidth)
+                    // Shadow: room for a longer time ("0:22 / 1:14") next to the date.
+                    if let shadowFormat = shadowVoiceTimeFormat(context: arguments.context, file: arguments.file), ShadowVoiceTime.isWide(shadowFormat) {
+                        let widest = NSAttributedString(string: ShadowVoiceTime.widestText(format: shadowFormat, duration: Double(audioDuration)), font: durationFont)
+                        let widestWidth = ceil(widest.boundingRect(with: CGSize(width: 1000.0, height: 100.0), options: .usesLineFragmentOrigin, context: nil).width)
+                        let statusWidth = statusSuggestedWidthAndContinue?.0 ?? 50.0
+                        minLayoutWidth = max(minLayoutWidth, min(maxVoiceWidth, 56.0 + widestWidth + 8.0 + statusWidth))
+                    }
                 } else {
                     minLayoutWidth = max(titleLayout.size.width, descriptionMaxWidth) + 44.0 + 8.0
                 }
@@ -1694,7 +1701,15 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
                 
                 let effectiveDuration = playerDuration > 0 ? playerDuration : Double(audioDuration ?? 0)
                 
-                let durationString = stringForDuration(Int32(effectiveDuration), position: playerPosition.flatMap { Int32($0) })
+                var durationString = stringForDuration(Int32(effectiveDuration), position: playerPosition.flatMap { Int32($0) })
+                // Shadow: the chosen time format (Кастомизация → Время на голосовых).
+                if !isViewOnceMessage, let shadowFormat = shadowVoiceTimeFormat(context: context, file: file), shadowFormat != ShadowVoiceTime.defaultFormat {
+                    var isPlaying = false
+                    if case .playing = playerStatus.status {
+                        isPlaying = true
+                    }
+                    durationString = ShadowVoiceTime.text(format: shadowFormat, duration: effectiveDuration, position: ShadowVoiceTime.position(isPlaying: isPlaying, timestamp: playerPosition ?? 0.0))
+                }
                 let durationFont = Font.regular(floor(presentationData.fontSize.baseDisplaySize * 11.0 / 17.0))
                 downloadingStrings = (durationString, durationString, durationFont)
                 
@@ -2245,4 +2260,14 @@ private func shadowUsesLocalVoiceTranscription(arguments: ChatMessageInteractive
         return false
     }
     return currentAyuGramSettings(accountId: arguments.context.account.id).localVoiceTranscription
+}
+
+// Shadow: the voice time format for this file, nil when it does not apply (a
+// round video with "Также на кружках" off).
+private func shadowVoiceTimeFormat(context: AccountContext, file: TelegramMediaFile) -> Int32? {
+    let settings = currentAyuGramSettings(accountId: context.account.id)
+    if file.isInstantVideo && !settings.voiceTimeRoundVideos {
+        return nil
+    }
+    return ShadowVoiceTime.normalized(settings.voiceTimeFormat)
 }

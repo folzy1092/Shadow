@@ -42,7 +42,7 @@ private class MediaHeaderItemNode: ASDisplayNode {
         self.addSubnode(self.subtitleNode)
     }
     
-    func updateLayout(size: CGSize, leftInset: CGFloat, rightInset: CGFloat, theme: PresentationTheme, strings: PresentationStrings, dateTimeFormat: PresentationDateTimeFormat, nameDisplayOrder: PresentationPersonNameOrder, playbackItem: SharedMediaPlaylistItem?, transition: ContainedViewLayoutTransition) -> (NSAttributedString?, NSAttributedString?, Bool) {
+    func updateLayout(size: CGSize, leftInset: CGFloat, rightInset: CGFloat, theme: PresentationTheme, strings: PresentationStrings, dateTimeFormat: PresentationDateTimeFormat, nameDisplayOrder: PresentationPersonNameOrder, playbackItem: SharedMediaPlaylistItem?, shadowTimeText: String? = nil, transition: ContainedViewLayoutTransition) -> (NSAttributedString?, NSAttributedString?, Bool) {
         var rateButtonHidden = false
         var titleString: NSAttributedString?
         var subtitleString: NSAttributedString?
@@ -74,7 +74,9 @@ private class MediaHeaderItemNode: ASDisplayNode {
                     }
                     
                     titleString = NSAttributedString(string: titleText, font: titleFont, textColor: theme.rootController.navigationBar.primaryTextColor)
-                    subtitleString = NSAttributedString(string: subtitleText, font: subtitleFont, textColor: theme.rootController.navigationBar.secondaryTextColor)
+                    // Shadow: the voice time in the top player (Кастомизация → Время на голосовых).
+                    let shadowSubtitleText = shadowTimeText.flatMap { subtitleText + " · " + $0 } ?? subtitleText
+                    subtitleString = NSAttributedString(string: shadowSubtitleText, font: subtitleFont, textColor: theme.rootController.navigationBar.secondaryTextColor)
                 case let .instantVideo(author, peer, timestamp):
                     rateButtonHidden = false
                     let titleText: String = author?.displayTitle(strings: strings, displayOrder: nameDisplayOrder) ?? ""
@@ -96,7 +98,9 @@ private class MediaHeaderItemNode: ASDisplayNode {
                     }
                     
                     titleString = NSAttributedString(string: titleText, font: titleFont, textColor: theme.rootController.navigationBar.primaryTextColor)
-                    subtitleString = NSAttributedString(string: subtitleText, font: subtitleFont, textColor: theme.rootController.navigationBar.secondaryTextColor)
+                    // Shadow: the voice time in the top player (Кастомизация → Время на голосовых).
+                    let shadowSubtitleText = shadowTimeText.flatMap { subtitleText + " · " + $0 } ?? subtitleText
+                    subtitleString = NSAttributedString(string: shadowSubtitleText, font: subtitleFont, textColor: theme.rootController.navigationBar.secondaryTextColor)
             }
         }
         let makeTitleLayout = TextNode.asyncLayout(self.titleNode)
@@ -206,6 +210,68 @@ public final class MediaNavigationAccessoryHeaderNode: ASDisplayNode, ASScrollVi
     public var playbackStatus: Signal<MediaPlayerStatus, NoError>? {
         didSet {
             self.scrubbingNode.status = self.playbackStatus
+            if let playbackStatus = self.playbackStatus {
+                self.shadowStatusDisposable.set((playbackStatus |> deliverOnMainQueue).startStrict(next: { [weak self] status in
+                    self?.shadowStatus = status
+                }))
+            } else {
+                self.shadowStatusDisposable.set(nil)
+                self.shadowStatus = nil
+            }
+        }
+    }
+    
+    // Shadow: the voice time shown after the subtitle while
+    // AyuGramSettings.voiceTimeInPlayer is on (ShadowVoiceTime).
+    private let shadowStatusDisposable = MetaDisposable()
+    private var shadowTimer: SwiftSignalKit.Timer?
+    private var shadowTimeText: String?
+    private var shadowStatus: MediaPlayerStatus? {
+        didSet {
+            if let shadowStatus = self.shadowStatus, case .playing = shadowStatus.status {
+                if self.shadowTimer == nil {
+                    let timer = SwiftSignalKit.Timer(timeout: 0.5, repeat: true, completion: { [weak self] in
+                        self?.shadowUpdateTime()
+                    }, queue: Queue.mainQueue())
+                    self.shadowTimer = timer
+                    timer.start()
+                }
+            } else {
+                self.shadowTimer?.invalidate()
+                self.shadowTimer = nil
+            }
+            self.shadowUpdateTime()
+        }
+    }
+    
+    private func shadowUpdateTime() {
+        var text: String?
+        let settings = currentAyuGramSettings(accountId: self.context.account.id)
+        if settings.voiceTimeInPlayer, let status = self.shadowStatus, status.duration > 0.0, let displayData = self.playbackItems?.0?.displayData {
+            let isVoice: Bool
+            switch displayData {
+            case .voice, .instantVideo:
+                isVoice = true
+            case .music:
+                isVoice = false
+            }
+            if isVoice {
+                var isPlaying = false
+                if case .playing = status.status {
+                    isPlaying = true
+                }
+                var timestamp = status.timestamp
+                if isPlaying && !status.generationTimestamp.isZero {
+                    timestamp += (CACurrentMediaTime() - status.generationTimestamp) * status.baseRate
+                }
+                text = ShadowVoiceTime.text(format: settings.voiceTimeFormat, duration: status.duration, position: ShadowVoiceTime.position(isPlaying: isPlaying, timestamp: timestamp))
+            }
+        }
+        if text != self.shadowTimeText {
+            self.shadowTimeText = text
+            if let (size, leftInset, rightInset) = self.validLayout {
+                self.updateLayout(size: size, leftInset: leftInset, rightInset: rightInset, transition: .immediate)
+            }
         }
     }
     
@@ -343,6 +409,11 @@ public final class MediaNavigationAccessoryHeaderNode: ASDisplayNode, ASScrollVi
         }
     }
     
+    deinit {
+        self.shadowStatusDisposable.dispose()
+        self.shadowTimer?.invalidate()
+    }
+    
     override public func didLoad() {
         super.didLoad()
         
@@ -445,7 +516,7 @@ public final class MediaNavigationAccessoryHeaderNode: ASDisplayNode, ASScrollVi
         
         let inset: CGFloat = 45.0 + leftInset
         let constrainedSize = CGSize(width: size.width - inset * 2.0, height: size.height)
-        let (titleString, subtitleString, rateButtonHidden) = self.currentItemNode.updateLayout(size: constrainedSize, leftInset: 0.0, rightInset: 0.0, theme: self.theme, strings: self.strings, dateTimeFormat: self.dateTimeFormat, nameDisplayOrder: self.nameDisplayOrder, playbackItem: self.playbackItems?.0, transition: transition)
+        let (titleString, subtitleString, rateButtonHidden) = self.currentItemNode.updateLayout(size: constrainedSize, leftInset: 0.0, rightInset: 0.0, theme: self.theme, strings: self.strings, dateTimeFormat: self.dateTimeFormat, nameDisplayOrder: self.nameDisplayOrder, playbackItem: self.playbackItems?.0, shadowTimeText: self.shadowTimeText, transition: transition)
         self.accessibilityAreaNode.accessibilityLabel = "\(titleString?.string ?? ""). \(subtitleString?.string ?? "")"
         self.rateButton.isHidden = rateButtonHidden
         

@@ -6,10 +6,12 @@ import Foundation
 //   shadow://<screen>/<slug>?on       turn it on   (asks first from a message / browser)
 //   shadow://<screen>/<slug>?off      turn it off
 //   shadow://<screen>/<slug>?switch   flip it
+//   shadow://<screen>/<slug>?value=N  a setting with a choice of values: pick N
 //
 // `screen` is the ShadowLinks command of the screen (ShadowLinkRouter);
 // `entryId` is the toggle's stableId on that screen (focus, long-press menu);
-// `key` is the AyuGramSettings field (ShadowSettingsTransfer.boolValue/setBool).
+// `key` is the AyuGramSettings field (ShadowSettingsTransfer.boolValue/setBool,
+// or intValue/setInt for a choice: `choices` holds its titles by value).
 // Protected toggles (chat locks, second space…) only open; a link never changes
 // them. Toggles without a key live outside AyuGramSettings and only open too.
 //
@@ -25,8 +27,11 @@ public struct ShadowSettingLink: Equatable {
     public let icon: String
     // Shown only while this entry is on (dependent toggles): focus falls back to it.
     public let parentEntryId: Int32?
+    // A setting with a choice of values (not on/off): the title of each value,
+    // the value being the index. Empty for toggles.
+    public let choices: [String]
 
-    public init(screen: String, slug: String, entryId: Int32, key: String?, title: String, isProtected: Bool = false, icon: String = "", parentEntryId: Int32? = nil) {
+    public init(screen: String, slug: String, entryId: Int32, key: String?, title: String, isProtected: Bool = false, icon: String = "", parentEntryId: Int32? = nil, choices: [String] = []) {
         self.screen = screen
         self.slug = slug
         self.entryId = entryId
@@ -35,10 +40,24 @@ public struct ShadowSettingLink: Equatable {
         self.isProtected = isProtected
         self.icon = icon
         self.parentEntryId = parentEntryId
+        self.choices = choices
     }
 
+    // An on/off toggle a link can change.
     public var isSwitchable: Bool {
-        return self.key != nil && !self.isProtected
+        return self.key != nil && !self.isProtected && self.choices.isEmpty
+    }
+
+    // A choice a link can set with ?value=N.
+    public var isChoice: Bool {
+        return self.key != nil && !self.isProtected && !self.choices.isEmpty
+    }
+
+    public func choiceTitle(_ value: Int32) -> String? {
+        guard value >= 0, Int(value) < self.choices.count else {
+            return nil
+        }
+        return self.choices[Int(value)]
     }
 
     public var path: String {
@@ -51,6 +70,7 @@ public struct ShadowSettingLink: Equatable {
         case .on: return self.path + "?on"
         case .off: return self.path + "?off"
         case .toggle: return self.path + "?switch"
+        case let .value(value): return self.path + "?value=\(value)"
         }
     }
 }
@@ -61,10 +81,14 @@ public enum ShadowSettingLinks {
         case on
         case off
         case toggle
+        case value(Int32)
     }
 
     // `query` is ShadowLinks.Link.query: "?switch" parses as ["switch": ""].
     public static func mode(query: [String: String]) -> Mode {
+        if let raw = query["value"] ?? query["set"], let value = Int32(raw.trimmingCharacters(in: .whitespaces)) {
+            return .value(value)
+        }
         if query["switch"] != nil || query["toggle"] != nil {
             return .toggle
         }
@@ -100,7 +124,25 @@ public enum ShadowSettingLinks {
         guard let link = ShadowLinks.parse(string), let slug = link.arguments.first, let setting = self.find(screen: link.command, slug: slug) else {
             return nil
         }
-        return (setting, self.mode(query: link.query))
+        return (setting, self.mode(self.mode(query: link.query), for: setting))
+    }
+
+    // ?value=N means nothing for a toggle (nor an unknown N), ?on/?off/?switch
+    // nothing for a choice: those just open the setting.
+    public static func mode(_ mode: Mode, for setting: ShadowSettingLink) -> Mode {
+        switch mode {
+        case let .value(value):
+            if !setting.isChoice || setting.choiceTitle(value) == nil {
+                return .open
+            }
+        case .on, .off, .toggle:
+            if setting.isChoice {
+                return .open
+            }
+        case .open:
+            break
+        }
+        return mode
     }
 
     // Shared on/off for a group: flipping turns everything on unless all of it
@@ -162,6 +204,16 @@ public enum ShadowSettingLinks {
         ShadowSettingLink(screen: "customization", slug: "username", entryId: 94, key: "preferUsernameForNonContacts", title: "@username вместо имени незнакомых", icon: "at"),
         ShadowSettingLink(screen: "customization", slug: "username-bots", entryId: 95, key: "preferUsernameForBots", title: "@username также для ботов", parentEntryId: 94),
         ShadowSettingLink(screen: "customization", slug: "mono-icons", entryId: 106, key: "monochromeSettingsIcons", title: "Одноцветные иконки"),
+        // Settings that are not on/off or not in AyuGramSettings: links only open them.
+        ShadowSettingLink(screen: "customization", slug: "icon-background", entryId: 107, key: nil, title: "Цвет фона иконок", parentEntryId: 106),
+        ShadowSettingLink(screen: "customization", slug: "icon-glyph", entryId: 108, key: nil, title: "Цвет значков", parentEntryId: 106),
+        ShadowSettingLink(screen: "customization", slug: "edited-text", entryId: 90, key: nil, title: "Свой значок правки"),
+        ShadowSettingLink(screen: "customization", slug: "deleted-text", entryId: 91, key: nil, title: "Свой значок удалёнки"),
+        ShadowSettingLink(screen: "customization", slug: "message-screenshots", entryId: 93, key: nil, title: "Скриншоты сообщений", icon: "camera.viewfinder"),
+        ShadowSettingLink(screen: "customization", slug: "header-buttons", entryId: 111, key: nil, title: "Кнопки шапки"),
+        ShadowSettingLink(screen: "customization", slug: "github-sync", entryId: 34, key: nil, title: "Синхронизировать с GitHub"),
+        ShadowSettingLink(screen: "customization", slug: "banner-image", entryId: 38, key: nil, title: "Изображение баннера", parentEntryId: 37),
+        ShadowSettingLink(screen: "customization", slug: "profile-background-image", entryId: 44, key: nil, title: "Изображение фона профиля", parentEntryId: 41),
         ShadowSettingLink(screen: "customization", slug: "hide-all-chats", entryId: 12, key: "hideAllChatsFolder", title: "Скрыть папку «Все чаты»", icon: "folder"),
         ShadowSettingLink(screen: "customization", slug: "hide-stories", entryId: 99, key: "hideStoriesBar", title: "Скрыть истории", icon: "circle.dashed"),
         ShadowSettingLink(screen: "customization", slug: "hide-gift", entryId: 100, key: "hideGiftButton", title: "Скрыть кнопку подарка", icon: "gift"),
@@ -170,9 +222,13 @@ public enum ShadowSettingLinks {
         ShadowSettingLink(screen: "customization", slug: "unlimited-pins", entryId: 104, key: "unlimitedPinnedChats", title: "Безлимитные закрепы", icon: "pin"),
         ShadowSettingLink(screen: "customization", slug: "compact-chats", entryId: 110, key: "compactChatList", title: "Компактный список чатов"),
         ShadowSettingLink(screen: "customization", slug: "voice-transcription", entryId: 103, key: "localVoiceTranscription", title: "Расшифровка голосовых на устройстве", icon: "waveform"),
+        ShadowSettingLink(screen: "customization", slug: "voice-time", entryId: 112, key: "voiceTimeFormat", title: "Время на голосовых", icon: "timer", choices: ShadowVoiceTime.formats.map { ShadowVoiceTime.title($0) }),
+        ShadowSettingLink(screen: "customization", slug: "voice-time-round", entryId: 113, key: "voiceTimeRoundVideos", title: "Время на голосовых: также на кружках"),
+        ShadowSettingLink(screen: "customization", slug: "voice-time-player", entryId: 114, key: "voiceTimeInPlayer", title: "Время на голосовых: в верхнем плеере"),
         ShadowSettingLink(screen: "customization", slug: "folders-bottom", entryId: 15, key: "foldersAtBottom", title: "Папки снизу"),
         ShadowSettingLink(screen: "customization", slug: "hide-bottom-search", entryId: 16, key: "hideBottomSearch", title: "Убрать поиск снизу"),
         ShadowSettingLink(screen: "customization", slug: "compact-bottom", entryId: 17, key: "compactBottomBar", title: "Уменьшить интерфейс снизу"),
+        ShadowSettingLink(screen: "customization", slug: "bottom-bar-hiding", entryId: 92, key: "bottomBarScrollMode", title: "Скрытие нижней панели", choices: ["Всегда показывать", "Скрывать при прокрутке вниз", "Скрывать и показывать при остановке", "Скрывать при прокрутке вверх и вниз"]),
         ShadowSettingLink(screen: "customization", slug: "profile-id", entryId: 20, key: "showProfileId", title: "ID профиля (Bot API)"),
         ShadowSettingLink(screen: "customization", slug: "profile-dc", entryId: 21, key: "showProfileDC", title: "Дата-центр (DC)"),
         ShadowSettingLink(screen: "customization", slug: "registration-date", entryId: 22, key: "showRegistrationDate", title: "Дата регистрации"),

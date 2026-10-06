@@ -22,9 +22,9 @@ public func shadowOpenLink(context: AccountContext, link: ShadowLinks.Link, navi
         navigationController.pushViewController(controller)
     }
 
-    // shadow://<screen>/<toggle>[?on|?off|?switch] (ShadowSettingLinks).
+    // shadow://<screen>/<toggle>[?on|?off|?switch|?value=N] (ShadowSettingLinks).
     if let slug = link.arguments.first, let setting = ShadowSettingLinks.find(screen: link.command, slug: slug) {
-        shadowOpenSettingLink(context: context, setting: setting, mode: ShadowSettingLinks.mode(query: link.query), navigationController: navigationController)
+        shadowOpenSettingLink(context: context, setting: setting, mode: ShadowSettingLinks.mode(ShadowSettingLinks.mode(query: link.query), for: setting), navigationController: navigationController)
         return
     }
 

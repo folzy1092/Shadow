@@ -69,6 +69,8 @@ public enum ShadowSettingsTransfer {
         "updateChannelBeta": \.updateChannelBeta,
         "unlimitedPinnedChats": \.unlimitedPinnedChats,
         "localVoiceTranscription": \.localVoiceTranscription,
+        "voiceTimeRoundVideos": \.voiceTimeRoundVideos,
+        "voiceTimeInPlayer": \.voiceTimeInPlayer,
         "monochromeSettingsIcons": \.monochromeSettingsIcons,
         "compactChatList": \.compactChatList,
         "onlineHistory": \.onlineHistory,
@@ -99,6 +101,7 @@ public enum ShadowSettingsTransfer {
         values["mediaAutoCleanInterval"] = .integer(Int64(settings.mediaAutoCleanInterval))
         values["attachmentSizeLimit"] = .integer(settings.attachmentSizeLimit)
         values["bottomBarScrollMode"] = .integer(Int64(settings.bottomBarScrollMode))
+        values["voiceTimeFormat"] = .integer(Int64(settings.voiceTimeFormat))
         values["ghostAccountMode"] = .integer(Int64(settings.ghostAccountMode.rawValue))
         values["screenshotBackground"] = .integer(Int64(settings.messageScreenshot.background.rawValue))
         values["screenshotCustomColorARGB"] = .integer(Int64(settings.messageScreenshot.customColorARGB))
@@ -133,6 +136,7 @@ public enum ShadowSettingsTransfer {
                 case "mediaAutoCleanInterval": updated.mediaAutoCleanInterval = Int32(number)
                 case "attachmentSizeLimit": updated.attachmentSizeLimit = number
                 case "bottomBarScrollMode": updated.bottomBarScrollMode = Int32(number)
+                case "voiceTimeFormat": updated.voiceTimeFormat = ShadowVoiceTime.normalized(Int32(number))
                 case "settingsIconBackgroundColor": updated.settingsIconBackgroundColor = Int32(number)
                 case "settingsIconGlyphColor": updated.settingsIconGlyphColor = Int32(number)
                 case "ghostAccountMode":

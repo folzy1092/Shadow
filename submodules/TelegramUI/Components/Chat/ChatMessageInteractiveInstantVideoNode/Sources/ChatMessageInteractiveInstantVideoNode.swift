@@ -762,7 +762,6 @@ public class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
                                 }
                             }
                             durationNode.defaultDuration = telegramFile.duration.flatMap(Double.init)
-                            
                             let streamVideo = automaticDownload && isMediaStreamable(message: EngineMessage(item.message), media: telegramFile) && telegramFile.id?.namespace != Namespaces.Media.LocalFile
                             if let videoNode = strongSelf.videoNode {
                                 videoNode.layer.allowsGroupOpacity = true
@@ -919,6 +918,21 @@ public class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
                         }
                         
                         durationNode.isSeen = !notConsumed || item.presentationData.isPreview
+                        // Shadow: Кастомизация → Время на голосовых → «Также на кружках».
+                        let shadowVoiceSettings = currentAyuGramSettings(accountId: item.context.account.id)
+                        let shadowVoiceFormat = ShadowVoiceTime.normalized(shadowVoiceSettings.voiceTimeFormat)
+                        if shadowVoiceSettings.voiceTimeRoundVideos && shadowVoiceFormat != ShadowVoiceTime.defaultFormat {
+                            if durationNode.shadowFormat != shadowVoiceFormat {
+                                durationNode.shadowFormat = shadowVoiceFormat
+                                durationNode.shadowFormatter = { duration, position in
+                                    return ShadowVoiceTime.text(format: shadowVoiceFormat, duration: duration, position: position)
+                                }
+                            }
+                        } else if durationNode.shadowFormat != nil {
+                            durationNode.shadowFormat = nil
+                            durationNode.shadowFormatter = nil
+                        }
+                        
                         let size = durationNode.size
                         if let durationBackgroundNode = strongSelf.durationBackgroundNode, size.width > 1.0 {
                             durationBackgroundNode.update(size: size, cornerRadius: size.height / 2.0, transition: .immediate)

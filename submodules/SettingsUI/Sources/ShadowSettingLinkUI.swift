@@ -56,6 +56,30 @@ func shadowOpenSettingLink(context: AccountContext, setting: ShadowSettingLink, 
         open()
         return
     }
+    if case let .value(value) = mode {
+        guard setting.isChoice, let key = setting.key, let valueTitle = setting.choiceTitle(value) else {
+            open()
+            return
+        }
+        let current = ShadowSettingsTransfer.intValue(key, in: currentAyuGramSettings(accountId: context.account.id)) ?? 0
+        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+        let text = "«\(setting.title)»: \(setting.choiceTitle(current) ?? "\(current)") → \(valueTitle)\n\nСсылка: \(setting.link(mode))"
+        let alert = textAlertController(context: context, title: "Изменить настройку?", text: text, actions: [
+            TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {}),
+            TextAlertAction(type: .defaultAction, title: "Изменить", action: {
+                let _ = (updateAyuGramSettings(postbox: context.account.postbox, { settings in
+                    var settings = settings
+                    ShadowSettingsTransfer.setInt(key, value, in: &settings)
+                    return settings
+                })
+                |> deliverOnMainQueue).startStandalone(completed: {
+                    open()
+                })
+            })
+        ])
+        context.sharedContext.mainWindow?.present(alert, on: .root)
+        return
+    }
     guard setting.isSwitchable, let key = setting.key else {
         open()
         shadowSettingLinkToast(context: context, text: "«\(setting.title)» по ссылке не меняется — только вручную.")
@@ -158,12 +182,27 @@ func shadowSettingsInstallLinkMenu(controller: ItemListController, context: Acco
                 actionSheet?.dismissAnimated()
                 copy(setting.link(value ? .on : .off), "Ссылка со значением «\(value ? "вкл" : "выкл")» скопирована")
             }))
+        } else if setting.isChoice, let key = setting.key {
+            items.append(ActionSheetButtonItem(title: "Скопировать путь к настройке", color: .accent, action: { [weak actionSheet] in
+                actionSheet?.dismissAnimated()
+                copy(setting.path, "Путь к настройке скопирован")
+            }))
+            let value = ShadowSettingsTransfer.intValue(key, in: currentAyuGramSettings(accountId: context.account.id)) ?? 0
+            let valueTitle = setting.choiceTitle(value) ?? "\(value)"
+            items.append(ActionSheetButtonItem(title: "Скопировать с текущим значением (\(valueTitle))", color: .accent, action: { [weak actionSheet] in
+                actionSheet?.dismissAnimated()
+                copy(setting.link(.value(value)), "Ссылка со значением «\(valueTitle)» скопирована")
+            }))
         } else {
             items.append(ActionSheetButtonItem(title: "Скопировать путь к настройке", color: .accent, action: { [weak actionSheet] in
                 actionSheet?.dismissAnimated()
                 copy(setting.path, "Путь к настройке скопирован")
             }))
-            items.append(ActionSheetTextItem(title: "Эта настройка защищает данные, поэтому ссылкой её не переключить.", parseMarkdown: false))
+            if setting.isProtected {
+                items.append(ActionSheetTextItem(title: "Эта настройка защищает данные, поэтому ссылкой её не переключить.", parseMarkdown: false))
+            } else {
+                items.append(ActionSheetTextItem(title: "Ссылка открывает эту настройку; меняется она только вручную.", parseMarkdown: false))
+            }
         }
         actionSheet.setItemGroups([
             ActionSheetItemGroup(items: items),

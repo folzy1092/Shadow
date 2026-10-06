@@ -22,6 +22,29 @@ extension ShadowSettingsTransfer {
         "screenshotPeerAvatars": \.messageScreenshot.showPeerAvatars
     ]
 
+    // Settings with a choice of values (ShadowSettingLink.choices), set by
+    // shadow://…?value=N. Exported through the integer keys of the document.
+    private static let choiceFields: [String: WritableKeyPath<AyuGramSettings, Int32>] = [
+        "voiceTimeFormat": \.voiceTimeFormat,
+        "bottomBarScrollMode": \.bottomBarScrollMode
+    ]
+
+    public static func intValue(_ key: String, in settings: AyuGramSettings) -> Int32? {
+        guard let path = self.choiceFields[key] else {
+            return nil
+        }
+        return settings[keyPath: path]
+    }
+
+    @discardableResult
+    public static func setInt(_ key: String, _ value: Int32, in settings: inout AyuGramSettings) -> Bool {
+        guard let path = self.choiceFields[key] else {
+            return false
+        }
+        settings[keyPath: path] = value
+        return true
+    }
+
     private static func booleanPath(_ key: String) -> WritableKeyPath<AyuGramSettings, Bool>? {
         return self.exportBooleanPath(key) ?? self.linkOnlyBooleanFields[key]
     }
@@ -49,10 +72,24 @@ extension ShadowSettingsTransfer {
 
     // Applies several settings links at once. `.toggle` items share one target
     // (ShadowSettingLinks.groupTarget): all on → all off, otherwise all on.
-    // Returns the toggles' new values in the same order.
+    // `.value` items set their choice. Returns the toggles' new values in the
+    // same order.
     public static func applying(links: [(ShadowSettingLink, ShadowSettingLinks.Mode)], to current: AyuGramSettings) -> (AyuGramSettings, [Bool]) {
         var updated = current
-        let switchable = links.filter { $0.0.isSwitchable && $0.1 != .open }
+        for (link, mode) in links {
+            if case let .value(value) = mode, link.isChoice, let key = link.key, link.choiceTitle(value) != nil {
+                self.setInt(key, value, in: &updated)
+            }
+        }
+        let switchable = links.filter { item in
+            guard item.0.isSwitchable else {
+                return false
+            }
+            switch item.1 {
+            case .on, .off, .toggle: return true
+            case .open, .value: return false
+            }
+        }
         let toggled = switchable.filter { $0.1 == .toggle }.compactMap { item -> Bool? in
             guard let key = item.0.key else {
                 return nil
@@ -70,7 +107,7 @@ extension ShadowSettingsTransfer {
             case .on: value = true
             case .off: value = false
             case .toggle: value = groupValue
-            case .open: continue
+            case .open, .value: continue
             }
             if self.setBool(key, value, in: &updated) {
                 values.append(value)

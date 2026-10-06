@@ -149,6 +149,7 @@ private func shadowHeaderModeTitle(_ mode: ShadowSettingLinks.Mode) -> String {
     case .on: return "включать"
     case .off: return "выключать"
     case .open: return "открыть"
+    case let .value(value): return "ставить \(value)"
     }
 }
 
@@ -156,6 +157,9 @@ func shadowHeaderStepTitle(_ step: ShadowHeaderStep) -> String {
     switch step.action {
     case .customLink, .setting:
         if let (setting, mode) = ShadowSettingLinks.resolve(step.link) {
+            if case let .value(value) = mode, let choice = setting.choiceTitle(value) {
+                return "\(setting.title): \(choice)"
+            }
             return "\(setting.title) (\(shadowHeaderModeTitle(mode)))"
         }
         let trimmed = step.link.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -268,7 +272,7 @@ func shadowHeaderButtonsController(context: AccountContext, focus: ShadowSetting
     let pickSetting: (@escaping (ShadowHeaderStep) -> Void) -> Void = { completion in
         var screens: [ShadowSheetEntry] = []
         for screen in ShadowSettingLinks.screenOrder {
-            let toggles = ShadowSettingLinks.all.filter { $0.screen == screen && $0.isSwitchable }
+            let toggles = ShadowSettingLinks.all.filter { $0.screen == screen && ($0.isSwitchable || $0.isChoice) }
             if toggles.isEmpty {
                 continue
             }
@@ -276,6 +280,12 @@ func shadowHeaderButtonsController(context: AccountContext, focus: ShadowSetting
                 var items: [ShadowSheetEntry] = []
                 for setting in toggles {
                     items.append(ShadowSheetEntry(title: setting.title, color: .accent, action: {
+                        if setting.isChoice {
+                            presentSheet("«\(setting.title)»: что ставить при нажатии", setting.choices.enumerated().map { index, choice in
+                                ShadowSheetEntry(title: choice, color: .accent, action: { completion(ShadowHeaderStep(.setting, link: setting.link(.value(Int32(index))))) })
+                            })
+                            return
+                        }
                         presentSheet("«\(setting.title)»: что делать при нажатии", [
                             ShadowSheetEntry(title: "Переключать (вкл ↔ выкл)", color: .accent, action: { completion(ShadowHeaderStep(.setting, link: setting.link(.toggle))) }),
                             ShadowSheetEntry(title: "Только включать", color: .accent, action: { completion(ShadowHeaderStep(.setting, link: setting.link(.on))) }),
@@ -286,7 +296,7 @@ func shadowHeaderButtonsController(context: AccountContext, focus: ShadowSetting
                 presentSheet(ShadowSettingLinks.screenTitles[screen], items)
             }))
         }
-        presentSheet("Какой тумблер", screens)
+        presentSheet("Какая настройка", screens)
     }
 
     // One action: the action list, then a link or a toggle when needed.

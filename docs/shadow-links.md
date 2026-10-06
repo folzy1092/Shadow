@@ -48,7 +48,13 @@
 
 - без параметра — открыть экран, плавно прокрутить к тумблеру и один раз подсветить;
 - `?on` / `?off` — включить / выключить;
-- `?switch` — переключить.
+- `?switch` — переключить;
+- `?value=N` — для настройки с выбором (не вкл/выкл): поставить вариант N
+  (нумерация с 0, как в списке выбора), например
+  `shadow://customization/voice-time?value=2` — «Прошло / всего».
+
+Настройки без вкл/выкл и вне `AyuGramSettings` (цвета, свои значки, кнопки
+шапки, выбор картинок) тоже имеют ссылку, но она только открывает их.
 
 Из сообщений, браузера и других приложений смена значения спрашивает
 подтверждение; с кнопок шапки — без вопроса. Защитные тумблеры (замки чатов,
@@ -110,9 +116,13 @@
 | `shadow://customization/unlimited-pins` | Безлимитные закрепы |
 | `shadow://customization/compact-chats` | Компактный список чатов |
 | `shadow://customization/voice-transcription` | Расшифровка голосовых на устройстве |
+| `shadow://customization/voice-time` | Время на голосовых, `?value=0…5`: по умолчанию, текущий таймкод, прошло / всего, осталось / всего, прошло и процент, процент |
+| `shadow://customization/voice-time-round` | Время на голосовых: также на кружках |
+| `shadow://customization/voice-time-player` | Время в верхнем плеере |
 | `shadow://customization/folders-bottom` | Папки снизу |
 | `shadow://customization/hide-bottom-search` | Убрать поиск снизу |
 | `shadow://customization/compact-bottom` | Уменьшить интерфейс снизу |
+| `shadow://customization/bottom-bar-hiding` | Скрытие нижней панели, `?value=0…3` |
 | `shadow://customization/profile-id` | ID профиля (Bot API) |
 | `shadow://customization/profile-dc` | Дата-центр (DC) |
 | `shadow://customization/registration-date` | Дата регистрации |
@@ -126,6 +136,15 @@
 | `shadow://customization/profile-background` | Кастомный фон профиля |
 | `shadow://customization/profile-background-all` | Фон для всех профилей |
 | `shadow://customization/profile-background-settings` | Фон в настройках |
+| `shadow://customization/icon-background` | Цвет фона иконок (только открывает) |
+| `shadow://customization/icon-glyph` | Цвет значков (только открывает) |
+| `shadow://customization/edited-text` | Свой значок правки (только открывает) |
+| `shadow://customization/deleted-text` | Свой значок удалёнки (только открывает) |
+| `shadow://customization/message-screenshots` | Скриншоты сообщений (только открывает) |
+| `shadow://customization/header-buttons` | Кнопки шапки (только открывает) |
+| `shadow://customization/github-sync` | Синхронизировать с GitHub (только открывает) |
+| `shadow://customization/banner-image` | Изображение баннера (только открывает) |
+| `shadow://customization/profile-background-image` | Изображение фона профиля (только открывает) |
 
 **Скриншоты сообщений**
 

@@ -12,21 +12,32 @@ private struct ChatInstantVideoMessageDurationNodeState: Equatable {
     let hours: Int32?
     let minutes: Int32?
     let seconds: Int32?
+    // Shadow: a custom text (ShadowVoiceTime) instead of the time above.
+    let text: String?
     
     init() {
         self.hours = nil
         self.minutes = nil
         self.seconds = nil
+        self.text = nil
     }
     
     init(hours: Int32, minutes: Int32, seconds: Int32) {
         self.hours = hours
         self.minutes = minutes
         self.seconds = seconds
+        self.text = nil
+    }
+    
+    init(text: String) {
+        self.hours = nil
+        self.minutes = nil
+        self.seconds = nil
+        self.text = text
     }
     
     static func ==(lhs: ChatInstantVideoMessageDurationNodeState, rhs: ChatInstantVideoMessageDurationNodeState) -> Bool {
-        if lhs.hours != rhs.hours || lhs.minutes != rhs.minutes || lhs.seconds != rhs.seconds {
+        if lhs.hours != rhs.hours || lhs.minutes != rhs.minutes || lhs.seconds != rhs.seconds || lhs.text != rhs.text {
             return false
         }
         return true
@@ -68,6 +79,17 @@ public final class ChatInstantVideoMessageDurationNode: ASImageNode {
     }
     
     private var updateTimer: SwiftSignalKit.Timer?
+    
+    // Shadow: the voice time format the formatter below was made for.
+    public var shadowFormat: Int32?
+    
+    // Shadow: (duration, position or nil while not playing) → the text, for the
+    // voice time formats (set by the round video node; nil = Telegram's own).
+    public var shadowFormatter: ((Double, Double?) -> String?)? {
+        didSet {
+            self.updateTimestamp()
+        }
+    }
     
     private var statusValue: MediaPlayerStatus? {
         didSet {
@@ -151,6 +173,28 @@ public final class ChatInstantVideoMessageDurationNode: ASImageNode {
     }
     
     public func updateTimestamp() {
+        if let shadowFormatter = self.shadowFormatter {
+            if let statusValue = self.statusValue, Double(0.0).isLess(than: statusValue.duration) {
+                let timestampSeconds: Double
+                if !statusValue.generationTimestamp.isZero {
+                    timestampSeconds = statusValue.timestamp + (CACurrentMediaTime() - statusValue.generationTimestamp)
+                } else {
+                    timestampSeconds = statusValue.timestamp
+                }
+                var isPlaying = false
+                if case .playing = statusValue.status {
+                    isPlaying = true
+                }
+                let position: Double? = (isPlaying || timestampSeconds >= 1.0) ? timestampSeconds : nil
+                if let text = shadowFormatter(statusValue.duration, position) {
+                    self.state = ChatInstantVideoMessageDurationNodeState(text: text)
+                    return
+                }
+            } else if let defaultDuration = self.defaultDuration, let text = shadowFormatter(defaultDuration, nil) {
+                self.state = ChatInstantVideoMessageDurationNodeState(text: text)
+                return
+            }
+        }
         if let statusValue = self.statusValue, Double(0.0).isLess(than: statusValue.duration) {
             let timestampSeconds: Double
             if !statusValue.generationTimestamp.isZero {
@@ -188,7 +232,9 @@ public final class ChatInstantVideoMessageDurationNode: ASImageNode {
         }
         
         let text: String
-        if let hours = parameters.state.hours, let minutes = parameters.state.minutes, let seconds = parameters.state.seconds {
+        if let customText = parameters.state.text {
+            text = customText
+        } else if let hours = parameters.state.hours, let minutes = parameters.state.minutes, let seconds = parameters.state.seconds {
             if hours != 0 {
                 text = String(format: "%d:%02d:%02d", hours, minutes, seconds)
             } else {

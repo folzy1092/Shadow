@@ -85,7 +85,8 @@ class SettingLinksContracts(unittest.TestCase):
 class HeaderStepsContracts(unittest.TestCase):
     def test_toggles_change_together_without_asking(self):
         chat_list = read("ChatListUI/Sources/ChatListController.swift")
-        self.assertIn("ShadowSettingsTransfer.applying(links: switchable, to: current)", chat_list)
+        self.assertIn("ShadowSettingsTransfer.applying(links: applied, to: current)", chat_list)
+        self.assertIn("let applied = switchable + choices.map", chat_list)
         self.assertIn("fileprivate func shadowPerformHeaderSteps(", chat_list)
         transfer = read("TelegramCore/Sources/AyuGram/ShadowSettingLinksApply.swift")
         self.assertIn("ShadowSettingLinks.groupTarget(currentValues: toggled)", transfer)

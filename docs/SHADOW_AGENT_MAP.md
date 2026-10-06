@@ -107,7 +107,18 @@ UI-проекция настроек выбирается в `TelegramRootContro
      ключей **и** ветка в `validate()` для integer/text;
   3. `ShadowSettingsTransfer.swift`: key path (bool) или запись/чтение (int/text);
   4. UI в `AyuGramSettingsController.swift` и поиск в `ShadowSettingsSearchIndex.swift`;
-  5. тест в `Tests/ShadowSettings/DocumentTests.swift` (round-trip).
+  5. тест в `Tests/ShadowSettings/DocumentTests.swift` (round-trip);
+  6. **ссылка** в `ShadowSettingLinks.swift` у каждой новой настройки, без
+     исключений: тумблер — `key` (`?on/?off/?switch`), выбор из вариантов —
+     `key` + `choices` и путь в `ShadowSettingLinksApply.choiceFields`
+     (`?value=N`), всё остальное (цвет, текст, экран, картинка) — `key: nil`
+     (ссылка только открывает). `entryId` = stableId строки; строка таблицы
+     в `docs/shadow-links.md`;
+  7. **синхронизация аккаунтов**: всё в `AyuGramSettings` синхронизируется само
+     (`ShadowSettingsSync.syncedValue`). Состояние аккаунта, а не настройку,
+     явно исключить там (как `ghostLastSeenTimestamp`); настройку вне
+     `AyuGramSettings` (файлы, UserDefaults) — довести до синхронизации отдельно,
+     как баннеры (`ShadowSettingsSyncManager`).
 - Ghost Mode: мастер-флаг `ghostMode`; конкретные фичи читаются через
   `effective*` / `suppressReadReceipts(peerId:)` (учитывают персональные
   правила чатов).
@@ -250,6 +261,19 @@ UI-проекция настроек выбирается в `TelegramRootContro
 - Баннеры в синхронизации: `AyuSavedMedia.bannersDidChangeNotification` →
   `ShadowSettingsSyncManager` копирует файлы (`copyBanners`), флаг
   `ShadowSettingsSync.syncBanners`.
+- Выбор из вариантов (`ShadowSettingLink.choices`, `isChoice`): `?value=N`
+  ставит вариант N (`ShadowSettingsTransfer.setInt`, ключи `choiceFields`),
+  `ShadowSettingLinks.mode(_:for:)` превращает бессмысленные сочетания
+  (`?value` у тумблера, `?on` у выбора) в «только открыть». Есть у
+  `voice-time` и `bottom-bar-hiding`; кнопки шапки умеют ставить вариант.
+- Время на голосовых: `ShadowVoiceTime.swift` (Foundation, тест
+  `VoiceTimeTests.swift`), поля `voiceTimeFormat` (0…5), `voiceTimeRoundVideos`,
+  `voiceTimeInPlayer`. Пузырь — `ChatMessageInteractiveFileNode.updateStatus`
+  (+ запас ширины под длинный формат в layout), кружки — `shadowFormatter` у
+  `ChatInstantVideoMessageDurationNode` (ставит
+  `ChatMessageInteractiveInstantVideoNode`), верхний плеер — подзаголовок в
+  **обоих** `MediaNavigationAccessoryHeaderNode` (`TelegramBaseController` и
+  `MediaPlaybackHeaderPanelComponent`). Пока не играет — просто длина.
 
 ## 5a. Замки чатов и второе пространство
 

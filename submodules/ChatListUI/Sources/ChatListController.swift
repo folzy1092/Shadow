@@ -8078,18 +8078,26 @@ extension ChatListControllerImpl {
     }
 
     private func shadowApplyHeaderToggles(_ toggles: [(ShadowSettingLink, ShadowSettingLinks.Mode)]) {
-        let locked = toggles.filter { !$0.0.isSwitchable }
+        let locked = toggles.filter { !$0.0.isSwitchable && !$0.0.isChoice }
         let switchable = toggles.filter { $0.0.isSwitchable }
-        if !locked.isEmpty && switchable.isEmpty {
+        // Choices (?value=N) set their value; their titles go first in the toast.
+        let choices: [(ShadowSettingLink, ShadowSettingLinks.Mode, String)] = toggles.compactMap { item -> (ShadowSettingLink, ShadowSettingLinks.Mode, String)? in
+            guard item.0.isChoice, case let .value(value) = item.1, let title = item.0.choiceTitle(value) else {
+                return nil
+            }
+            return (item.0, item.1, title)
+        }
+        if !locked.isEmpty && switchable.isEmpty && choices.isEmpty {
             self.shadowHeaderToast("«\(locked[0].0.title)» меняется только вручную.")
             return
         }
+        let applied = switchable + choices.map { ($0.0, $0.1) }
         let context = self.context
         let _ = (context.account.postbox.transaction { transaction -> ([Bool], Bool) in
             var values: [Bool] = []
             var ghostMode = false
             updateAyuGramSettings(transaction: transaction, { current in
-                let (updated, newValues) = ShadowSettingsTransfer.applying(links: switchable, to: current)
+                let (updated, newValues) = ShadowSettingsTransfer.applying(links: applied, to: current)
                 values = newValues
                 ghostMode = updated.ghostMode
                 return updated
@@ -8097,20 +8105,23 @@ extension ChatListControllerImpl {
             return (values, ghostMode)
         }
         |> deliverOnMainQueue).startStandalone(next: { [weak self] values, ghostMode in
-            guard let self, !values.isEmpty else {
+            guard let self, !values.isEmpty || !choices.isEmpty else {
                 return
             }
-            let names = switchable.map { $0.0.title }
-            let allOn = values.allSatisfy { $0 }
-            let allOff = values.allSatisfy { !$0 }
-            var text: String
-            if names.count == 1 {
-                text = "\(names[0]): \(values[0] ? "вкл" : "выкл")"
-            } else if allOn || allOff {
-                text = "\(allOn ? "Включено" : "Выключено"): \(names.joined(separator: ", "))"
-            } else {
-                text = zip(names, values).map { "\($0.0): \($0.1 ? "вкл" : "выкл")" }.joined(separator: "; ")
+            var parts: [String] = choices.map { "\($0.0.title): \($0.2)" }
+            if !values.isEmpty {
+                let names = switchable.map { $0.0.title }
+                let allOn = values.allSatisfy { $0 }
+                let allOff = values.allSatisfy { !$0 }
+                if names.count == 1 {
+                    parts.append("\(names[0]): \(values[0] ? "вкл" : "выкл")")
+                } else if allOn || allOff {
+                    parts.append("\(allOn ? "Включено" : "Выключено"): \(names.joined(separator: ", "))")
+                } else {
+                    parts.append(zip(names, values).map { "\($0.0): \($0.1 ? "вкл" : "выкл")" }.joined(separator: "; "))
+                }
             }
+            var text = parts.joined(separator: "; ")
             let needsGhost = switchable.contains { $0.0.screen == "ghost" && $0.0.slug != "mode" }
             if needsGhost && !ghostMode && values.contains(true) {
                 text += ". Работает, когда включён Призрак."
