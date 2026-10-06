@@ -17,6 +17,13 @@ This file provides guidance to AI assistants when working with code in this repo
 > announced build gets changelog items typed НОВОЕ / ИСПРАВЛЕНО, in plain Russian
 > for users, new features with the settings section where to find them. Rules and
 > format: SHADOW_AGENT_MAP §5d «Список изменений».
+>
+> **Announce builds yourself, right away** (Folzy, 2026-10-07): every CI build
+> with user-visible changes gets patch notes and is announced
+> (`tools/shadow-announce.py`) as soon as CI is green — do not wait to be asked.
+> A real new feature or an important bug fix is announced immediately, in its
+> own build. Only purely internal builds (CI, tests, docs) are skipped.
+> Procedure: SHADOW_AGENT_MAP §5d «Когда объявлять».
 
 ## Build
 
