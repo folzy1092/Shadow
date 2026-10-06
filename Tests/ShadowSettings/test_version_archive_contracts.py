@@ -42,6 +42,13 @@ class VersionArchiveContracts(unittest.TestCase):
         tool = (ROOT / "tools/shadow-announce.py").read_text(encoding="utf-8")
         self.assertIn('"ipa_url": IPA.format(build=args.build)', tool)
         self.assertIn('"version": args.version', tool)
+        # Typed notes for the update screen.
+        self.assertIn('entry["new"] = new', tool)
+        self.assertIn('entry["fixed"] = fixed', tool)
+        changelog = json.loads((ROOT / "shadow-changelog.json").read_text(encoding="utf-8"))
+        latest = changelog["entries"][0]
+        if latest["build"] >= 34777:
+            self.assertTrue(latest.get("new") or latest.get("fixed"), latest["build"])
         worker = (ROOT / "tools/shadow-bot/worker.js").read_text(encoding="utf-8")
         self.assertIn('"shadow-changelog.json", changelog', worker)
         self.assertIn("version, ipa_url: ipaURL", worker)
