@@ -32,11 +32,17 @@ public enum ShadowUpdateCheck {
         public let build: Int
         public let date: String
         public let items: [String]
+        // "12.9.2-1.2.0"; nil in entries announced before the field existed.
+        public let version: String?
+        // The IPA of this build (the version archive downloads it).
+        public let ipaURL: URL?
 
-        public init(build: Int, date: String, items: [String]) {
+        public init(build: Int, date: String, items: [String], version: String? = nil, ipaURL: URL? = nil) {
             self.build = build
             self.date = date
             self.items = items
+            self.version = version
+            self.ipaURL = ipaURL
         }
     }
 
@@ -199,7 +205,15 @@ public enum ShadowUpdateCheck {
             if items.isEmpty {
                 continue
             }
-            result.append(ChangelogEntry(build: build, date: (entry["date"] as? String) ?? "", items: items))
+            var version = (entry["version"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            if version?.isEmpty == true {
+                version = nil
+            }
+            var ipaURL: URL?
+            if let string = entry["ipa_url"] as? String, let url = URL(string: string), url.scheme == "https" {
+                ipaURL = url
+            }
+            result.append(ChangelogEntry(build: build, date: (entry["date"] as? String) ?? "", items: items, version: version, ipaURL: ipaURL))
         }
         return result.sorted(by: { $0.build > $1.build })
     }
@@ -329,5 +343,75 @@ public enum ShadowUpdateCheck {
                 checkReleases(completion: completion)
             }
         }
+    }
+}
+
+// Shadow: "Архив версий" — every announced build (shadow-changelog.json),
+// newest first, with its notes and IPA, to read what changed or roll back.
+// Builds older than the device whitelist (34725) are never offered: rolling
+// back to them would skip the device check.
+public enum ShadowVersionArchive {
+    public static let minimumBuild = 34725
+
+    public struct Row: Equatable {
+        public let entry: ShadowUpdateCheck.ChangelogEntry
+        // "12.9.2-1.1.0", or "12.9.2-1.0.0 (build 34751)" when several
+        // announced builds share the version.
+        public let title: String
+        public let isInstalled: Bool
+    }
+
+    public static func rows(entries: [ShadowUpdateCheck.ChangelogEntry], installedBuild: Int?) -> [Row] {
+        let shown = entries
+            .filter { $0.build >= minimumBuild }
+            .sorted(by: { $0.build > $1.build })
+        var counts: [String: Int] = [:]
+        for entry in shown {
+            counts[entry.version ?? "", default: 0] += 1
+        }
+        return shown.map { entry in
+            let version = entry.version ?? ""
+            let title: String
+            if version.isEmpty {
+                title = "Сборка \(entry.build)"
+            } else if (counts[version] ?? 0) > 1 {
+                title = "\(version) (build \(entry.build))"
+            } else {
+                title = version
+            }
+            return Row(entry: entry, title: title, isInstalled: entry.build == installedBuild)
+        }
+    }
+
+    // The entry's IPA; entries without ipa_url use the release mirror.
+    public static func ipaURL(_ entry: ShadowUpdateCheck.ChangelogEntry) -> URL {
+        return entry.ipaURL ?? URL(string: "https://github.com/folzy1092/tgfork/releases/download/build-\(entry.build)/Shadow.ipa")!
+    }
+
+    // "6 октября 2026" from "2026-10-06"; the raw string when it does not parse.
+    public static func dateText(_ date: String) -> String {
+        let parts = date.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 3, (1...12).contains(parts[1]) else {
+            return date
+        }
+        let months = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"]
+        return "\(parts[2]) \(months[parts[1] - 1]) \(parts[0])"
+    }
+
+    public static func fetch(completion: @escaping ([ShadowUpdateCheck.ChangelogEntry]?) -> Void) {
+        var components = URLComponents(url: ShadowUpdateCheck.changelogURL, resolvingAgainstBaseURL: false)
+        components?.queryItems = [URLQueryItem(name: "t", value: String(Int(Date().timeIntervalSince1970)))]
+        var request = URLRequest(url: components?.url ?? ShadowUpdateCheck.changelogURL)
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.timeoutInterval = 20.0
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            var result: [ShadowUpdateCheck.ChangelogEntry]?
+            if error == nil, let data, let status = (response as? HTTPURLResponse)?.statusCode, (200 ..< 300).contains(status) {
+                result = ShadowUpdateCheck.parseChangelog(data)
+            }
+            DispatchQueue.main.async {
+                completion(result)
+            }
+        }.resume()
     }
 }

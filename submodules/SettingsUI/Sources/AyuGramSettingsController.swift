@@ -120,6 +120,7 @@ private enum AyuHubEntry: ItemListNodeEntry {
     case chatLocks
     case secondSpace
     case emergency
+    case versionArchive
     case crashReports(Int)
     case infoFooter
     case deviceAccess
@@ -138,7 +139,7 @@ private enum AyuHubEntry: ItemListNodeEntry {
             return AyuHubSection.privacy.rawValue
         case .noResults:
             return AyuHubSection.info.rawValue
-        case .customization, .spy, .ghost, .filters, .misc, .hiddenAccounts, .settingsSync, .backup, .pushDiagnostics, .quickReplies, .chatLocks, .secondSpace, .emergency, .crashReports:
+        case .customization, .spy, .ghost, .filters, .misc, .hiddenAccounts, .settingsSync, .backup, .pushDiagnostics, .quickReplies, .chatLocks, .secondSpace, .emergency, .versionArchive, .crashReports:
             return AyuHubSection.tools.rawValue
         case .infoFooter:
             return AyuHubSection.info.rawValue
@@ -174,6 +175,8 @@ private enum AyuHubEntry: ItemListNodeEntry {
             return 14
         case .emergency:
             return 16
+        case .versionArchive:
+            return 17
         case .crashReports:
             return 15
         case .infoFooter:
@@ -238,6 +241,8 @@ private enum AyuHubEntry: ItemListNodeEntry {
             return ItemListDisclosureItem(presentationData: presentationData, title: "Второе пространство", label: "", sectionId: self.section, style: .blocks, action: { arguments.openFeature(.secondSpace) })
         case .emergency:
             return ItemListDisclosureItem(presentationData: presentationData, title: "Экстренная защита", label: "", sectionId: self.section, style: .blocks, action: { arguments.openFeature(.emergency) })
+        case .versionArchive:
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Архив версий", label: "", sectionId: self.section, style: .blocks, action: { arguments.openVersionArchive() })
         case let .crashReports(count):
             return ItemListDisclosureItem(presentationData: presentationData, title: "Отчёты о вылетах", label: "\(count)", sectionId: self.section, style: .blocks, action: { arguments.openCrashReports() })
         case let .updateButton(enabled):
@@ -281,6 +286,7 @@ private final class AyuHubArguments {
     var openUrl: (String) -> Void = { _ in }
     var openCrashReports: () -> Void = {}
     var openDeviceAccess: () -> Void = {}
+    var openVersionArchive: () -> Void = {}
     var openSettingsSync: () -> Void = {}
 
     init(updateQuery: @escaping (String) -> Void, openResult: @escaping (ShadowSettingsSearchItem) -> Void, openCustomization: @escaping () -> Void, openSpy: @escaping () -> Void, openGhost: @escaping () -> Void, openMisc: @escaping () -> Void, openBackup: @escaping () -> Void, openFilters: @escaping () -> Void, openHiddenAccounts: @escaping () -> Void, openPushDiagnostics: @escaping () -> Void) {
@@ -451,6 +457,9 @@ public func ayuGramSettingsController(context: AccountContext, autoCheckUpdates:
     arguments.openUrl = { url in
         context.sharedContext.applicationBindings.openUrl(url)
     }
+    arguments.openVersionArchive = {
+        pushControllerImpl?(shadowVersionArchiveController(context: context))
+    }
     arguments.openDeviceAccess = {
         pushControllerImpl?(shadowDeviceAccessController(context: context))
     }
@@ -503,7 +512,7 @@ public func ayuGramSettingsController(context: AccountContext, autoCheckUpdates:
         }
         entries.append(.query(query))
         if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            entries += [.customization, .spy, .ghost, .filters, .misc, .hiddenAccounts, .settingsSync, .backup, .pushDiagnostics, .quickReplies, .chatLocks, .secondSpace, .emergency, .infoFooter]
+            entries += [.customization, .spy, .ghost, .filters, .misc, .hiddenAccounts, .settingsSync, .backup, .pushDiagnostics, .quickReplies, .chatLocks, .secondSpace, .emergency, .versionArchive, .infoFooter]
             let crashCount = ShadowCrashReports.shared.reports().count
             if crashCount > 0 {
                 entries.insert(.crashReports(crashCount), at: entries.firstIndex(where: { if case .infoFooter = $0 { return true } else { return false } }) ?? entries.count)

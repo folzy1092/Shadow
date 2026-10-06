@@ -104,6 +104,30 @@ struct UpdateCheckTests {
                 preconditionFailure("Installed newer than stable should be up to date")
             }
         }
+        // Version archive.
+        let archiveJSON = """
+        {"entries":[
+          {"build":34762,"date":"2026-10-06","version":"12.9.2-1.2.0","ipa_url":"https://github.com/folzy1092/tgfork/releases/download/build-34762/Shadow.ipa","items":["a"]},
+          {"build":34755,"date":"2026-10-05","version":"12.9.2-1.1.0","items":["b"]},
+          {"build":34753,"date":"2026-10-05","version":"12.9.2-1.0.0","items":["c"]},
+          {"build":34751,"date":"2026-10-04","version":"12.9.2-1.0.0","items":["d"]},
+          {"build":34725,"date":"2026-10-02","version":"12.9.2","ipa_url":"https://github.com/folzy1092/Shadow/releases/download/build-34725/Shadow.ipa","items":["e"]},
+          {"build":34719,"date":"2026-10-01","version":"12.9.2","items":["f"]},
+          {"build":34730,"date":"2026-10-02","items":["g"]}
+        ]}
+        """
+        let archiveEntries = ShadowUpdateCheck.parseChangelog(Data(archiveJSON.utf8))
+        check(archiveEntries.first?.version == "12.9.2-1.2.0", "Changelog version parsed")
+        check(archiveEntries.first?.ipaURL?.absoluteString.hasSuffix("build-34762/Shadow.ipa") == true, "Changelog IPA parsed")
+        let rows = ShadowVersionArchive.rows(entries: archiveEntries, installedBuild: 34755)
+        check(rows.map { $0.entry.build } == [34762, 34755, 34753, 34751, 34730, 34725], "Newest first, nothing before the whitelist")
+        check(rows.map { $0.title } == ["12.9.2-1.2.0", "12.9.2-1.1.0", "12.9.2-1.0.0 (build 34753)", "12.9.2-1.0.0 (build 34751)", "Сборка 34730", "12.9.2"], "Titles, duplicates with the build")
+        check(rows.filter { $0.isInstalled }.map { $0.entry.build } == [34755], "Installed build marked")
+        check(ShadowVersionArchive.ipaURL(rows[1].entry).absoluteString == "https://github.com/folzy1092/tgfork/releases/download/build-34755/Shadow.ipa", "IPA fallback")
+        check(ShadowVersionArchive.ipaURL(rows[5].entry).absoluteString.contains("folzy1092/Shadow/releases/download/build-34725"), "Explicit IPA kept")
+        check(ShadowVersionArchive.dateText("2026-10-06") == "6 октября 2026", "Date text")
+        check(ShadowVersionArchive.dateText("soon") == "soon", "Unparsed date kept")
+
         print("Shadow update check: \(count) checks passed")
     }
 }

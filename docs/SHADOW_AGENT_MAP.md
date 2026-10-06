@@ -188,12 +188,21 @@ UI-проекция настроек выбирается в `TelegramRootContro
 ## 5d. Версии, ветки обновлений, автокоммит вайтлиста
 
 - Версия форка — `ShadowVersion.fork` (Swift) и `versions.json` ключ `fork`
-  (CI, контракт-тест сверяет). Полная версия `ShadowVersion.full` = `12.9.2-1.2.0`.
+  (CI, контракт-тест сверяет). Полная версия `ShadowVersion.full` = `12.9.2-1.3.0`.
 - **Версию форка поднимать в коммите с изменениями**, оба места сразу
   (`ShadowVersion.fork` и `versions.json` → `fork`): новые фичи — minor
   (1.1.0 → 1.2.0), исправление крупных багов — patch (1.1.0 → 1.1.1).
   Мелкие правки, служебные коммиты и объявления версию не меняют.
   В `shadow-update.json` поле `version` = новая полная версия.
+- Объявление сборки: `python3 tools/shadow-announce.py --build N --version V
+  --title T --notes notes.txt <tgfork> <shadow>` (по пункту на строку), затем
+  коммит в tgfork и в Shadow с `[skip ci]`. Пишет и `shadow-update.json`, и
+  запись `shadow-changelog.json` с `version` + `ipa_url` — из неё строится
+  «Архив версий» (`ShadowVersionArchive` в `ShadowUpdateCheck.swift`,
+  экран `ShadowVersionArchiveController.swift`, `shadow://versions`).
+  Объявление из админки (воркер, action `announce`) тоже дописывает запись.
+  Архив показывает сборки начиная с 34725 (первая с вайтлистом устройств):
+  откат ниже обошёл бы проверку устройства.
   CI пишет её в заголовок релиза `Shadow <app>-<fork> (<build>)`.
 - `shadow-update.json` поддерживает ветки `stable`/`beta` (плоские поля вверху =
   stable, для старых сборок). `ShadowUpdateCheck.parseManifest`/`parseBetaManifest`;

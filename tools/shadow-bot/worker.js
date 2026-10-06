@@ -232,7 +232,21 @@ async function handleAdmin(request, env) {
       next.ipa_url = ipaURL;
     }
     const put = await ghPutJSON(env, "shadow-update.json", next, `Shadow: announce ${channel} ${build} [skip ci]`, current.sha);
-    return put.ok ? json({ ok: true }) : json({ ok: false, error: "github", status: put.status, detail: put.detail }, 502);
+    if (!put.ok) return json({ ok: false, error: "github", status: put.status, detail: put.detail }, 502);
+    if (channel === "stable") {
+      // The app's "Архив версий" lists shadow-changelog.json: add this build
+      // (version, IPA, the notes split at "•": clean() already turned the
+      // line breaks into spaces) unless it is already there.
+      const log = await ghGetJSON(env, "shadow-changelog.json");
+      const changelog = log.json && Array.isArray(log.json.entries) ? log.json : { entries: [] };
+      if (!changelog.entries.some((entry) => entry && entry.build === build)) {
+        const items = notes.split("•").map((line) => line.trim()).filter((line) => line.length > 0);
+        changelog.entries.unshift({ build, date: new Date().toISOString().slice(0, 10), version, ipa_url: ipaURL, items: items.length > 0 ? items : [title || `Сборка ${build}`] });
+        const logPut = await ghPutJSON(env, "shadow-changelog.json", changelog, `Shadow: changelog ${build} [skip ci]`, log.sha);
+        if (!logPut.ok) return json({ ok: false, error: "github_changelog", status: logPut.status, detail: logPut.detail }, 502);
+      }
+    }
+    return json({ ok: true });
   }
 
   return json({ ok: false, error: "bad_action" }, 400);
