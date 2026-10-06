@@ -51,6 +51,7 @@ public enum ShadowSettingsTransfer {
         "customVideoMessageSpeed": \.customVideoMessageSpeed,
         "showCameraTile": \.showCameraTile,
         "cameraTileLivePreview": \.cameraTileLivePreview,
+        "cameraTileCompact": \.cameraTileCompact,
         "confirmCalls": \.confirmCalls,
         "saveDestructingMedia": \.saveDestructingMedia,
         "saveAllIncomingMedia": \.saveAllIncomingMedia,

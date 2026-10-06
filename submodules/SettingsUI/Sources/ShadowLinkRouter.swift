@@ -63,6 +63,8 @@ public func shadowOpenLink(context: AccountContext, link: ShadowLinks.Link, navi
         push(ayuForkStorageController(context: context))
     case "versions", "archive":
         push(shadowVersionArchiveController(context: context))
+    case "autoupdate", "signing":
+        push(shadowAutoUpdateController(context: context))
     case "header", "buttons":
         push(shadowHeaderButtonsController(context: context))
     case "sync":

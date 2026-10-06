@@ -298,6 +298,45 @@ UI-проекция настроек выбирается в `TelegramRootContro
   **обоих** `MediaNavigationAccessoryHeaderNode` (`TelegramBaseController` и
   `MediaPlaybackHeaderPanelComponent`). Пока не играет — просто длина.
 
+## 5g. Автообновление с подписью на устройстве (1.4.0), плитка камеры
+
+- Идея из IPA Hub (Feather): «Обновить» в хабе скачивает объявленную сборку,
+  подписывает её на iPhone парой .p12 + .mobileprovision и ставит через
+  `itms-services`. Модуль `submodules/ShadowSelfUpdate`, экран —
+  `SettingsUI/ShadowAutoUpdateController.swift` («Автообновление»,
+  `shadow://autoupdate`), строки в хабе — `selfUpdate*` в
+  `AyuGramSettingsController.swift` (прогресс — `ShadowProgressItem`).
+- Пара хранится **на устройстве**, не в `AyuGramSettings`: файлы в
+  Application Support/ShadowSigning (без бэкапа), пароль в Keychain
+  (`ThisDeviceOnly`). В экспорт настроек и синхронизацию аккаунтов не входит.
+- Шаги (`ShadowSelfUpdater`): загрузка → распаковка (SSZipArchive) →
+  `ShadowBundlePreparer` → подпись → упаковка → локальный сервер → установка.
+  `ShadowBundlePreparer`: bundle ID = **установленной копии** (`Bundle.main`,
+  у ESign это `ph.telegra.Telegra`), id расширений и BGTask по тому же
+  префиксу; остаются только те `.appex` (и Watch), что есть у установленной
+  копии; в каждое расширение кладётся тот же профиль.
+- Подпись — `third-party/zsign` (MIT, Zsign-Package `c4ba9da`): Mach-O/bundle
+  код как есть, а `openssl.cpp` заменён на `Sources/openssl_apple.mm`:
+  p12 — `SecPKCS12Import`, подпись — `SecKeyCreateSignature`, CMS SignedData
+  собирается вручную (формат сверен с `openssl cms -verify`). SHA — CommonCrypto
+  через `Sources/shim/openssl/sha.h`. Свой OpenSSL Telegram не подходит
+  (`no-cms`, `no-rc2`, `no-des`), второй дал бы конфликт символов. Ошибки zsign —
+  `ZLog::LastError()` → текст в хабе.
+- Установка (`ShadowInstallServer`): HTTPS на 127.0.0.1 (Network.framework),
+  сертификат `*.backloop.dev` (резолвится в 127.0.0.1) скачивается с
+  `backloop.dev/pack.json` при обновлении и кэшируется (живёт ~90 дней);
+  ключ и сертификат кладутся в Keychain, чтобы получить `SecIdentity`
+  (`ShadowLocalTLSIdentity`). Манифест + IPA (Range) + иконки, затем
+  `itms-services://?action=download-manifest&url=…`. Пока iOS не скачал IPA,
+  Shadow сворачивать нельзя; запасной путь — «Поделиться подписанным IPA».
+- Не проверено на устройстве до 1.4.0: обновление приложения самим собой
+  (Feather его запрещает для серверного способа), поведение iOS 26/27 с
+  `itms-services` из приложения.
+- Компактная плитка камеры: `AyuGramSettings.cameraTileCompact` (ключ
+  `cameraTileCompact`, ссылка `shadow://customization/camera-compact`, строка
+  115 в «Кастомизации») — в `MediaPickerScreen` плитка камеры высотой в одну
+  ячейку вместо двух. Живой предпросмотр — прежний `cameraTileLivePreview`.
+
 ## 5a. Замки чатов и второе пространство
 
 - Замки: `ShadowChatLock.swift` (хранилище), `TelegramUI/Sources/ShadowChatLockUI.swift`

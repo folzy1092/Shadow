@@ -1,7 +1,7 @@
 import Foundation
 
 enum ShadowSettingsSearchDestination: Int32 {
-    case customization, spy, ghost, misc, backup, filters, pushDiagnostics, quickReplies, chatLocks, secondSpace, emergency
+    case customization, spy, ghost, misc, backup, filters, pushDiagnostics, quickReplies, chatLocks, secondSpace, emergency, autoUpdate
 
     var title: String {
         switch self {
@@ -16,6 +16,7 @@ enum ShadowSettingsSearchDestination: Int32 {
         case .chatLocks: return "Замки чатов"
         case .secondSpace: return "Второе пространство"
         case .emergency: return "Экстренная защита"
+        case .autoUpdate: return "Автообновление"
         }
     }
 }
@@ -63,6 +64,7 @@ enum ShadowSettingsSearchIndex {
         ShadowSettingsSearchItem(destination: .customization, entryId: 97, title: "Кастомная скорость кружков", description: "Менять скорость и голос перед отправкой: 0.5×–3×", keywords: "round video кружок speed скорость 0.5 0.75 1.25 1.5 2 3 голос"),
         ShadowSettingsSearchItem(destination: .customization, entryId: 27, title: "Камера в галерее", description: "Показывать плитку камеры во вложениях", keywords: "camera gallery"),
         ShadowSettingsSearchItem(destination: .customization, entryId: 28, title: "Живой предпросмотр камеры", description: "Видео в плитке камеры", keywords: "live camera preview"),
+        ShadowSettingsSearchItem(destination: .customization, entryId: 115, title: "Компактная плитка камеры", description: "Плитка камеры в галерее занимает одну ячейку вместо двух", keywords: "camera tile compact small gallery камера плитка компакт маленькая ячейка"),
         ShadowSettingsSearchItem(destination: .customization, entryId: 31, title: "Подтверждение звонков", description: "Защита от случайного звонка", keywords: "confirm calls"),
         ShadowSettingsSearchItem(destination: .customization, entryId: 34, title: "Синхронизировать с GitHub", description: "Обновить значки из конфигурации", keywords: "sync github badges стрелочка значок"),
         ShadowSettingsSearchItem(destination: .customization, entryId: 37, title: "Кастомный баннер", description: "Фон верхней части списка чатов", keywords: "custom banner background"),
@@ -97,6 +99,7 @@ enum ShadowSettingsSearchIndex {
         ShadowSettingsSearchItem(destination: .misc, entryId: 1, title: "Подменить ID", description: "Визуальная подмена ID в профиле", keywords: "spoof profile id"),
         ShadowSettingsSearchItem(destination: .misc, entryId: 3, title: "Подменить DC", description: "Визуальная подмена дата-центра", keywords: "spoof dc data center"),
         ShadowSettingsSearchItem(destination: .misc, entryId: 5, title: "Подменить номер", description: "Визуальная подмена телефона", keywords: "spoof phone number"),
+        ShadowSettingsSearchItem(destination: .autoUpdate, entryId: 0, title: "Сертификат для автообновления", description: "Выбрать .p12, .mobileprovision и пароль, чтобы Shadow сам подписывал и ставил обновления", keywords: "автообновление обновление подпись сертификат p12 mobileprovision профиль esign update sign install"),
         ShadowSettingsSearchItem(destination: .backup, entryId: 0, title: "Экспортировать настройки", description: "Перенести настройки без сессий и личных данных", keywords: "export backup json"),
         ShadowSettingsSearchItem(destination: .backup, entryId: 1, title: "Импортировать настройки", description: "Применить файл к текущему аккаунту", keywords: "import settings json"),
         ShadowSettingsSearchItem(destination: .backup, entryId: 2, title: "Отменить последний импорт", description: "Вернуть настройки перед импортом", keywords: "undo restore backup"),

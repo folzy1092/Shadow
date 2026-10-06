@@ -9,6 +9,7 @@ import ItemListUI
 import PresentationDataUtils
 import AccountContext
 import AlertUI
+import ShadowSelfUpdate
 
 // Shadow fork settings.
 //
@@ -103,6 +104,10 @@ private enum AyuHubEntry: ItemListNodeEntry {
     // Shadow: the build CI is running right now (ShadowBuildStatus).
     case buildStatus(String)
     case downloadButton(String, String)
+    // Shadow: on-device update (ShadowSelfUpdater, "Автообновление").
+    case selfUpdateButton(String)
+    case selfUpdateProgress(title: String, detail: String, progress: Double?)
+    case selfUpdateAction(ShadowHubSelfUpdateAction)
     case updateNotes(title: String, text: String)
     case query(String)
     case result(ShadowSettingsSearchItem)
@@ -121,13 +126,14 @@ private enum AyuHubEntry: ItemListNodeEntry {
     case secondSpace
     case emergency
     case versionArchive
+    case autoUpdate(String)
     case crashReports(Int)
     case infoFooter
     case deviceAccess
 
     var section: ItemListSectionId {
         switch self {
-        case .updateButton, .updateStatus, .buildStatus, .downloadButton:
+        case .updateButton, .updateStatus, .buildStatus, .downloadButton, .selfUpdateButton, .selfUpdateProgress, .selfUpdateAction:
             return AyuHubSection.updateBanner.rawValue
         case .updateNotes:
             return AyuHubSection.updateCheck.rawValue
@@ -139,7 +145,7 @@ private enum AyuHubEntry: ItemListNodeEntry {
             return AyuHubSection.privacy.rawValue
         case .noResults:
             return AyuHubSection.info.rawValue
-        case .customization, .spy, .ghost, .filters, .misc, .hiddenAccounts, .settingsSync, .backup, .pushDiagnostics, .quickReplies, .chatLocks, .secondSpace, .emergency, .versionArchive, .crashReports:
+        case .customization, .spy, .ghost, .filters, .misc, .hiddenAccounts, .settingsSync, .backup, .pushDiagnostics, .quickReplies, .chatLocks, .secondSpace, .emergency, .versionArchive, .autoUpdate, .crashReports:
             return AyuHubSection.tools.rawValue
         case .infoFooter:
             return AyuHubSection.info.rawValue
@@ -148,9 +154,13 @@ private enum AyuHubEntry: ItemListNodeEntry {
 
     var stableId: Int32 {
         switch self {
-        case .updateButton: return -5
-        case .updateStatus: return -4
-        case .buildStatus: return -6
+        // In display order: the list diff (mergeListsStableWithUpdates) expects it.
+        case .updateButton: return -16
+        case .updateStatus: return -15
+        case .buildStatus: return -14
+        case .selfUpdateProgress: return -13
+        case .selfUpdateButton: return -12
+        case let .selfUpdateAction(action): return -11 + action.rawValue
         case .downloadButton: return -3
         case .updateNotes: return -2
         case .query: return -1
@@ -177,6 +187,8 @@ private enum AyuHubEntry: ItemListNodeEntry {
             return 16
         case .versionArchive:
             return 17
+        case .autoUpdate:
+            return 18
         case .crashReports:
             return 15
         case .infoFooter:
@@ -243,6 +255,18 @@ private enum AyuHubEntry: ItemListNodeEntry {
             return ItemListDisclosureItem(presentationData: presentationData, title: "Экстренная защита", label: "", sectionId: self.section, style: .blocks, action: { arguments.openFeature(.emergency) })
         case .versionArchive:
             return ItemListDisclosureItem(presentationData: presentationData, title: "Архив версий", label: "", sectionId: self.section, style: .blocks, action: { arguments.openVersionArchive() })
+        case let .autoUpdate(label):
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Автообновление", label: label, sectionId: self.section, style: .blocks, action: { arguments.openAutoUpdate() })
+        case let .selfUpdateButton(title):
+            return ShadowBigButtonItem(presentationData: presentationData, title: title, enabled: true, sectionId: self.section, action: {
+                arguments.startSelfUpdate()
+            })
+        case let .selfUpdateProgress(title, detail, progress):
+            return ShadowProgressItem(presentationData: presentationData, title: title, detail: detail, progress: progress, sectionId: self.section)
+        case let .selfUpdateAction(action):
+            return ItemListActionItem(presentationData: presentationData, title: action.title, kind: action == .cancel ? .destructive : .generic, alignment: .center, sectionId: self.section, style: .blocks, action: {
+                arguments.selfUpdateAction(action)
+            })
         case let .crashReports(count):
             return ItemListDisclosureItem(presentationData: presentationData, title: "Отчёты о вылетах", label: "\(count)", sectionId: self.section, style: .blocks, action: { arguments.openCrashReports() })
         case let .updateButton(enabled):
@@ -288,6 +312,9 @@ private final class AyuHubArguments {
     var openDeviceAccess: () -> Void = {}
     var openVersionArchive: () -> Void = {}
     var openSettingsSync: () -> Void = {}
+    var openAutoUpdate: () -> Void = {}
+    var startSelfUpdate: () -> Void = {}
+    var selfUpdateAction: (ShadowHubSelfUpdateAction) -> Void = { _ in }
 
     init(updateQuery: @escaping (String) -> Void, openResult: @escaping (ShadowSettingsSearchItem) -> Void, openCustomization: @escaping () -> Void, openSpy: @escaping () -> Void, openGhost: @escaping () -> Void, openMisc: @escaping () -> Void, openBackup: @escaping () -> Void, openFilters: @escaping () -> Void, openHiddenAccounts: @escaping () -> Void, openPushDiagnostics: @escaping () -> Void) {
         self.updateQuery = updateQuery
@@ -310,6 +337,7 @@ func shadowSettingsSearchDestinationController(context: AccountContext, item: Sh
     case .ghost: return ayuGhostController(context: context, focus: item)
     case .misc: return ayuMiscController(context: context, focus: item)
     case .backup: return shadowSettingsBackupController(context: context, focus: item)
+    case .autoUpdate: return shadowAutoUpdateController(context: context, focus: item)
     case .filters: return shadowMessageFiltersController(context: context)
     case .pushDiagnostics:
         if item.entryId == 0 {
@@ -340,6 +368,87 @@ private func shadowUpdateNotesText(_ release: ShadowUpdateCheck.Release) -> Stri
         blocks.append("…и ещё \(rest) сборок")
     }
     return blocks.joined(separator: "\n\n")
+}
+
+// Shadow: buttons under the on-device update progress.
+enum ShadowHubSelfUpdateAction: Int32 {
+    // Raw values follow the display order (stableIds of the rows).
+    case showPrompt = 0
+    case retry = 1
+    case share = 2
+    case cancel = 3
+
+    var title: String {
+        switch self {
+        case .showPrompt: return "Показать окно установки"
+        case .share: return "Поделиться подписанным IPA"
+        case .retry: return "Повторить"
+        case .cancel: return "Отменить"
+        }
+    }
+}
+
+private func shadowMegabytes(_ bytes: Int64) -> String {
+    return String(format: "%.1f МБ", Double(bytes) / (1024.0 * 1024.0))
+}
+
+private func shadowPercent(_ fraction: Double) -> String {
+    return "\(Int((max(0.0, min(1.0, fraction)) * 100.0).rounded(.down)))%"
+}
+
+// Title, detail and bar of the progress row; nil = nothing to show.
+private func shadowSelfUpdateRow(_ state: ShadowSelfUpdater.State) -> (String, String, Double?)? {
+    let build = state.build.map { " \($0)" } ?? ""
+    switch state.stage {
+    case .idle:
+        return nil
+    case let .downloading(received, total):
+        if total > 0 {
+            let fraction = Double(received) / Double(total)
+            return ("Загрузка сборки\(build) · \(shadowPercent(fraction))", "\(shadowMegabytes(received)) из \(shadowMegabytes(total))", fraction)
+        }
+        return ("Загрузка сборки\(build)…", received > 0 ? shadowMegabytes(received) : "", nil)
+    case let .unpacking(fraction):
+        return ("Распаковка · \(shadowPercent(fraction))", "", fraction)
+    case .signing:
+        return ("Подпись сертификатом…", "До минуты. Не сворачивайте Shadow, пока идёт подготовка.", nil)
+    case let .packing(fraction):
+        return ("Упаковка подписанного IPA · \(shadowPercent(fraction))", "", fraction)
+    case .startingServer:
+        return ("Подготовка установки…", "", nil)
+    case let .waitingForConfirmation(hint):
+        return ("Подтвердите установку в окне iOS", hint ? "Окно не появилось или закрыто — нажмите «Показать окно установки». Можно также поделиться IPA и поставить его вручную." : "Нажмите «Установить» в системном окне.", nil)
+    case let .sending(sent, total):
+        let fraction = total > 0 ? Double(sent) / Double(total) : 0.0
+        return ("Установка: передача в iOS · \(shadowPercent(fraction))", "Не закрывайте Shadow до конца передачи.", fraction)
+    case .installing:
+        return ("iOS устанавливает обновление", "Shadow сейчас закроется и обновится. Если иконка застряла на «Ожидание», откройте её ещё раз.", 1.0)
+    case let .failed(reason):
+        return ("Не удалось обновить", reason, nil)
+    }
+}
+
+private func shadowSelfUpdateActions(_ state: ShadowSelfUpdater.State, canRetry: Bool) -> [ShadowHubSelfUpdateAction] {
+    switch state.stage {
+    case .idle:
+        return []
+    case .waitingForConfirmation:
+        return [.showPrompt, .share, .cancel]
+    case .installing:
+        return state.signedIPA != nil ? [.share] : []
+    case .failed:
+        var actions: [ShadowHubSelfUpdateAction] = []
+        if canRetry {
+            actions.append(.retry)
+        }
+        if state.signedIPA != nil {
+            actions.append(.share)
+        }
+        actions.append(.cancel)
+        return actions
+    default:
+        return [.cancel]
+    }
 }
 
 // autoCheckUpdates: start "Проверить обновления" right away (shadow://updates).
@@ -399,6 +508,21 @@ public func ayuGramSettingsController(context: AccountContext, autoCheckUpdates:
     }
 
     let updateState = ValuePromise<ShadowHubUpdateState>(.idle, ignoreRepeated: true)
+    // Shadow: the announced release, for "Обновить" (on-device signing).
+    var availableRelease: ShadowUpdateCheck.Release?
+    let signingChanges: Signal<Void, NoError> = Signal { subscriber in
+        subscriber.putNext(Void())
+        let observer = NotificationCenter.default.addObserver(forName: ShadowSigningStore.didChangeNotification, object: nil, queue: .main, using: { _ in
+            subscriber.putNext(Void())
+        })
+        return ActionDisposable {
+            NotificationCenter.default.removeObserver(observer)
+        }
+    }
+    let selfUpdate: Signal<(ShadowSelfUpdater.State, Bool), NoError> = combineLatest(ShadowSelfUpdater.shared.state, signingChanges)
+    |> map { state, _ -> (ShadowSelfUpdater.State, Bool) in
+        return (state, ShadowSigningStore.shared.isConfigured)
+    }
     let bannerDismissed = ValuePromise<Bool>(false, ignoreRepeated: true)
     // Shadow: refreshed only by "Проверить обновления"; nil = no build running.
     let buildStatus = ValuePromise<String?>(nil, ignoreRepeated: true)
@@ -445,6 +569,11 @@ public func ayuGramSettingsController(context: AccountContext, autoCheckUpdates:
         bannerDismissed.set(false)
         let betaEnabled = currentAyuGramSettings(accountId: context.account.id).updateChannelBeta
         ShadowUpdateCheck.check(betaEnabled: betaEnabled) { status in
+            if case let .available(release) = status {
+                availableRelease = release
+            } else {
+                availableRelease = nil
+            }
             updateState.set(.result(status))
         }
         ShadowBuildStatus.fetch { info in
@@ -463,17 +592,51 @@ public func ayuGramSettingsController(context: AccountContext, autoCheckUpdates:
     arguments.openDeviceAccess = {
         pushControllerImpl?(shadowDeviceAccessController(context: context))
     }
+    arguments.openAutoUpdate = {
+        pushControllerImpl?(shadowAutoUpdateController(context: context))
+    }
+    let startSelfUpdate: () -> Void = {
+        guard let release = availableRelease, let url = release.downloadURL else {
+            return
+        }
+        let version = release.changelog.first(where: { $0.build == release.build })?.version
+        let bindings = context.sharedContext.applicationBindings
+        ShadowSelfUpdater.shared.start(ipaURL: url, build: release.build, version: version, openURL: { installURL in
+            bindings.openUrl(installURL.absoluteString)
+        }, keepAwake: {
+            return bindings.pushIdleTimerExtension()
+        })
+    }
+    arguments.startSelfUpdate = startSelfUpdate
+    arguments.selfUpdateAction = { action in
+        switch action {
+        case .showPrompt:
+            ShadowSelfUpdater.shared.retryInstallPrompt()
+        case .share:
+            guard let ipa = ShadowSelfUpdater.shared.currentState.signedIPA else {
+                return
+            }
+            let share = UIActivityViewController(activityItems: [ipa], applicationActivities: nil)
+            context.sharedContext.applicationBindings.presentNativeController(share)
+        case .retry:
+            startSelfUpdate()
+        case .cancel:
+            ShadowSelfUpdater.shared.cancel()
+        }
+    }
     // Shadow: the device whitelist editor is for the admins only.
     let isAdmin = ShadowDeviceAccess.hasAdminAccess(peerId: context.account.peerId.id._internalGetInt64Value())
 
-    let signal = combineLatest(queue: .mainQueue(), context.sharedContext.presentationData, query.get(), updateState.get(), bannerDismissed.get(), crashRevision.get(), buildStatus.get())
+    let signal = combineLatest(queue: .mainQueue(), context.sharedContext.presentationData, query.get(), updateState.get(), bannerDismissed.get(), crashRevision.get(), buildStatus.get(), selfUpdate)
     |> deliverOnMainQueue
-    |> map { presentationData, query, updateState, bannerDismissed, _, buildStatus -> (ItemListControllerState, (ItemListNodeState, Any)) in
+    |> map { presentationData, query, updateState, bannerDismissed, _, buildStatus, selfUpdate -> (ItemListControllerState, (ItemListNodeState, Any)) in
+        let (selfUpdateState, signingReady) = selfUpdate
         let installed = ShadowUpdateCheck.installedBuild.map { "\($0)" } ?? "?"
         var updateEnabled = true
         var statusText = "Установлена \(ShadowVersion.full) · сборка \(installed)"
         var download: (String, String)?
         var notes: (String, String)?
+        var selfUpdateTitle: String?
         switch updateState {
         case .idle:
             break
@@ -493,6 +656,9 @@ public func ayuGramSettingsController(context: AccountContext, autoCheckUpdates:
                     statusText = "Обязательное обновление. " + statusText
                 }
                 download = (release.isBeta ? "Скачать бету IPA (\(release.build))" : "Скачать IPA (\(release.build))", (release.downloadURL ?? release.pageURL).absoluteString)
+                if signingReady, release.downloadURL != nil {
+                    selfUpdateTitle = release.isBeta ? "Обновить до беты \(release.build)" : "Обновить до \(release.build)"
+                }
                 if !bannerDismissed {
                     notes = (release.title, shadowUpdateNotesText(release))
                 }
@@ -504,6 +670,14 @@ public func ayuGramSettingsController(context: AccountContext, autoCheckUpdates:
         if let buildStatus {
             entries.append(.buildStatus(buildStatus))
         }
+        if let row = shadowSelfUpdateRow(selfUpdateState) {
+            entries.append(.selfUpdateProgress(title: row.0, detail: row.1, progress: row.2))
+            for action in shadowSelfUpdateActions(selfUpdateState, canRetry: signingReady && availableRelease != nil) {
+                entries.append(.selfUpdateAction(action))
+            }
+        } else if let selfUpdateTitle {
+            entries.append(.selfUpdateButton(selfUpdateTitle))
+        }
         if let download {
             entries.append(.downloadButton(download.0, download.1))
         }
@@ -512,7 +686,7 @@ public func ayuGramSettingsController(context: AccountContext, autoCheckUpdates:
         }
         entries.append(.query(query))
         if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            entries += [.customization, .spy, .ghost, .filters, .misc, .hiddenAccounts, .settingsSync, .backup, .pushDiagnostics, .quickReplies, .chatLocks, .secondSpace, .emergency, .versionArchive, .infoFooter]
+            entries += [.customization, .spy, .ghost, .filters, .misc, .hiddenAccounts, .settingsSync, .backup, .pushDiagnostics, .quickReplies, .chatLocks, .secondSpace, .emergency, .versionArchive, .autoUpdate(signingReady ? "Вкл" : "Выкл"), .infoFooter]
             let crashCount = ShadowCrashReports.shared.reports().count
             if crashCount > 0 {
                 entries.insert(.crashReports(crashCount), at: entries.firstIndex(where: { if case .infoFooter = $0 { return true } else { return false } }) ?? entries.count)
@@ -1046,6 +1220,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
     case roundVideoBackCamera(Bool)
     case showCameraTile(Bool)
     case cameraTileLivePreview(Bool)
+    case cameraTileCompact(Bool)
     case mediaFooter
 
     case customRoundVideosHeader
@@ -1089,7 +1264,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
             return AyuCustomizationSection.bottomBar.rawValue
         case .profilesHeader, .showProfileId, .showProfileDC, .showRegistrationDate, .hideOwnPhoneNumber, .profilesFooter:
             return AyuCustomizationSection.profiles.rawValue
-        case .mediaHeader, .roundVideoBackCamera, .showCameraTile, .cameraTileLivePreview, .localVoiceTranscription, .voiceTimeFormat, .voiceTimeRoundVideos, .voiceTimeInPlayer, .mediaFooter:
+        case .mediaHeader, .roundVideoBackCamera, .showCameraTile, .cameraTileLivePreview, .cameraTileCompact, .localVoiceTranscription, .voiceTimeFormat, .voiceTimeRoundVideos, .voiceTimeInPlayer, .mediaFooter:
             return AyuCustomizationSection.media.rawValue
         case .customRoundVideosHeader, .customVideoMessageSpeed, .customRoundVideosFooter:
             return AyuCustomizationSection.customRoundVideos.rawValue
@@ -1158,6 +1333,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .roundVideoBackCamera: return 26
         case .showCameraTile: return 27
         case .cameraTileLivePreview: return 28
+        case .cameraTileCompact: return 115
         case .mediaFooter: return 29
         case .customRoundVideosHeader: return 96
         case .customVideoMessageSpeed: return 97
@@ -1196,10 +1372,11 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .hideSponsoredMessages: return (12, 4)
         case .unlimitedPinnedChats: return (12, 5)
         case .compactChatList: return (12, 6)
-        case .localVoiceTranscription: return (28, 1)
-        case .voiceTimeFormat: return (28, 2)
-        case .voiceTimeRoundVideos: return (28, 3)
-        case .voiceTimeInPlayer: return (28, 4)
+        case .cameraTileCompact: return (28, 1)
+        case .localVoiceTranscription: return (28, 2)
+        case .voiceTimeFormat: return (28, 3)
+        case .voiceTimeRoundVideos: return (28, 4)
+        case .voiceTimeInPlayer: return (28, 5)
         // Right after the appearance section.
         case .settingsIconsHeader: return (10, 1)
         case .monochromeSettingsIcons: return (10, 2)
@@ -1393,8 +1570,12 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
             return ItemListSwitchItem(presentationData: presentationData, title: "Живой предпросмотр камеры", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 arguments.updateCameraTileLivePreview(value)
             })
+        case let .cameraTileCompact(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Компактная плитка камеры", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.updateSetting { $0.cameraTileCompact = value }
+            })
         case .mediaFooter:
-            return ItemListTextItem(presentationData: presentationData, text: .plain("Начинать запись видеосообщений («кружков») с задней камеры. Во время записи можно переключиться на фронтальную. «Камера в галерее» показывает плитку камеры первой ячейкой в галерее вложений. «Живой предпросмотр камеры» запускает в этой плитке видео с камеры вживую вместо статичной иконки. «Расшифровка голосовых на устройстве» без Premium распознаёт речь прямо на телефоне — аудио никуда не отправляется. «Время на голосовых» меняет время под голосовым во время прослушивания: сколько осталось (как в Telegram), сколько прошло, «прошло / всего», «-осталось / всего» или процент; пока голосовое не играет, видна его длина. «Также на кружках» применяет тот же формат к видеосообщениям, «Время в верхнем плеере» добавляет его в полоску плеера над чатом."), sectionId: self.section)
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Начинать запись видеосообщений («кружков») с задней камеры. Во время записи можно переключиться на фронтальную. «Камера в галерее» показывает плитку камеры первой ячейкой в галерее вложений. «Живой предпросмотр камеры» запускает в этой плитке видео с камеры вживую вместо статичной иконки. «Компактная плитка камеры» занимает одну ячейку вместо двух — в первом ряду видно больше медиа. «Расшифровка голосовых на устройстве» без Premium распознаёт речь прямо на телефоне — аудио никуда не отправляется. «Время на голосовых» меняет время под голосовым во время прослушивания: сколько осталось (как в Telegram), сколько прошло, «прошло / всего», «-осталось / всего» или процент; пока голосовое не играет, видна его длина. «Также на кружках» применяет тот же формат к видеосообщениям, «Время в верхнем плеере» добавляет его в полоску плеера над чатом."), sectionId: self.section)
         case .customRoundVideosHeader:
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "КАСТОМНЫЕ КРУЖКИ", sectionId: self.section)
         case let .customVideoMessageSpeed(value):
@@ -1517,6 +1698,7 @@ private func ayuCustomizationEntries(settings: AyuGramSettings) -> [AyuCustomiza
     entries.append(.roundVideoBackCamera(settings.roundVideoUseBackCamera))
     entries.append(.showCameraTile(settings.showCameraTile))
     entries.append(.cameraTileLivePreview(settings.cameraTileLivePreview))
+    entries.append(.cameraTileCompact(settings.cameraTileCompact))
     entries.append(.localVoiceTranscription(settings.localVoiceTranscription))
     entries.append(.voiceTimeFormat(settings.voiceTimeFormat))
     entries.append(.voiceTimeRoundVideos(settings.voiceTimeRoundVideos))

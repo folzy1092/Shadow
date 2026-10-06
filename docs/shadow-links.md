@@ -40,6 +40,7 @@
 | `shadow://user?username=<name>`, `shadow://user/@name` | профиль по @username |
 | `shadow://gift` | «Отправить подарок» (контакты, дни рождения, себе) |
 | `shadow://versions` | Архив версий: объявленные сборки с текстом и IPA для отката |
+| `shadow://autoupdate` | Автообновление: сертификат .p12, профиль и пароль для подписи обновлений на устройстве |
 
 Неизвестная команда — это имя пасхалки (см. ниже); если пасхалки с таким
 именем нет, открываются настройки Shadow. Код: разбор —
@@ -135,6 +136,7 @@
 | `shadow://customization/round-back-camera` | Кружки на заднюю камеру |
 | `shadow://customization/camera-tile` | Камера в галерее |
 | `shadow://customization/camera-live` | Живой предпросмотр камеры |
+| `shadow://customization/camera-compact` | Компактная плитка камеры |
 | `shadow://customization/round-speed` | Кастомная скорость кружков |
 | `shadow://customization/confirm-calls` | Подтверждение звонков |
 | `shadow://customization/banner` | Кастомный баннер |

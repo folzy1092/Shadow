@@ -1738,7 +1738,9 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
             let itemWidth = floorToScreenPixels((width - itemSpacing * CGFloat(itemsPerRow - 1)) / CGFloat(itemsPerRow))
             
             var cutoutRects: [CGRect] = []
-            var cameraRect: CGRect? = CGRect(origin: CGPoint(x: layout.safeInsets.left, y: 0.0), size: CGSize(width: itemWidth, height: itemWidth * 2.0 + 1.0))
+            // Shadow: "Компактная плитка камеры" — one grid cell instead of two rows.
+            let cameraHeight = ayuGramSettingsCurrent.cameraTileCompact ? itemWidth : itemWidth * 2.0 + itemSpacing
+            var cameraRect: CGRect? = CGRect(origin: CGPoint(x: layout.safeInsets.left, y: 0.0), size: CGSize(width: itemWidth, height: cameraHeight))
             if self.cameraView == nil && self.modernCameraView == nil {
                 cameraRect = nil
             }

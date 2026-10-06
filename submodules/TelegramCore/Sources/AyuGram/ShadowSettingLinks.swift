@@ -236,6 +236,7 @@ public enum ShadowSettingLinks {
         ShadowSettingLink(screen: "customization", slug: "round-back-camera", entryId: 26, key: "roundVideoUseBackCamera", title: "Кружки на заднюю камеру", icon: "camera"),
         ShadowSettingLink(screen: "customization", slug: "camera-tile", entryId: 27, key: "showCameraTile", title: "Камера в галерее", icon: "camera"),
         ShadowSettingLink(screen: "customization", slug: "camera-live", entryId: 28, key: "cameraTileLivePreview", title: "Живой предпросмотр камеры"),
+        ShadowSettingLink(screen: "customization", slug: "camera-compact", entryId: 115, key: "cameraTileCompact", title: "Компактная плитка камеры"),
         ShadowSettingLink(screen: "customization", slug: "round-speed", entryId: 97, key: "customVideoMessageSpeed", title: "Кастомная скорость кружков"),
         ShadowSettingLink(screen: "customization", slug: "confirm-calls", entryId: 31, key: "confirmCalls", title: "Подтверждение звонков", icon: "phone"),
         ShadowSettingLink(screen: "customization", slug: "banner", entryId: 37, key: "customBannerEnabled", title: "Кастомный баннер", icon: "photo"),
