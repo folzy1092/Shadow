@@ -12,6 +12,11 @@ This file provides guidance to AI assistants when working with code in this repo
 > features, third — bug fixes and small updates. Bump it with every release;
 > details in SHADOW_AGENT_MAP §5d. Most of this file describes upstream Telegram; the
 > local-build/simulator instructions below assume a macOS dev machine.
+>
+> **Release notes are written by the agent** (Folzy does not write them): every
+> announced build gets changelog items typed НОВОЕ / ИСПРАВЛЕНО, in plain Russian
+> for users, new features with the settings section where to find them. Rules and
+> format: SHADOW_AGENT_MAP §5d «Список изменений».
 
 ## Build
 
