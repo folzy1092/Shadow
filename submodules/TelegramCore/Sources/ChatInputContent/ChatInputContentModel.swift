@@ -784,9 +784,29 @@ extension ChatInputMediaItem: Codable {
 
 /// Mirrors the editor's `MediaDisplayMode` — how a multi-item container lays out (mosaic → `.collage`,
 /// slideshow → `.slideshow`). Meaningful only for `items.count >= 2`; default `.mosaic`.
+///
+/// Shadow: explicit keyed codec, like `ChatInputMediaKind`/`ChatInputMediaAlignment`. The synthesized
+/// RawRepresentable Codable goes through `singleValueContainer()`, which the Postbox `AdaptedPostbox*coder`
+/// traps on: a draft or edit state holding a multi-media block crashed the app when it was saved or read
+/// back (MetricKit, build 34755: ChatInterfaceState → … → ChatInputMedia → ChatInputMediaDisplayMode).
 public enum ChatInputMediaDisplayMode: String, Codable, Equatable {
     case mosaic
     case slideshow
+
+    private enum CodingKeys: String, CodingKey {
+        case raw
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let value = try container.decode(String.self, forKey: .raw)
+        self = ChatInputMediaDisplayMode(rawValue: value) ?? .mosaic
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(self.rawValue, forKey: .raw)
+    }
 }
 
 /// An attached media container (one or more images/videos) with a single inline caption. Mirrors the editor
@@ -846,7 +866,8 @@ extension ChatInputMedia: Codable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.displayWidth = try container.decodeIfPresent(Double.self, forKey: .displayWidth)
         self.alignment = try container.decode(ChatInputMediaAlignment.self, forKey: .alignment)
-        self.displayMode = try container.decodeIfPresent(ChatInputMediaDisplayMode.self, forKey: .displayMode) ?? .mosaic
+        // Shadow: a value that does not decode (unknown layout) must not drop the whole draft.
+        self.displayMode = (try? container.decodeIfPresent(ChatInputMediaDisplayMode.self, forKey: .displayMode)) ?? .mosaic
         self.caption = try container.decode([ChatInputRun].self, forKey: .caption)
         if let items = try container.decodeIfPresent([ChatInputMediaItem].self, forKey: .items) {
             self.items = items
