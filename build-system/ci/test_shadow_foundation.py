@@ -40,7 +40,7 @@ def main():
         ('chat-export', 'submodules/TelegramCore/Sources/AyuGram/ShadowChatExport.swift', 'Tests/ShadowSettings/ChatExportTests.swift'),
         ('search', 'submodules/SettingsUI/Sources/ShadowSettingsSearchIndex.swift', 'Tests/ShadowSettings/SearchTests.swift'),
         ('tab-bar-scroll', 'submodules/Display/Source/TabBarScrollState.swift', 'Tests/ShadowSettings/TabBarScrollTests.swift'),
-        ('self-update', ('submodules/ShadowSelfUpdate/Sources/ShadowProvisioningProfile.swift', 'submodules/ShadowSelfUpdate/Sources/ShadowBundlePreparer.swift', 'submodules/ShadowSelfUpdate/Sources/ShadowLocalTLSIdentity.swift'), 'Tests/ShadowSettings/SelfUpdateTests.swift'),
+        ('self-update', ('submodules/ShadowSelfUpdate/Sources/ShadowProvisioningProfile.swift', 'submodules/ShadowSelfUpdate/Sources/ShadowBundlePreparer.swift', 'submodules/ShadowSelfUpdate/Sources/ShadowLocalTLSIdentity.swift', 'submodules/ShadowSelfUpdate/Sources/ShadowInstallLinks.swift', 'submodules/ShadowSelfUpdate/Sources/ShadowInstallDiagnostics.swift'), 'Tests/ShadowSettings/SelfUpdateTests.swift'),
     ]
     with tempfile.TemporaryDirectory(prefix='shadow-foundation-tests-') as directory:
         for name, sources, tests in cases:

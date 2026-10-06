@@ -4,10 +4,11 @@ import Security
 import ImageIO
 import CoreGraphics
 
-// Shadow: a tiny HTTPS server on 127.0.0.1 for itms-services. It serves the
-// install manifest, the signed IPA (with Range support) and two icons, and
-// reports how much of the IPA the system installer has read. Like Feather's
-// ServerInstaller, but on Network.framework instead of Vapor.
+// Shadow: a tiny server on 127.0.0.1 for itms-services, like Feather's
+// ServerInstaller but on Network.framework instead of Vapor. It serves the
+// signed IPA (with Range support), the /install page that hands the
+// itms-services link to Safari, the manifest with two icons for the HTTPS
+// route, and reports what the system installer asked for.
 final class ShadowInstallServer {
     struct Item {
         let ipaURL: URL
@@ -16,40 +17,71 @@ final class ShadowInstallServer {
         let title: String
     }
 
+    enum Route {
+        // Plain HTTP on the 127.0.0.1 literal: no DNS, no local TLS. The
+        // manifest comes from api.palera.in (Feather's "Semi Local").
+        case localHTTP
+        // HTTPS for shadow.backloop.dev on 127.0.0.1 and ::1 with the
+        // backloop pack (Feather's "Fully Local").
+        case backloopHTTPS(ShadowLocalTLSIdentity.Material)
+
+        var isLocalHTTP: Bool {
+            if case .localHTTP = self {
+                return true
+            }
+            return false
+        }
+    }
+
     private let item: Item
+    let route: Route
     private let queue = DispatchQueue(label: "ShadowInstallServer")
-    private var listener: NWListener?
+    private var listeners: [NWListener] = []
     private var connections: [ObjectIdentifier: NWConnection] = [:]
     private let ipaSize: Int64
-    // Highest byte offset of the IPA handed to the installer.
-    private var payloadSent: Int64 = 0
+    private var port: UInt16?
+    // The itms-services link /install leads to.
+    private var pageTarget: URL?
+    private var activity = ShadowInstallActivity()
+    // Bytes of the IPA handed to the installer, over all requests: a Range
+    // request for the tail (the zip directory) does not end the transfer.
+    private var payloadSent = IndexSet()
     private var didReportManifest = false
+    private var didReportPayload = false
     private var didReportFinished = false
 
+    // All callbacks run on the server queue.
+    var onActivity: ((ShadowInstallActivity) -> Void)?
     var onManifestRequested: (() -> Void)?
+    var onPayloadRequested: (() -> Void)?
     var onPayloadProgress: ((Int64, Int64) -> Void)?
     var onPayloadFinished: (() -> Void)?
 
-    private(set) var manifestURL: URL?
-
-    init(item: Item) {
+    init(item: Item, route: Route) {
         self.item = item
+        self.route = route
         self.ipaSize = ((try? FileManager.default.attributesOfItem(atPath: item.ipaURL.path)[.size]) as? NSNumber)?.int64Value ?? 0
     }
 
     deinit {
-        self.listener?.cancel()
+        for listener in self.listeners {
+            listener.cancel()
+        }
     }
 
-    // completion runs on the server queue with the manifest URL.
-    func start(material: ShadowLocalTLSIdentity.Material, completion: @escaping (Result<URL, Error>) -> Void) {
-        let tls = NWProtocolTLS.Options()
-        guard let identity = sec_identity_create_with_certificates(material.identity, material.chain as CFArray) else {
-            completion(.failure(ServerError.identity))
-            return
+    // completion runs once, on the server queue, with the port.
+    func start(completion: @escaping (Result<UInt16, Error>) -> Void) {
+        var tls: NWProtocolTLS.Options?
+        if case let .backloopHTTPS(material) = self.route {
+            let options = NWProtocolTLS.Options()
+            guard let identity = sec_identity_create_with_certificates(material.identity, material.chain as CFArray) else {
+                completion(.failure(ServerError.identity))
+                return
+            }
+            sec_protocol_options_set_local_identity(options.securityProtocolOptions, identity)
+            sec_protocol_options_set_min_tls_protocol_version(options.securityProtocolOptions, .TLSv12)
+            tls = options
         }
-        sec_protocol_options_set_local_identity(tls.securityProtocolOptions, identity)
-        sec_protocol_options_set_min_tls_protocol_version(tls.securityProtocolOptions, .TLSv12)
 
         let parameters = NWParameters(tls: tls, tcp: NWProtocolTCP.Options())
         // Loopback only: the IPA is not offered to the local network.
@@ -63,36 +95,46 @@ final class ShadowInstallServer {
             completion(.failure(error))
             return
         }
-        self.listener = listener
+        self.listeners = [listener]
         var completed = false
         listener.stateUpdateHandler = { [weak self] state in
-            guard let self, !completed else {
+            guard let self else {
                 return
             }
             switch state {
             case .ready:
-                completed = true
-                guard let port = listener.port?.rawValue else {
-                    completion(.failure(ServerError.port))
-                    return
+                self.activity.listener = "работает"
+                self.activity.isReady = true
+                if !completed {
+                    completed = true
+                    if let port = listener.port?.rawValue {
+                        self.port = port
+                        self.startIPv6Listener(parameters: parameters, port: port)
+                        completion(.success(port))
+                    } else {
+                        completion(.failure(ServerError.port))
+                    }
                 }
-                var components = URLComponents()
-                components.scheme = "https"
-                components.host = ShadowLocalTLSIdentity.host
-                components.port = Int(port)
-                components.path = "/manifest.plist"
-                guard let url = components.url else {
-                    completion(.failure(ServerError.port))
-                    return
-                }
-                self.manifestURL = url
-                completion(.success(url))
+            case let .waiting(error):
+                self.activity.listener = "ждёт: \(ShadowInstallServer.describe(error))"
+                self.activity.isReady = false
             case let .failed(error):
-                completed = true
-                completion(.failure(error))
+                self.activity.listener = "ошибка: \(ShadowInstallServer.describe(error))"
+                self.activity.isReady = false
+                listener.cancel()
+                if !completed {
+                    completed = true
+                    completion(.failure(error))
+                }
+            case .cancelled:
+                if self.activity.isReady {
+                    self.activity.listener = "остановлен"
+                }
+                self.activity.isReady = false
             default:
                 break
             }
+            self.reportActivity()
         }
         listener.newConnectionHandler = { [weak self] connection in
             self?.accept(connection)
@@ -100,10 +142,35 @@ final class ShadowInstallServer {
         listener.start(queue: self.queue)
     }
 
+    // shadow.backloop.dev also has AAAA ::1, which iOS tries first; the
+    // second listener on the same port answers there. Best effort.
+    private func startIPv6Listener(parameters: NWParameters, port: UInt16) {
+        guard case .backloopHTTPS = self.route, let endpointPort = NWEndpoint.Port(rawValue: port) else {
+            return
+        }
+        let ipv6 = parameters.copy()
+        ipv6.requiredLocalEndpoint = NWEndpoint.hostPort(host: .ipv6(.loopback), port: endpointPort)
+        guard let listener = try? NWListener(using: ipv6) else {
+            return
+        }
+        listener.stateUpdateHandler = { state in
+            if case .failed = state {
+                listener.cancel()
+            }
+        }
+        listener.newConnectionHandler = { [weak self] connection in
+            self?.accept(connection)
+        }
+        self.listeners.append(listener)
+        listener.start(queue: self.queue)
+    }
+
     func stop() {
         self.queue.async {
-            self.listener?.cancel()
-            self.listener = nil
+            for listener in self.listeners {
+                listener.cancel()
+            }
+            self.listeners.removeAll()
             for connection in self.connections.values {
                 connection.cancel()
             }
@@ -111,13 +178,30 @@ final class ShadowInstallServer {
         }
     }
 
-    static func installURL(manifest: URL) -> URL? {
-        var allowed = CharacterSet.alphanumerics
-        allowed.insert(charactersIn: "-._~")
-        guard let encoded = manifest.absoluteString.addingPercentEncoding(withAllowedCharacters: allowed) else {
+    // Must not be called on the server queue.
+    func snapshot() -> ShadowInstallActivity {
+        return self.queue.sync {
+            self.activity
+        }
+    }
+
+    func setPageTarget(_ itms: URL) {
+        self.queue.async {
+            self.pageTarget = itms
+        }
+    }
+
+    // Where the manifest points the installer, by route.
+    private var baseURL: URL? {
+        guard let port = self.port else {
             return nil
         }
-        return URL(string: "itms-services://?action=download-manifest&url=" + encoded)
+        switch self.route {
+        case .localHTTP:
+            return URL(string: "http://\(ShadowInstallLinks.loopback):\(port)/")
+        case .backloopHTTPS:
+            return URL(string: "https://\(ShadowLocalTLSIdentity.host):\(port)/")
+        }
     }
 
     enum ServerError: LocalizedError {
@@ -132,21 +216,56 @@ final class ShadowInstallServer {
         }
     }
 
+    static func describe(_ error: NWError) -> String {
+        switch error {
+        case let .posix(code):
+            return "POSIX \(code.rawValue)"
+        case let .tls(status):
+            return "TLS \(status)"
+        case let .dns(code):
+            return "DNS \(code)"
+        default:
+            return "\(error)"
+        }
+    }
+
+    private func reportActivity() {
+        self.onActivity?(self.activity)
+    }
+
     // MARK: - Connections
 
     private func accept(_ connection: NWConnection) {
         let id = ObjectIdentifier(connection)
         self.connections[id] = connection
+        self.activity.connections += 1
+        self.reportActivity()
         connection.stateUpdateHandler = { [weak self] state in
+            guard let self else {
+                return
+            }
             switch state {
-            case .failed, .cancelled:
-                self?.connections.removeValue(forKey: id)
+            case let .waiting(error), let .failed(error):
+                self.noteConnectionError(error)
+                self.connections.removeValue(forKey: id)
+                connection.cancel()
+            case .cancelled:
+                self.connections.removeValue(forKey: id)
             default:
                 break
             }
         }
         connection.start(queue: self.queue)
         self.readRequest(connection, buffer: Data())
+    }
+
+    private func noteConnectionError(_ error: NWError) {
+        self.activity.connectionErrors += 1
+        if case .tls = error {
+            self.activity.tlsErrors += 1
+        }
+        self.activity.lastConnectionError = ShadowInstallServer.describe(error)
+        self.reportActivity()
     }
 
     private func readRequest(_ connection: NWConnection, buffer: Data) {
@@ -190,17 +309,33 @@ final class ShadowInstallServer {
         }
         let path = requestLine[1].components(separatedBy: "?").first ?? ""
         switch path {
-        case "/manifest.plist":
+        case ShadowInstallLinks.pagePath:
+            guard let target = self.pageTarget else {
+                self.send(connection, status: "404 Not Found", headers: [:], body: Data(), isHead: isHead)
+                return
+            }
+            self.activity.pageRequested = true
+            self.reportActivity()
+            self.send(connection, status: "200 OK", headers: ["Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store"], body: Data(ShadowInstallLinks.installPage(itms: target).utf8), isHead: isHead)
+        case ShadowInstallLinks.manifestPath:
+            self.activity.manifestRequested = true
+            self.reportActivity()
             if !self.didReportManifest {
                 self.didReportManifest = true
                 self.onManifestRequested?()
             }
             self.send(connection, status: "200 OK", headers: ["Content-Type": "text/xml"], body: self.manifestData(), isHead: isHead)
-        case "/icon57.png":
-            self.send(connection, status: "200 OK", headers: ["Content-Type": "image/png"], body: ShadowInstallServer.iconData(size: 57), isHead: isHead)
-        case "/icon512.png":
-            self.send(connection, status: "200 OK", headers: ["Content-Type": "image/png"], body: ShadowInstallServer.iconData(size: 512), isHead: isHead)
-        case "/shadow.ipa":
+        case "/icon57.png", "/icon512.png":
+            self.activity.iconsRequested = true
+            self.reportActivity()
+            self.send(connection, status: "200 OK", headers: ["Content-Type": "image/png"], body: ShadowInstallServer.iconData(size: path == "/icon57.png" ? 57 : 512), isHead: isHead)
+        case ShadowInstallLinks.payloadPath:
+            self.activity.payloadRequested = true
+            self.reportActivity()
+            if !self.didReportPayload {
+                self.didReportPayload = true
+                self.onPayloadRequested?()
+            }
             self.sendPayload(connection, range: headers["range"], isHead: isHead)
         default:
             self.send(connection, status: "404 Not Found", headers: [:], body: Data(), isHead: isHead)
@@ -300,14 +435,13 @@ final class ShadowInstallServer {
                 connection.cancel()
                 return
             }
-            if next > self.payloadSent {
-                self.payloadSent = next
-                self.onPayloadProgress?(min(next, self.ipaSize), self.ipaSize)
-            }
+            self.payloadSent.insert(integersIn: Int(offset) ..< Int(next))
+            let sent = Int64(self.payloadSent.count)
+            self.onPayloadProgress?(min(sent, self.ipaSize), self.ipaSize)
             if isLast {
                 file.closeFile()
                 connection.cancel()
-                if next >= self.ipaSize, !self.didReportFinished {
+                if sent >= self.ipaSize, !self.didReportFinished {
                     self.didReportFinished = true
                     self.onPayloadFinished?()
                 }
@@ -320,10 +454,9 @@ final class ShadowInstallServer {
     // MARK: - Manifest and icons
 
     private func manifestData() -> Data {
-        guard let manifestURL = self.manifestURL else {
+        guard let base = self.baseURL else {
             return Data()
         }
-        let base = manifestURL.deletingLastPathComponent()
         let manifest: [String: Any] = [
             "items": [[
                 "assets": [

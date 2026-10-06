@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+import SafariServices
 import Display
 import SwiftSignalKit
 import Postbox
@@ -76,6 +77,75 @@ func shadowSelfUpdateRow(_ state: ShadowSelfUpdater.State) -> (String, String, D
         return ("iOS устанавливает обновление", "Shadow сейчас закроется и обновится. Если иконка застряла на «Ожидание», откройте её ещё раз.", 1.0)
     case let .failed(reason):
         return ("Не удалось обновить", reason, nil)
+    }
+}
+
+// The install page of the self-update: SFSafariViewController on
+// http://127.0.0.1:PORT/install, which hands the itms-services link to iOS (as
+// IPA Hub does). One at a time.
+private final class ShadowInstallPage {
+    static let shared = ShadowInstallPage()
+
+    private weak var controller: SFSafariViewController?
+
+    func show(_ url: URL, present: (UIViewController) -> Void) {
+        self.hide(animated: false)
+        let controller = SFSafariViewController(url: url)
+        controller.dismissButtonStyle = .close
+        self.controller = controller
+        present(controller)
+    }
+
+    func hide(animated: Bool = true) {
+        guard let controller = self.controller else {
+            return
+        }
+        self.controller = nil
+        if controller.presentingViewController != nil {
+            controller.dismiss(animated: animated, completion: nil)
+        }
+    }
+}
+
+// Keeps Shadow running for a while in the background: iOS takes the IPA from
+// the local server, which stops when the app is suspended. A task lasts about
+// 30 s in the background, so an expired one is begun again when Shadow comes
+// back (download and signing can outlive it). Main thread only.
+private final class ShadowBackgroundTask {
+    private var identifier: UIBackgroundTaskIdentifier = .invalid
+    private var observer: NSObjectProtocol?
+    private var ended = false
+
+    init() {
+        self.begin()
+        self.observer = NotificationCenter.default.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main, using: { [weak self] _ in
+            self?.begin()
+        })
+    }
+
+    private func begin() {
+        guard !self.ended, self.identifier == .invalid else {
+            return
+        }
+        self.identifier = UIApplication.shared.beginBackgroundTask(withName: "ShadowSelfUpdate", expirationHandler: { [weak self] in
+            self?.release()
+        })
+    }
+
+    private func release() {
+        if self.identifier != .invalid {
+            UIApplication.shared.endBackgroundTask(self.identifier)
+            self.identifier = .invalid
+        }
+    }
+
+    func end() {
+        self.ended = true
+        if let observer = self.observer {
+            self.observer = nil
+            NotificationCenter.default.removeObserver(observer)
+        }
+        self.release()
     }
 }
 
@@ -356,10 +426,23 @@ func shadowUpdateController(context: AccountContext) -> ViewController {
         }
         let version = release.changelog.first(where: { $0.build == release.build })?.version
         let bindings = context.sharedContext.applicationBindings
-        ShadowSelfUpdater.shared.start(ipaURL: url, build: release.build, version: version, openURL: { installURL in
-            bindings.openUrl(installURL.absoluteString)
-        }, keepAwake: {
-            return bindings.pushIdleTimerExtension()
+        // The result of UIApplication.open goes to the diagnostics line.
+        let opener = ShadowSelfUpdater.InstallOpener(openURL: { installURL, completion in
+            UIApplication.shared.open(installURL, options: [:], completionHandler: completion)
+        }, showPage: { pageURL in
+            ShadowInstallPage.shared.show(pageURL, present: { controller in
+                bindings.presentNativeController(controller)
+            })
+        }, hidePage: {
+            ShadowInstallPage.shared.hide()
+        })
+        ShadowSelfUpdater.shared.start(ipaURL: url, build: release.build, version: version, opener: opener, keepAwake: {
+            let idleTimer = bindings.pushIdleTimerExtension()
+            let backgroundTask = ShadowBackgroundTask()
+            return ActionDisposable {
+                idleTimer.dispose()
+                backgroundTask.end()
+            }
         })
     }
 

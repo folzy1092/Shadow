@@ -1,11 +1,18 @@
 import Foundation
 import Security
 
-// Shadow: the TLS identity of the local install server. itms-services only
-// accepts an https manifest with a publicly trusted certificate, so, like
-// Feather, the server uses the public *.backloop.dev pack (any subdomain
-// resolves to 127.0.0.1). The certificate lives ~90 days, so the pack is
-// fetched at update time and cached until it nears expiry.
+// Shadow: the TLS identity of the backloop route of the local install
+// server. itms-services only accepts an https manifest with a publicly
+// trusted certificate; Feather's "Fully Local" mode uses the public
+// *.backloop.dev pack (any subdomain resolves to 127.0.0.1 and ::1). The
+// certificate lives ~90 days, so the pack is fetched at update time and
+// cached until it nears expiry.
+//
+// backloop.dev was discontinued in 2026: its last certificate was revoked
+// for key compromise on 2026-07-31, and iOS rejects it on any network. The
+// pack is used only after its certificate passes the system trust check
+// (the installer's SSL policy, revocation as far as the system knows it);
+// otherwise the install goes over local HTTP.
 //
 // iOS has no public API to build a SecIdentity from a key and a certificate;
 // both are stored in the app's Keychain and the identity is read back.
@@ -19,6 +26,7 @@ enum ShadowLocalTLSIdentity {
         let identity: SecIdentity
         // Leaf first, then intermediates.
         let chain: [SecCertificate]
+        let notAfter: Date?
     }
 
     enum IdentityError: LocalizedError {
@@ -32,6 +40,20 @@ enum ShadowLocalTLSIdentity {
             case .badPack: return "Сертификат для локальной установки повреждён."
             case let .keychain(status): return "Keychain не принял сертификат локальной установки (код \(status))."
             }
+        }
+    }
+
+    // For the diagnostics line: "серт. backloop ✗ <text>".
+    static func shortText(_ error: Error) -> String {
+        switch error as? IdentityError {
+        case .download?:
+            return "не скачан"
+        case .badPack?:
+            return "пакет повреждён"
+        case let .keychain(status)?:
+            return "Keychain \(status)"
+        case nil:
+            return "ошибка"
         }
     }
 
@@ -78,10 +100,9 @@ enum ShadowLocalTLSIdentity {
               let pkcs1 = rsaPrivateKey(fromPKCS8: pkcs8) else {
             throw IdentityError.badPack
         }
+        let notAfter = self.notAfter(fromPack: pack)
         if interval > 0 {
-            guard let notAfter = (pack["info"] as? [String: Any])?["notAfter"] as? String,
-                  let date = ISO8601DateFormatter.withFractions.date(from: notAfter) ?? ISO8601DateFormatter().date(from: notAfter),
-                  date.timeIntervalSinceNow > interval else {
+            guard let notAfter, notAfter.timeIntervalSinceNow > interval else {
                 throw IdentityError.badPack
             }
         }
@@ -96,7 +117,53 @@ enum ShadowLocalTLSIdentity {
         }
         let identity = try self.storeAndReadIdentity(key: key, certificate: leaf)
         let chain = [leaf] + intermediates.compactMap { SecCertificateCreateWithData(nil, $0 as CFData) }
-        return Material(identity: identity, chain: chain)
+        return Material(identity: identity, chain: chain, notAfter: notAfter)
+    }
+
+    static func notAfter(fromPack data: Data) -> Date? {
+        guard let pack = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
+            return nil
+        }
+        return self.notAfter(fromPack: pack)
+    }
+
+    private static func notAfter(fromPack pack: [String: Any]) -> Date? {
+        guard let text = (pack["info"] as? [String: Any])?["notAfter"] as? String else {
+            return nil
+        }
+        return ISO8601DateFormatter.withFractions.date(from: text) ?? ISO8601DateFormatter().date(from: text)
+    }
+
+    // The system TLS trust check for host with the installer's SSL policy: an
+    // expired certificate, or one the system knows is revoked, fails here.
+    // Blocks; nil means trusted.
+    static func trustProblem(chain: [SecCertificate], host: String = ShadowLocalTLSIdentity.host) -> String? {
+        var trust: SecTrust?
+        let policy = SecPolicyCreateSSL(true, host as CFString)
+        guard !chain.isEmpty, SecTrustCreateWithCertificates(chain as CFArray, policy, &trust) == errSecSuccess, let trust else {
+            return "не проверен"
+        }
+        var error: CFError?
+        if SecTrustEvaluateWithError(trust, &error) {
+            return nil
+        }
+        let code = error.map { OSStatus(CFErrorGetCode($0)) } ?? errSecNotTrusted
+        return self.trustProblemText(code)
+    }
+
+    static func trustProblemText(_ code: OSStatus) -> String {
+        switch code {
+        case errSecCertificateRevoked:
+            return "отозван"
+        case errSecCertificateExpired:
+            return "истёк"
+        case errSecCertificateNotValidYet:
+            return "ещё не действует"
+        case errSecHostNameMismatch:
+            return "не для этого адреса"
+        default:
+            return "не доверен (\(code))"
+        }
     }
 
     private static func storeAndReadIdentity(key: SecKey, certificate: SecCertificate) throws -> SecIdentity {
