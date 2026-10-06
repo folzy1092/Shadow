@@ -1377,6 +1377,26 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .voiceTimeFormat: return (28, 3)
         case .voiceTimeRoundVideos: return (28, 4)
         case .voiceTimeInPlayer: return (28, 5)
+        // After the media section (mediaFooter = 29), in display order.
+        case .customRoundVideosHeader: return (29, 1)
+        case .customVideoMessageSpeed: return (29, 2)
+        case .customRoundVideosFooter: return (29, 3)
+        case .bannerHeader: return (29, 4)
+        case .customBanner: return (29, 5)
+        case .bannerChoose: return (29, 6)
+        case .bannerFooter: return (29, 7)
+        case .profileBackgroundHeader: return (29, 8)
+        case .customProfileBackground: return (29, 9)
+        case .customProfileBackgroundForOthers: return (29, 10)
+        case .customProfileBackgroundForSettings: return (29, 11)
+        case .profileBackgroundChoose: return (29, 12)
+        case .profileBackgroundFooter: return (29, 13)
+        case .callsHeader: return (29, 14)
+        case .confirmCalls: return (29, 15)
+        case .callsFooter: return (29, 16)
+        case .githubConfigHeader: return (29, 17)
+        case .syncGithub: return (29, 18)
+        case .githubConfigFooter: return (29, 19)
         // Right after the appearance section.
         case .settingsIconsHeader: return (10, 1)
         case .monochromeSettingsIcons: return (10, 2)
@@ -1583,7 +1603,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
                 arguments.updateCustomVideoMessageSpeed(value)
             })
         case .customRoundVideosFooter:
-            return ItemListTextItem(presentationData: presentationData, text: .plain("После записи кружка над одноразовым просмотром появится стеклянная кнопка скорости. Нажимайте её, чтобы выбрать 0.5×, 0.75×, 1×, 1.25×, 1.5×, 2× или 3×. Скорость применяется к готовому видео и звуку перед отправкой: на ускорении голос становится выше, на замедлении — ниже."), sectionId: self.section)
+            return ItemListTextItem(presentationData: presentationData, text: .plain("После записи кружка появится кнопка скорости: от 0.5× до 3×. Меняет видео и звук перед отправкой."), sectionId: self.section)
         case .callsHeader:
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "ЗВОНКИ", sectionId: self.section)
         case let .confirmCalls(value):
@@ -1593,13 +1613,13 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .callsFooter:
             return ItemListTextItem(presentationData: presentationData, text: .plain("Перед аудио- или видеозвонком запрашивать подтверждение — защита от случайного нажатия. Не влияет на входящие звонки."), sectionId: self.section)
         case .githubConfigHeader:
-            return ItemListSectionHeaderItem(presentationData: presentationData, text: "КОНФИГУРАЦИЯ GITHUB", sectionId: self.section)
+            return ItemListSectionHeaderItem(presentationData: presentationData, text: "ЗНАЧКИ", sectionId: self.section)
         case .syncGithub:
             return ItemListActionItem(presentationData: presentationData, title: "Синхронизировать с GitHub", kind: .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: {
                 arguments.syncGitConfig()
             })
         case .githubConfigFooter:
-            return ItemListTextItem(presentationData: presentationData, text: .plain("Загружает актуальные значки профилей и каналов из конфигурации GitHub. Значки также обновляются при запуске; эта кнопка обновляет их немедленно."), sectionId: self.section)
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Значки профилей и каналов из GitHub. Обновляются сами при запуске, кнопка — сразу."), sectionId: self.section)
         case .bannerHeader:
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "БАННЕР", sectionId: self.section)
         case let .customBanner(value):
@@ -1709,14 +1729,6 @@ private func ayuCustomizationEntries(settings: AyuGramSettings) -> [AyuCustomiza
     entries.append(.customVideoMessageSpeed(settings.customVideoMessageSpeed))
     entries.append(.customRoundVideosFooter)
 
-    entries.append(.callsHeader)
-    entries.append(.confirmCalls(settings.confirmCalls))
-    entries.append(.callsFooter)
-
-    entries.append(.githubConfigHeader)
-    entries.append(.syncGithub)
-    entries.append(.githubConfigFooter)
-
     entries.append(.bannerHeader)
     entries.append(.customBanner(settings.customBannerEnabled))
     if settings.customBannerEnabled {
@@ -1732,6 +1744,14 @@ private func ayuCustomizationEntries(settings: AyuGramSettings) -> [AyuCustomiza
         entries.append(.profileBackgroundChoose)
     }
     entries.append(.profileBackgroundFooter)
+
+    entries.append(.callsHeader)
+    entries.append(.confirmCalls(settings.confirmCalls))
+    entries.append(.callsFooter)
+
+    entries.append(.githubConfigHeader)
+    entries.append(.syncGithub)
+    entries.append(.githubConfigFooter)
 
     return entries
 }

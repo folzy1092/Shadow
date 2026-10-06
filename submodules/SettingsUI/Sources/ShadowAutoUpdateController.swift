@@ -149,10 +149,18 @@ private final class ShadowAutoUpdateCoordinator: NSObject, UIDocumentPickerDeleg
         self.pickKind = kind
         let picker: UIDocumentPickerViewController
         if #available(iOS 14.0, *) {
-            // .mobileprovision has no system type; validate after picking.
-            picker = UIDocumentPickerViewController(forOpeningContentTypes: [.data], asCopy: true)
+            // Only the needed extension is selectable; .mobileprovision gets a
+            // dynamic type, which matches exactly that extension.
+            let type: UTType
+            switch kind {
+            case .certificate:
+                type = UTType(filenameExtension: "p12") ?? .pkcs12
+            case .profile:
+                type = UTType(filenameExtension: "mobileprovision", conformingTo: .data) ?? .data
+            }
+            picker = UIDocumentPickerViewController(forOpeningContentTypes: [type], asCopy: true)
         } else {
-            picker = UIDocumentPickerViewController(documentTypes: ["public.data"], in: .import)
+            picker = UIDocumentPickerViewController(documentTypes: [kind == .certificate ? "com.rsa.pkcs-12" : "public.data"], in: .import)
         }
         picker.allowsMultipleSelection = false
         picker.delegate = self
@@ -164,6 +172,13 @@ private final class ShadowAutoUpdateCoordinator: NSObject, UIDocumentPickerDeleg
             return
         }
         let kind = self.pickKind
+        let expectedExtension = kind == .certificate ? "p12" : "mobileprovision"
+        if url.pathExtension.lowercased() != expectedExtension {
+            controller.dismiss(animated: true) { [weak self] in
+                self?.message("Нужен файл .\(expectedExtension).")
+            }
+            return
+        }
         controller.dismiss(animated: true) { [weak self] in
             DispatchQueue.global(qos: .userInitiated).async {
                 var failure: String?

@@ -6,6 +6,7 @@
 #include "common.h"
 #include "base64.h"
 #include "openssl.h"
+#include "pkcs12_apple.h"
 
 #import <Foundation/Foundation.h>
 #import <Security/Security.h>
@@ -397,30 +398,87 @@ bool ZSignAsset::Init(
 		CFArrayRef items = NULL;
 		OSStatus status = SecPKCS12Import((__bridge CFDataRef)DataFromString(strP12Data), (__bridge CFDictionaryRef)options, &items);
 		NSArray* importedItems = CFBridgingRelease(items);
-		if (status == errSecAuthFailed) {
-			ZLog::Error("Неверный пароль от .p12\n");
-			return false;
-		}
-		if (status != errSecSuccess || importedItems.count == 0) {
-			ZLog::ErrorV("Не удалось открыть .p12 (код %d)\n", (int)status);
-			return false;
-		}
-		NSDictionary* item = importedItems.firstObject;
-		SecIdentityRef identity = (__bridge SecIdentityRef)item[(__bridge id)kSecImportItemIdentity];
-		if (identity == NULL) {
-			ZLog::Error("В .p12 нет сертификата с ключом\n");
-			return false;
-		}
 		SecCertificateRef certificate = NULL;
 		SecKeyRef privateKey = NULL;
-		if (SecIdentityCopyCertificate(identity, &certificate) != errSecSuccess || certificate == NULL) {
-			ZLog::Error("В .p12 нет сертификата\n");
-			return false;
-		}
-		if (SecIdentityCopyPrivateKey(identity, &privateKey) != errSecSuccess || privateKey == NULL) {
-			CFRelease(certificate);
-			ZLog::Error("В .p12 нет закрытого ключа\n");
-			return false;
+		NSDictionary* item = importedItems.firstObject;
+		SecIdentityRef identity = item ? (__bridge SecIdentityRef)item[(__bridge id)kSecImportItemIdentity] : NULL;
+		if (status == errSecSuccess && identity != NULL) {
+			if (SecIdentityCopyCertificate(identity, &certificate) != errSecSuccess || certificate == NULL) {
+				ZLog::Error("В .p12 нет сертификата\n");
+				return false;
+			}
+			if (SecIdentityCopyPrivateKey(identity, &privateKey) != errSecSuccess || privateKey == NULL) {
+				CFRelease(certificate);
+				ZLog::Error("В .p12 нет закрытого ключа\n");
+				return false;
+			}
+		} else {
+			// Shadow: iOS cannot read OpenSSL 3 exports (PBES2/AES, SHA-256 MAC)
+			// and fails with errSecDecode (-26275); read them ourselves.
+			string strKeyInfo;
+			string strReadError;
+			vector<string> arrCerts;
+			bool bWrongPassword = false;
+			if (!ShadowParsePKCS12(strP12Data, strPassword, strKeyInfo, arrCerts, bWrongPassword, strReadError)) {
+				if (bWrongPassword || status == errSecAuthFailed) {
+					ZLog::Error("Неверный пароль от .p12\n");
+				} else {
+					ZLog::ErrorV("Не удалось открыть .p12: %s (код iOS %d)\n", strReadError.c_str(), (int)status);
+				}
+				return false;
+			}
+			string strRSAKey;
+			if (!ShadowRSAKeyFromPKCS8(strKeyInfo, strRSAKey)) {
+				ZLog::Error("Ключ в .p12 не RSA — такой сертификат Apple не выдаёт\n");
+				return false;
+			}
+			NSDictionary* keyAttributes = @{
+				(__bridge id)kSecAttrKeyType: (__bridge id)kSecAttrKeyTypeRSA,
+				(__bridge id)kSecAttrKeyClass: (__bridge id)kSecAttrKeyClassPrivate
+			};
+			CFErrorRef keyError = NULL;
+			privateKey = SecKeyCreateWithData((__bridge CFDataRef)DataFromString(strRSAKey), (__bridge CFDictionaryRef)keyAttributes, &keyError);
+			if (keyError != NULL) {
+				CFRelease(keyError);
+			}
+			if (privateKey == NULL) {
+				ZLog::Error("Не удалось прочитать ключ из .p12\n");
+				return false;
+			}
+			// The certificate the profile allows, else the first one.
+			string strChosen = arrCerts.empty() ? string() : arrCerts.front();
+			for (const string& strCandidate : arrCerts) {
+				for (size_t i = 0; i < jvProv["DeveloperCertificates"].size(); i++) {
+					if (jvProv["DeveloperCertificates"][i].as_data() == strCandidate) {
+						strChosen = strCandidate;
+					}
+				}
+			}
+			if (!strChosen.empty()) {
+				certificate = SecCertificateCreateWithData(NULL, (__bridge CFDataRef)DataFromString(strChosen));
+			}
+			if (certificate == NULL) {
+				CFRelease(privateKey);
+				ZLog::Error("В .p12 нет сертификата\n");
+				return false;
+			}
+			// The key must belong to the certificate.
+			SecKeyRef publicFromKey = SecKeyCopyPublicKey(privateKey);
+			SecKeyRef publicFromCertificate = SecCertificateCopyKey(certificate);
+			NSData* keyBytes = publicFromKey ? CFBridgingRelease(SecKeyCopyExternalRepresentation(publicFromKey, NULL)) : nil;
+			NSData* certificateBytes = publicFromCertificate ? CFBridgingRelease(SecKeyCopyExternalRepresentation(publicFromCertificate, NULL)) : nil;
+			if (publicFromKey) {
+				CFRelease(publicFromKey);
+			}
+			if (publicFromCertificate) {
+				CFRelease(publicFromCertificate);
+			}
+			if (keyBytes == nil || ![keyBytes isEqualToData:certificateBytes]) {
+				CFRelease(certificate);
+				CFRelease(privateKey);
+				ZLog::Error("Ключ в .p12 не подходит к его сертификату\n");
+				return false;
+			}
 		}
 
 		string strCertData = StringFromData(CFBridgingRelease(SecCertificateCopyData(certificate)));
