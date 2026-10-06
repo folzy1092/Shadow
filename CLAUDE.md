@@ -5,7 +5,12 @@ This file provides guidance to AI assistants when working with code in this repo
 > **Shadow fork:** this repo is the Shadow (ex-AyuGram) fork of Telegram-iOS. Read
 > [`docs/SHADOW_AGENT_MAP.md`](docs/SHADOW_AGENT_MAP.md) first: working branch
 > (`master` only), CI and tests, where fork code lives, settings rules, Ghost Mode
-> and anti-delete hook points. Most of this file describes upstream Telegram; the
+> and anti-delete hook points.
+>
+> **Fork version = Г.О.Ф** (`ShadowVersion.fork` + `versions.json` → `fork`,
+> e.g. `1.1.1`): first digit — global overhaul, second — update with new
+> features, third — bug fixes and small updates. Bump it with every release;
+> details in SHADOW_AGENT_MAP §5d. Most of this file describes upstream Telegram; the
 > local-build/simulator instructions below assume a macOS dev machine.
 
 ## Build
