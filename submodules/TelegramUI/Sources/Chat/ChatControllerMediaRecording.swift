@@ -203,8 +203,21 @@ extension ChatControllerImpl {
                             shouldAnimateMessageTransition = false
                         }
                         
+                        let messages = [message]
+                        let effectiveSilentPosting = silentPosting ?? self.presentationInterfaceState.interfaceState.silentPosting
+                        let transformedMessages = self.transformEnqueueMessages(messages, silentPosting: effectiveSilentPosting, scheduleTime: scheduleTime, repeatPeriod: repeatPeriod)
+                        // Shadow: a round video sent through Ghost's scheduled messages
+                        // never appears here, so skip the snapshot → bubble transition
+                        // (it would wait for that message forever).
+                        let shouldClearGhostScheduledDraft: Bool
+                        if scheduleTime == nil, let peerId = self.chatLocation.peerId {
+                            shouldClearGhostScheduledDraft = AyuDelayedSend.willAutomaticallySchedule(messages: transformedMessages, peerId: peerId, settings: currentAyuGramSettings(accountId: self.context.account.id))
+                        } else {
+                            shouldClearGhostScheduledDraft = false
+                        }
+
                         var usedCorrelationId = false
-                        if scheduleTime == nil, shouldAnimateMessageTransition, let extractedView = videoController.extractVideoSnapshot() {
+                        if scheduleTime == nil, !shouldClearGhostScheduledDraft, shouldAnimateMessageTransition, let extractedView = videoController.extractVideoSnapshot() {
                             usedCorrelationId = true
                             self.chatDisplayNode.messageTransitionNode.add(correlationId: correlationId, source:  .videoMessage(ChatMessageTransitionNodeImpl.Source.VideoMessage(view: extractedView)), initiated: { [weak videoController, weak self] in
                                 videoController?.hideVideoSnapshot()
@@ -217,15 +230,6 @@ extension ChatControllerImpl {
                             self.videoRecorder.set(.single(nil))
                         }
                         
-                        let messages = [message]
-                        let effectiveSilentPosting = silentPosting ?? self.presentationInterfaceState.interfaceState.silentPosting
-                        let transformedMessages = self.transformEnqueueMessages(messages, silentPosting: effectiveSilentPosting, scheduleTime: scheduleTime, repeatPeriod: repeatPeriod)
-                        let shouldClearGhostScheduledDraft: Bool
-                        if scheduleTime == nil, let peerId = self.chatLocation.peerId {
-                            shouldClearGhostScheduledDraft = AyuDelayedSend.willAutomaticallySchedule(messages: transformedMessages, peerId: peerId, settings: currentAyuGramSettings(accountId: self.context.account.id))
-                        } else {
-                            shouldClearGhostScheduledDraft = false
-                        }
 
                         if !shouldClearGhostScheduledDraft {
                             self.chatDisplayNode.setupSendActionOnViewUpdate({ [weak self] in
@@ -377,7 +381,24 @@ extension ChatControllerImpl {
                                 shouldAnimateMessageTransition = false
                             }
                             
-                            if shouldAnimateMessageTransition, let textInputPanelNode = strongSelf.chatDisplayNode.textInputPanelNode, let micButton = textInputPanelNode.micButton {
+                            var attributes: [EngineMessage.Attribute] = []
+                            if viewOnce {
+                                attributes.append(AutoremoveTimeoutMessageAttribute(timeout: viewOnceTimeout, countdownBeginTime: nil))
+                            }
+                            
+                            let message: EnqueueMessage = .message(text: "", attributes: attributes, inlineStickers: [:], mediaReference: .standalone(media: TelegramMediaFile(fileId: EngineMedia.Id(namespace: Namespaces.Media.LocalFile, id: randomId), partialReference: nil, resource: resource, previewRepresentations: [], videoThumbnails: [], immediateThumbnailData: nil, mimeType: "audio/ogg", size: Int64(data.compressedData.count), attributes: [.Audio(isVoice: true, duration: Int(data.duration), title: nil, performer: nil, waveform: waveformBuffer)], alternativeRepresentations: [])), threadId: strongSelf.chatLocation.threadId, replyToMessageId: strongSelf.presentationInterfaceState.interfaceState.replyMessageSubject?.subjectModel, replyToStoryId: nil, localGroupingKey: nil, correlationId: correlationId, bubbleUpEmojiOrStickersets: [])
+                            // Shadow: a voice message that Ghost sends through the scheduled
+                            // messages never appears in this chat's history, so the
+                            // mic → bubble transition would never start and the recorder
+                            // panel (paused, "Отмена") would stay. Decide first.
+                            let shouldClearGhostScheduledDraft: Bool
+                            if let peerId = strongSelf.chatLocation.peerId {
+                                shouldClearGhostScheduledDraft = AyuDelayedSend.willAutomaticallySchedule(messages: [message], peerId: peerId, settings: currentAyuGramSettings(accountId: strongSelf.context.account.id))
+                            } else {
+                                shouldClearGhostScheduledDraft = false
+                            }
+
+                            if !shouldClearGhostScheduledDraft, shouldAnimateMessageTransition, let textInputPanelNode = strongSelf.chatDisplayNode.textInputPanelNode, let micButton = textInputPanelNode.micButton {
                                 usedCorrelationId = true
                                 strongSelf.chatDisplayNode.messageTransitionNode.add(correlationId: correlationId, source: .audioMicInput(ChatMessageTransitionNodeImpl.Source.AudioMicInput(micButton: micButton)), initiated: {
                                     guard let strongSelf = self else {
@@ -389,18 +410,6 @@ extension ChatControllerImpl {
                                 strongSelf.audioRecorder.set(.single(nil))
                             }
                             
-                            var attributes: [EngineMessage.Attribute] = []
-                            if viewOnce {
-                                attributes.append(AutoremoveTimeoutMessageAttribute(timeout: viewOnceTimeout, countdownBeginTime: nil))
-                            }
-                            
-                            let message: EnqueueMessage = .message(text: "", attributes: attributes, inlineStickers: [:], mediaReference: .standalone(media: TelegramMediaFile(fileId: EngineMedia.Id(namespace: Namespaces.Media.LocalFile, id: randomId), partialReference: nil, resource: resource, previewRepresentations: [], videoThumbnails: [], immediateThumbnailData: nil, mimeType: "audio/ogg", size: Int64(data.compressedData.count), attributes: [.Audio(isVoice: true, duration: Int(data.duration), title: nil, performer: nil, waveform: waveformBuffer)], alternativeRepresentations: [])), threadId: strongSelf.chatLocation.threadId, replyToMessageId: strongSelf.presentationInterfaceState.interfaceState.replyMessageSubject?.subjectModel, replyToStoryId: nil, localGroupingKey: nil, correlationId: correlationId, bubbleUpEmojiOrStickersets: [])
-                            let shouldClearGhostScheduledDraft: Bool
-                            if let peerId = strongSelf.chatLocation.peerId {
-                                shouldClearGhostScheduledDraft = AyuDelayedSend.willAutomaticallySchedule(messages: [message], peerId: peerId, settings: currentAyuGramSettings(accountId: strongSelf.context.account.id))
-                            } else {
-                                shouldClearGhostScheduledDraft = false
-                            }
 
                             if !shouldClearGhostScheduledDraft {
                                 strongSelf.chatDisplayNode.setupSendActionOnViewUpdate({

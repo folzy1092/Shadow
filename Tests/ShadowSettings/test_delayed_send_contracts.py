@@ -61,6 +61,17 @@ class DelayedSendContracts(unittest.TestCase):
         self.assertGreaterEqual(MEDIA_RECORDING.count("AyuDelayedSend.willAutomaticallySchedule"), 3)
         self.assertGreaterEqual(MEDIA_RECORDING.count("clearGhostScheduledDraft()"), 3)
 
+    def test_voice_and_round_video_skip_the_transition_when_scheduled(self):
+        # The mic → bubble and snapshot → bubble transitions start only when the
+        # message shows up in this chat; a ghost-scheduled one never does, so the
+        # recorder stayed on screen (paused, "Отмена") after Send.
+        audio = MEDIA_RECORDING.split("case let .send(viewOnce):", 1)[1].split("} else if let videoRecorderValue", 1)[0]
+        self.assertLess(audio.index("let shouldClearGhostScheduledDraft: Bool"), audio.index("messageTransitionNode.add("))
+        self.assertIn("if !shouldClearGhostScheduledDraft, shouldAnimateMessageTransition, let textInputPanelNode", audio)
+        video = MEDIA_RECORDING.split("let controller = VideoMessageCameraScreen(", 1)[1].split("controller.onResume", 1)[0]
+        self.assertLess(video.index("let shouldClearGhostScheduledDraft: Bool"), video.index("messageTransitionNode.add("))
+        self.assertIn("if scheduleTime == nil, !shouldClearGhostScheduledDraft, shouldAnimateMessageTransition", video)
+
     def test_ghost_send_never_flashes_online(self):
         drafts = (ROOT / "submodules/TelegramCore/Sources/State/ManagedSynchronizeChatInputStateOperations.swift").read_text(encoding="utf-8")
         body = drafts.split("private func synchronizeChatInputState(", 1)[1]
