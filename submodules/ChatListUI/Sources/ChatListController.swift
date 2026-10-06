@@ -6987,8 +6987,11 @@ private final class ChatListLocationContext {
                 }
                 |> distinctUntilChanged
                 let ghostDisguiseSignal: Signal<ShadowDisguise.Mode, NoError> = shadowDisguiseModeSignal()
-                let ghostModeSignal: Signal<ShadowChatListHeaderState, NoError> = combineLatest(ghostSettingsSignal, ghostDisguiseSignal)
-                |> map { headerState, _ -> ShadowChatListHeaderState in
+                let ghostAvatarsSignal: Signal<Int, NoError> = ShadowHeaderAvatars.shared.version.get()
+                let ghostModeSignal: Signal<ShadowChatListHeaderState, NoError> = combineLatest(ghostSettingsSignal, ghostDisguiseSignal, ghostAvatarsSignal)
+                |> map { headerState, _, avatarsVersion -> ShadowChatListHeaderState in
+                    var headerState = headerState
+                    headerState.avatarsVersion = avatarsVersion
                     return headerState
                 }
                 self.titleDisposable = combineLatest(queue: .mainQueue(),
@@ -7837,6 +7840,8 @@ struct ShadowChatListHeaderState: Equatable {
     var settings: AyuGramSettings = AyuGramSettings.defaultSettings
     var ghostMode: Bool = false
     var buttons: ShadowHeaderButtons = .stock
+    // Bumped when a profile button's avatar loads (ShadowHeaderAvatars).
+    var avatarsVersion: Int = 0
 
     init() {
     }
@@ -7891,7 +7896,11 @@ private func shadowHeaderSymbol(_ name: String, active: Bool) -> String {
 
 // The icon of a header button and whether its toggle is on (part of the
 // button identity, so the header redraws the icon when the state flips).
-private func shadowHeaderButtonIcon(_ button: ShadowHeaderButton, state: ShadowChatListHeaderState, isDark: Bool, proxyEnabled: Bool) -> (String, Bool) {
+private func shadowHeaderButtonIcon(_ button: ShadowHeaderButton, context: AccountContext, state: ShadowChatListHeaderState, isDark: Bool, proxyEnabled: Bool) -> (String, Bool) {
+    // A profile button shows that person's avatar (a chosen icon wins).
+    if button.icon.isEmpty, let first = button.tapSteps.first, first.action == .openProfile {
+        return (ShadowHeaderAvatars.shared.iconName(context: context, link: first.link) ?? "sf:person.crop.circle", false)
+    }
     let settingsActive = shadowHeaderSettingsActive(button.tapSteps, settings: state.settings)
     // A user-chosen icon: filled while the button's toggles are on.
     if !button.icon.isEmpty {
@@ -7954,6 +7963,10 @@ private func shadowHeaderButtonIcon(_ button: ShadowHeaderButton, state: ShadowC
         return ("sf:square.stack.3d.up", false)
     case .customLink:
         return ("sf:link", false)
+    case .openProfile:
+        return ("sf:person.crop.circle", false)
+    case .sendGift:
+        return ("sf:gift", false)
     }
 }
 
@@ -7996,9 +8009,12 @@ extension ChatListLocationContext {
         if tapSteps.count == 1 && button.tap == .edit && button.icon.isEmpty {
             content = .text(title: presentationData.strings.Common_Edit, isBold: false)
         } else {
-            let (imageName, isActive) = shadowHeaderButtonIcon(button, state: state, isDark: presentationData.theme.overallDarkAppearance, proxyEnabled: proxyEnabled)
+            let (imageName, isActive) = shadowHeaderButtonIcon(button, context: self.context, state: state, isDark: presentationData.theme.overallDarkAppearance, proxyEnabled: proxyEnabled)
             content = .icon(imageName: imageName)
             stateKey = isActive ? "on" : "off"
+            if imageName.hasPrefix("img:") {
+                stateKey += "_" + imageName
+            }
         }
 
         let longPressSteps = button.longPressSteps
@@ -8294,6 +8310,14 @@ extension ChatListControllerImpl {
             }).startStandalone()
         case .storage:
             context.sharedContext.openStorageUsage(context: context)
+        case .openProfile:
+            if ShadowProfileTarget(string: link) != nil {
+                self.shadowOpenHeaderUrl(link)
+            } else {
+                self.shadowHeaderToast("Профиль для кнопки не выбран: Shadow → Кастомизация → Кнопки шапки.")
+            }
+        case .sendGift:
+            self.shadowOpenHeaderUrl("shadow://gift")
         case .setting:
             // Only "open" links get here (toggles run in shadowPerformHeaderSteps).
             if let resolved = ShadowSettingLinks.resolve(link) {

@@ -41,6 +41,11 @@ public enum ShadowHeaderAction: String, CaseIterable {
     case customLink
     // A Shadow settings toggle: the step link is shadow://<screen>/<slug>?on|off|switch.
     case setting
+    // A person's profile: the step link is shadow://me or shadow://user?id=|username=
+    // (ShadowProfileTarget). The button shows that person's avatar.
+    case openProfile
+    // Telegram's "Отправить подарок" screen (contacts, birthdays, yourself).
+    case sendGift
 
     public init(storedValue: String) {
         self = ShadowHeaderAction(rawValue: storedValue) ?? .none
@@ -74,6 +79,8 @@ public enum ShadowHeaderAction: String, CaseIterable {
         case .storage: return "Хранилище и кэш"
         case .customLink: return "Своя ссылка…"
         case .setting: return "Тумблер настройки…"
+        case .openProfile: return "Открыть профиль…"
+        case .sendGift: return "Отправить подарок"
         }
     }
 
@@ -82,7 +89,7 @@ public enum ShadowHeaderAction: String, CaseIterable {
     // The three toggleHide* actions are kept for buttons saved by 1.1.0;
     // new buttons use `.setting` (any toggle, several per button).
     public static let selectable: [ShadowHeaderAction] = [
-        .setting, .edit, .compose, .newStory, .search,
+        .setting, .openProfile, .sendGift, .edit, .compose, .newStory, .search,
         .ghostMode, .ghostSettings,
         .readAllServer, .readAllLocal, .readFolder,
         .savedMessages, .archive, .deletedArchive, .editedArchive,

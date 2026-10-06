@@ -181,7 +181,10 @@ public final class NavigationButtonComponent: Component {
                     let color = theme.chat.inputPanel.panelControlColor
                     // Shadow: "sf:<name>" draws an SF Symbol in the same color and
                     // weight as the bundled header glyphs.
-                    if imageName.hasPrefix("sf:"), let symbol = UIImage(systemName: String(imageName.dropFirst(3)), withConfiguration: UIImage.SymbolConfiguration(pointSize: 21.0, weight: .medium)) {
+                    if imageName.hasPrefix("img:") {
+                        // Shadow: a ready image (a person's avatar), drawn as is.
+                        iconView.image = NavigationButtonCustomImages.images[String(imageName.dropFirst(4))]
+                    } else if imageName.hasPrefix("sf:"), let symbol = UIImage(systemName: String(imageName.dropFirst(3)), withConfiguration: UIImage.SymbolConfiguration(pointSize: 21.0, weight: .medium)) {
                         let tinted = symbol.withTintColor(color, renderingMode: .alwaysOriginal)
                         iconView.image = UIGraphicsImageRenderer(size: tinted.size).image { _ in
                             tinted.draw(at: CGPoint())
@@ -278,4 +281,12 @@ public final class NavigationButtonComponent: Component {
     public func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<NavigationButtonComponentEnvironment>, transition: ComponentTransition) -> CGSize {
         return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
     }
+}
+
+// Shadow: images for header buttons that are not glyphs (a person's avatar on
+// a "Открыть профиль" button). `.icon(imageName: "img:<key>")` draws
+// `images[key]` untinted; a new picture must come under a new key, since the
+// button redraws only when its image name changes. Main thread only.
+public enum NavigationButtonCustomImages {
+    public static var images: [String: UIImage] = [:]
 }

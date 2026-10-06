@@ -29,6 +29,22 @@ struct LinksTests {
         check(ShadowLinks.ranges(in: "без ссылок").isEmpty, "No links")
         check(ShadowLinks.ranges(in: "tg://resolve?domain=x").isEmpty, "Other tg links are ignored")
 
+        check(ShadowProfileTarget(string: "shadow://me") == .me, "My profile")
+        check(ShadowProfileTarget(string: "shadow://user?id=7878830498") == .id(7878830498), "Profile by id")
+        check(ShadowProfileTarget(string: "shadow://user?username=durov") == .username("durov"), "Profile by username")
+        check(ShadowProfileTarget(string: "shadow://user/@durov") == .username("durov"), "Short username form")
+        check(ShadowProfileTarget(string: "tg://shadow/user/123456") == .id(123456), "Short id form")
+        check(ShadowProfileTarget(string: "shadow://user?id=5&name=%D0%9A%D0%B0%D1%82%D1%8F") == .id(5), "A name label is ignored")
+        check(ShadowProfileTarget(string: "shadow://user") == nil, "Nobody")
+        check(ShadowProfileTarget(string: "shadow://user?username=ab") == nil, "Too short a username")
+        check(ShadowProfileTarget(input: "@durov") == .username("durov"), "Typed @username")
+        check(ShadowProfileTarget(input: "https://t.me/durov") == .username("durov"), "Typed t.me link")
+        check(ShadowProfileTarget(input: " 42 ") == .id(42), "Typed id")
+        check(ShadowProfileTarget(input: "1abc") == nil, "A username cannot start with a digit")
+        check(ShadowProfileTarget.id(42).link == "shadow://user?id=42", "Id link")
+        check(ShadowProfileTarget.username("durov").link == "shadow://user?username=durov", "Username link")
+        check(ShadowLinks.parse("shadow://user?id=5&name=%D0%9A%D0%B0%D1%82%D1%8F")?.query["name"] == "Катя", "Name label decodes")
+
         print("Shadow links: \(count) checks passed")
     }
 }

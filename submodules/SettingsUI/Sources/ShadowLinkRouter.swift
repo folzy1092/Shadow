@@ -74,6 +74,20 @@ public func shadowOpenLink(context: AccountContext, link: ShadowLinks.Link, navi
         if ShadowDeviceAccess.hasAdminAccess(peerId: context.account.peerId.id._internalGetInt64Value()) {
             push(shadowDeviceAccessController(context: context, prefillDeviceId: link.query["id"]))
         }
+    case "me", "user":
+        // shadow://me, shadow://user?id=N|username=name (ShadowProfileTarget).
+        guard let target = ShadowProfileTarget(link: link) else {
+            push(ayuGramSettingsController(context: context))
+            return
+        }
+        shadowOpenProfile(context: context, target: target, push: push)
+    case "gift", "gifts":
+        // Telegram's "Отправить подарок": contacts, birthdays, yourself.
+        let _ = (context.account.stateManager.contactBirthdays
+        |> take(1)
+        |> deliverOnMainQueue).start(next: { birthdays in
+            push(context.sharedContext.makePremiumGiftController(context: context, source: .settings(birthdays), completion: nil))
+        })
     case "folzy":
         shadowOpenDeveloperProfile(context: context, peerId: 7878830498, username: nil, push: push)
     case "matey":
@@ -114,4 +128,32 @@ private func shadowOpenDeveloperProfile(context: AccountContext, peerId: Int64, 
             }
         })
     })
+}
+
+// A person's profile by link: your own opens as "Мой профиль".
+private func shadowOpenProfile(context: AccountContext, target: ShadowProfileTarget, push: @escaping (ViewController) -> Void) {
+    switch target {
+    case .me:
+        let _ = (context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: context.account.peerId))
+        |> deliverOnMainQueue).start(next: { peer in
+            if let peer, let controller = context.sharedContext.makePeerInfoController(context: context, updatedPresentationData: nil, peer: peer, mode: .myProfile, avatarInitiallyExpanded: false, fromChat: false, requestsContext: nil) {
+                push(controller)
+            }
+        })
+    case let .id(value):
+        shadowOpenDeveloperProfile(context: context, peerId: value, username: nil, push: push)
+    case let .username(name):
+        let _ = (context.engine.peers.resolvePeerByName(name: name, referrer: nil)
+        |> deliverOnMainQueue).start(next: { result in
+            guard case let .result(peer) = result else {
+                return
+            }
+            if let peer, let controller = context.sharedContext.makePeerInfoController(context: context, updatedPresentationData: nil, peer: peer, mode: .generic, avatarInitiallyExpanded: false, fromChat: false, requestsContext: nil) {
+                push(controller)
+            } else if peer == nil {
+                let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+                context.sharedContext.mainWindow?.present(UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: "Нет пользователя @\(name).", timeout: nil, customUndoText: nil), elevatedLayout: false, action: { _ in return false }), on: .root)
+            }
+        })
+    }
 }

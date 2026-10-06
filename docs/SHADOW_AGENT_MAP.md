@@ -266,6 +266,12 @@ UI-проекция настроек выбирается в `TelegramRootContro
   `ShadowSettingLinks.mode(_:for:)` превращает бессмысленные сочетания
   (`?value` у тумблера, `?on` у выбора) в «только открыть». Есть у
   `voice-time` и `bottom-bar-hiding`; кнопки шапки умеют ставить вариант.
+- Профиль на кнопке шапки: действие `.openProfile`, ссылка шага —
+  `shadow://me` / `shadow://user?id=|username=` (`ShadowProfileTarget` в
+  `ShadowLinks.swift`, `&name=` только для подписи в списке). Иконка — аватарка
+  (`ChatListUI/ShadowHeaderAvatars.swift` → `NavigationButtonCustomImages`,
+  иконка `img:<key>`; новая картинка = новый ключ). `.sendGift` открывает
+  `shadow://gift` (`makePremiumGiftController(.settings(birthdays))`).
 - Время на голосовых: `ShadowVoiceTime.swift` (Foundation, тест
   `VoiceTimeTests.swift`), поля `voiceTimeFormat` (0…5), `voiceTimeRoundVideos`,
   `voiceTimeInPlayer`. Пузырь — `ChatMessageInteractiveFileNode.updateStatus`

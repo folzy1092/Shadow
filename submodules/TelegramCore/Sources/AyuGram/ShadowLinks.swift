@@ -81,3 +81,85 @@ public enum ShadowLinks {
         return result
     }
 }
+
+// Shadow: a person's profile by link.
+//
+//   shadow://me                      your own profile
+//   shadow://user?id=<user id>       by Telegram user id (as in tg://user?id=)
+//   shadow://user?username=<name>    by @username
+//   shadow://user/<id or @name>      the same, shorter
+//
+// A bare id opens only people this account has already seen (Telegram cannot
+// look a user up by id); a username works for anyone public.
+public enum ShadowProfileTarget: Equatable {
+    case me
+    case id(Int64)
+    case username(String)
+
+    public init?(link: ShadowLinks.Link) {
+        switch link.command {
+        case "me":
+            self = .me
+        case "user":
+            if let raw = link.query["id"], let value = Int64(raw.trimmingCharacters(in: .whitespaces)), value > 0 {
+                self = .id(value)
+            } else if let raw = link.query["username"] ?? link.query["domain"], let name = ShadowProfileTarget.username(raw) {
+                self = .username(name)
+            } else if let argument = link.arguments.first {
+                if let value = Int64(argument), value > 0 {
+                    self = .id(value)
+                } else if let name = ShadowProfileTarget.username(argument) {
+                    self = .username(name)
+                } else {
+                    return nil
+                }
+            } else {
+                return nil
+            }
+        default:
+            return nil
+        }
+    }
+
+    public init?(string: String) {
+        guard let link = ShadowLinks.parse(string) else {
+            return nil
+        }
+        self.init(link: link)
+    }
+
+    // "@Name" / "t.me/name" style input → "name"; nil when it is not a username.
+    public static func username(_ raw: String) -> String? {
+        var value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        for prefix in ["https://t.me/", "http://t.me/", "t.me/", "@"] where value.lowercased().hasPrefix(prefix) {
+            value = String(value.dropFirst(prefix.count))
+        }
+        let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_")
+        guard value.count >= 4, value.count <= 32, value.unicodeScalars.allSatisfy({ allowed.contains($0) }), let first = value.unicodeScalars.first, !CharacterSet.decimalDigits.contains(first) else {
+            return nil
+        }
+        return value
+    }
+
+    // What the user typed in "Ввести @username или ID".
+    public init?(input: String) {
+        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let target = ShadowProfileTarget(string: trimmed) {
+            self = target
+        } else if let value = Int64(trimmed), value > 0 {
+            self = .id(value)
+        } else if let name = ShadowProfileTarget.username(trimmed) {
+            self = .username(name)
+        } else {
+            return nil
+        }
+    }
+
+    public var link: String {
+        switch self {
+        case .me: return "shadow://me"
+        case let .id(value): return "shadow://user?id=\(value)"
+        case let .username(name): return "shadow://user?username=\(name)"
+        }
+    }
+}

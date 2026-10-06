@@ -153,8 +153,31 @@ private func shadowHeaderModeTitle(_ mode: ShadowSettingLinks.Mode) -> String {
     }
 }
 
+// The profile link of a header button, with the person's name for the list.
+private func shadowHeaderProfileLink(_ target: ShadowProfileTarget, name: String) -> String {
+    guard target != .me, let encoded = name.addingPercentEncoding(withAllowedCharacters: .alphanumerics), !encoded.isEmpty else {
+        return target.link
+    }
+    return target.link + "&name=" + encoded
+}
+
 func shadowHeaderStepTitle(_ step: ShadowHeaderStep) -> String {
     switch step.action {
+    case .openProfile:
+        guard let link = ShadowLinks.parse(step.link), let target = ShadowProfileTarget(link: link) else {
+            return "Профиль (не выбран)"
+        }
+        switch target {
+        case .me:
+            return "Мой профиль"
+        case let .username(name):
+            return "Профиль @\(name)"
+        case let .id(value):
+            if let name = link.query["name"], !name.isEmpty {
+                return "Профиль: \(name)"
+            }
+            return "Профиль (ID \(value))"
+        }
     case .customLink, .setting:
         if let (setting, mode) = ShadowSettingLinks.resolve(step.link) {
             if case let .value(value) = mode, let choice = setting.choiceTitle(value) {
@@ -200,6 +223,7 @@ private func shadowHeaderButtonsEntries(_ value: ShadowHeaderButtons) -> [Shadow
 
 func shadowHeaderButtonsController(context: AccountContext, focus: ShadowSettingsSearchItem? = nil) -> ViewController {
     var presentControllerImpl: ((ViewController) -> Void)?
+    var pushControllerImpl: ((ViewController) -> Void)?
     var focusedIndex: Int?
 
     let currentButtons: () -> ShadowHeaderButtons = {
@@ -299,6 +323,43 @@ func shadowHeaderButtonsController(context: AccountContext, focus: ShadowSetting
         presentSheet("Какая настройка", screens)
     }
 
+    // Whose profile: yourself, someone from the chats, or @username / id.
+    let pickProfile: (@escaping (ShadowHeaderStep) -> Void) -> Void = { completion in
+        presentSheet("Чей профиль открывать", [
+            ShadowSheetEntry(title: "Мой профиль", color: .accent, action: {
+                completion(ShadowHeaderStep(.openProfile, link: ShadowProfileTarget.me.link))
+            }),
+            ShadowSheetEntry(title: "Выбрать из чатов…", color: .accent, action: {
+                let picker = context.sharedContext.makePeerSelectionController(PeerSelectionControllerParams(context: context, filter: [.onlyPrivateChats, .excludeSecretChats], hasContactSelector: false, title: "Чей профиль"))
+                picker.peerSelected = { [weak picker] peer, _ in
+                    picker?.dismiss()
+                    let target: ShadowProfileTarget
+                    if peer.id == context.account.peerId {
+                        target = .me
+                    } else {
+                        target = .id(peer.id.id._internalGetInt64Value())
+                    }
+                    completion(ShadowHeaderStep(.openProfile, link: shadowHeaderProfileLink(target, name: peer.compactDisplayTitle)))
+                }
+                pushControllerImpl?(picker)
+            }),
+            ShadowSheetEntry(title: "Ввести @username или ID…", color: .accent, action: {
+                let controller = promptController(context: context, text: "Чей профиль", subtitle: "@username, t.me/username или числовой ID. По ID открывается только тот, кого этот аккаунт уже видел.", value: "", placeholder: "@username", characterLimit: 64, apply: { value in
+                    guard let value else {
+                        return
+                    }
+                    if let target = ShadowProfileTarget(input: value) {
+                        completion(ShadowHeaderStep(.openProfile, link: target.link))
+                    } else {
+                        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+                        presentControllerImpl?(textAlertController(context: context, title: nil, text: "Нужен @username (от 4 символов) или числовой ID.", actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]))
+                    }
+                })
+                presentControllerImpl?(controller)
+            })
+        ])
+    }
+
     // One action: the action list, then a link or a toggle when needed.
     let pickStep: (String, @escaping (ShadowHeaderStep) -> Void) -> Void = { title, completion in
         var items: [ShadowSheetEntry] = []
@@ -311,6 +372,8 @@ func shadowHeaderButtonsController(context: AccountContext, focus: ShadowSetting
                     })
                 case .setting:
                     pickSetting(completion)
+                case .openProfile:
+                    pickProfile(completion)
                 default:
                     completion(ShadowHeaderStep(action))
                 }
@@ -492,6 +555,9 @@ func shadowHeaderButtonsController(context: AccountContext, focus: ShadowSetting
     let controller = ItemListController(context: context, state: signal)
     presentControllerImpl = { [weak controller] c in
         controller?.present(c, in: .window(.root))
+    }
+    pushControllerImpl = { [weak controller] c in
+        (controller?.navigationController as? NavigationController)?.pushViewController(c)
     }
     if focus != nil {
         shadowSettingsInstallFocus(controller: controller, index: { focusedIndex }, color: shadowSettingsPulseColor(context.sharedContext.currentPresentationData.with { $0 }.theme))
