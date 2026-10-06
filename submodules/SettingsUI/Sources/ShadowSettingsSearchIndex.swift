@@ -66,7 +66,6 @@ enum ShadowSettingsSearchIndex {
         ShadowSettingsSearchItem(destination: .customization, entryId: 28, title: "Живой предпросмотр камеры", description: "Видео в плитке камеры", keywords: "live camera preview"),
         ShadowSettingsSearchItem(destination: .customization, entryId: 115, title: "Компактная плитка камеры", description: "Плитка камеры в галерее занимает одну ячейку вместо двух", keywords: "camera tile compact small gallery камера плитка компакт маленькая ячейка"),
         ShadowSettingsSearchItem(destination: .customization, entryId: 31, title: "Подтверждение звонков", description: "Защита от случайного звонка", keywords: "confirm calls"),
-        ShadowSettingsSearchItem(destination: .customization, entryId: 34, title: "Синхронизировать с GitHub", description: "Обновить значки из конфигурации", keywords: "sync github badges стрелочка значок"),
         ShadowSettingsSearchItem(destination: .customization, entryId: 37, title: "Кастомный баннер", description: "Фон верхней части списка чатов", keywords: "custom banner background"),
         ShadowSettingsSearchItem(destination: .customization, entryId: 38, title: "Выбрать изображение баннера", description: "После включения кастомного баннера", keywords: "banner image photo", parentEntryId: 37),
         ShadowSettingsSearchItem(destination: .customization, entryId: 41, title: "Кастомный фон профиля", description: "Свой фон за аватаром и именем", keywords: "custom profile background"),

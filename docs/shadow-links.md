@@ -151,7 +151,6 @@
 | `shadow://customization/deleted-text` | Свой значок удалёнки (только открывает) |
 | `shadow://customization/message-screenshots` | Скриншоты сообщений (только открывает) |
 | `shadow://customization/header-buttons` | Кнопки шапки (только открывает) |
-| `shadow://customization/github-sync` | Синхронизировать с GitHub (только открывает) |
 | `shadow://customization/banner-image` | Изображение баннера (только открывает) |
 | `shadow://customization/profile-background-image` | Изображение фона профиля (только открывает) |
 

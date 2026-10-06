@@ -1757,9 +1757,8 @@ private func ayuCustomizationEntries(settings: AyuGramSettings) -> [AyuCustomiza
     entries.append(.confirmCalls(settings.confirmCalls))
     entries.append(.callsFooter)
 
-    entries.append(.githubConfigHeader)
-    entries.append(.syncGithub)
-    entries.append(.githubConfigFooter)
+    // Shadow: the badge sync button is hidden; badges refresh by themselves on
+    // launch (startGitConfigIfNeeded).
 
     return entries
 }

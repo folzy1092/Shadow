@@ -212,7 +212,6 @@ public enum ShadowSettingLinks {
         ShadowSettingLink(screen: "customization", slug: "deleted-text", entryId: 91, key: nil, title: "Свой значок удалёнки"),
         ShadowSettingLink(screen: "customization", slug: "message-screenshots", entryId: 93, key: nil, title: "Скриншоты сообщений", icon: "camera.viewfinder"),
         ShadowSettingLink(screen: "customization", slug: "header-buttons", entryId: 111, key: nil, title: "Кнопки шапки"),
-        ShadowSettingLink(screen: "customization", slug: "github-sync", entryId: 34, key: nil, title: "Синхронизировать с GitHub"),
         ShadowSettingLink(screen: "customization", slug: "banner-image", entryId: 38, key: nil, title: "Изображение баннера", parentEntryId: 37),
         ShadowSettingLink(screen: "customization", slug: "profile-background-image", entryId: 44, key: nil, title: "Изображение фона профиля", parentEntryId: 41),
         ShadowSettingLink(screen: "customization", slug: "hide-all-chats", entryId: 12, key: "hideAllChatsFolder", title: "Скрыть папку «Все чаты»", icon: "folder"),

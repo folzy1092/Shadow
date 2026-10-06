@@ -126,10 +126,11 @@ class CustomizationOrderContracts(unittest.TestCase):
     def test_badges_section_is_last(self):
         hub = read("SettingsUI/Sources/AyuGramSettingsController.swift")
         body = hub.split("entries.append(.mediaFooter)", 1)[1].split("return entries", 1)[0]
-        order = [body.index(name) for name in (".customRoundVideosHeader", ".bannerHeader", ".profileBackgroundHeader", ".callsHeader", ".githubConfigHeader")]
+        order = [body.index(name) for name in (".customRoundVideosHeader", ".bannerHeader", ".profileBackgroundHeader", ".callsHeader")]
         self.assertEqual(order, sorted(order))
         self.assertIn('text: "ЗНАЧКИ"', hub)
-        self.assertIn("case .githubConfigFooter: return (29, 19)", hub)
+        # The badge sync button is hidden; badges refresh on launch.
+        self.assertNotIn("entries.append(.syncGithub)", hub)
 
 
 if __name__ == "__main__":
