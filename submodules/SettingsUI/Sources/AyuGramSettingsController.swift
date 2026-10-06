@@ -100,6 +100,8 @@ private enum ShadowHubUpdateState: Equatable {
 private enum AyuHubEntry: ItemListNodeEntry {
     case updateButton(enabled: Bool)
     case updateStatus(String)
+    // Shadow: the build CI is running right now (ShadowBuildStatus).
+    case buildStatus(String)
     case downloadButton(String, String)
     case updateNotes(title: String, text: String)
     case query(String)
@@ -124,7 +126,7 @@ private enum AyuHubEntry: ItemListNodeEntry {
 
     var section: ItemListSectionId {
         switch self {
-        case .updateButton, .updateStatus, .downloadButton:
+        case .updateButton, .updateStatus, .buildStatus, .downloadButton:
             return AyuHubSection.updateBanner.rawValue
         case .updateNotes:
             return AyuHubSection.updateCheck.rawValue
@@ -147,6 +149,7 @@ private enum AyuHubEntry: ItemListNodeEntry {
         switch self {
         case .updateButton: return -5
         case .updateStatus: return -4
+        case .buildStatus: return -6
         case .downloadButton: return -3
         case .updateNotes: return -2
         case .query: return -1
@@ -242,6 +245,8 @@ private enum AyuHubEntry: ItemListNodeEntry {
                 arguments.checkUpdates()
             })
         case let .updateStatus(text):
+            return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section, textAlignment: .center)
+        case let .buildStatus(text):
             return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section, textAlignment: .center)
         case let .downloadButton(title, url):
             return ShadowBigButtonItem(presentationData: presentationData, title: title, enabled: true, sectionId: self.section, action: {
@@ -389,6 +394,8 @@ public func ayuGramSettingsController(context: AccountContext, autoCheckUpdates:
 
     let updateState = ValuePromise<ShadowHubUpdateState>(.idle, ignoreRepeated: true)
     let bannerDismissed = ValuePromise<Bool>(false, ignoreRepeated: true)
+    // Shadow: refreshed only by "Проверить обновления"; nil = no build running.
+    let buildStatus = ValuePromise<String?>(nil, ignoreRepeated: true)
     // Shadow: bumped when crash reports are sent or deleted.
     let crashRevision = ValuePromise<Int>(0, ignoreRepeated: false)
     var crashRevisionValue = 0
@@ -434,6 +441,9 @@ public func ayuGramSettingsController(context: AccountContext, autoCheckUpdates:
         ShadowUpdateCheck.check(betaEnabled: betaEnabled) { status in
             updateState.set(.result(status))
         }
+        ShadowBuildStatus.fetch { info in
+            buildStatus.set(info.map { ShadowBuildStatus.text($0) })
+        }
     }
     arguments.dismissUpdateBanner = {
         bannerDismissed.set(true)
@@ -447,9 +457,9 @@ public func ayuGramSettingsController(context: AccountContext, autoCheckUpdates:
     // Shadow: the device whitelist editor is for the admins only.
     let isAdmin = ShadowDeviceAccess.hasAdminAccess(peerId: context.account.peerId.id._internalGetInt64Value())
 
-    let signal = combineLatest(queue: .mainQueue(), context.sharedContext.presentationData, query.get(), updateState.get(), bannerDismissed.get(), crashRevision.get())
+    let signal = combineLatest(queue: .mainQueue(), context.sharedContext.presentationData, query.get(), updateState.get(), bannerDismissed.get(), crashRevision.get(), buildStatus.get())
     |> deliverOnMainQueue
-    |> map { presentationData, query, updateState, bannerDismissed, _ -> (ItemListControllerState, (ItemListNodeState, Any)) in
+    |> map { presentationData, query, updateState, bannerDismissed, _, buildStatus -> (ItemListControllerState, (ItemListNodeState, Any)) in
         let installed = ShadowUpdateCheck.installedBuild.map { "\($0)" } ?? "?"
         var updateEnabled = true
         var statusText = "Установлена \(ShadowVersion.full) · сборка \(installed)"
@@ -482,6 +492,9 @@ public func ayuGramSettingsController(context: AccountContext, autoCheckUpdates:
             }
         }
         var entries: [AyuHubEntry] = [.updateButton(enabled: updateEnabled), .updateStatus(statusText)]
+        if let buildStatus {
+            entries.append(.buildStatus(buildStatus))
+        }
         if let download {
             entries.append(.downloadButton(download.0, download.1))
         }

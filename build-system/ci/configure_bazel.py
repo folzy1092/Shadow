@@ -42,6 +42,9 @@ def configured_rc(original: str, memory_mb: int, cpu_count: int) -> str:
         f"build:macos --jobs={jobs}",
         # This is a scheduling budget, not an OS limit on a single compiler.
         f"build:macos --local_resources=memory={action_memory_mb}",
+        # A "[done / total]" line at least every 15 s in the non-tty log, which
+        # the "Shadow build progress" reporter in build.yml reads.
+        "build:macos --show_progress_rate_limit=15",
         END,
         "",
     ])

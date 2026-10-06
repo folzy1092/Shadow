@@ -16,6 +16,9 @@ permissions:
   # write: the successful master build is published as a GitHub Release,
   # which the in-app "Обновления" screen compares against.
   contents: write
+  # write: the "Shadow build progress" check run, read by the app's
+  # "Проверить обновления" (ShadowBuildStatus) while the build runs.
+  checks: write
 
 concurrency:
   group: shadow-build-${{ github.ref }}
@@ -73,6 +76,7 @@ jobs:
         env:
           TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
           TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -x
           # Keep Make.py's exit status through the tee below.
@@ -115,6 +119,29 @@ jobs:
           echo "FORK_VERSION=$(echo $FORK_VERSION)" >> $GITHUB_ENV
 
           python3 build-system/Make/ImportCertificates.py --path build-system/fake-codesigning/certs
+
+          # Shadow build progress: a check run on this commit whose title carries
+          # Bazel's latest "[done / total]" and whose summary carries build=N.
+          # The app reads it from the public API (ShadowBuildStatus). Best effort:
+          # a failing API call never fails the build.
+          : > "$GITHUB_WORKSPACE/build.log"
+          PROGRESS_CHECK_ID="$(python3 build-system/ci/build_progress.py create \
+            --sha "$GITHUB_SHA" --build "$BUILD_NUMBER" || true)"
+          if [ -n "$PROGRESS_CHECK_ID" ]; then
+            python3 build-system/ci/build_progress.py watch \
+              --id "$PROGRESS_CHECK_ID" --build "$BUILD_NUMBER" \
+              --log "$GITHUB_WORKSPACE/build.log" > /dev/null 2>&1 &
+            PROGRESS_WATCH_PID=$!
+            finish_progress() {
+              status=$?
+              kill "$PROGRESS_WATCH_PID" 2>/dev/null || true
+              python3 build-system/ci/build_progress.py finish \
+                --id "$PROGRESS_CHECK_ID" --build "$BUILD_NUMBER" \
+                --log "$GITHUB_WORKSPACE/build.log" --status "$status" || true
+            }
+            trap finish_progress EXIT
+          fi
+
           python3 -u build-system/Make/Make.py \
             --bazelUserRoot="$BAZEL_USER_ROOT" \
             build \

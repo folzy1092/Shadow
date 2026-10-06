@@ -194,6 +194,16 @@ UI-проекция настроек выбирается в `TelegramRootContro
   приложения, вводится в «Доступ устройств»). Админ по устройству — флаг
   `admin` в вайтлисте (`ShadowDeviceAccess.isAdminDevice`/`hasAdminAccess`).
   Объявление сборок — из того же меню (секция «Объявить сборку»).
+- Статус идущей сборки в «Проверить обновления» (видно всем, обновляется только
+  по нажатию): `ShadowBuildStatus` читает публичный GitHub API — последний run
+  `build.yml` на master → его текущий шаг → во время «Build the App» check run
+  «Shadow build progress» (заголовок `Build the App [done / total]`, summary
+  `build=N`). Check run создаёт и раз в 30 с обновляет
+  `build-system/ci/build_progress.py` из `build.log` (Bazel пишет счётчик не реже
+  раза в 15 с: `--show_progress_rate_limit` в `configure_bazel.py`); нужен
+  `permissions: checks: write`. Ошибки репортера сборку не валят. Если
+  переименовать шаг «Build the App» или check run — менять в обоих местах
+  (тест `Tests/ShadowCI/test_build_progress.py`).
 
 ## 5e. Кнопки шапки, кружок из галереи, синхронизация аккаунтов
 
