@@ -125,12 +125,20 @@ class SelfUpdateContracts(unittest.TestCase):
         self.assertIn("case mainButton(String, Bool)", update)
         self.assertIn("ShadowSelfUpdater.shared.start(", update)
         self.assertIn("bindings.pushIdleTimerExtension()", update)
-        # 1.4.1: the Safari install page and the open result.
+        # 1.4.1: the Safari install page, the open result, the diagnostics line
+        # and rounded buttons.
         self.assertIn("SFSafariViewController(url: url)", update)
         self.assertIn("UIApplication.shared.open(installURL, options: [:], completionHandler: completion)", update)
         self.assertIn("beginBackgroundTask(withName:", update)
         # An expired task is begun again when Shadow comes back.
         self.assertIn("UIApplication.willEnterForegroundNotification", update)
+        self.assertIn("case diagnostics(String)", update)
+        self.assertIn("entries.append(.diagnostics(diagnostics.line))", update)
+        self.assertIn("state.diagnostics?.cause(now: Date())", update)
+        self.assertIn("ShadowBigButtonItem(presentationData: presentationData, title: action.title, enabled: true, style: action.style", update)
+        self.assertIn("case .cancel: return .destructive", update)
+        button = read("SettingsUI/Sources/ShadowBigButtonItem.swift")
+        self.assertIn("buttonTheme = SolidRoundedButtonTheme(backgroundColor: theme.list.itemBlocksBackgroundColor, foregroundColor: theme.list.itemDestructiveColor)", button)
         self.assertIn("if signingReady, release.downloadURL != nil", update)
         self.assertIn('entries.append(.mainButton("Обновить до \(target)", true))', update)
         self.assertIn("pushControllerImpl?(shadowAutoUpdateController(context: context))", update)

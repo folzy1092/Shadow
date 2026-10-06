@@ -16,6 +16,7 @@ import ShadowSelfUpdate
 // download + sign + install; without: the IPA link), progress of an on-device
 // update, the update settings (certificate, beta, archive) and the changes of
 // every skipped build, typed НОВОЕ / ИСПРАВЛЕНО when the changelog has it.
+// While the update installs, a diagnostics line is under the status.
 
 enum ShadowHubSelfUpdateAction: Int32 {
     // Raw values follow the display order (stable ids of the rows).
@@ -30,6 +31,14 @@ enum ShadowHubSelfUpdateAction: Int32 {
         case .share: return "Поделиться подписанным IPA"
         case .retry: return "Повторить"
         case .cancel: return "Отменить"
+        }
+    }
+
+    var style: ShadowBigButtonItem.Style {
+        switch self {
+        case .showPrompt, .retry: return .filled
+        case .share: return .plain
+        case .cancel: return .destructive
         }
     }
 }
@@ -69,7 +78,14 @@ func shadowSelfUpdateRow(_ state: ShadowSelfUpdater.State) -> (String, String, D
     case .startingServer:
         return ("Подготовка установки…", "", nil)
     case let .waitingForConfirmation(hint):
-        return ("Подтвердите установку в окне iOS", hint ? "Окно не появилось или закрыто — нажмите «Показать окно установки». Можно также поделиться IPA и поставить его вручную." : "Нажмите «Установить» в системном окне.", nil)
+        if hint {
+            // No download hintDelay after the link: the cause, then the way around.
+            let cause = state.diagnostics?.cause(now: Date()) ?? "Нажмите «Показать окно установки» или поделитесь IPA и установите его через ESign."
+            // promptSeen: the window came, but the download did not start.
+            let title = state.diagnostics?.promptSeen == true ? "Установка не началась" : "Окно установки не появилось"
+            return (title, cause, nil)
+        }
+        return ("Подтвердите установку в окне iOS", "Нажмите «Установить» в системном окне.", nil)
     case let .sending(sent, total):
         let fraction = total > 0 ? Double(sent) / Double(total) : 0.0
         return ("Установка: передача в iOS · \(shadowPercent(fraction))", "Не закрывайте Shadow до конца передачи.", fraction)
@@ -277,6 +293,8 @@ private enum ShadowUpdateEntry: ItemListNodeEntry {
     case status(String)
     case buildStatus(String)
     case progress(title: String, detail: String, progress: Double?)
+    // What the local install saw (ShadowInstallDiagnostics.line).
+    case diagnostics(String)
     case action(ShadowHubSelfUpdateAction)
     case mainButton(String, Bool)
     case mainFooter(String)
@@ -291,7 +309,7 @@ private enum ShadowUpdateEntry: ItemListNodeEntry {
 
     var section: ItemListSectionId {
         switch self {
-        case .summary, .counts, .status, .buildStatus, .progress, .action, .mainButton, .mainFooter:
+        case .summary, .counts, .status, .buildStatus, .progress, .diagnostics, .action, .mainButton, .mainFooter:
             return ShadowUpdateSection.top.rawValue
         case .settingsHeader, .certificate, .beta, .archive:
             return ShadowUpdateSection.settings.rawValue
@@ -308,7 +326,8 @@ private enum ShadowUpdateEntry: ItemListNodeEntry {
         case .status: return 2
         case .buildStatus: return 3
         case .progress: return 4
-        case let .action(action): return 5 + action.rawValue
+        case .diagnostics: return 5
+        case let .action(action): return 6 + action.rawValue
         case .mainButton: return 10
         case .mainFooter: return 11
         case .settingsHeader: return 20
@@ -337,8 +356,10 @@ private enum ShadowUpdateEntry: ItemListNodeEntry {
             return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section, textAlignment: .center)
         case let .progress(title, detail, progress):
             return ShadowProgressItem(presentationData: presentationData, title: title, detail: detail, progress: progress, sectionId: self.section)
+        case let .diagnostics(text):
+            return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section, textAlignment: .center)
         case let .action(action):
-            return ItemListActionItem(presentationData: presentationData, title: action.title, kind: action == .cancel ? .destructive : .generic, alignment: .center, sectionId: self.section, style: .blocks, action: {
+            return ShadowBigButtonItem(presentationData: presentationData, title: action.title, enabled: true, style: action.style, sectionId: self.section, action: {
                 arguments.selfUpdateAction(action)
             })
         case let .mainButton(title, enabled):
@@ -528,6 +549,9 @@ func shadowUpdateController(context: AccountContext) -> ViewController {
 
         if let row = shadowSelfUpdateRow(selfUpdateState) {
             entries.append(.progress(title: row.0, detail: row.1, progress: row.2))
+            if let diagnostics = selfUpdateState.diagnostics {
+                entries.append(.diagnostics(diagnostics.line))
+            }
             for action in shadowSelfUpdateActions(selfUpdateState, canRetry: signingReady && release != nil) {
                 entries.append(.action(action))
             }

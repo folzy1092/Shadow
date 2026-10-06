@@ -354,7 +354,7 @@ UI-проекция настроек выбирается в `TelegramRootContro
   **обоих** `MediaNavigationAccessoryHeaderNode` (`TelegramBaseController` и
   `MediaPlaybackHeaderPanelComponent`). Пока не играет — просто длина.
 
-## 5g. Автообновление с подписью на устройстве (1.4.0), плитка камеры
+## 5g. Автообновление с подписью на устройстве (1.4.0, установка 1.4.1), плитка камеры
 
 - Идея из IPA Hub (Feather): «Обновить» в хабе скачивает объявленную сборку,
   подписывает её на iPhone парой .p12 + .mobileprovision и ставит через
@@ -378,16 +378,33 @@ UI-проекция настроек выбирается в `TelegramRootContro
   через `Sources/shim/openssl/sha.h`. Свой OpenSSL Telegram не подходит
   (`no-cms`, `no-rc2`, `no-des`), второй дал бы конфликт символов. Ошибки zsign —
   `ZLog::LastError()` → текст в хабе.
-- Установка (`ShadowInstallServer`): HTTPS на 127.0.0.1 (Network.framework),
-  сертификат `*.backloop.dev` (резолвится в 127.0.0.1) скачивается с
-  `backloop.dev/pack.json` при обновлении и кэшируется (живёт ~90 дней);
-  ключ и сертификат кладутся в Keychain, чтобы получить `SecIdentity`
-  (`ShadowLocalTLSIdentity`). Манифест + IPA (Range) + иконки, затем
-  `itms-services://?action=download-manifest&url=…`. Пока iOS не скачал IPA,
-  Shadow сворачивать нельзя; запасной путь — «Поделиться подписанным IPA».
-- Не проверено на устройстве до 1.4.0: обновление приложения самим собой
-  (Feather его запрещает для серверного способа), поведение iOS 26/27 с
-  `itms-services` из приложения.
+- Установка (1.4.1, как IPA Hub / Feather «Semi Local + только localhost»):
+  `ShadowInstallServer` отдаёт IPA по `http://127.0.0.1:PORT/shadow.ipa`
+  (Network.framework, только loopback, Range и HEAD), без DNS и локального TLS.
+  Манифест (itms-services требует https) — `https://api.palera.in/genPlist?
+  bundleid=&name=&version=&fetchurl=` (`ShadowInstallLinks`), приложение
+  заранее проверяет, что он отвечает plist с этим IPA. Ссылку iOS передаёт
+  страница `http://127.0.0.1:PORT/install` в `SFSafariViewController`
+  (JS-редирект на `itms-services://?action=download-manifest&url=…`).
+  «Показать окно установки» без показанного окна переключает Safari ↔
+  `UIApplication.open`, остановленный listener перезапускает. Зависимость:
+  api.palera.in должен быть доступен с iPhone.
+- Маршрут 1.4.0 (HTTPS на `shadow.backloop.dev` с сертификатом из
+  `backloop.dev/pack.json`, `ShadowLocalTLSIdentity`) — только запасной:
+  сертификат отозван 2026-07-31 (Key Compromise), сервис закрыт. Берётся, лишь
+  если palera не ответил, а `SecTrustEvaluateWithError` сертификату доверяет.
+- Диагностика (`ShadowInstallDiagnostics`): строка под статусом на
+  «Обновлении» — маршрут, манифест palera, Safari/open, getaddrinfo
+  `shadow.backloop.dev`, listener, подключения и ошибки TLS, запросы, срок
+  сертификата. Если через 10 с (`hintDelay`) iOS не начала загрузку —
+  конкретная причина (`cause(now:)`) и кнопки «Показать окно установки»,
+  «Поделиться подписанным IPA», «Отменить» (`ShadowBigButtonItem`, стили
+  filled / plain / destructive). Пока iOS не скачал IPA, Shadow держит экран
+  и фоновую задачу (`beginBackgroundTask`; истёкшая заново начинается при
+  возврате в приложение). «Окно показано» (`promptSeen`) считается только по
+  уходу из приложения до подсказки; сбой palera важнее этого признака.
+- Не проверено на устройстве: обновление приложения самим собой (Feather его
+  запрещает для серверного способа), поведение iOS 27 с palera-манифестом.
 - Компактная плитка камеры: `AyuGramSettings.cameraTileCompact` (ключ
   `cameraTileCompact`, ссылка `shadow://customization/camera-compact`, строка
   115 в «Кастомизации») — в `MediaPickerScreen` плитка камеры высотой в одну

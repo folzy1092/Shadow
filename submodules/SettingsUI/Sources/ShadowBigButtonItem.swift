@@ -7,20 +7,31 @@ import TelegramPresentationData
 import ItemListUI
 import SolidRoundedButtonNode
 
-// Shadow: a full-width filled button inside a settings list ("Проверить
-// обновления", "Скачать IPA"). The title never changes with state; status text
-// goes into a separate row below.
+// Shadow: a full-width rounded button inside a settings list ("Проверить
+// обновления", "Скачать IPA", the self-update actions). The title never
+// changes with state; status text goes into a separate row below.
 final class ShadowBigButtonItem: ListViewItem, ItemListItem {
+    enum Style {
+        // Accent fill: the main action.
+        case filled
+        // List background, accent title.
+        case plain
+        // List background, red title.
+        case destructive
+    }
+
     let presentationData: ItemListPresentationData
     let title: String
     let enabled: Bool
+    let style: Style
     let sectionId: ItemListSectionId
     let action: () -> Void
 
-    init(presentationData: ItemListPresentationData, title: String, enabled: Bool, sectionId: ItemListSectionId, action: @escaping () -> Void) {
+    init(presentationData: ItemListPresentationData, title: String, enabled: Bool, style: Style = .filled, sectionId: ItemListSectionId, action: @escaping () -> Void) {
         self.presentationData = presentationData
         self.title = title
         self.enabled = enabled
+        self.style = style
         self.sectionId = sectionId
         self.action = action
     }
@@ -90,7 +101,15 @@ private final class ShadowBigButtonItemNode: ListViewItemNode, ItemListItemNode 
                 }
                 self.item = item
                 let theme = item.presentationData.theme
-                let buttonTheme = SolidRoundedButtonTheme(backgroundColor: theme.list.itemCheckColors.fillColor, foregroundColor: theme.list.itemCheckColors.foregroundColor)
+                let buttonTheme: SolidRoundedButtonTheme
+                switch item.style {
+                case .filled:
+                    buttonTheme = SolidRoundedButtonTheme(backgroundColor: theme.list.itemCheckColors.fillColor, foregroundColor: theme.list.itemCheckColors.foregroundColor)
+                case .plain:
+                    buttonTheme = SolidRoundedButtonTheme(backgroundColor: theme.list.itemBlocksBackgroundColor, foregroundColor: theme.list.itemAccentColor)
+                case .destructive:
+                    buttonTheme = SolidRoundedButtonTheme(backgroundColor: theme.list.itemBlocksBackgroundColor, foregroundColor: theme.list.itemDestructiveColor)
+                }
                 let buttonNode: SolidRoundedButtonNode
                 if let current = self.buttonNode {
                     buttonNode = current
