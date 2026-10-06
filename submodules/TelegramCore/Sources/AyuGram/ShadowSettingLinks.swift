@@ -153,7 +153,7 @@ public enum ShadowSettingLinks {
 
     public static let screenTitles: [String: String] = [
         "ghost": "Призрак",
-        "spy": "Шпион",
+        "spy": "Сохранение",
         "customization": "Кастомизация",
         "profile": "Подмена профиля",
         "misc": "Разное",

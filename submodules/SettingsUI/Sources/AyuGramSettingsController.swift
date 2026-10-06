@@ -77,130 +77,133 @@ private func attachmentSizeLabel(_ value: Int64) -> String {
 
 // MARK: - Hub
 
-private enum AyuHubSection: Int32 {
-    case updateBanner
-    case search
-    case privacy
-    case interface
-    case accounts
-    case tools
-    case info
-    case updateCheck
-    case admin
+// Shadow: the hub. "Обновление Shadow" on top (→ shadowUpdateController), the
+// search field, then sections grouped by purpose. Кастомизация is split into
+// five parts (ShadowCustomizationPart) that show slices of the same screen, so
+// shadow://customization/… links and search focus keep working.
+
+enum ShadowCustomizationPart: Int32, CaseIterable {
+    case messages
+    case chats
+    case profiles
+    case media
+    case icons
+
+    var title: String {
+        switch self {
+        case .messages: return "Сообщения"
+        case .chats: return "Чаты и звонки"
+        case .profiles: return "Профили"
+        case .media: return "Медиа и камера"
+        case .icons: return "Иконки"
+        }
+    }
+
+    fileprivate var symbol: String {
+        switch self {
+        case .messages: return "bubble.left.fill"
+        case .chats: return "list.bullet"
+        case .profiles: return "person.crop.circle.fill"
+        case .media: return "camera.fill"
+        case .icons: return "square.grid.2x2.fill"
+        }
+    }
+
+    fileprivate var color: UIColor {
+        switch self {
+        case .messages: return ShadowIconColor.blue
+        case .chats: return ShadowIconColor.green
+        case .profiles: return ShadowIconColor.pink
+        case .media: return ShadowIconColor.purple
+        case .icons: return ShadowIconColor.yellow
+        }
+    }
 }
 
-// Shadow: a big "check for updates" button opens the hub; status, the IPA
-// download button and the notes of every skipped build go right under it
-// (ShadowUpdateCheck).
-private enum ShadowHubUpdateState: Equatable {
-    case idle
-    case checking
-    case result(ShadowUpdateCheck.Status)
+private enum AyuHubSection: Int32 {
+    case update
+    case search
+    case privacy
+    case appearance
+    case tools
+    case accounts
+    case service
 }
 
 private enum AyuHubEntry: ItemListNodeEntry {
-    case updateButton(enabled: Bool)
-    case updateStatus(String)
-    // Shadow: the build CI is running right now (ShadowBuildStatus).
-    case buildStatus(String)
-    case downloadButton(String, String)
-    // Shadow: on-device update (ShadowSelfUpdater, "Автообновление").
-    case selfUpdateButton(String)
-    case selfUpdateProgress(title: String, detail: String, progress: Double?)
-    case selfUpdateAction(ShadowHubSelfUpdateAction)
-    case updateNotes(title: String, text: String)
+    case update(detail: String, badge: Bool)
     case query(String)
     case result(ShadowSettingsSearchItem)
     case noResults
-    case customization
+    case privacyHeader
+    case ghost(Bool)
     case spy
-    case ghost
-    case misc
-    case backup
-    case filters
-    case hiddenAccounts
-    case settingsSync
-    case pushDiagnostics
-    case quickReplies
     case chatLocks
     case secondSpace
     case emergency
-    case versionArchive
-    case autoUpdate(String)
+    case appearanceHeader
+    case customization(ShadowCustomizationPart)
+    case toolsHeader
+    case messageScreenshot
+    case filters
+    case quickReplies
+    case misc
+    case pushDiagnostics
+    case accountsHeader
+    case hiddenAccounts
+    case settingsSync
+    case backup
     case crashReports(Int)
-    case infoFooter
     case deviceAccess
 
     var section: ItemListSectionId {
         switch self {
-        case .updateButton, .updateStatus, .buildStatus, .downloadButton, .selfUpdateButton, .selfUpdateProgress, .selfUpdateAction:
-            return AyuHubSection.updateBanner.rawValue
-        case .updateNotes:
-            return AyuHubSection.updateCheck.rawValue
-        case .deviceAccess:
-            return AyuHubSection.admin.rawValue
+        case .update:
+            return AyuHubSection.update.rawValue
         case .query:
             return AyuHubSection.search.rawValue
-        case .result:
+        case .result, .noResults:
+            return AyuHubSection.search.rawValue
+        case .privacyHeader, .ghost, .spy, .chatLocks, .secondSpace, .emergency:
             return AyuHubSection.privacy.rawValue
-        case .noResults:
-            return AyuHubSection.info.rawValue
-        case .customization, .spy, .ghost, .filters, .misc, .hiddenAccounts, .settingsSync, .backup, .pushDiagnostics, .quickReplies, .chatLocks, .secondSpace, .emergency, .versionArchive, .autoUpdate, .crashReports:
+        case .appearanceHeader, .customization:
+            return AyuHubSection.appearance.rawValue
+        case .toolsHeader, .messageScreenshot, .filters, .quickReplies, .misc, .pushDiagnostics:
             return AyuHubSection.tools.rawValue
-        case .infoFooter:
-            return AyuHubSection.info.rawValue
+        case .accountsHeader, .hiddenAccounts, .settingsSync, .backup:
+            return AyuHubSection.accounts.rawValue
+        case .crashReports, .deviceAccess:
+            return AyuHubSection.service.rawValue
         }
     }
 
+    // In display order (the list diff expects it).
     var stableId: Int32 {
         switch self {
-        // In display order: the list diff (mergeListsStableWithUpdates) expects it.
-        case .updateButton: return -16
-        case .updateStatus: return -15
-        case .buildStatus: return -14
-        case .selfUpdateProgress: return -13
-        case .selfUpdateButton: return -12
-        case let .selfUpdateAction(action): return -11 + action.rawValue
-        case .downloadButton: return -3
-        case .updateNotes: return -2
-        case .query: return -1
-        case .deviceAccess: return 30
-        case let .result(item): return 100 + item.id
-        case .noResults: return 10
-        case .customization:
-            return 0
-        case .spy:
-            return 1
-        case .ghost:
-            return 2
-        case .filters:
-            return 3
-        case .misc:
-            return 4
-        case .quickReplies:
-            return 12
-        case .chatLocks:
-            return 13
-        case .secondSpace:
-            return 14
-        case .emergency:
-            return 16
-        case .versionArchive:
-            return 17
-        case .autoUpdate:
-            return 18
-        case .crashReports:
-            return 15
-        case .infoFooter:
-            return 20
-        case .backup:
-            return 6
-        case .hiddenAccounts:
-            return 5
-        case .settingsSync:
-            return 8
-        case .pushDiagnostics:
-            return 7
+        case .update: return 0
+        case .query: return 1
+        case let .result(item): return 10_000 + item.id
+        case .noResults: return 2
+        case .privacyHeader: return 10
+        case .ghost: return 11
+        case .spy: return 12
+        case .chatLocks: return 13
+        case .secondSpace: return 14
+        case .emergency: return 15
+        case .appearanceHeader: return 20
+        case let .customization(part): return 21 + part.rawValue
+        case .toolsHeader: return 30
+        case .messageScreenshot: return 31
+        case .filters: return 32
+        case .quickReplies: return 33
+        case .misc: return 34
+        case .pushDiagnostics: return 35
+        case .accountsHeader: return 40
+        case .hiddenAccounts: return 41
+        case .settingsSync: return 42
+        case .backup: return 43
+        case .crashReports: return 50
+        case .deviceAccess: return 51
         }
     }
 
@@ -210,124 +213,83 @@ private enum AyuHubEntry: ItemListNodeEntry {
 
     func item(presentationData: ItemListPresentationData, arguments: Any) -> ListViewItem {
         let arguments = arguments as! AyuHubArguments
+        let row: (String, String, UIColor, String, @escaping () -> Void) -> ListViewItem = { title, symbol, color, label, action in
+            return ItemListDisclosureItem(presentationData: presentationData, icon: shadowSymbolIcon(symbol, color: color), title: title, label: label, sectionId: self.section, style: .blocks, action: action)
+        }
         switch self {
+        case let .update(detail, badge):
+            return ItemListDisclosureItem(presentationData: presentationData, icon: shadowSymbolIcon("arrow.down.circle.fill", color: ShadowIconColor.blue), title: "Обновление Shadow", titleBadge: badge ? "1" : nil, label: detail, labelStyle: .detailText, sectionId: self.section, style: .blocks, action: {
+                arguments.openUpdate()
+            })
         case let .query(value):
             return ItemListSingleLineInputItem(presentationData: presentationData, title: NSAttributedString(string: ""), text: value, placeholder: "Поиск настроек Shadow", type: .regular(capitalization: false, autocorrection: false), clearType: .always, sectionId: self.section, textUpdated: arguments.updateQuery, action: {})
         case let .result(item):
-            return ItemListDisclosureItem(presentationData: presentationData, title: item.title, label: item.path + "\n" + item.description, labelStyle: .multilineDetailText, sectionId: self.section, style: .blocks, action: { arguments.openResult(item) })
+            // Customization rows live in the hub parts: show the part in the path.
+            let path = item.destination == .customization ? (shadowCustomizationPart(for: item).map { "Shadow → \($0.title)" } ?? item.path) : item.path
+            return ItemListDisclosureItem(presentationData: presentationData, title: item.title, label: path + "\n" + item.description, labelStyle: .multilineDetailText, sectionId: self.section, style: .blocks, action: { arguments.openResult(item) })
         case .noResults:
             return ItemListTextItem(presentationData: presentationData, text: .plain("Ничего не найдено. Попробуйте другое слово на русском или английском."), sectionId: self.section)
-        case .customization:
-            return ItemListDisclosureItem(presentationData: presentationData, title: "Кастомизация", label: "", sectionId: self.section, style: .blocks, action: {
-                arguments.openCustomization()
-            })
+        case .privacyHeader:
+            return ItemListSectionHeaderItem(presentationData: presentationData, text: "ПРИВАТНОСТЬ", sectionId: self.section)
+        case let .ghost(enabled):
+            return row("Призрак", "eye.slash.fill", ShadowIconColor.indigo, enabled ? "Вкл" : "Выкл", { arguments.openGhost() })
         case .spy:
-            return ItemListDisclosureItem(presentationData: presentationData, title: "Шпион", label: "", sectionId: self.section, style: .blocks, action: {
-                arguments.openSpy()
-            })
-        case .ghost:
-            return ItemListDisclosureItem(presentationData: presentationData, title: "Призрак", label: "", sectionId: self.section, style: .blocks, action: {
-                arguments.openGhost()
-            })
-        case .misc:
-            return ItemListDisclosureItem(presentationData: presentationData, title: "Подмена профиля", label: "", sectionId: self.section, style: .blocks, action: {
-                arguments.openMisc()
-            })
-        case .infoFooter:
-            return ItemListTextItem(presentationData: presentationData, text: .plain("Скрытый аккаунт остаётся авторизованным и продолжает получать обновления, но не показывается в переключателе аккаунтов."), sectionId: self.section)
-        case .backup:
-            return ItemListDisclosureItem(presentationData: presentationData, title: "Резервная копия настроек", label: "", sectionId: self.section, style: .blocks, action: arguments.openBackup)
-        case .filters:
-            return ItemListDisclosureItem(presentationData: presentationData, title: "Фильтры", label: "", sectionId: self.section, style: .blocks, action: arguments.openFilters)
-        case .hiddenAccounts:
-            return ItemListDisclosureItem(presentationData: presentationData, title: "Скрытие аккаунтов", label: "", sectionId: self.section, style: .blocks, action: arguments.openHiddenAccounts)
-        case .settingsSync:
-            return ItemListDisclosureItem(presentationData: presentationData, title: "Синхронизация аккаунтов", label: "", sectionId: self.section, style: .blocks, action: arguments.openSettingsSync)
-        case .pushDiagnostics:
-            return ItemListDisclosureItem(presentationData: presentationData, title: "Разное", label: "", sectionId: self.section, style: .blocks, action: arguments.openPushDiagnostics)
-        case .quickReplies:
-            return ItemListDisclosureItem(presentationData: presentationData, title: "Шаблоны ответов", label: "", sectionId: self.section, style: .blocks, action: { arguments.openFeature(.quickReplies) })
+            return row("Сохранение", "tray.full.fill", ShadowIconColor.orange, "", { arguments.openSpy() })
         case .chatLocks:
-            return ItemListDisclosureItem(presentationData: presentationData, title: "Замки чатов", label: "", sectionId: self.section, style: .blocks, action: { arguments.openFeature(.chatLocks) })
+            return row("Замки чатов", "lock.fill", ShadowIconColor.gray, "", { arguments.openFeature(.chatLocks) })
         case .secondSpace:
-            return ItemListDisclosureItem(presentationData: presentationData, title: "Второе пространство", label: "", sectionId: self.section, style: .blocks, action: { arguments.openFeature(.secondSpace) })
+            return row("Второе пространство", "square.split.2x1.fill", ShadowIconColor.teal, "", { arguments.openFeature(.secondSpace) })
         case .emergency:
-            return ItemListDisclosureItem(presentationData: presentationData, title: "Экстренная защита", label: "", sectionId: self.section, style: .blocks, action: { arguments.openFeature(.emergency) })
-        case .versionArchive:
-            return ItemListDisclosureItem(presentationData: presentationData, title: "Архив версий", label: "", sectionId: self.section, style: .blocks, action: { arguments.openVersionArchive() })
-        case let .autoUpdate(label):
-            return ItemListDisclosureItem(presentationData: presentationData, title: "Автообновление", label: label, sectionId: self.section, style: .blocks, action: { arguments.openAutoUpdate() })
-        case let .selfUpdateButton(title):
-            return ShadowBigButtonItem(presentationData: presentationData, title: title, enabled: true, sectionId: self.section, action: {
-                arguments.startSelfUpdate()
-            })
-        case let .selfUpdateProgress(title, detail, progress):
-            return ShadowProgressItem(presentationData: presentationData, title: title, detail: detail, progress: progress, sectionId: self.section)
-        case let .selfUpdateAction(action):
-            return ItemListActionItem(presentationData: presentationData, title: action.title, kind: action == .cancel ? .destructive : .generic, alignment: .center, sectionId: self.section, style: .blocks, action: {
-                arguments.selfUpdateAction(action)
-            })
+            return row("Экстренная защита", "exclamationmark.shield.fill", ShadowIconColor.red, "", { arguments.openFeature(.emergency) })
+        case .appearanceHeader:
+            return ItemListSectionHeaderItem(presentationData: presentationData, text: "ВНЕШНИЙ ВИД", sectionId: self.section)
+        case let .customization(part):
+            return row(part.title, part.symbol, part.color, "", { arguments.openCustomization(part) })
+        case .toolsHeader:
+            return ItemListSectionHeaderItem(presentationData: presentationData, text: "ИНСТРУМЕНТЫ", sectionId: self.section)
+        case .messageScreenshot:
+            return row("Скриншоты сообщений", "camera.viewfinder", ShadowIconColor.mint, "", { arguments.openMessageScreenshot() })
+        case .filters:
+            return row("Фильтры", "line.3.horizontal.decrease.circle.fill", ShadowIconColor.orange, "", { arguments.openFilters() })
+        case .quickReplies:
+            return row("Шаблоны ответов", "text.bubble.fill", ShadowIconColor.blue, "", { arguments.openFeature(.quickReplies) })
+        case .misc:
+            return row("Подмена профиля", "person.crop.rectangle.fill", ShadowIconColor.purple, "", { arguments.openMisc() })
+        case .pushDiagnostics:
+            return row("Разное", "ellipsis.circle.fill", ShadowIconColor.gray, "", { arguments.openPushDiagnostics() })
+        case .accountsHeader:
+            return ItemListSectionHeaderItem(presentationData: presentationData, text: "АККАУНТЫ И ДАННЫЕ", sectionId: self.section)
+        case .hiddenAccounts:
+            return row("Скрытие аккаунтов", "person.crop.circle.badge.minus", ShadowIconColor.gray, "", { arguments.openHiddenAccounts() })
+        case .settingsSync:
+            return row("Синхронизация аккаунтов", "arrow.triangle.2.circlepath", ShadowIconColor.green, "", { arguments.openSettingsSync() })
+        case .backup:
+            return row("Резервная копия настроек", "externaldrive.fill", ShadowIconColor.blue, "", { arguments.openBackup() })
         case let .crashReports(count):
-            return ItemListDisclosureItem(presentationData: presentationData, title: "Отчёты о вылетах", label: "\(count)", sectionId: self.section, style: .blocks, action: { arguments.openCrashReports() })
-        case let .updateButton(enabled):
-            return ShadowBigButtonItem(presentationData: presentationData, title: "Проверить обновления", enabled: enabled, sectionId: self.section, action: {
-                arguments.checkUpdates()
-            })
-        case let .updateStatus(text):
-            return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section, textAlignment: .center)
-        case let .buildStatus(text):
-            return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section, textAlignment: .center)
-        case let .downloadButton(title, url):
-            return ShadowBigButtonItem(presentationData: presentationData, title: title, enabled: true, sectionId: self.section, action: {
-                arguments.openUrl(url)
-            })
-        case let .updateNotes(title, text):
-            return ItemListInfoItem(presentationData: presentationData, title: title, text: .plain(text), style: .blocks, sectionId: self.section, closeAction: {
-                arguments.dismissUpdateBanner()
-            })
+            return row("Отчёты о вылетах", "exclamationmark.triangle.fill", ShadowIconColor.red, "\(count)", { arguments.openCrashReports() })
         case .deviceAccess:
-            return ItemListDisclosureItem(presentationData: presentationData, title: "Доступ устройств", label: "", sectionId: self.section, style: .blocks, action: {
-                arguments.openDeviceAccess()
-            })
+            return row("Доступ устройств", "iphone", ShadowIconColor.gray, "", { arguments.openDeviceAccess() })
         }
     }
 }
 
 private final class AyuHubArguments {
-    let updateQuery: (String) -> Void
-    let openResult: (ShadowSettingsSearchItem) -> Void
-    let openCustomization: () -> Void
-    let openSpy: () -> Void
-    let openGhost: () -> Void
-    let openMisc: () -> Void
-    let openBackup: () -> Void
-    let openFilters: () -> Void
-    let openHiddenAccounts: () -> Void
-    let openPushDiagnostics: () -> Void
+    var updateQuery: (String) -> Void = { _ in }
+    var openResult: (ShadowSettingsSearchItem) -> Void = { _ in }
+    var openUpdate: () -> Void = {}
+    var openCustomization: (ShadowCustomizationPart) -> Void = { _ in }
+    var openSpy: () -> Void = {}
+    var openGhost: () -> Void = {}
+    var openMisc: () -> Void = {}
+    var openBackup: () -> Void = {}
+    var openFilters: () -> Void = {}
+    var openHiddenAccounts: () -> Void = {}
+    var openPushDiagnostics: () -> Void = {}
+    var openMessageScreenshot: () -> Void = {}
     var openFeature: (ShadowSettingsSearchDestination) -> Void = { _ in }
-    var checkUpdates: () -> Void = {}
-    var dismissUpdateBanner: () -> Void = {}
-    var openUrl: (String) -> Void = { _ in }
     var openCrashReports: () -> Void = {}
     var openDeviceAccess: () -> Void = {}
-    var openVersionArchive: () -> Void = {}
     var openSettingsSync: () -> Void = {}
-    var openAutoUpdate: () -> Void = {}
-    var startSelfUpdate: () -> Void = {}
-    var selfUpdateAction: (ShadowHubSelfUpdateAction) -> Void = { _ in }
-
-    init(updateQuery: @escaping (String) -> Void, openResult: @escaping (ShadowSettingsSearchItem) -> Void, openCustomization: @escaping () -> Void, openSpy: @escaping () -> Void, openGhost: @escaping () -> Void, openMisc: @escaping () -> Void, openBackup: @escaping () -> Void, openFilters: @escaping () -> Void, openHiddenAccounts: @escaping () -> Void, openPushDiagnostics: @escaping () -> Void) {
-        self.updateQuery = updateQuery
-        self.openResult = openResult
-        self.openCustomization = openCustomization
-        self.openSpy = openSpy
-        self.openGhost = openGhost
-        self.openMisc = openMisc
-        self.openBackup = openBackup
-        self.openFilters = openFilters
-        self.openHiddenAccounts = openHiddenAccounts
-        self.openPushDiagnostics = openPushDiagnostics
-    }
 }
 
 func shadowSettingsSearchDestinationController(context: AccountContext, item: ShadowSettingsSearchItem) -> ViewController {
@@ -352,146 +314,53 @@ func shadowSettingsSearchDestinationController(context: AccountContext, item: Sh
     }
 }
 
-// Notes of every build between the installed and the announced one, newest
-// first; long gaps are cut by builds, not in the middle of an item.
-private func shadowUpdateNotesText(_ release: ShadowUpdateCheck.Release) -> String {
-    guard !release.changelog.isEmpty else {
-        return String(release.notes.trimmingCharacters(in: .whitespacesAndNewlines).prefix(600))
-    }
-    let shown = release.changelog.prefix(5)
-    var blocks = shown.map { entry -> String in
-        let header = "Сборка \(entry.build)" + (entry.date.isEmpty ? "" : " · \(entry.date)") + ":"
-        return header + "\n" + entry.items.map { "• \($0)" }.joined(separator: "\n")
-    }
-    let rest = release.changelog.count - shown.count
-    if rest > 0 {
-        blocks.append("…и ещё \(rest) сборок")
-    }
-    return blocks.joined(separator: "\n\n")
-}
-
-// Shadow: buttons under the on-device update progress.
-enum ShadowHubSelfUpdateAction: Int32 {
-    // Raw values follow the display order (stableIds of the rows).
-    case showPrompt = 0
-    case retry = 1
-    case share = 2
-    case cancel = 3
-
-    var title: String {
-        switch self {
-        case .showPrompt: return "Показать окно установки"
-        case .share: return "Поделиться подписанным IPA"
-        case .retry: return "Повторить"
-        case .cancel: return "Отменить"
-        }
-    }
-}
-
-private func shadowMegabytes(_ bytes: Int64) -> String {
-    return String(format: "%.1f МБ", Double(bytes) / (1024.0 * 1024.0))
-}
-
-private func shadowPercent(_ fraction: Double) -> String {
-    return "\(Int((max(0.0, min(1.0, fraction)) * 100.0).rounded(.down)))%"
-}
-
-// Title, detail and bar of the progress row; nil = nothing to show.
-private func shadowSelfUpdateRow(_ state: ShadowSelfUpdater.State) -> (String, String, Double?)? {
-    let build = state.build.map { " \($0)" } ?? ""
-    switch state.stage {
-    case .idle:
-        return nil
-    case let .downloading(received, total):
-        if total > 0 {
-            let fraction = Double(received) / Double(total)
-            return ("Загрузка сборки\(build) · \(shadowPercent(fraction))", "\(shadowMegabytes(received)) из \(shadowMegabytes(total))", fraction)
-        }
-        return ("Загрузка сборки\(build)…", received > 0 ? shadowMegabytes(received) : "", nil)
-    case let .unpacking(fraction):
-        return ("Распаковка · \(shadowPercent(fraction))", "", fraction)
-    case .signing:
-        return ("Подпись сертификатом…", "До минуты. Не сворачивайте Shadow, пока идёт подготовка.", nil)
-    case let .packing(fraction):
-        return ("Упаковка подписанного IPA · \(shadowPercent(fraction))", "", fraction)
-    case .startingServer:
-        return ("Подготовка установки…", "", nil)
-    case let .waitingForConfirmation(hint):
-        return ("Подтвердите установку в окне iOS", hint ? "Окно не появилось или закрыто — нажмите «Показать окно установки». Можно также поделиться IPA и поставить его вручную." : "Нажмите «Установить» в системном окне.", nil)
-    case let .sending(sent, total):
-        let fraction = total > 0 ? Double(sent) / Double(total) : 0.0
-        return ("Установка: передача в iOS · \(shadowPercent(fraction))", "Не закрывайте Shadow до конца передачи.", fraction)
-    case .installing:
-        return ("iOS устанавливает обновление", "Shadow сейчас закроется и обновится. Если иконка застряла на «Ожидание», откройте её ещё раз.", 1.0)
-    case let .failed(reason):
-        return ("Не удалось обновить", reason, nil)
-    }
-}
-
-private func shadowSelfUpdateActions(_ state: ShadowSelfUpdater.State, canRetry: Bool) -> [ShadowHubSelfUpdateAction] {
-    switch state.stage {
-    case .idle:
-        return []
-    case .waitingForConfirmation:
-        return [.showPrompt, .share, .cancel]
-    case .installing:
-        return state.signedIPA != nil ? [.share] : []
-    case .failed:
-        var actions: [ShadowHubSelfUpdateAction] = []
-        if canRetry {
-            actions.append(.retry)
-        }
-        if state.signedIPA != nil {
-            actions.append(.share)
-        }
-        actions.append(.cancel)
-        return actions
-    default:
-        return [.cancel]
-    }
-}
-
-// autoCheckUpdates: start "Проверить обновления" right away (shadow://updates).
+// autoCheckUpdates (shadow://updates) now opens the update screen right away.
 public func ayuGramSettingsController(context: AccountContext, autoCheckUpdates: Bool = false) -> ViewController {
     var pushControllerImpl: ((ViewController) -> Void)?
     var presentControllerImpl: ((ViewController, ViewControllerPresentationArguments?) -> Void)?
     let query = ValuePromise<String>("", ignoreRepeated: true)
+    let arguments = AyuHubArguments()
 
-    let arguments = AyuHubArguments(
-        updateQuery: { query.set(String($0.prefix(256))) },
-        openResult: { item in
-            pushControllerImpl?(shadowSettingsSearchDestinationController(context: context, item: item))
-        },
-        openCustomization: {
-            pushControllerImpl?(ayuCustomizationController(context: context))
-        },
-        openSpy: {
-            pushControllerImpl?(ayuSpyController(context: context))
-        },
-        openGhost: {
-            pushControllerImpl?(ayuGhostController(context: context))
-        },
-        openMisc: {
-            pushControllerImpl?(ayuMiscController(context: context))
-        },
-        openBackup: {
-            pushControllerImpl?(shadowSettingsBackupController(context: context))
-        },
-        openFilters: {
-            pushControllerImpl?(shadowMessageFiltersController(context: context))
-        },
-        openHiddenAccounts: {
-            pushControllerImpl?(shadowHiddenAccountsController(context: context))
-        },
-        openPushDiagnostics: {
-            pushControllerImpl?(shadowMiscController(context: context))
-        }
-    )
-
+    arguments.updateQuery = { query.set(String($0.prefix(256))) }
+    arguments.openResult = { item in
+        pushControllerImpl?(shadowSettingsSearchDestinationController(context: context, item: item))
+    }
+    arguments.openUpdate = {
+        pushControllerImpl?(shadowUpdateController(context: context))
+    }
+    arguments.openCustomization = { part in
+        pushControllerImpl?(ayuCustomizationController(context: context, part: part))
+    }
+    arguments.openSpy = {
+        pushControllerImpl?(ayuSpyController(context: context))
+    }
+    arguments.openGhost = {
+        pushControllerImpl?(ayuGhostController(context: context))
+    }
+    arguments.openMisc = {
+        pushControllerImpl?(ayuMiscController(context: context))
+    }
+    arguments.openBackup = {
+        pushControllerImpl?(shadowSettingsBackupController(context: context))
+    }
+    arguments.openFilters = {
+        pushControllerImpl?(shadowMessageFiltersController(context: context))
+    }
+    arguments.openHiddenAccounts = {
+        pushControllerImpl?(shadowHiddenAccountsController(context: context))
+    }
+    arguments.openPushDiagnostics = {
+        pushControllerImpl?(shadowMiscController(context: context))
+    }
+    arguments.openMessageScreenshot = {
+        pushControllerImpl?(shadowMessageScreenshotSettingsController(context: context))
+    }
     arguments.openSettingsSync = {
         pushControllerImpl?(shadowSettingsSyncController(context: context))
     }
-
+    arguments.openDeviceAccess = {
+        pushControllerImpl?(shadowDeviceAccessController(context: context))
+    }
     arguments.openFeature = { destination in
         switch destination {
         case .quickReplies:
@@ -507,25 +376,6 @@ public func ayuGramSettingsController(context: AccountContext, autoCheckUpdates:
         }
     }
 
-    let updateState = ValuePromise<ShadowHubUpdateState>(.idle, ignoreRepeated: true)
-    // Shadow: the announced release, for "Обновить" (on-device signing).
-    var availableRelease: ShadowUpdateCheck.Release?
-    let signingChanges: Signal<Void, NoError> = Signal { subscriber in
-        subscriber.putNext(Void())
-        let observer = NotificationCenter.default.addObserver(forName: ShadowSigningStore.didChangeNotification, object: nil, queue: .main, using: { _ in
-            subscriber.putNext(Void())
-        })
-        return ActionDisposable {
-            NotificationCenter.default.removeObserver(observer)
-        }
-    }
-    let selfUpdate: Signal<(ShadowSelfUpdater.State, Bool), NoError> = combineLatest(ShadowSelfUpdater.shared.state, signingChanges)
-    |> map { state, _ -> (ShadowSelfUpdater.State, Bool) in
-        return (state, ShadowSigningStore.shared.isConfigured)
-    }
-    let bannerDismissed = ValuePromise<Bool>(false, ignoreRepeated: true)
-    // Shadow: refreshed only by "Проверить обновления"; nil = no build running.
-    let buildStatus = ValuePromise<String?>(nil, ignoreRepeated: true)
     // Shadow: bumped when crash reports are sent or deleted.
     let crashRevision = ValuePromise<Int>(0, ignoreRepeated: false)
     var crashRevisionValue = 0
@@ -564,132 +414,52 @@ public func ayuGramSettingsController(context: AccountContext, autoCheckUpdates:
         ])
         presentControllerImpl?(actionSheet, nil)
     }
-    arguments.checkUpdates = {
-        updateState.set(.checking)
-        bannerDismissed.set(false)
-        let betaEnabled = currentAyuGramSettings(accountId: context.account.id).updateChannelBeta
-        ShadowUpdateCheck.check(betaEnabled: betaEnabled) { status in
-            if case let .available(release) = status {
-                availableRelease = release
-            } else {
-                availableRelease = nil
-            }
-            updateState.set(.result(status))
-        }
-        ShadowBuildStatus.fetch { info in
-            buildStatus.set(info.map { ShadowBuildStatus.text($0) })
-        }
+
+    // The update row: checked quietly when the hub opens (two small requests
+    // to raw.githubusercontent.com); the CI status is read only on the update
+    // screen (GitHub API limit).
+    let updateStatus = ValuePromise<ShadowUpdateCheck.Status?>(nil, ignoreRepeated: true)
+    ShadowUpdateCheck.check(betaEnabled: currentAyuGramSettings(accountId: context.account.id).updateChannelBeta) { status in
+        updateStatus.set(status)
     }
-    arguments.dismissUpdateBanner = {
-        bannerDismissed.set(true)
-    }
-    arguments.openUrl = { url in
-        context.sharedContext.applicationBindings.openUrl(url)
-    }
-    arguments.openVersionArchive = {
-        pushControllerImpl?(shadowVersionArchiveController(context: context))
-    }
-    arguments.openDeviceAccess = {
-        pushControllerImpl?(shadowDeviceAccessController(context: context))
-    }
-    arguments.openAutoUpdate = {
-        pushControllerImpl?(shadowAutoUpdateController(context: context))
-    }
-    let startSelfUpdate: () -> Void = {
-        guard let release = availableRelease, let url = release.downloadURL else {
-            return
-        }
-        let version = release.changelog.first(where: { $0.build == release.build })?.version
-        let bindings = context.sharedContext.applicationBindings
-        ShadowSelfUpdater.shared.start(ipaURL: url, build: release.build, version: version, openURL: { installURL in
-            bindings.openUrl(installURL.absoluteString)
-        }, keepAwake: {
-            return bindings.pushIdleTimerExtension()
-        })
-    }
-    arguments.startSelfUpdate = startSelfUpdate
-    arguments.selfUpdateAction = { action in
-        switch action {
-        case .showPrompt:
-            ShadowSelfUpdater.shared.retryInstallPrompt()
-        case .share:
-            guard let ipa = ShadowSelfUpdater.shared.currentState.signedIPA else {
-                return
-            }
-            let share = UIActivityViewController(activityItems: [ipa], applicationActivities: nil)
-            context.sharedContext.applicationBindings.presentNativeController(share)
-        case .retry:
-            startSelfUpdate()
-        case .cancel:
-            ShadowSelfUpdater.shared.cancel()
-        }
-    }
+
     // Shadow: the device whitelist editor is for the admins only.
     let isAdmin = ShadowDeviceAccess.hasAdminAccess(peerId: context.account.peerId.id._internalGetInt64Value())
 
-    let signal = combineLatest(queue: .mainQueue(), context.sharedContext.presentationData, query.get(), updateState.get(), bannerDismissed.get(), crashRevision.get(), buildStatus.get(), selfUpdate)
-    |> deliverOnMainQueue
-    |> map { presentationData, query, updateState, bannerDismissed, _, buildStatus, selfUpdate -> (ItemListControllerState, (ItemListNodeState, Any)) in
-        let (selfUpdateState, signingReady) = selfUpdate
+    let settingsSignal: Signal<AyuGramSettings, NoError> = ayuGramSettings(postbox: context.account.postbox)
+    let updateSignal: Signal<(ShadowUpdateCheck.Status?, ShadowSelfUpdater.State), NoError> = combineLatest(updateStatus.get(), ShadowSelfUpdater.shared.state)
+    let signal = combineLatest(queue: .mainQueue(), context.sharedContext.presentationData, query.get(), crashRevision.get(), settingsSignal, updateSignal)
+    |> map { presentationData, query, _, settings, update -> (ItemListControllerState, (ItemListNodeState, Any)) in
+        let (status, selfUpdateState) = update
         let installed = ShadowUpdateCheck.installedBuild.map { "\($0)" } ?? "?"
-        var updateEnabled = true
-        var statusText = "Установлена \(ShadowVersion.full) · сборка \(installed)"
-        var download: (String, String)?
-        var notes: (String, String)?
-        var selfUpdateTitle: String?
-        switch updateState {
-        case .idle:
-            break
-        case .checking:
-            statusText = "Проверяю…"
-            updateEnabled = false
-        case let .result(status):
+        var detail = "\(ShadowVersion.fork) · сборка \(installed)"
+        var badge = false
+        if let running = shadowSelfUpdateShortText(selfUpdateState) {
+            detail = running
+        } else if let status {
             switch status {
-            case .upToDate:
-                statusText = "Актуально · \(ShadowVersion.full) · сборка \(installed)"
             case let .available(release):
-                statusText = "У тебя \(installed) → доступна \(release.build)"
-                if release.changelog.count > 1 {
-                    statusText += ", пропущено \(release.changelog.count) обновлений"
-                }
-                if release.isRequired {
-                    statusText = "Обязательное обновление. " + statusText
-                }
-                download = (release.isBeta ? "Скачать бету IPA (\(release.build))" : "Скачать IPA (\(release.build))", (release.downloadURL ?? release.pageURL).absoluteString)
-                if signingReady, release.downloadURL != nil {
-                    selfUpdateTitle = release.isBeta ? "Обновить до беты \(release.build)" : "Обновить до \(release.build)"
-                }
-                if !bannerDismissed {
-                    notes = (release.title, shadowUpdateNotesText(release))
-                }
-            case let .failed(reason):
-                statusText = "Не удалось проверить: \(reason)"
+                let target = shadowForkVersion(release.changelog.first(where: { $0.build == release.build })?.version) ?? "\(release.build)"
+                let summary = ShadowReleaseSummary(release).shortText
+                detail = "Доступна \(target)" + (summary.isEmpty ? "" : " · \(summary)")
+                badge = true
+            case .upToDate:
+                detail = "Актуально · \(ShadowVersion.fork)"
+            case .failed:
+                break
             }
         }
-        var entries: [AyuHubEntry] = [.updateButton(enabled: updateEnabled), .updateStatus(statusText)]
-        if let buildStatus {
-            entries.append(.buildStatus(buildStatus))
-        }
-        if let row = shadowSelfUpdateRow(selfUpdateState) {
-            entries.append(.selfUpdateProgress(title: row.0, detail: row.1, progress: row.2))
-            for action in shadowSelfUpdateActions(selfUpdateState, canRetry: signingReady && availableRelease != nil) {
-                entries.append(.selfUpdateAction(action))
-            }
-        } else if let selfUpdateTitle {
-            entries.append(.selfUpdateButton(selfUpdateTitle))
-        }
-        if let download {
-            entries.append(.downloadButton(download.0, download.1))
-        }
-        if let notes, !notes.1.isEmpty {
-            entries.append(.updateNotes(title: notes.0, text: notes.1))
-        }
-        entries.append(.query(query))
+
+        var entries: [AyuHubEntry] = [.update(detail: detail, badge: badge), .query(query)]
         if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            entries += [.customization, .spy, .ghost, .filters, .misc, .hiddenAccounts, .settingsSync, .backup, .pushDiagnostics, .quickReplies, .chatLocks, .secondSpace, .emergency, .versionArchive, .autoUpdate(signingReady ? "Вкл" : "Выкл"), .infoFooter]
+            entries += [.privacyHeader, .ghost(settings.ghostMode), .spy, .chatLocks, .secondSpace, .emergency]
+            entries.append(.appearanceHeader)
+            entries += ShadowCustomizationPart.allCases.map { .customization($0) }
+            entries += [.toolsHeader, .messageScreenshot, .filters, .quickReplies, .misc, .pushDiagnostics]
+            entries += [.accountsHeader, .hiddenAccounts, .settingsSync, .backup]
             let crashCount = ShadowCrashReports.shared.reports().count
             if crashCount > 0 {
-                entries.insert(.crashReports(crashCount), at: entries.firstIndex(where: { if case .infoFooter = $0 { return true } else { return false } }) ?? entries.count)
+                entries.append(.crashReports(crashCount))
             }
             if isAdmin {
                 entries.append(.deviceAccess)
@@ -712,7 +482,10 @@ public func ayuGramSettingsController(context: AccountContext, autoCheckUpdates:
         controller?.present(c, in: .window(.root), with: a)
     }
     if autoCheckUpdates {
-        arguments.checkUpdates()
+        // After the hub is on screen, so "back" leads to it.
+        Queue.mainQueue().after(0.3) {
+            arguments.openUpdate()
+        }
     }
     return controller
 }
@@ -1763,7 +1536,38 @@ private func ayuCustomizationEntries(settings: AyuGramSettings) -> [AyuCustomiza
     return entries
 }
 
-func ayuCustomizationController(context: AccountContext, focus: ShadowSettingsSearchItem? = nil) -> ViewController {
+// Which customization sections each hub part shows.
+private extension ShadowCustomizationPart {
+    var sections: [AyuCustomizationSection] {
+        switch self {
+        case .messages: return [.appearance]
+        case .chats: return [.chats, .bottomBar, .calls]
+        case .profiles: return [.profiles, .banner, .profileBackground]
+        case .media: return [.media, .customRoundVideos]
+        case .icons: return [.settingsIcons]
+        }
+    }
+
+    func contains(_ section: ItemListSectionId) -> Bool {
+        return self.sections.contains(where: { $0.rawValue == section })
+    }
+}
+
+// The part that shows a focused row (search result or shadow:// link); a row
+// hidden behind its parent toggle is looked up by the parent.
+private func shadowCustomizationPart(for focus: ShadowSettingsSearchItem) -> ShadowCustomizationPart? {
+    let entries = ayuCustomizationEntries(settings: ayuGramSettingsCurrent)
+    let entry = entries.first(where: { $0.stableId == focus.entryId }) ?? focus.parentEntryId.flatMap { parentId in entries.first(where: { $0.stableId == parentId }) }
+    guard let entry else {
+        return nil
+    }
+    return ShadowCustomizationPart.allCases.first(where: { $0.contains(entry.section) })
+}
+
+// part nil: the whole screen (shadow://customization). With a focus and no
+// part, the part holding the focused row.
+func ayuCustomizationController(context: AccountContext, focus: ShadowSettingsSearchItem? = nil, part requestedPart: ShadowCustomizationPart? = nil) -> ViewController {
+    let part = requestedPart ?? focus.flatMap { shadowCustomizationPart(for: $0) }
     let linkRows = ShadowSettingsLinkRows()
     var focusedIndex: Int?
     var presentControllerImpl: ((ViewController, ViewControllerPresentationArguments?) -> Void)?
@@ -1899,8 +1703,9 @@ func ayuCustomizationController(context: AccountContext, focus: ShadowSettingsSe
     )
     |> deliverOnMainQueue
     |> map { presentationData, settings -> (ItemListControllerState, (ItemListNodeState, Any)) in
-        let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Кастомизация"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
-        let entries = ayuCustomizationEntries(settings: settings)
+        let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text(part?.title ?? "Кастомизация"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
+        let allEntries = ayuCustomizationEntries(settings: settings)
+        let entries = part.map { part in allEntries.filter { part.contains($0.section) } } ?? allEntries
         linkRows.stableIds = entries.map { $0.stableId }
         focusedIndex = shadowSettingsFocusIndex(stableIds: entries.map { $0.stableId }, target: focus)
         let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, initialScrollToItem: shadowSettingsInitialScroll(index: focusedIndex), animateChanges: true)
@@ -2460,7 +2265,7 @@ func ayuSpyController(context: AccountContext, focus: ShadowSettingsSearchItem? 
     )
     |> deliverOnMainQueue
     |> map { presentationData, settings -> (ItemListControllerState, (ItemListNodeState, Any)) in
-        let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Шпион"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
+        let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Сохранение"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
         let entries = ayuSpyEntries(settings: settings)
         linkRows.stableIds = entries.map { $0.stableId }
         focusedIndex = shadowSettingsFocusIndex(stableIds: entries.map { $0.stableId }, target: focus)

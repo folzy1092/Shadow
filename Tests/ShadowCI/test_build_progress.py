@@ -58,10 +58,10 @@ class BuildProgressTests(unittest.TestCase):
         self.assertIn("--show_progress_rate_limit=", rc)
 
     def test_app_shows_status_on_update_check(self):
-        hub = (ROOT / "submodules/SettingsUI/Sources/AyuGramSettingsController.swift").read_text()
-        self.assertIn("case buildStatus(String)", hub)
-        check = hub[hub.index("arguments.checkUpdates = {"):]
-        check = check[:check.index("arguments.dismissUpdateBanner")]
+        screen = (ROOT / "submodules/SettingsUI/Sources/ShadowUpdateController.swift").read_text(encoding="utf-8")
+        self.assertIn("case buildStatus(String)", screen)
+        check = screen[screen.index("let check: () -> Void = {"):]
+        check = check[:check.index("let startSelfUpdate")]
         self.assertIn("ShadowBuildStatus.fetch", check)
 
 

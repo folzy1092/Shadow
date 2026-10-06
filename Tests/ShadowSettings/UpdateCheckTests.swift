@@ -129,5 +129,19 @@ struct UpdateCheckTests {
         check(ShadowVersionArchive.dateText("soon") == "soon", "Unparsed date kept")
 
         print("Shadow update check: \(count) checks passed")
+
+        // Typed notes (new/fixed) next to the plain items.
+        let typed = ShadowUpdateCheck.parseChangelog(Data("""
+        {"entries": [
+          {"build": 34780, "date": "2026-10-08", "new": [{"text": " Призрак перед историями ", "where": "Призрак"}, "Время удаления"], "fixed": ["Пасхалки", ""], "items": ["Призрак перед историями"]},
+          {"build": 34779, "date": "2026-10-07", "fixed": ["Только исправление"]},
+          {"build": 34778, "date": "2026-10-07", "items": ["Старый формат"]}
+        ]}
+        """.utf8))
+        precondition(typed.count == 3, "Typed-only entries are kept")
+        precondition(typed[0].newItems == ["Призрак перед историями", "Время удаления"], "New items: objects and strings, trimmed")
+        precondition(typed[0].fixedItems == ["Пасхалки"], "Empty fixed items are dropped")
+        precondition(typed[1].items.isEmpty && typed[1].fixedItems == ["Только исправление"], "An entry with only fixed items")
+        precondition(typed[2].newItems.isEmpty && typed[2].fixedItems.isEmpty && typed[2].items == ["Старый формат"], "Old entries stay untyped")
     }
 }

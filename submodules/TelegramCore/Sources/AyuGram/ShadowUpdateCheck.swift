@@ -36,6 +36,10 @@ public enum ShadowUpdateCheck {
         public let version: String?
         // The IPA of this build (the version archive downloads it).
         public let ipaURL: URL?
+        // Typed notes for the update screen (SHADOW_AGENT_MAP §5d «Список
+        // изменений»); empty in entries announced before the fields existed.
+        public var newItems: [String] = []
+        public var fixedItems: [String] = []
 
         public init(build: Int, date: String, items: [String], version: String? = nil, ipaURL: URL? = nil) {
             self.build = build
@@ -202,7 +206,9 @@ public enum ShadowUpdateCheck {
                 continue
             }
             let items = ((entry["items"] as? [String]) ?? []).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
-            if items.isEmpty {
+            let newItems = typedItems(entry["new"])
+            let fixedItems = typedItems(entry["fixed"])
+            if items.isEmpty && newItems.isEmpty && fixedItems.isEmpty {
                 continue
             }
             var version = (entry["version"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -213,9 +219,31 @@ public enum ShadowUpdateCheck {
             if let string = entry["ipa_url"] as? String, let url = URL(string: string), url.scheme == "https" {
                 ipaURL = url
             }
-            result.append(ChangelogEntry(build: build, date: (entry["date"] as? String) ?? "", items: items, version: version, ipaURL: ipaURL))
+            var parsed = ChangelogEntry(build: build, date: (entry["date"] as? String) ?? "", items: items, version: version, ipaURL: ipaURL)
+            parsed.newItems = newItems
+            parsed.fixedItems = fixedItems
+            result.append(parsed)
         }
         return result.sorted(by: { $0.build > $1.build })
+    }
+
+    // "new": [{"text": "…", "where": "…"}] or ["…"]; "fixed": ["…"].
+    static func typedItems(_ value: Any?) -> [String] {
+        guard let array = value as? [Any] else {
+            return []
+        }
+        return array.compactMap { element -> String? in
+            let text: String?
+            if let string = element as? String {
+                text = string
+            } else if let object = element as? [String: Any] {
+                text = object["text"] as? String
+            } else {
+                text = nil
+            }
+            let trimmed = text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return trimmed.isEmpty ? nil : trimmed
+        }
     }
 
     // Entries newer than the installed build and not newer than the announced one.

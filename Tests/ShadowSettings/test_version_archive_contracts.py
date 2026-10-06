@@ -28,9 +28,10 @@ class VersionArchiveContracts(unittest.TestCase):
             self.assertTrue(entry["ipa_url"].endswith(f"build-{entry['build']}/Shadow.ipa"), entry["build"])
 
     def test_screen_is_in_the_hub_and_links(self):
-        hub = read("SettingsUI/Sources/AyuGramSettingsController.swift")
-        self.assertIn('title: "Архив версий"', hub)
-        self.assertIn(".emergency, .versionArchive, .autoUpdate(signingReady ? \"Вкл\" : \"Выкл\"), .infoFooter]", hub)
+        screen = read("SettingsUI/Sources/ShadowUpdateController.swift")
+        self.assertIn('title: "Архив версий"', screen)
+        self.assertIn("entries.append(.archive)", screen)
+        self.assertIn("pushControllerImpl?(shadowVersionArchiveController(context: context))", screen)
         router = read("SettingsUI/Sources/ShadowLinkRouter.swift")
         self.assertIn('case "versions", "archive":', router)
         screen = read("SettingsUI/Sources/ShadowVersionArchiveController.swift")

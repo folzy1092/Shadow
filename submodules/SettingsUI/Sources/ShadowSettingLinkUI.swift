@@ -167,7 +167,11 @@ func shadowSettingsInstallLinkMenu(controller: ItemListController, context: Acco
             UIPasteboard.general.string = link
             shadowSettingLinkToast(context: context, text: text)
         }
-        var items: [ActionSheetItem] = [ActionSheetTextItem(title: "\(setting.title)\n\(setting.path)", parseMarkdown: false)]
+        // Shadow: the long press doubles as the short help of the setting
+        // (its search-index description).
+        let destinations: [String: ShadowSettingsSearchDestination] = ["customization": .customization, "spy": .spy, "ghost": .ghost, "profile": .misc, "misc": .pushDiagnostics, "filters": .filters, "locks": .chatLocks, "space": .secondSpace]
+        let help = destinations[screen].flatMap { destination in ShadowSettingsSearchIndex.items.first(where: { $0.destination == destination && $0.entryId == setting.entryId }) }?.description ?? ""
+        var items: [ActionSheetItem] = [ActionSheetTextItem(title: setting.title + (help.isEmpty ? "" : "\n\n" + help) + "\n\n" + setting.path, parseMarkdown: false)]
         if setting.isSwitchable, let key = setting.key {
             items.append(ActionSheetButtonItem(title: "Скопировать ссылку-переключатель", color: .accent, action: { [weak actionSheet] in
                 actionSheet?.dismissAnimated()

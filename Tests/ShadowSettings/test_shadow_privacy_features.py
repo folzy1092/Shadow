@@ -85,7 +85,7 @@ class ShadowPrivacyFeatures(unittest.TestCase):
         hub = (SETTINGS_UI / "AyuGramSettingsController.swift").read_text()
         history = (SETTINGS_UI / "AyuArchiveChatContents.swift").read_text()
         menu = (UI / "Sources/ChatInterfaceStateContextMenus.swift").read_text()
-        self.assertIn('title: "Фильтры"', hub)
+        self.assertIn('row("Фильтры", ', hub)
         self.assertIn("Скрыто локальным фильтром", (UI / "Sources/ChatHistoryEntriesForView.swift").read_text())
         self.assertIn("ayuEditComparisonChatController", history)
         self.assertIn('text: "Сравнить правки"', menu)
@@ -108,7 +108,7 @@ class ShadowPrivacyFeatures(unittest.TestCase):
         hub = (SETTINGS_UI / "AyuGramSettingsController.swift").read_text()
         settings_screen = (UI / "Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoScreen.swift").read_text()
         self.assertIn("shadow.hiddenAccountPeerIds.v1", storage)
-        self.assertIn('title: "Скрытие аккаунтов"', hub)
+        self.assertIn('row("Скрытие аккаунтов", ', hub)
         self.assertIn("ShadowHiddenAccounts.setHidden", hub)
         self.assertIn("context.sharedContext.activeAccountContexts", hub)
         self.assertNotIn("activeAccountsAndPeers(context: context)", hub)
@@ -118,8 +118,7 @@ class ShadowPrivacyFeatures(unittest.TestCase):
     def test_main_settings_use_requested_flat_sections(self):
         hub = (SETTINGS_UI / "AyuGramSettingsController.swift").read_text()
         expected = [
-            "Кастомизация",
-            "Шпион",
+            "Сохранение",
             "Призрак",
             "Фильтры",
             "Подмена профиля",
@@ -129,8 +128,15 @@ class ShadowPrivacyFeatures(unittest.TestCase):
         ]
         root = hub.split("private enum AyuHubEntry", 1)[1].split("private final class AyuHubArguments", 1)[0]
         for title in expected:
-            self.assertIn(f'title: "{title}"', root)
-        self.assertIn('entries += [.customization, .spy, .ghost, .filters, .misc, .hiddenAccounts, .settingsSync, .backup, .pushDiagnostics, .quickReplies, .chatLocks, .secondSpace, .emergency, .versionArchive, .autoUpdate(signingReady ? "Вкл" : "Выкл"), .infoFooter]', hub)
+            self.assertIn(f'row("{title}", ', root)
+        self.assertNotIn('"Шпион"', hub)
+        # Grouped by purpose; Кастомизация is split into parts.
+        self.assertIn("entries += [.privacyHeader, .ghost(settings.ghostMode), .spy, .chatLocks, .secondSpace, .emergency]", hub)
+        self.assertIn("entries += ShadowCustomizationPart.allCases.map { .customization($0) }", hub)
+        self.assertIn("entries += [.toolsHeader, .messageScreenshot, .filters, .quickReplies, .misc, .pushDiagnostics]", hub)
+        self.assertIn("entries += [.accountsHeader, .hiddenAccounts, .settingsSync, .backup]", hub)
+        for part in ("Сообщения", "Чаты и звонки", "Профили", "Медиа и камера", "Иконки"):
+            self.assertIn(f'return "{part}"', hub)
 
     def test_account_addition_has_no_client_premium_limit(self):
         paths = [

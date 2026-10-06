@@ -48,7 +48,7 @@ private enum ShadowOnlineHistoryEntry: ItemListNodeEntry {
         case let .summary(text):
             return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
         case .empty:
-            return ItemListTextItem(presentationData: presentationData, text: .plain("Пока нет записей. История копится, пока включена настройка Shadow → Шпион → «История в сети» и контакт заходит в Telegram."), sectionId: self.section)
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Пока нет записей. История копится, пока включена настройка Shadow → Сохранение → «Журнал «в сети»» и контакт заходит в Telegram."), sectionId: self.section)
         case let .dayHeader(_, title):
             return ItemListSectionHeaderItem(presentationData: presentationData, text: title, sectionId: self.section)
         case let .dayText(_, text):

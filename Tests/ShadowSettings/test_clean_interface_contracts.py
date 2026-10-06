@@ -93,10 +93,13 @@ class CleanInterfaceContracts(unittest.TestCase):
         self.assertIsInstance(manifest["enabled"], bool)
         self.assertIsInstance(manifest["build"], int)
         self.assertIn("update-check", (ROOT / "build-system/ci/test_shadow_foundation.py").read_text())
+        # The hub row opens the update screen; without a signing pair its
+        # button is the IPA link.
         hub = read("SettingsUI/Sources/AyuGramSettingsController.swift")
-        self.assertIn("ItemListInfoItem(", hub)
-        self.assertIn("arguments.dismissUpdateBanner()", hub)
-        self.assertIn('"Скачать IPA (\(release.build))"', hub)
+        self.assertIn("pushControllerImpl?(shadowUpdateController(context: context))", hub)
+        screen = read("SettingsUI/Sources/ShadowUpdateController.swift")
+        self.assertIn('entries.append(.mainButton("Скачать IPA \(target)", true))', screen)
+        self.assertIn("(release.downloadURL ?? release.pageURL).absoluteString", screen)
         self.assertFalse((SUB / "SettingsUI/Sources/ShadowUpdatesController.swift").exists())
 
     def test_changelog_file_and_banner(self):
@@ -111,9 +114,11 @@ class CleanInterfaceContracts(unittest.TestCase):
         self.assertIn(manifest["build"], builds)
         check = read("TelegramCore/Sources/AyuGram/ShadowUpdateCheck.swift")
         self.assertIn("folzy1092/tgfork/main/shadow-changelog.json", check)
-        hub = read("SettingsUI/Sources/AyuGramSettingsController.swift")
-        self.assertIn("shadowUpdateNotesText(release)", hub)
-        self.assertIn("let shown = release.changelog.prefix(5)", hub)
+        screen = read("SettingsUI/Sources/ShadowUpdateController.swift")
+        self.assertIn("for (position, entry) in release.changelog.prefix(20).enumerated()", screen)
+        self.assertIn("shadowChangeLines(entry).prefix(60)", screen)
+        self.assertIn('entry.newItems.map { "НОВОЕ · " + $0 }', screen)
+        self.assertIn('entry.fixedItems.map { "ИСПРАВЛЕНО · " + $0 }', screen)
 
     def test_app_icons(self):
         build = (ROOT / "Telegram/BUILD").read_text()

@@ -137,7 +137,7 @@ func shadowSavedStoriesController(context: AccountContext) -> ViewController {
     let signal = combineLatest(queue: .mainQueue(), context.sharedContext.presentationData, data)
     |> map { presentationData, data -> (ItemListControllerState, (ItemListNodeState, Any)) in
         groups = data.map { ($0.0, $0.2) }
-        var entries: [ShadowSavedStoriesEntry] = [.info(data.isEmpty ? "Пока пусто. Включите «Сохранять просмотренные истории» в Shadow → Шпион: каждая открытая вами история сохранится здесь и останется, даже если автор её удалит." : "Истории, которые вы смотрели. Хранятся только на этом устройстве.")]
+        var entries: [ShadowSavedStoriesEntry] = [.info(data.isEmpty ? "Пока пусто. Включите «Сохранять просмотренные истории» в Shadow → Сохранение: каждая открытая вами история сохранится здесь и останется, даже если автор её удалит." : "Истории, которые вы смотрели. Хранятся только на этом устройстве.")]
         let now = Date()
         for (peerIndex, group) in data.enumerated() {
             entries.append(.peerHeader(index: peerIndex, title: group.1))
