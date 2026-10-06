@@ -93,6 +93,48 @@ class SettingsSyncContracts(unittest.TestCase):
         self.assertNotIn("currentAyuGramSettings", manager)
         self.assertNotIn("ayuGramSettingsCurrent", manager)
 
+    def test_late_echoes_never_swap_values_between_accounts(self):
+        manager = read("TelegramUI/Sources/ShadowSettingsSyncManager.swift")
+        process = manager.split("private func process(", 1)[1]
+        # `known` is what was last seen on an account, never what was written
+        # to it: a stale value before the echo is not a change made there.
+        self.assertNotIn("self.known[peerId] = target", process)
+        self.assertIn("self.pending[peerId]?.firstIndex(of: synced)", process)
+        self.assertIn("queue.append(target)", process)
+
+        # The same algorithm in Python: two quick edits on A, B's echoes late,
+        # and A re-emitting (ghostLastSeenTimestamp) before they land.
+        known, pending, writes = {}, {}, []
+
+        def process_values(values):
+            source = None
+            for peer, value in values:
+                queue = pending.get(peer, [])
+                if value in queue:
+                    del queue[:queue.index(value) + 1]
+                    known[peer] = value
+                    continue
+                if peer in known and known[peer] != value:
+                    source = (peer, value)
+                known[peer] = value
+            if source is None:
+                return
+            for peer, value in values:
+                if peer != source[0] and value != source[1]:
+                    pending.setdefault(peer, []).append(source[1])
+                    writes.append((peer, source[1]))
+
+        process_values([("A", "W"), ("B", "W")])
+        process_values([("A", "X"), ("B", "W")])  # edit 1
+        process_values([("A", "X"), ("B", "W")])  # A re-emits before B's echo
+        process_values([("A", "Y"), ("B", "W")])  # edit 2
+        process_values([("A", "Y"), ("B", "X")])  # late echo of edit 1
+        process_values([("A", "Y"), ("B", "Y")])  # echo of edit 2
+        self.assertEqual(writes, [("B", "X"), ("B", "Y")])
+        self.assertEqual(known, {"A": "Y", "B": "Y"})
+        self.assertEqual(pending.get("A", []), [])
+        self.assertEqual(pending["B"], [])
+
     def test_runtime_state_is_not_synced(self):
         sync = read("TelegramCore/Sources/AyuGram/ShadowSettingsSync.swift")
         self.assertIn("result.ghostLastSeenTimestamp = target.ghostLastSeenTimestamp", sync)

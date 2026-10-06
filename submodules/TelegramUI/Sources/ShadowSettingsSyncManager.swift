@@ -19,6 +19,12 @@ final class ShadowSettingsSyncManager {
     private let disposable = MetaDisposable()
     // Main queue only.
     private var known: [Int64: AyuGramSettings] = [:]
+    // Values written to an account whose echo has not come back yet, oldest
+    // first. Two quick edits (add a button, then set its link) used to make a
+    // late echo of the first look like a new change on the other account: it
+    // was copied back, then the second echo, and so on — the accounts swapped
+    // the two values forever (header and settings flickering, edits undone).
+    private var pending: [Int64: [AyuGramSettings]] = [:]
     private var members: Set<Int64> = Set()
     // Synced accounts' media paths, for the banner images.
     private var basePaths: [Int64: String] = [:]
@@ -84,6 +90,7 @@ final class ShadowSettingsSyncManager {
             // A different group: record everyone, propagate nothing.
             self.members = members
             self.known.removeAll()
+            self.pending.removeAll()
             for (peerId, _, settings) in values {
                 self.known[peerId] = ShadowSettingsSync.syncedValue(settings)
             }
@@ -93,6 +100,12 @@ final class ShadowSettingsSyncManager {
         var source: (Int64, AyuGramSettings)?
         for (peerId, _, settings) in values {
             let synced = ShadowSettingsSync.syncedValue(settings)
+            if let index = self.pending[peerId]?.firstIndex(of: synced) {
+                // Our own write coming back (and any older ones it supersedes).
+                self.pending[peerId]?.removeFirst(index + 1)
+                self.known[peerId] = synced
+                continue
+            }
             if let previous = self.known[peerId], previous != synced {
                 source = (peerId, settings)
             }
@@ -103,8 +116,14 @@ final class ShadowSettingsSyncManager {
         }
         let target = ShadowSettingsSync.syncedValue(sourceSettings)
         for (peerId, context, settings) in values where peerId != sourcePeerId {
+            // `known` stays the value last SEEN on that account: until the echo
+            // arrives, every emission still shows its old value, which must not
+            // read as a change made there.
             if ShadowSettingsSync.syncedValue(settings) != target {
-                self.known[peerId] = target
+                var queue = self.pending[peerId] ?? []
+                queue.append(target)
+                // A lost echo must not pin old values forever.
+                self.pending[peerId] = Array(queue.suffix(8))
                 let _ = shadowApplySyncedAyuGramSettings(sourceSettings, to: context.account.postbox).start()
             }
         }
