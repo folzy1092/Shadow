@@ -33,6 +33,16 @@ class BuildProgressTests(unittest.TestCase):
         self.assertIn('step == "Build the App"', swift)
         self.assertIn('"build="', swift)
 
+    def test_failed_build_puts_the_errors_in_the_check_run(self):
+        import tempfile
+        with tempfile.NamedTemporaryFile("w", suffix=".log", delete=False) as f:
+            f.write("[5,858 / 5,879] Compiling\n"
+                    "2026-10-06T15:00:00.0000000Z submodules/TelegramUI/Sources/X.swift:191:26: error: 'Timer' is ambiguous for type lookup in this context\n")
+            path = f.name
+        text = progress.failure_text(path)
+        self.assertIn("X.swift:191:26: error: 'Timer' is ambiguous", text)
+        self.assertEqual(progress.failure_text("/nonexistent.log")[:12], "(no summary:")
+
     def test_workflow_reports_progress_without_failing_the_build(self):
         workflow = (ROOT / ".github/workflows/build.yml").read_text()
         self.assertIn("checks: write", workflow)

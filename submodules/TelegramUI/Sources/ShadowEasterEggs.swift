@@ -188,7 +188,7 @@ private final class ShadowEasterEggPlayer {
     private var linkPath: String?
     private var closed = false
     private var statusObservation: NSKeyValueObservation?
-    private var watchdog: Timer?
+    private var watchdog: Foundation.Timer?
 
     init(windowScene: UIWindowScene?, finished: @escaping () -> Void) {
         if let windowScene {
@@ -314,7 +314,7 @@ private final class ShadowEasterEggPlayer {
 extension ShadowEasterEggPlayer {
     fileprivate func restartWatchdog(after seconds: Double) {
         self.watchdog?.invalidate()
-        self.watchdog = Timer.scheduledTimer(withTimeInterval: seconds, repeats: false, block: { [weak self] _ in
+        self.watchdog = Foundation.Timer.scheduledTimer(withTimeInterval: seconds, repeats: false, block: { [weak self] _ in
             self?.close(animated: true)
         })
     }

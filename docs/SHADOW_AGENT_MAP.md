@@ -226,7 +226,12 @@ UI-проекция настроек выбирается в `TelegramRootContro
   раза в 15 с: `--show_progress_rate_limit` в `configure_bazel.py`); нужен
   `permissions: checks: write`. Ошибки репортера сборку не валят. Если
   переименовать шаг «Build the App» или check run — менять в обоих местах
-  (тест `Tests/ShadowCI/test_build_progress.py`).
+  (тест `Tests/ShadowCI/test_build_progress.py`). Если сборка упала, первые
+  ошибки компилятора лежат в `output.text` этого check run (лог прогона без
+  токена не скачать, а check run читается публичным API):
+  `curl https://api.github.com/repos/folzy1092/Shadow/commits/<sha>/check-runs?check_name=Shadow%20build%20progress`.
+- Не писать голый `Timer` в файлах с `import SwiftSignalKit`: там свой `Timer`,
+  тип неоднозначен — `Foundation.Timer` или `SwiftSignalKit.Timer` явно.
 
 ## 5e. Кнопки шапки, кружок из галереи, синхронизация аккаунтов
 

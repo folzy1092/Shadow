@@ -112,13 +112,33 @@ def watch(args) -> None:
                 print(f"progress update failed: {error}", file=sys.stderr)
 
 
+def failure_text(log_path: str) -> str:
+    """The first compiler errors (build_failure_summary.py), for the check run:
+    the job log itself is not readable without a token, the check run is."""
+    try:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "build_failure_summary", os.path.join(os.path.dirname(os.path.abspath(__file__)), "build_failure_summary.py"))
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        with open(log_path, encoding="utf-8", errors="replace") as f:
+            return module.summarize(f.read())
+    except Exception as error:  # never fail the reporter
+        return f"(no summary: {error})"
+
+
 def finish(args) -> None:
     progress = latest_progress(read_tail(args.log))
+    output = {"title": title(progress), "summary": summary(args.build)}
+    if args.status != 0:
+        errors = failure_text(args.log)
+        if errors:
+            output["text"] = errors
     api("PATCH", f"check-runs/{args.id}", {
         "status": "completed",
         "conclusion": "success" if args.status == 0 else "failure",
         "completed_at": now(),
-        "output": {"title": title(progress), "summary": summary(args.build)},
+        "output": output,
     })
 
 
