@@ -36,6 +36,7 @@ def main():
         ('header-buttons', 'submodules/TelegramCore/Sources/AyuGram/ShadowHeaderButtons.swift', 'Tests/ShadowSettings/HeaderButtonsTests.swift'),
         ('setting-links', ('submodules/TelegramCore/Sources/AyuGram/ShadowSettingLinks.swift', 'submodules/TelegramCore/Sources/AyuGram/ShadowLinks.swift', 'submodules/TelegramCore/Sources/AyuGram/ShadowVoiceTime.swift'), 'Tests/ShadowSettings/SettingLinksTests.swift'),
         ('voice-time', 'submodules/TelegramCore/Sources/AyuGram/ShadowVoiceTime.swift', 'Tests/ShadowSettings/VoiceTimeTests.swift'),
+        ('registration-date', 'submodules/TelegramCore/Sources/AyuGram/ShadowRegistrationDate.swift', 'Tests/ShadowSettings/RegistrationDateTests.swift'),
         ('build-status', 'submodules/TelegramCore/Sources/AyuGram/ShadowBuildStatus.swift', 'Tests/ShadowSettings/BuildStatusTests.swift'),
         ('chat-export', 'submodules/TelegramCore/Sources/AyuGram/ShadowChatExport.swift', 'Tests/ShadowSettings/ChatExportTests.swift'),
         ('search', 'submodules/SettingsUI/Sources/ShadowSettingsSearchIndex.swift', 'Tests/ShadowSettings/SearchTests.swift'),

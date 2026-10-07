@@ -97,6 +97,7 @@ func fetchAndUpdateSupplementalCachedPeerData(peerId rawPeerId: PeerId, accountP
                         case let .peerSettings(peerSettingsData):
                             let (settings, chats, users) = (peerSettingsData.settings, peerSettingsData.chats, peerSettingsData.users)
                             peerStatusSettings = PeerStatusSettings(apiSettings: settings)
+                            shadowRecordOfficialRegistrationMonth(peerId: peer.id, settings: peerStatusSettings)
                             parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: users)
                         }
                         
@@ -375,6 +376,7 @@ func _internal_fetchAndUpdateCachedPeerData(accountPeerId: PeerId, peerId rawPee
                                         let pinnedMessageId = userFullPinnedMsgId.flatMap({ MessageId(peerId: peerId, namespace: Namespaces.Message.Cloud, id: $0) })
                                     
                                         let peerStatusSettings = PeerStatusSettings(apiSettings: userFullSettings)
+                                        shadowRecordOfficialRegistrationMonth(peerId: peerId, settings: peerStatusSettings)
                                         
                                         let hasScheduledMessages = (userFullFlags & 1 << 12) != 0
                                         

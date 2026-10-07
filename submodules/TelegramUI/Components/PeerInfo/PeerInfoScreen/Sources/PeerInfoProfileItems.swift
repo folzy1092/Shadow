@@ -67,67 +67,27 @@ private func ayuGramPhotoDatacenterId(_ representations: [TelegramMediaImageRepr
     return nil
 }
 
-// Estimated account registration date, interpolated between known (id, date)
-// anchors. Telegram exposes no real signup date, so this is an approximation —
-// the same technique other clients use.
-private func ayuGramApproximateRegistrationDate(userId: Int64) -> Date? {
-    if userId <= 0 {
+// Shadow: registration date row. Telegram's own month when known, else the
+// @ayugrambot answer, else the local estimate (ShadowRegistrationDate.swift).
+// Starts the bot lookup in the background; the profile refreshes through
+// ShadowRegistrationDateStore.didChangeNotification when it answers.
+private func shadowRegistrationDateText(context: AccountContext, userId: EnginePeer.Id, cachedData: CachedUserData?) -> String? {
+    guard ayuGramSettingsCurrent.showRegistrationDate, userId.namespace == Namespaces.Peer.CloudUser else {
         return nil
     }
-    let anchors: [(Int64, Double)] = [
-        (1, 1380326400),
-        (50000000, 1386028800),
-        (100000000, 1391212800),
-        (200000000, 1410912000),
-        (300000000, 1433116800),
-        (400000000, 1447372800),
-        (500000000, 1460764800),
-        (600000000, 1470009600),
-        (700000000, 1481760000),
-        (800000000, 1496620800),
-        (900000000, 1508025600),
-        (1000000000, 1521763200),
-        (1100000000, 1531785600),
-        (1200000000, 1546300800),
-        (1300000000, 1556064000),
-        (1400000000, 1570924800),
-        (1500000000, 1578960000),
-        (1600000000, 1585008000),
-        (1700000000, 1590019200),
-        (2000000000, 1609459200),
-        (4000000000, 1656633600),
-        (6000000000, 1690848000),
-        (7500000000, 1717200000)
-    ]
-    if userId <= anchors[0].0 {
-        return Date(timeIntervalSince1970: anchors[0].1)
+    let rawId = userId.id._internalGetInt64Value()
+    let store = ShadowRegistrationDateStore.shared
+    let official = cachedData?.peerStatusSettings?.registrationDate
+    if let official {
+        store.recordOfficial(userId: rawId, month: official)
+    } else if store.officialMonth(userId: rawId) == nil {
+        let _ = shadowRequestRegistrationDate(account: context.account, userId: rawId).start()
     }
-    if let last = anchors.last, userId >= last.0 {
-        return Date(timeIntervalSince1970: last.1)
-    }
-    for i in 0 ..< anchors.count - 1 {
-        let (lowId, lowTs) = anchors[i]
-        let (highId, highTs) = anchors[i + 1]
-        if userId >= lowId && userId <= highId {
-            let fraction = Double(userId - lowId) / Double(highId - lowId)
-            return Date(timeIntervalSince1970: lowTs + (highTs - lowTs) * fraction)
-        }
-    }
-    return nil
-}
-
-private func ayuGramRegistrationDateText(userId: Int64) -> String? {
-    guard let date = ayuGramApproximateRegistrationDate(userId: userId) else {
+    let now = Int64(Date().timeIntervalSince1970)
+    guard let value = store.value(userId: rawId, official: official, now: now) else {
         return nil
     }
-    let formatter = DateFormatter()
-    formatter.locale = Locale(identifier: "ru_RU")
-    formatter.dateFormat = "LLLL yyyy"
-    var text = formatter.string(from: date)
-    if let first = text.first {
-        text = first.uppercased() + text.dropFirst()
-    }
-    return text + " г."
+    return ShadowRegistrationDate.text(value)
 }
 
 // Builds the AyuGram technical-info card (id / dc / registration date /
@@ -135,7 +95,7 @@ private func ayuGramRegistrationDateText(userId: Int64) -> String? {
 // render as a single compact line (the value is folded into the label, text
 // left empty), registration date keeps the normal two-line label+value
 // layout. `idBase` must be unique within the item block.
-private func ayuGramProfileItems(peerId: EnginePeer.Id, photo: [TelegramMediaImageRepresentation], includeRegistration: Bool, isMutualContact: Bool = false, isSelf: Bool = false, idBase: Int, presentationData: PresentationData, getController: @escaping () -> ViewController?) -> [PeerInfoScreenItem] {
+private func ayuGramProfileItems(peerId: EnginePeer.Id, photo: [TelegramMediaImageRepresentation], registrationText: String?, isMutualContact: Bool = false, isSelf: Bool = false, idBase: Int, presentationData: PresentationData, getController: @escaping () -> ViewController?) -> [PeerInfoScreenItem] {
     let settings = ayuGramSettingsCurrent
     var result: [PeerInfoScreenItem] = []
     let copyAndToast: (String) -> Void = { value in
@@ -166,7 +126,7 @@ private func ayuGramProfileItems(peerId: EnginePeer.Id, photo: [TelegramMediaIma
         }, requestLayout: { _ in
         }))
     }
-    if settings.showRegistrationDate, includeRegistration, let registration = ayuGramRegistrationDateText(userId: peerId.id._internalGetInt64Value()) {
+    if settings.showRegistrationDate, let registration = registrationText {
         result.append(PeerInfoScreenLabeledValueItem(id: idBase + 2, label: "Дата регистрации", text: registration, textColor: .primary, action: nil, requestLayout: { _ in
         }))
     }
@@ -391,7 +351,7 @@ func infoItems(
         // AyuGram: technical info card (id / dc / registration date / mutual
         // contact) — pinned to its own top-of-profile section, not the
         // username/bio section.
-        items[.ayugram]!.append(contentsOf: ayuGramProfileItems(peerId: user.id, photo: user.photo, includeRegistration: true, isMutualContact: user.flags.contains(.mutualContact), isSelf: user.id == context.account.peerId, idBase: 3500, presentationData: presentationData, getController: { [weak interaction] in
+        items[.ayugram]!.append(contentsOf: ayuGramProfileItems(peerId: user.id, photo: user.photo, registrationText: shadowRegistrationDateText(context: context, userId: user.id, cachedData: data.cachedData as? CachedUserData), isMutualContact: user.flags.contains(.mutualContact), isSelf: user.id == context.account.peerId, idBase: 3500, presentationData: presentationData, getController: { [weak interaction] in
             interaction?.getController()
         }))
         // Shadow: local online history of this contact (spec 7.4).
@@ -778,7 +738,7 @@ func infoItems(
         // AyuGram: technical info card for channels (id / dc only — registration
         // date is omitted, channel ids don't map onto the user-id timeline, and
         // there's no "mutual contact" concept for channels).
-        items[.ayugram]!.append(contentsOf: ayuGramProfileItems(peerId: channel.id, photo: channel.photo, includeRegistration: false, idBase: 3500, presentationData: presentationData, getController: { [weak interaction] in
+        items[.ayugram]!.append(contentsOf: ayuGramProfileItems(peerId: channel.id, photo: channel.photo, registrationText: nil, idBase: 3500, presentationData: presentationData, getController: { [weak interaction] in
             interaction?.getController()
         }))
         // AyuGram: chat/channel badge (custom emoji from the remote config)

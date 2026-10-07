@@ -415,6 +415,25 @@ UI-проекция настроек выбирается в `TelegramRootContro
   115 в «Кастомизации») — в `MediaPickerScreen` плитка камеры высотой в одну
   ячейку вместо двух. Живой предпросмотр — прежний `cameraTileLivePreview`.
 
+## 5h. Дата регистрации в профиле (1.4.2)
+
+- Логика — `TelegramCore/Sources/AyuGram/ShadowRegistrationDate.swift`
+  (Foundation, тест `RegistrationDateTests.swift`), запрос к боту —
+  `ShadowRegistrationDateFetch.swift`, строка в профиле —
+  `shadowRegistrationDateText` в `PeerInfoProfileItems.swift`.
+- Источники по приоритету: месяц от Telegram (`peerSettings.registration_month`,
+  приходит для не-контактов; пишется хуками `shadowRecordOfficialRegistrationMonth`
+  в `UpdateCachedPeerData.swift` ×2 и `AccountStateManagementUtils.swift`) →
+  инлайн-запрос `regdate <id>` к @ayugrambot (как AyuGram Desktop; ответ JSON
+  `flag` EXACT/INTERPOLATED/LT/ET + `date`) → локальная оценка по таблице
+  опорных точек (кусочно-линейная, после последней точки — экстраполяция
+  с ограничением «не позже сегодня»).
+- Каждый месяц от Telegram сохраняется (`shadow-registration-dates.json`) и
+  становится новой опорной точкой, таблица выпрямляется по возрастанию (PAV).
+- Профиль обновляется по `ShadowRegistrationDateStore.didChangeNotification`
+  (`shadowRegistrationDateChanges()` в `PeerInfoData.swift`, сигнал статуса
+  намеренно без `distinctUntilChanged`).
+
 ## 5a. Замки чатов и второе пространство
 
 - Замки: `ShadowChatLock.swift` (хранилище), `TelegramUI/Sources/ShadowChatLockUI.swift`

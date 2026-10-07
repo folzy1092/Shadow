@@ -616,6 +616,20 @@ private func shadowChatLockChanges() -> Signal<Void, NoError> {
     }
 }
 
+// Shadow: re-emits when a registration date arrives (Telegram's month or the
+// bot's answer), so an open profile replaces the estimate without reopening.
+private func shadowRegistrationDateChanges() -> Signal<Void, NoError> {
+    return Signal { subscriber in
+        subscriber.putNext(Void())
+        let token = NotificationCenter.default.addObserver(forName: ShadowRegistrationDateStore.didChangeNotification, object: nil, queue: nil, using: { _ in
+            subscriber.putNext(Void())
+        })
+        return ActionDisposable {
+            NotificationCenter.default.removeObserver(token)
+        }
+    }
+}
+
 private func shadowFilterLockedPanes(_ panes: [PeerInfoPaneKey]?, accountPeerId: EnginePeer.Id, peerId: EnginePeer.Id) -> [PeerInfoPaneKey]? {
     guard let panes else {
         return nil
@@ -1378,6 +1392,12 @@ func peerInfoScreenData(
                 return statusData
             }
             |> distinctUntilChanged
+            // Shadow: no distinctUntilChanged after this on purpose — a new
+            // registration date must rebuild the profile items.
+            let statusWithRegistrationDate = combineLatest(queue: .mainQueue(), status, shadowRegistrationDateChanges())
+            |> map { status, _ -> PeerInfoStatusData? in
+                return status
+            }
 
             var secretChatKeyFingerprint: Signal<EngineSecretChatKeyFingerprint?, NoError> = .single(nil)
             if let secretChatId {
@@ -1603,7 +1623,7 @@ func peerInfoScreenData(
                 peerInfoAvailableMediaPanes(context: context, peerId: peerId, chatLocation: chatLocation, isMyProfile: isMyProfile, chatLocationContextHolder: chatLocationContextHolder, sharedMediaFromForumTopic: sharedMediaFromForumTopic),
                 context.engine.data.subscribe(TelegramEngine.EngineData.Item.NotificationSettings.Global()),
                 secretChatKeyFingerprint,
-                status,
+                statusWithRegistrationDate,
                 hasStories,
                 hasStoryArchive,
                 recommendedBots,

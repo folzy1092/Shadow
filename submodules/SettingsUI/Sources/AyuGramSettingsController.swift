@@ -1355,7 +1355,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
                 arguments.updateHideOwnPhoneNumber(value)
             })
         case .profilesFooter:
-            return ItemListTextItem(presentationData: presentationData, text: .plain("Показывать в профилях пользователей, ботов и каналов дополнительные поля: числовой ID (в формате Bot API, копируется по удержанию), дата-центр фото профиля и примерную дату регистрации. Дата регистрации приблизительная — Telegram не раскрывает точную.\n\n«Скрыть свой номер» полностью убирает плашку с вашим номером телефона в настройках/профиле."), sectionId: self.section)
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Показывать в профилях пользователей, ботов и каналов дополнительные поля: числовой ID (в формате Bot API, копируется по удержанию), дата-центр фото профиля и дату регистрации. Если Telegram сообщил месяц регистрации, показывается он; иначе дата запрашивается у @ayugrambot (бот видит, чей ID проверяли) или оценивается по ID — такие значения помечены «≈».\n\n«Скрыть свой номер» полностью убирает плашку с вашим номером телефона в настройках/профиле."), sectionId: self.section)
         case .mediaHeader:
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "МЕДИА", sectionId: self.section)
         case let .roundVideoBackCamera(value):

@@ -1536,6 +1536,7 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
             case let .updatePeerSettings(updatePeerSettingsData):
                 let (peer, settings) = (updatePeerSettingsData.peer, updatePeerSettingsData.settings)
                 let peerStatusSettings = PeerStatusSettings(apiSettings: settings)
+                shadowRecordOfficialRegistrationMonth(peerId: peer.peerId, settings: peerStatusSettings)
                 updatedState.updateCachedPeerData(peer.peerId, { current in
                     if peer.peerId.namespace == Namespaces.Peer.CloudUser {
                         let previous: CachedUserData
