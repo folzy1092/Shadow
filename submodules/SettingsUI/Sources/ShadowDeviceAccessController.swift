@@ -258,9 +258,10 @@ private enum ShadowDeviceAccessEntry: ItemListNodeEntry {
                 arguments.updateAnnounce("title", value)
             }, action: {})
         case let .announceNotes(value, _):
-            return ItemListSingleLineInputItem(presentationData: presentationData, title: NSAttributedString(string: "Заметки"), text: value, placeholder: "строки через \\n", type: .regular(capitalization: true, autocorrection: true), clearType: .always, sectionId: self.section, textUpdated: { value in
+            // Multiline: a change per line, the line breaks go to the worker.
+            return ItemListMultilineInputItem(presentationData: presentationData, text: value, placeholder: "НОВОЕ: текст | раздел", maxLength: nil, sectionId: self.section, style: .blocks, textUpdated: { value in
                 arguments.updateAnnounce("notes", value)
-            }, action: {})
+            })
         case let .announceBeta(value):
             return ItemListSwitchItem(presentationData: presentationData, title: "В бету", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 arguments.setAnnounceBeta(value)
@@ -280,7 +281,7 @@ private enum ShadowDeviceAccessEntry: ItemListNodeEntry {
         case .easterEggsInfo:
             return ItemListTextItem(presentationData: presentationData, text: .plain("shadow://<имя> ищет пост с видео или гифкой, в подписи которого есть shadow://<имя> или tg://ayu/<имя>, — по каналам по порядку. Каналы должны быть публичными. Изменение сохраняется в tgfork через бота."), sectionId: self.section)
         case .announceInfo:
-            return ItemListTextItem(presentationData: presentationData, text: .plain("Объявляет сборку в выбранной ветке (stable или бета) через бота. Друзьям покажется обновление. Номер сборки смотри в заголовке релиза."), sectionId: self.section)
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Заметки — по пункту на строку: «НОВОЕ: текст | раздел» или «ИСПРАВЛЕНО: текст». Строка без метки считается новым.\nОбъявляет сборку в выбранной ветке (stable или бета) через бота. Друзьям покажется обновление. Номер сборки смотри в заголовке релиза."), sectionId: self.section)
         }
     }
 }
@@ -501,6 +502,8 @@ public func shadowDeviceAccessController(context: AccountContext, prefillDeviceI
             return
         }
         let version = snapshot.announceVersion.trimmingCharacters(in: .whitespacesAndNewlines)
+        // A typed \n (backslash, n) still breaks a line, as in the old
+        // single-line field.
         let notes = snapshot.announceNotes.replacingOccurrences(of: "\\n", with: "\n")
         let channel = snapshot.announceBeta ? "beta" : "stable"
         updateState { state in var state = state; state.announcing = true; return state }

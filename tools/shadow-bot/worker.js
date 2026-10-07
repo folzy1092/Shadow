@@ -28,8 +28,12 @@ function escapeHtml(value) {
     .replace(/>/g, "&gt;");
 }
 
+// Half an emoji (a cut at the limit) breaks JSONSerialization in the app:
+// the whole file stops parsing. So lone surrogates go.
+const LONE_SURROGATE = /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g;
+
 function clean(value, limit) {
-  return String(value ?? "").replace(/[\u0000-\u001f]/g, " ").trim().slice(0, limit);
+  return String(value ?? "").replace(/[\u0000-\u001f]/g, " ").trim().slice(0, limit).replace(LONE_SURROGATE, "");
 }
 
 async function sendMessage(env, chatId, text, keyboard) {
@@ -47,6 +51,71 @@ async function sendMessage(env, chatId, text, keyboard) {
     headers: { "content-type": "application/json" },
     body: JSON.stringify(payload),
   });
+}
+
+// --- Release notes (the "announce" action) ---
+
+const NOTES_LIMIT = 4000;
+const NOTES_LINE_LIMIT = 500;
+const NOTES_MAX_ITEMS = 40;
+
+// Notes typed for the update screen, by the rules of parse_notes in
+// tools/shadow-announce.py: one change per line, "НОВОЕ: текст | раздел" or
+// "ИСПРАВЛЕНО: текст", an untyped line counts as new. A line that starts with
+// "•" is split at every "•", so the old one-line "• a • b" notes still work;
+// a "•" inside a typed line stays, as in the script. Each line is cleaned on
+// its own: clean() of the whole text would turn the line breaks into spaces.
+// Pure, so the tests run it in node.
+function parseNotes(text) {
+  const parsed = { new: [], fixed: [], items: [] };
+  const lines = String(text ?? "").slice(0, NOTES_LIMIT).split(/\r\n|[\n\r\v\f\x1c-\x1e\x85\u2028\u2029]/)
+    .flatMap((line) => (line.trim().startsWith("•") ? line.split("•") : [line]));
+  for (const raw of lines) {
+    if (parsed.items.length >= NOTES_MAX_ITEMS) break;
+    const line = clean(raw, NOTES_LINE_LIMIT);
+    if (!line) continue;
+    const upper = line.toUpperCase();
+    if (upper.startsWith("ИСПРАВЛЕНО:")) {
+      const value = line.slice(line.indexOf(":") + 1).trim();
+      if (value) {
+        parsed.fixed.push(value);
+        parsed.items.push("Исправлено: " + value.slice(0, 1).toLowerCase() + value.slice(1));
+      }
+      continue;
+    }
+    const typed = upper.startsWith("НОВОЕ:") ? line.slice(line.indexOf(":") + 1).trim() : line;
+    const bar = typed.indexOf("|");
+    const value = (bar < 0 ? typed : typed.slice(0, bar)).trim();
+    const where = bar < 0 ? "" : typed.slice(bar + 1).trim();
+    if (!value) continue;
+    parsed.new.push(where ? { text: value, where } : { text: value });
+    parsed.items.push(where ? `${value} (${where})` : value);
+  }
+  return parsed;
+}
+
+// The shadow-changelog.json entry, as the script writes it: "Версия Shadow
+// X.Y.Z" first in items (old builds show only items), no empty new / fixed.
+function changelogEntry({ build, date, version, ipaURL, title, parsed }) {
+  const fork = version.includes("-") ? version.slice(version.indexOf("-") + 1) : version;
+  const items = (fork ? [`Версия Shadow ${fork}`] : []).concat(parsed.items);
+  const entry = { build, date, version, ipa_url: ipaURL, items: items.length > 0 ? items : [title || `Сборка ${build}`] };
+  if (!version) delete entry.version;
+  if (parsed.new.length > 0) entry.new = parsed.new;
+  if (parsed.fixed.length > 0) entry.fixed = parsed.fixed;
+  return entry;
+}
+
+// A new build goes first. One already there is updated in place (its date
+// stays), so announcing it again does not add a second entry.
+function mergeChangelog(entries, entry) {
+  const index = entries.findIndex((item) => item && item.build === entry.build);
+  if (index < 0) return [entry, ...entries];
+  const current = entries[index];
+  const next = { ...current, ...entry, date: current.date || entry.date };
+  if (!entry.new) delete next.new;
+  if (!entry.fixed) delete next.fixed;
+  return entries.map((item, i) => (i === index ? next : item));
 }
 
 // --- GitHub (the public data repo folzy1092/tgfork, branch main) ---
@@ -213,7 +282,9 @@ async function handleAdmin(request, env) {
     const channel = body.channel === "beta" ? "beta" : "stable";
     const version = clean(body.version, 40);
     const title = clean(body.title, 200);
-    const notes = clean(body.notes, 2000);
+    const parsed = parseNotes(body.notes);
+    // Old builds show notes as is: a "• …" list, like the script writes.
+    const notes = parsed.items.map((item) => "• " + item).join("\n");
     const url = `https://github.com/${GH_REPO}/releases/tag/build-${build}`;
     const ipaURL = `https://github.com/${GH_REPO}/releases/download/build-${build}/Shadow.ipa`;
     const channelObj = { build, version, title, notes, url, ipa_url: ipaURL };
@@ -234,17 +305,15 @@ async function handleAdmin(request, env) {
     const put = await ghPutJSON(env, "shadow-update.json", next, `Shadow: announce ${channel} ${build} [skip ci]`, current.sha);
     if (!put.ok) return json({ ok: false, error: "github", status: put.status, detail: put.detail }, 502);
     if (channel === "stable") {
-      // The app's "Архив версий" lists shadow-changelog.json: add this build
-      // (version, IPA, the notes split at "•": clean() already turned the
-      // line breaks into spaces) unless it is already there.
+      // The update screen ("N новых · M исправлений", НОВОЕ / ИСПРАВЛЕНО)
+      // and "Архив версий" read shadow-changelog.json: this build with
+      // version, IPA and the typed notes.
       const log = await ghGetJSON(env, "shadow-changelog.json");
       const changelog = log.json && Array.isArray(log.json.entries) ? log.json : { entries: [] };
-      if (!changelog.entries.some((entry) => entry && entry.build === build)) {
-        const items = notes.split("•").map((line) => line.trim()).filter((line) => line.length > 0);
-        changelog.entries.unshift({ build, date: new Date().toISOString().slice(0, 10), version, ipa_url: ipaURL, items: items.length > 0 ? items : [title || `Сборка ${build}`] });
-        const logPut = await ghPutJSON(env, "shadow-changelog.json", changelog, `Shadow: changelog ${build} [skip ci]`, log.sha);
-        if (!logPut.ok) return json({ ok: false, error: "github_changelog", status: logPut.status, detail: logPut.detail }, 502);
-      }
+      const entry = changelogEntry({ build, date: new Date().toISOString().slice(0, 10), version, ipaURL, title, parsed });
+      changelog.entries = mergeChangelog(changelog.entries, entry);
+      const logPut = await ghPutJSON(env, "shadow-changelog.json", changelog, `Shadow: changelog ${build} [skip ci]`, log.sha);
+      if (!logPut.ok) return json({ ok: false, error: "github_changelog", status: logPut.status, detail: logPut.detail }, 502);
     }
     return json({ ok: true });
   }
