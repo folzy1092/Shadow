@@ -521,6 +521,7 @@ swift_library(
         "//submodules/TelegramUI/Components/Gifts/GiftDemoScreen",
         "//submodules/TelegramUI/Components/EmojiGameStakeScreen",
         "//submodules/TelegramUI/Components/AlertComponent",
+        "//submodules/TelegramUI/Components/AlertComponent/AlertCheckComponent",
         "//submodules/TelegramUI/Components/Chat/ChatAgeRestrictionAlertController",
         "//submodules/TelegramUI/Components/CocoonInfoScreen",
         "//submodules/TelegramUI/Components/ProxyServerPreviewScreen",

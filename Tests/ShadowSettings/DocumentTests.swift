@@ -62,6 +62,11 @@ struct DocumentTests {
         check(restoredVoiceTime.settings["voiceTimeFormat"] == .integer(5), "Voice time format is portable")
         check(restoredVoiceTime.settings["voiceTimeInPlayer"] == .bool(true), "Voice time in player is portable")
         expectFailure("Unsupported voice time format") { _ = try ShadowSettingsDocument(settings: ["voiceTimeFormat": .integer(6)]) }
+        let replyTimecode = try ShadowSettingsDocument(settings: ["replyTimecode": .bool(true), "replyTimecodeMode": .integer(0)])
+        let restoredReplyTimecode = try ShadowSettingsDocument.decode(replyTimecode.encoded())
+        check(restoredReplyTimecode.settings["replyTimecode"] == .bool(true), "Reply timecode is portable")
+        check(restoredReplyTimecode.settings["replyTimecodeMode"] == .integer(0), "Reply timecode mode is portable")
+        expectFailure("Unsupported reply timecode mode") { _ = try ShadowSettingsDocument(settings: ["replyTimecodeMode": .integer(2)]) }
         let ghostPolicy = try ShadowSettingsDocument(settings: ["ghostAccountMode": .integer(3)])
         let restoredGhostPolicy = try ShadowSettingsDocument.decode(ghostPolicy.encoded())
         check(restoredGhostPolicy.settings["ghostAccountMode"] == .integer(3), "Ghost account policy is portable")

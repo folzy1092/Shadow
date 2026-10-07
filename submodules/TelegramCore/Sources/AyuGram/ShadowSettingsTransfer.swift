@@ -74,6 +74,7 @@ public enum ShadowSettingsTransfer {
         "localVoiceTranscription": \.localVoiceTranscription,
         "voiceTimeRoundVideos": \.voiceTimeRoundVideos,
         "voiceTimeInPlayer": \.voiceTimeInPlayer,
+        "replyTimecode": \.replyTimecode,
         "monochromeSettingsIcons": \.monochromeSettingsIcons,
         "compactChatList": \.compactChatList,
         "onlineHistory": \.onlineHistory,
@@ -105,6 +106,7 @@ public enum ShadowSettingsTransfer {
         values["attachmentSizeLimit"] = .integer(settings.attachmentSizeLimit)
         values["bottomBarScrollMode"] = .integer(Int64(settings.bottomBarScrollMode))
         values["voiceTimeFormat"] = .integer(Int64(settings.voiceTimeFormat))
+        values["replyTimecodeMode"] = .integer(Int64(settings.replyTimecodeMode))
         values["ghostAccountMode"] = .integer(Int64(settings.ghostAccountMode.rawValue))
         values["screenshotBackground"] = .integer(Int64(settings.messageScreenshot.background.rawValue))
         values["screenshotCustomColorARGB"] = .integer(Int64(settings.messageScreenshot.customColorARGB))
@@ -140,6 +142,7 @@ public enum ShadowSettingsTransfer {
                 case "attachmentSizeLimit": updated.attachmentSizeLimit = number
                 case "bottomBarScrollMode": updated.bottomBarScrollMode = Int32(number)
                 case "voiceTimeFormat": updated.voiceTimeFormat = ShadowVoiceTime.normalized(Int32(number))
+                case "replyTimecodeMode": updated.replyTimecodeMode = ShadowReplyTimecode.normalizedMode(Int32(number))
                 case "settingsIconBackgroundColor": updated.settingsIconBackgroundColor = Int32(number)
                 case "settingsIconGlyphColor": updated.settingsIconGlyphColor = Int32(number)
                 case "ghostAccountMode":

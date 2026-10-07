@@ -113,7 +113,8 @@ UI-проекция настроек выбирается в `TelegramRootContro
      `key` + `choices` и путь в `ShadowSettingLinksApply.choiceFields`
      (`?value=N`), всё остальное (цвет, текст, экран, картинка) — `key: nil`
      (ссылка только открывает). `entryId` = stableId строки; строка таблицы
-     в `docs/shadow-links.md`;
+     в `docs/shadow-links.md`; `since: "<версия форка>"` — с ним старые версии
+     говорят, с какой версии работает ссылка (§5i);
   7. **синхронизация аккаунтов**: всё в `AyuGramSettings` синхронизируется само
      (`ShadowSettingsSync.syncedValue`). Состояние аккаунта, а не настройку,
      явно исключить там (как `ghostLastSeenTimestamp`); настройку вне
@@ -434,6 +435,26 @@ UI-проекция настроек выбирается в `TelegramRootContro
 - Профиль обновляется по `ShadowRegistrationDateStore.didChangeNotification`
   (`shadowRegistrationDateChanges()` в `PeerInfoData.swift`, сигнал статуса
   намеренно без `distinctUntilChanged`).
+
+## 5i. Тайм-код в ответах и ссылки из новых версий (1.4.4)
+
+- Тайм-код: модель `ShadowReplyTimecode.swift` (Foundation, тест
+  `ReplyTimecodeTests.swift`), поля `replyTimecode`, `replyTimecodeMode`
+  (0 всегда, 1 спрашивать). Позиции голосовых и кружков пишет `MediaManager`
+  (`shadowReplyTimecodeDisposable`: последняя позиция каждого сообщения, при
+  переходе плеера к другому сообщению — `freeze`). Отправка —
+  `ChatControllerNode.sendCurrentMessage` (параметр `shadowReplyTimecode`,
+  проверка до `lastSendTimestamp`), кандидат и окно с галочкой «Запомнить для
+  чата на 30 мин» — `TelegramUI/Sources/Chat/ShadowReplyTimecodeSend.swift`.
+  Тайм-код — обычный текст «0:53 …»: кликабельным его делает сам Telegram
+  (timecode-сущность по длительности медиа в ответе). Rich-сообщения,
+  редактирование и подписи к медиа не трогаются. Память ответов — только в RAM.
+- Ссылки на настройки из новых версий: у `ShadowSettingLink` поле `since`
+  (версия появления, ставить у **каждой новой** настройки), `link(_:)` дописывает
+  `?v=<since>`. `ShadowLinkRouter`: неизвестный slug на экране настроек и
+  неизвестная команда (не пасхалка) → тост `ShadowSettingLinks.unsupportedText`
+  («работает с Shadow N, у вас M») с кнопкой «Обновить». Раньше такие ссылки
+  молча открывали экран.
 
 ## 5a. Замки чатов и второе пространство
 

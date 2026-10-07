@@ -38,6 +38,21 @@ struct SettingLinksTests {
         check(ShadowSettingLinks.find(screen: "locks", slug: "hide-preview")?.isSwitchable == false, "Locks only open")
         check(typing?.0.link(.on) == "shadow://ghost/typing?on", "Link with mode")
 
+        // Links of newer settings carry the version they need (?v=).
+        let timecode = ShadowSettingLinks.resolve("shadow://customization/reply-timecode?on&v=1.4.4")
+        check(timecode?.0.key == "replyTimecode" && timecode?.1 == .on, "?v= does not change the mode")
+        check(timecode?.0.link(.on) == "shadow://customization/reply-timecode?on&v=1.4.4", "Link carries the version")
+        check(timecode?.0.link(.open) == "shadow://customization/reply-timecode?v=1.4.4", "Open link carries the version")
+        check(ShadowSettingLinks.resolve("shadow://customization/reply-timecode-mode?value=0")?.1 == .value(0), "Timecode mode choice")
+        check(ShadowSettingLinks.compareVersions("1.4.10", "1.4.9") == .orderedDescending, "Versions compare by number")
+        check(ShadowSettingLinks.compareVersions("1.4", "1.4.0") == .orderedSame, "Missing parts are zero")
+        check(ShadowSettingLinks.needsUpdate(linkVersion: "1.4.4", current: "1.4.3"), "Newer link needs an update")
+        check(!ShadowSettingLinks.needsUpdate(linkVersion: "1.4.3", current: "1.4.3") && !ShadowSettingLinks.needsUpdate(linkVersion: nil, current: "1.4.3"), "Same or unknown version")
+        check(ShadowSettingLinks.unsupportedText(isSetting: true, linkVersion: "1.4.4", current: "1.4.3") == "Эта настройка работает с Shadow 1.4.4. У вас 1.4.3 — обновите Shadow.", "Needs a newer version")
+        check(ShadowSettingLinks.unsupportedText(isSetting: true, linkVersion: nil, current: "1.4.3").hasPrefix("Такой настройки нет в Shadow 1.4.3."), "Unknown setting")
+        check(ShadowSettingLinks.unsupportedText(isSetting: false, linkVersion: "1.4.3", current: "1.4.3").hasPrefix("Такой ссылки нет в Shadow 1.4.3."), "Unknown link")
+        check(ShadowSettingLinks.isScreen("Customization") && !ShadowSettingLinks.isScreen("gift"), "Settings screens")
+
         let voice = ShadowSettingLinks.resolve("shadow://customization/voice-time?value=2")
         check(voice?.0.isChoice == true && voice?.1 == .value(2), "Choice with ?value")
         check(voice?.0.choiceTitle(2) == "Прошло / всего", "Choice title")

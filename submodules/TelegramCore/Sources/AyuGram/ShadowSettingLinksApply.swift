@@ -26,6 +26,7 @@ extension ShadowSettingsTransfer {
     // shadow://…?value=N. Exported through the integer keys of the document.
     private static let choiceFields: [String: WritableKeyPath<AyuGramSettings, Int32>] = [
         "voiceTimeFormat": \.voiceTimeFormat,
+        "replyTimecodeMode": \.replyTimecodeMode,
         "bottomBarScrollMode": \.bottomBarScrollMode
     ]
 

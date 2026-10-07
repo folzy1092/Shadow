@@ -4859,7 +4859,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         }
     }
 
-    func sendCurrentMessage(silentPosting: Bool? = nil, scheduleTime: Int32? = nil, repeatPeriod: Int32? = nil, postpone: Bool = false, messageEffect: ChatSendMessageEffect? = nil, sendWithoutFormatting: Bool = false, completion: @escaping () -> Void = {}) {
+    func sendCurrentMessage(silentPosting: Bool? = nil, scheduleTime: Int32? = nil, repeatPeriod: Int32? = nil, postpone: Bool = false, messageEffect: ChatSendMessageEffect? = nil, sendWithoutFormatting: Bool = false, shadowReplyTimecode: ShadowReplyTimecode.Resolved? = nil, completion: @escaping () -> Void = {}) {
         guard let textInputPanelNode = self.inputPanelNode as? ChatTextInputPanelNode else {
             return
         }
@@ -5054,6 +5054,29 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 }
             }
             
+            // Shadow: a timecode for a text reply to a voice message or round video
+            // (ShadowReplyTimecode). In the ask mode the alert sends again with the answer.
+            var shadowTimecodeText: String?
+            if let shadowReplyTimecode {
+                if case let .add(timecode) = shadowReplyTimecode {
+                    shadowTimecodeText = timecode
+                }
+            } else if !sendAsRichMessage, !effectiveInputText.string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, let candidate = shadowReplyTimecodeCandidate(context: self.context, state: effectivePresentationInterfaceState, chatLocation: self.chatLocation) {
+                switch candidate.action {
+                case .add:
+                    shadowTimecodeText = candidate.timecode
+                case .skip:
+                    break
+                case .ask:
+                    self.historyNode.justSentTextMessage = false
+                    let alert = shadowReplyTimecodeAlertController(context: self.context, candidate: candidate, completion: { [weak self] resolved in
+                        self?.sendCurrentMessage(silentPosting: silentPosting, scheduleTime: scheduleTime, repeatPeriod: repeatPeriod, postpone: postpone, messageEffect: messageEffect, sendWithoutFormatting: sendWithoutFormatting, shadowReplyTimecode: resolved, completion: completion)
+                    })
+                    self.controller?.present(alert, in: .window(.root))
+                    return
+                }
+            }
+
             let timestamp = CACurrentMediaTime()
             if self.lastSendTimestamp + 0.15 > timestamp {
                 return
@@ -5067,7 +5090,12 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             if peerId?.namespace != Namespaces.Peer.SecretChat, let interactiveEmojis = self.interactiveEmojis, interactiveEmojis.emojis.contains(trimmedInputText), effectiveInputText.attribute(ChatTextInputAttributes.customEmoji, at: 0, effectiveRange: nil) == nil {
                 messages.append(.message(text: "", attributes: [], inlineStickers: [:], mediaReference: AnyMediaReference.standalone(media: TelegramMediaDice(emoji: trimmedInputText)), threadId: self.chatLocation.threadId, replyToMessageId: self.chatPresentationInterfaceState.interfaceState.replyMessageSubject?.subjectModel, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: []))
             } else {
-                let inputText = convertMarkdownToAttributes(effectiveInputText)
+                var inputText = convertMarkdownToAttributes(effectiveInputText)
+                if let shadowTimecodeText {
+                    let prefixed = NSMutableAttributedString(string: ShadowReplyTimecode.applying(shadowTimecodeText, to: ""))
+                    prefixed.append(inputText)
+                    inputText = prefixed
+                }
                 
                 var mediaReference: AnyMediaReference?
                 var webpage: TelegramMediaWebpage?

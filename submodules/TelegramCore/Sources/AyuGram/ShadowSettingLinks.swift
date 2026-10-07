@@ -7,6 +7,9 @@ import Foundation
 //   shadow://<screen>/<slug>?off      turn it off
 //   shadow://<screen>/<slug>?switch   flip it
 //   shadow://<screen>/<slug>?value=N  a setting with a choice of values: pick N
+//   …&v=1.4.4                         the Shadow version the setting appeared in
+//                                     (`since`): an older Shadow that does not
+//                                     know the setting says which version it needs
 //
 // `screen` is the ShadowLinks command of the screen (ShadowLinkRouter);
 // `entryId` is the toggle's stableId on that screen (focus, long-press menu);
@@ -30,8 +33,11 @@ public struct ShadowSettingLink: Equatable {
     // A setting with a choice of values (not on/off): the title of each value,
     // the value being the index. Empty for toggles.
     public let choices: [String]
+    // The Shadow version the setting appeared in (1.4.4 and later); links carry
+    // it as ?v=. Older settings have none.
+    public let since: String?
 
-    public init(screen: String, slug: String, entryId: Int32, key: String?, title: String, isProtected: Bool = false, icon: String = "", parentEntryId: Int32? = nil, choices: [String] = []) {
+    public init(screen: String, slug: String, entryId: Int32, key: String?, title: String, isProtected: Bool = false, icon: String = "", parentEntryId: Int32? = nil, choices: [String] = [], since: String? = nil) {
         self.screen = screen
         self.slug = slug
         self.entryId = entryId
@@ -41,6 +47,7 @@ public struct ShadowSettingLink: Equatable {
         self.icon = icon
         self.parentEntryId = parentEntryId
         self.choices = choices
+        self.since = since
     }
 
     // An on/off toggle a link can change.
@@ -65,13 +72,18 @@ public struct ShadowSettingLink: Equatable {
     }
 
     public func link(_ mode: ShadowSettingLinks.Mode) -> String {
+        let result: String
         switch mode {
-        case .open: return self.path
-        case .on: return self.path + "?on"
-        case .off: return self.path + "?off"
-        case .toggle: return self.path + "?switch"
-        case let .value(value): return self.path + "?value=\(value)"
+        case .open: result = self.path
+        case .on: result = self.path + "?on"
+        case .off: result = self.path + "?off"
+        case .toggle: result = self.path + "?switch"
+        case let .value(value): result = self.path + "?value=\(value)"
         }
+        guard let since = self.since else {
+            return result
+        }
+        return result + (result.contains("?") ? "&" : "?") + "v=\(since)"
     }
 }
 
@@ -107,6 +119,48 @@ public enum ShadowSettingLinks {
             }
         }
         return .open
+    }
+
+    // A link this Shadow cannot open: a setting or screen it does not know.
+    // `linkVersion` is the link's ?v=, `current` is ShadowVersion.fork.
+    public static func isScreen(_ command: String) -> Bool {
+        let command = command.lowercased()
+        return self.all.contains(where: { $0.screen == command })
+    }
+
+    public static func needsUpdate(linkVersion: String?, current: String) -> Bool {
+        guard let linkVersion else {
+            return false
+        }
+        return self.compareVersions(linkVersion, current) == .orderedDescending
+    }
+
+    public static func unsupportedText(isSetting: Bool, linkVersion: String?, current: String) -> String {
+        let what = isSetting ? "Эта настройка" : "Эта ссылка"
+        if let linkVersion, self.needsUpdate(linkVersion: linkVersion, current: current) {
+            return "\(what) работает с Shadow \(linkVersion). У вас \(current) — обновите Shadow."
+        }
+        if isSetting {
+            return "Такой настройки нет в Shadow \(current). Если ссылку прислали из новой версии — обновите Shadow."
+        }
+        return "Такой ссылки нет в Shadow \(current). Если её прислали из новой версии — обновите Shadow."
+    }
+
+    // "1.4.10" > "1.4.9"; missing parts count as 0, non-digits are ignored.
+    public static func compareVersions(_ lhs: String, _ rhs: String) -> ComparisonResult {
+        func parts(_ value: String) -> [Int] {
+            return value.split(separator: ".").map { part in Int(part.filter { character in character.isNumber }) ?? 0 }
+        }
+        let left = parts(lhs)
+        let right = parts(rhs)
+        for index in 0 ..< max(left.count, right.count) {
+            let l = index < left.count ? left[index] : 0
+            let r = index < right.count ? right[index] : 0
+            if l != r {
+                return l < r ? .orderedAscending : .orderedDescending
+            }
+        }
+        return .orderedSame
     }
 
     public static func find(screen: String, slug: String) -> ShadowSettingLink? {
@@ -226,6 +280,8 @@ public enum ShadowSettingLinks {
         ShadowSettingLink(screen: "customization", slug: "voice-time", entryId: 112, key: "voiceTimeFormat", title: "Время на голосовых", icon: "timer", choices: ShadowVoiceTime.formats.map { ShadowVoiceTime.title($0) }),
         ShadowSettingLink(screen: "customization", slug: "voice-time-round", entryId: 113, key: "voiceTimeRoundVideos", title: "Время на голосовых: также на кружках"),
         ShadowSettingLink(screen: "customization", slug: "voice-time-player", entryId: 114, key: "voiceTimeInPlayer", title: "Время на голосовых: в верхнем плеере"),
+        ShadowSettingLink(screen: "customization", slug: "reply-timecode", entryId: 117, key: "replyTimecode", title: "Тайм-код в ответах", icon: "timer", since: "1.4.4"),
+        ShadowSettingLink(screen: "customization", slug: "reply-timecode-mode", entryId: 118, key: "replyTimecodeMode", title: "Тайм-код в ответах: режим", parentEntryId: 117, choices: ShadowReplyTimecode.modes.map { ShadowReplyTimecode.modeTitle($0) }, since: "1.4.4"),
         ShadowSettingLink(screen: "customization", slug: "folders-bottom", entryId: 15, key: "foldersAtBottom", title: "Папки снизу"),
         ShadowSettingLink(screen: "customization", slug: "hide-bottom-search", entryId: 16, key: "hideBottomSearch", title: "Убрать поиск снизу"),
         ShadowSettingLink(screen: "customization", slug: "compact-bottom", entryId: 17, key: "compactBottomBar", title: "Уменьшить интерфейс снизу"),

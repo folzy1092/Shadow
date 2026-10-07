@@ -127,6 +127,8 @@
 | `shadow://customization/voice-time` | Время на голосовых, `?value=0…5`: по умолчанию, текущий таймкод, прошло / всего, осталось / всего, прошло и процент, процент |
 | `shadow://customization/voice-time-round` | Время на голосовых: также на кружках |
 | `shadow://customization/voice-time-player` | Время в верхнем плеере |
+| `shadow://customization/reply-timecode` | Тайм-код в ответах |
+| `shadow://customization/reply-timecode-mode` | Тайм-код в ответах: режим, `?value=0…1`: всегда, спрашивать |
 | `shadow://customization/folders-bottom` | Папки снизу |
 | `shadow://customization/hide-bottom-search` | Убрать поиск снизу |
 | `shadow://customization/compact-bottom` | Уменьшить интерфейс снизу |

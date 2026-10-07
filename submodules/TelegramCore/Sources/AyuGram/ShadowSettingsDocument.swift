@@ -39,14 +39,14 @@ public struct ShadowSettingsDocument: Codable, Equatable {
         "saveAllIncomingMedia", "mediaAutoCleanKeepPinned", "mediaAutoCleanKeepChannels",
         "mediaAutoCleanKeepBots", "showProfileId", "showProfileDC",
         "showRegistrationDate", "hideOwnPhoneNumber",
-        "hideStoriesBar", "hideGiftButton", "hideGreetingSticker", "offerGhostBeforeStories", "hidePremiumBadges", "hideSponsoredMessages", "messageFilterShowPlaceholder", "updateChannelBeta", "unlimitedPinnedChats", "localVoiceTranscription", "voiceTimeRoundVideos", "voiceTimeInPlayer", "monochromeSettingsIcons", "compactChatList", "onlineHistory", "saveViewedStories",
+        "hideStoriesBar", "hideGiftButton", "hideGreetingSticker", "offerGhostBeforeStories", "hidePremiumBadges", "hideSponsoredMessages", "messageFilterShowPlaceholder", "updateChannelBeta", "unlimitedPinnedChats", "localVoiceTranscription", "voiceTimeRoundVideos", "voiceTimeInPlayer", "replyTimecode", "monochromeSettingsIcons", "compactChatList", "onlineHistory", "saveViewedStories",
         "screenshotAnonymize", "screenshotAnonymizeOwn", "screenshotAnonymizeOthers", "screenshotEnabled", "screenshotAvatars", "screenshotNames", "screenshotBadges", "screenshotTime"
     ]
     public static let textKeys: Set<String> = ["editedIndicatorText", "deletedIndicatorText"]
     public static let integerKeys: Set<String> = [
         "mediaAutoCleanInterval", "attachmentSizeLimit", "bottomBarScrollMode", "ghostAccountMode",
         "screenshotBackground", "screenshotCustomColorARGB",
-        "settingsIconBackgroundColor", "settingsIconGlyphColor", "voiceTimeFormat"
+        "settingsIconBackgroundColor", "settingsIconGlyphColor", "voiceTimeFormat", "replyTimecodeMode"
     ]
     private static let ageIntervals: Set<Int64> = [0, 86400, 259200, 604800, 1209600, 2592000, 7776000, 15552000, 31536000]
     private static let sizeLimits: Set<Int64> = [0, 314572800, 1073741824, 2147483648, 5368709120, 6442450944, 12884901888]
@@ -114,6 +114,8 @@ public struct ShadowSettingsDocument: Codable, Equatable {
             case let .integer(number) where key == "bottomBarScrollMode" && (0...3).contains(number): break
             // ShadowVoiceTime formats.
             case let .integer(number) where key == "voiceTimeFormat" && (0...5).contains(number): break
+            // ShadowReplyTimecode modes: always, ask.
+            case let .integer(number) where key == "replyTimecodeMode" && (0...1).contains(number): break
             // ShadowGhostAccountMode raw values: manual, alwaysOn, alwaysOff, followPrevious.
             case let .integer(number) where key == "ghostAccountMode" && (0...3).contains(number): break
             // Keep raw 3 valid for backward-compatible imports: old format used 3 for black.

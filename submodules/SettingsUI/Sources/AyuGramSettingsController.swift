@@ -805,6 +805,7 @@ private final class AyuCustomizationArguments {
     var openMessageScreenshot: () -> Void = {}
     var openHeaderButtons: () -> Void = {}
     var selectVoiceTimeFormat: () -> Void = {}
+    var selectReplyTimecodeMode: () -> Void = {}
     var updateSetting: (@escaping (inout AyuGramSettings) -> Void) -> Void = { _ in }
     // true: background color, false: glyph color.
     var pickSettingsIconColor: (Bool) -> Void = { _ in }
@@ -974,6 +975,8 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
     case voiceTimeFormat(Int32)
     case voiceTimeRoundVideos(Bool)
     case voiceTimeInPlayer(Bool)
+    case replyTimecode(Bool)
+    case replyTimecodeMode(Int32)
     case chatsFooter
 
     case bottomBarHeader
@@ -1038,7 +1041,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
             return AyuCustomizationSection.bottomBar.rawValue
         case .profilesHeader, .showProfileId, .showProfileDC, .showRegistrationDate, .hideOwnPhoneNumber, .profilesFooter:
             return AyuCustomizationSection.profiles.rawValue
-        case .mediaHeader, .roundVideoBackCamera, .showCameraTile, .cameraTileLivePreview, .cameraTileCompact, .localVoiceTranscription, .voiceTimeFormat, .voiceTimeRoundVideos, .voiceTimeInPlayer, .mediaFooter:
+        case .mediaHeader, .roundVideoBackCamera, .showCameraTile, .cameraTileLivePreview, .cameraTileCompact, .localVoiceTranscription, .voiceTimeFormat, .voiceTimeRoundVideos, .voiceTimeInPlayer, .replyTimecode, .replyTimecodeMode, .mediaFooter:
             return AyuCustomizationSection.media.rawValue
         case .customRoundVideosHeader, .customVideoMessageSpeed, .customRoundVideosFooter:
             return AyuCustomizationSection.customRoundVideos.rawValue
@@ -1085,6 +1088,8 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .voiceTimeFormat: return 112
         case .voiceTimeRoundVideos: return 113
         case .voiceTimeInPlayer: return 114
+        case .replyTimecode: return 117
+        case .replyTimecodeMode: return 118
         case .unlimitedPinnedChats: return 104
         case .settingsIconsHeader: return 105
         case .compactChatList: return 110
@@ -1153,6 +1158,8 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .voiceTimeFormat: return (28, 3)
         case .voiceTimeRoundVideos: return (28, 4)
         case .voiceTimeInPlayer: return (28, 5)
+        case .replyTimecode: return (28, 6)
+        case .replyTimecodeMode: return (28, 7)
         // After the media section (mediaFooter = 29), in display order.
         case .customRoundVideosHeader: return (29, 1)
         case .customVideoMessageSpeed: return (29, 2)
@@ -1318,6 +1325,12 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
             return ItemListSwitchItem(presentationData: presentationData, title: "Время в верхнем плеере", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 arguments.updateSetting { $0.voiceTimeInPlayer = value }
             })
+        case let .replyTimecode(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Тайм-код в ответах", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.updateSetting { $0.replyTimecode = value }
+            })
+        case let .replyTimecodeMode(mode):
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Режим тайм-кода", label: ShadowReplyTimecode.modeTitle(mode), labelStyle: .detailText, sectionId: self.section, style: .blocks, action: arguments.selectReplyTimecodeMode)
         case .chatsFooter:
             return ItemListTextItem(presentationData: presentationData, text: .plain("«Скрыть папку «Все чаты»» убирает эту вкладку, остальные папки работают. «Скрыть истории» убирает ленту историй над списком чатов. «Скрыть кнопку подарка» убирает подарок из поля ввода. «Скрыть приветственный стикер» убирает карточку со стикером в пустом чате с незнакомым. «Скрыть значки Premium» убирает звёздочку и эмодзи-статус рядом с именами (галочки верификации остаются). «Скрыть рекламу в каналах» — спонсорские сообщения не загружаются; применяется при следующем открытии канала. «Безлимитные закрепы» снимают ограничение на закрепы в списке чатов, архиве, папках, «Избранном» и темах форумов; всё сверх лимита Telegram хранится только на этом устройстве."), sectionId: self.section)
         case .bottomBarHeader:
@@ -1375,7 +1388,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
                 arguments.updateSetting { $0.cameraTileCompact = value }
             })
         case .mediaFooter:
-            return ItemListTextItem(presentationData: presentationData, text: .plain("Начинать запись видеосообщений («кружков») с задней камеры. Во время записи можно переключиться на фронтальную. «Камера в галерее» показывает плитку камеры первой ячейкой в галерее вложений. «Живой предпросмотр камеры» запускает в этой плитке видео с камеры вживую вместо статичной иконки. «Компактная плитка камеры» занимает одну ячейку вместо двух — в первом ряду видно больше медиа. «Расшифровка голосовых на устройстве» без Premium распознаёт речь прямо на телефоне — аудио никуда не отправляется. «Время на голосовых» меняет время под голосовым во время прослушивания: сколько осталось (как в Telegram), сколько прошло, «прошло / всего», «-осталось / всего» или процент; пока голосовое не играет, видна его длина. «Также на кружках» применяет тот же формат к видеосообщениям, «Время в верхнем плеере» добавляет его в полоску плеера над чатом."), sectionId: self.section)
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Начинать запись видеосообщений («кружков») с задней камеры. Во время записи можно переключиться на фронтальную. «Камера в галерее» показывает плитку камеры первой ячейкой в галерее вложений. «Живой предпросмотр камеры» запускает в этой плитке видео с камеры вживую вместо статичной иконки. «Компактная плитка камеры» занимает одну ячейку вместо двух — в первом ряду видно больше медиа. «Расшифровка голосовых на устройстве» без Premium распознаёт речь прямо на телефоне — аудио никуда не отправляется. «Время на голосовых» меняет время под голосовым во время прослушивания: сколько осталось (как в Telegram), сколько прошло, «прошло / всего», «-осталось / всего» или процент; пока голосовое не играет, видна его длина. «Также на кружках» применяет тот же формат к видеосообщениям, «Время в верхнем плеере» добавляет его в полоску плеера над чатом. «Тайм-код в ответах»: ответ текстом на недослушанное голосовое или кружок начинается с момента, где вы остановились, например «0:53 текст»; собеседник нажимает на 0:53 и слушает с этого места. Режим «Спрашивать» показывает окно при отправке, ответ в нём можно запомнить для чата на 30 минут."), sectionId: self.section)
         case .customRoundVideosHeader:
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "КАСТОМНЫЕ КРУЖКИ", sectionId: self.section)
         case let .customVideoMessageSpeed(value):
@@ -1504,6 +1517,10 @@ private func ayuCustomizationEntries(settings: AyuGramSettings) -> [AyuCustomiza
     entries.append(.voiceTimeFormat(settings.voiceTimeFormat))
     entries.append(.voiceTimeRoundVideos(settings.voiceTimeRoundVideos))
     entries.append(.voiceTimeInPlayer(settings.voiceTimeInPlayer))
+    entries.append(.replyTimecode(settings.replyTimecode))
+    if settings.replyTimecode {
+        entries.append(.replyTimecodeMode(settings.replyTimecodeMode))
+    }
     entries.append(.mediaFooter)
 
     entries.append(.customRoundVideosHeader)
@@ -1797,6 +1814,22 @@ func ayuCustomizationController(context: AccountContext, focus: ShadowSettingsSe
             items.append(ActionSheetButtonItem(title: "\(ShadowVoiceTime.title(format)) — \(ShadowVoiceTime.example(format))", action: { [weak sheet] in
                 sheet?.dismissAnimated()
                 ayuUpdateSettings(context: context) { var settings = $0; settings.voiceTimeFormat = format; return settings }
+            }))
+        }
+        sheet.setItemGroups([
+            ActionSheetItemGroup(items: items),
+            ActionSheetItemGroup(items: [ActionSheetButtonItem(title: data.strings.Common_Cancel, action: { [weak sheet] in sheet?.dismissAnimated() })])
+        ])
+        presentControllerImpl?(sheet, nil)
+    }
+    arguments.selectReplyTimecodeMode = {
+        let data = context.sharedContext.currentPresentationData.with { $0 }
+        let sheet = ActionSheetController(presentationData: data)
+        var items: [ActionSheetItem] = [ActionSheetTextItem(title: "Тайм-код в ответе на голосовое или кружок", parseMarkdown: false)]
+        for mode in ShadowReplyTimecode.modes {
+            items.append(ActionSheetButtonItem(title: ShadowReplyTimecode.modeTitle(mode), action: { [weak sheet] in
+                sheet?.dismissAnimated()
+                ayuUpdateSettings(context: context) { var settings = $0; settings.replyTimecodeMode = mode; return settings }
             }))
         }
         sheet.setItemGroups([

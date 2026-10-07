@@ -189,6 +189,7 @@ public final class MediaManagerImpl: NSObject, MediaManager {
 
     private var musicListenTracker: MusicListenTracker?
     private let musicListenTrackingDisposable = MetaDisposable()
+    private let shadowReplyTimecodeDisposable = MetaDisposable()
 
     public let universalVideoManager: UniversalVideoManager = UniversalVideoManagerImpl()
     
@@ -433,6 +434,33 @@ public final class MediaManagerImpl: NSObject, MediaManager {
             }
         }))
 
+        // Shadow: the last position of every voice message and round video, for
+        // the timecode in replies (ShadowReplyTimecode). Kept when the player
+        // moves on to the next message or closes.
+        var shadowReplyTimecodeKey: String?
+        self.shadowReplyTimecodeDisposable.set((self.globalMediaPlayerState
+        |> deliverOnMainQueue).startStrict(next: { accountStateAndType in
+            let now = CACurrentMediaTime()
+            var key: String?
+            var sample: ShadowReplyTimecode.PlaybackSample?
+            if let (account, stateOrLoading, type) = accountStateAndType, case .voice = type, case let .state(state) = stateOrLoading, let item = state.item as? MessageMediaPlaylistItem {
+                let messageId = item.message.id
+                key = ShadowReplyTimecode.messageKey(accountPeerId: account.peerId.toInt64(), peerId: messageId.peerId.toInt64(), namespace: messageId.namespace, id: messageId.id)
+                var isPlaying = false
+                if case .playing = state.status.status {
+                    isPlaying = true
+                }
+                sample = ShadowReplyTimecode.PlaybackSample(timestamp: state.status.timestamp, duration: state.status.duration, rate: state.status.baseRate, isPlaying: isPlaying, generatedAt: state.status.generationTimestamp)
+            }
+            if let previousKey = shadowReplyTimecodeKey, previousKey != key {
+                ShadowReplyTimecode.positions.freeze(key: previousKey, now: now)
+            }
+            if let key, let sample {
+                ShadowReplyTimecode.positions.record(key: key, sample: sample)
+            }
+            shadowReplyTimecodeKey = key
+        }))
+
         self.musicListenTrackingDisposable.set((self.musicMediaPlayerState
         |> deliverOnMainQueue).startStrict(next: { [weak self] stateAndType in
             self?.musicListenTracker?.update(with: stateAndType)
@@ -455,6 +483,7 @@ public final class MediaManagerImpl: NSObject, MediaManager {
         self.setPlaylistByTypeDisposables.dispose()
         self.mediaPlaybackStateDisposable.dispose()
         self.musicListenTrackingDisposable.dispose()
+        self.shadowReplyTimecodeDisposable.dispose()
         self.globalAudioSessionForegroundDisposable.dispose()
         self.voiceMediaPlayerStateDisposable.dispose()
     }

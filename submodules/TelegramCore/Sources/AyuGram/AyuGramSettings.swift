@@ -120,6 +120,10 @@ public struct AyuGramSettings: Codable, Equatable {
     public var voiceTimeFormat: Int32 = 0
     public var voiceTimeRoundVideos: Bool = true
     public var voiceTimeInPlayer: Bool = false
+    // Shadow: a timecode in text replies to voice messages and round videos
+    // (ShadowReplyTimecode modes: 0 always, 1 ask).
+    public var replyTimecode: Bool = false
+    public var replyTimecodeMode: Int32 = 1
     // Shadow: buttons of the root chat list header (ShadowHeaderButtons.swift).
     public var headerButtons: ShadowHeaderButtons = .stock
     // Local quick reply templates inserted into the composer.
@@ -677,6 +681,8 @@ public struct AyuGramSettings: Codable, Equatable {
         self.voiceTimeFormat = ShadowVoiceTime.normalized((try container.decodeIfPresent(Int32.self, forKey: "voiceTimeFormat")) ?? 0)
         self.voiceTimeRoundVideos = ((try container.decodeIfPresent(Int32.self, forKey: "voiceTimeRoundVideos")) ?? 1) != 0
         self.voiceTimeInPlayer = ((try container.decodeIfPresent(Int32.self, forKey: "voiceTimeInPlayer")) ?? 0) != 0
+        self.replyTimecode = ((try container.decodeIfPresent(Int32.self, forKey: "replyTimecode")) ?? 0) != 0
+        self.replyTimecodeMode = ShadowReplyTimecode.normalizedMode((try container.decodeIfPresent(Int32.self, forKey: "replyTimecodeMode")) ?? ShadowReplyTimecode.modeAsk)
         self.quickReplyTemplates = (try container.decodeIfPresent([String].self, forKey: "quickReplyTemplates")) ?? []
         if let headerButtons = try? container.decodeIfPresent(ShadowHeaderButtons.self, forKey: "headerButtonsV1") {
             self.headerButtons = headerButtons.normalized()
@@ -777,6 +783,8 @@ public struct AyuGramSettings: Codable, Equatable {
         try container.encode(self.voiceTimeFormat, forKey: "voiceTimeFormat")
         try container.encode((self.voiceTimeRoundVideos ? 1 : 0) as Int32, forKey: "voiceTimeRoundVideos")
         try container.encode((self.voiceTimeInPlayer ? 1 : 0) as Int32, forKey: "voiceTimeInPlayer")
+        try container.encode((self.replyTimecode ? 1 : 0) as Int32, forKey: "replyTimecode")
+        try container.encode(self.replyTimecodeMode, forKey: "replyTimecodeMode")
         try container.encode(self.quickReplyTemplates, forKey: "quickReplyTemplates")
         try container.encode(self.headerButtons, forKey: "headerButtonsV1")
         try container.encode((self.monochromeSettingsIcons ? 1 : 0) as Int32, forKey: "monochromeSettingsIcons")

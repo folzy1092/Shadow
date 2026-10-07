@@ -171,7 +171,7 @@ func shadowSettingsInstallLinkMenu(controller: ItemListController, context: Acco
         // (its search-index description).
         let destinations: [String: ShadowSettingsSearchDestination] = ["customization": .customization, "spy": .spy, "ghost": .ghost, "profile": .misc, "misc": .pushDiagnostics, "filters": .filters, "locks": .chatLocks, "space": .secondSpace]
         let help = destinations[screen].flatMap { destination in ShadowSettingsSearchIndex.items.first(where: { $0.destination == destination && $0.entryId == setting.entryId }) }?.description ?? ""
-        var items: [ActionSheetItem] = [ActionSheetTextItem(title: setting.title + (help.isEmpty ? "" : "\n\n" + help) + "\n\n" + setting.path, parseMarkdown: false)]
+        var items: [ActionSheetItem] = [ActionSheetTextItem(title: setting.title + (help.isEmpty ? "" : "\n\n" + help) + "\n\n" + setting.link(.open), parseMarkdown: false)]
         if setting.isSwitchable, let key = setting.key {
             items.append(ActionSheetButtonItem(title: "Скопировать ссылку-переключатель", color: .accent, action: { [weak actionSheet] in
                 actionSheet?.dismissAnimated()
@@ -179,7 +179,7 @@ func shadowSettingsInstallLinkMenu(controller: ItemListController, context: Acco
             }))
             items.append(ActionSheetButtonItem(title: "Скопировать путь к настройке", color: .accent, action: { [weak actionSheet] in
                 actionSheet?.dismissAnimated()
-                copy(setting.path, "Путь к настройке скопирован")
+                copy(setting.link(.open), "Путь к настройке скопирован")
             }))
             let value = ShadowSettingsTransfer.boolValue(key, in: currentAyuGramSettings(accountId: context.account.id)) ?? false
             items.append(ActionSheetButtonItem(title: "Скопировать с текущим значением (\(value ? "вкл" : "выкл"))", color: .accent, action: { [weak actionSheet] in
@@ -189,7 +189,7 @@ func shadowSettingsInstallLinkMenu(controller: ItemListController, context: Acco
         } else if setting.isChoice, let key = setting.key {
             items.append(ActionSheetButtonItem(title: "Скопировать путь к настройке", color: .accent, action: { [weak actionSheet] in
                 actionSheet?.dismissAnimated()
-                copy(setting.path, "Путь к настройке скопирован")
+                copy(setting.link(.open), "Путь к настройке скопирован")
             }))
             let value = ShadowSettingsTransfer.intValue(key, in: currentAyuGramSettings(accountId: context.account.id)) ?? 0
             let valueTitle = setting.choiceTitle(value) ?? "\(value)"
@@ -200,7 +200,7 @@ func shadowSettingsInstallLinkMenu(controller: ItemListController, context: Acco
         } else {
             items.append(ActionSheetButtonItem(title: "Скопировать путь к настройке", color: .accent, action: { [weak actionSheet] in
                 actionSheet?.dismissAnimated()
-                copy(setting.path, "Путь к настройке скопирован")
+                copy(setting.link(.open), "Путь к настройке скопирован")
             }))
             if setting.isProtected {
                 items.append(ActionSheetTextItem(title: "Эта настройка защищает данные, поэтому ссылкой её не переключить.", parseMarkdown: false))

@@ -27,6 +27,11 @@ public func shadowOpenLink(context: AccountContext, link: ShadowLinks.Link, navi
         shadowOpenSettingLink(context: context, setting: setting, mode: ShadowSettingLinks.mode(ShadowSettingLinks.mode(query: link.query), for: setting), navigationController: navigationController)
         return
     }
+    // A setting this version does not know: say so instead of opening the screen.
+    if !link.arguments.isEmpty, ShadowSettingLinks.isScreen(link.command) {
+        shadowShowUnsupportedLink(context: context, link: link, isSetting: true, push: push)
+        return
+    }
 
     switch link.command {
     case "settings":
@@ -98,11 +103,26 @@ public func shadowOpenLink(context: AccountContext, link: ShadowLinks.Link, navi
         shadowOpenDeveloperProfile(context: context, peerId: 1068369028, username: "helbooyy", push: push)
     default:
         // Shadow: an unknown command is an easter egg name (ShadowEasterEggs);
-        // when there is no such egg, Shadow settings open as before.
+        // when there is no such egg, the link is from a newer Shadow or wrong.
         context.sharedContext.shadowOpenEasterEgg(context: context, name: link.command, notFound: {
-            push(ayuGramSettingsController(context: context))
+            shadowShowUnsupportedLink(context: context, link: link, isSetting: false, push: push)
         })
     }
+}
+
+// "Эта настройка работает с Shadow 1.4.4. У вас 1.4.3 — обновите Shadow."
+// The ?v= of the link says which version it needs (ShadowSettingLink.since);
+// "Обновить" opens the update screen.
+private func shadowShowUnsupportedLink(context: AccountContext, link: ShadowLinks.Link, isSetting: Bool, push: @escaping (ViewController) -> Void) {
+    let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+    let linkVersion = link.query["v"].flatMap { $0.isEmpty ? nil : $0 }
+    let text = ShadowSettingLinks.unsupportedText(isSetting: isSetting, linkVersion: linkVersion, current: ShadowVersion.fork)
+    context.sharedContext.mainWindow?.present(UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: text, timeout: 6.0, customUndoText: "Обновить"), elevatedLayout: false, action: { action in
+        if case .undo = action {
+            push(ayuGramSettingsController(context: context, autoCheckUpdates: true))
+        }
+        return false
+    }), on: .root)
 }
 
 // Opens a developer's profile by user id; falls back to the username when the
