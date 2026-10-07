@@ -68,6 +68,15 @@ class RoundVideoContracts(unittest.TestCase):
         self.assertIn("TGVideoEditMaximumRoundVideoDuration", item)
         self.assertIn("_playerView.layer.cornerRadius = isRound", item)
 
+    def test_toggle_sits_above_mute_not_under_counter(self):
+        # In portrait the right end of the mute row is the selection counter
+        # ("1" after checking an item); the toggle used to sit under it.
+        interface = read("LegacyComponents/Sources/TGMediaPickerGalleryInterfaceView.m")
+        frame = interface.split("- (CGRect)_roundButtonFrameForMuteFrame:(CGRect)muteFrame", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn("muteFrame.origin.x, muteFrame.origin.y - size.height", frame)
+        self.assertNotIn("screenEdges.right", frame)
+        self.assertIn("_roundButton.frame = [self _roundButtonFrameForMuteFrame:_muteButton.frame];", interface)
+
     def test_preview_and_converter_use_the_same_square(self):
         adjustments = read("LegacyComponents/Sources/TGVideoEditAdjustments.m")
         self.assertIn("const NSTimeInterval TGVideoEditMaximumRoundVideoDuration = 60.0;", adjustments)

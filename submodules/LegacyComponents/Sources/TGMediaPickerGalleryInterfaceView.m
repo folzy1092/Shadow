@@ -1925,20 +1925,13 @@ static TGMediaLivePhotoMode TGMediaPickerGalleryResolvedLivePhotoMode(NSNumber *
     return true;
 }
 
-// Shadow: portrait — same row as the mute button, at the right edge;
-// landscape — right above the mute button.
-- (CGRect)_roundButtonFrameForOrientation:(UIInterfaceOrientation)orientation muteFrame:(CGRect)muteFrame screenEdges:(UIEdgeInsets)screenEdges
+// Shadow: right above the mute button in every orientation. In portrait the
+// right end of the mute row belongs to the selection counter (_photoCounterButton),
+// which appears as soon as a media item is checked and used to cover this button.
+- (CGRect)_roundButtonFrameForMuteFrame:(CGRect)muteFrame
 {
     CGSize size = _roundButton.frame.size;
-    switch (orientation)
-    {
-        case UIInterfaceOrientationLandscapeLeft:
-        case UIInterfaceOrientationLandscapeRight:
-            return CGRectMake(muteFrame.origin.x, muteFrame.origin.y - size.height - 8.0f, size.width, size.height);
-            
-        default:
-            return CGRectMake(screenEdges.right - _safeAreaInset.right - 5.0f - size.width, muteFrame.origin.y, size.width, size.height);
-    }
+    return CGRectMake(muteFrame.origin.x, muteFrame.origin.y - size.height - 8.0f, size.width, size.height);
 }
 
 - (CGRect)_muteButtonFrameForOrientation:(UIInterfaceOrientation)orientation screenEdges:(UIEdgeInsets)screenEdges hasHeaderView:(bool)hasHeaderView
@@ -2273,7 +2266,7 @@ static TGMediaLivePhotoMode TGMediaPickerGalleryResolvedLivePhotoMode(NSNumber *
     }
     
     _muteButton.frame = [self _muteButtonFrameForOrientation:orientation screenEdges:screenEdges hasHeaderView:true];
-    _roundButton.frame = [self _roundButtonFrameForOrientation:orientation muteFrame:_muteButton.frame screenEdges:screenEdges];
+    _roundButton.frame = [self _roundButtonFrameForMuteFrame:_muteButton.frame];
     _checkButton.frame = [self _checkButtonFrameForOrientation:orientation screenEdges:screenEdges hasHeaderView:hasHeaderView];
     _groupButton.frame = [self _groupButtonFrameForOrientation:orientation screenEdges:screenEdges hasHeaderView:hasHeaderView];
     _coverButton.frame = [self _coverButtonFrameForOrientation:orientation screenEdges:screenEdges hasHeaderView:hasHeaderView];

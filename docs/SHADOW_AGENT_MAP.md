@@ -306,7 +306,8 @@ UI-проекция настроек выбирается в `TelegramRootContro
   Новое действие = case в `ShadowHeaderAction` + иконка + ветка в `shadowPerformHeaderAction`
   (контракт-тест проверяет все три).
 - Кружок из галереи: флаг — пресет `VideoMessage` в `TGVideoEditAdjustments`
-  (`isRoundVideo`), кнопка справа от кнопки звука (`TGMediaPickerGalleryInterfaceView`),
+  (`isRoundVideo`), кнопка над кнопкой звука (`TGMediaPickerGalleryInterfaceView`; справа
+  в ряду звука стоит счётчик выбранных «1», раньше он накрывал кнопку),
   превью — квадрат по центру + круглая маска (`TGMediaPickerGalleryVideoItemView`).
   Квадрат и лимит 60 с применяет `roundVideoAdjustmentsWithDuration:` перед
   отправкой (`LegacyMediaPickers.swift`: флаг `.instantRoundVideo`, без подписи и альбома).
