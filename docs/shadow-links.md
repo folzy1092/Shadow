@@ -129,6 +129,8 @@
 | `shadow://customization/voice-time-player` | Время в верхнем плеере |
 | `shadow://customization/reply-timecode` | Тайм-код в ответах |
 | `shadow://customization/reply-timecode-mode` | Тайм-код в ответах: режим, `?value=0…1`: всегда, спрашивать |
+| `shadow://customization/chat-voice-speed` | Своя скорость для чатов |
+| `shadow://customization/chat-voice-speeds` | Чаты со своей скоростью (только открыть) |
 | `shadow://customization/folders-bottom` | Папки снизу |
 | `shadow://customization/hide-bottom-search` | Убрать поиск снизу |
 | `shadow://customization/compact-bottom` | Уменьшить интерфейс снизу |

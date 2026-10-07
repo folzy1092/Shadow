@@ -282,6 +282,8 @@ public enum ShadowSettingLinks {
         ShadowSettingLink(screen: "customization", slug: "voice-time-player", entryId: 114, key: "voiceTimeInPlayer", title: "Время на голосовых: в верхнем плеере"),
         ShadowSettingLink(screen: "customization", slug: "reply-timecode", entryId: 117, key: "replyTimecode", title: "Тайм-код в ответах", icon: "timer", since: "1.4.4"),
         ShadowSettingLink(screen: "customization", slug: "reply-timecode-mode", entryId: 118, key: "replyTimecodeMode", title: "Тайм-код в ответах: режим", parentEntryId: 117, choices: ShadowReplyTimecode.modes.map { ShadowReplyTimecode.modeTitle($0) }, since: "1.4.4"),
+        ShadowSettingLink(screen: "customization", slug: "chat-voice-speed", entryId: 119, key: "chatVoiceSpeed", title: "Своя скорость для чатов", icon: "speedometer", since: "1.5.0"),
+        ShadowSettingLink(screen: "customization", slug: "chat-voice-speeds", entryId: 120, key: nil, title: "Чаты со своей скоростью", parentEntryId: 119, since: "1.5.0"),
         ShadowSettingLink(screen: "customization", slug: "folders-bottom", entryId: 15, key: "foldersAtBottom", title: "Папки снизу"),
         ShadowSettingLink(screen: "customization", slug: "hide-bottom-search", entryId: 16, key: "hideBottomSearch", title: "Убрать поиск снизу"),
         ShadowSettingLink(screen: "customization", slug: "compact-bottom", entryId: 17, key: "compactBottomBar", title: "Уменьшить интерфейс снизу"),

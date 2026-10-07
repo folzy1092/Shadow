@@ -36,6 +36,7 @@ def main():
         ('header-buttons', 'submodules/TelegramCore/Sources/AyuGram/ShadowHeaderButtons.swift', 'Tests/ShadowSettings/HeaderButtonsTests.swift'),
         ('setting-links', ('submodules/TelegramCore/Sources/AyuGram/ShadowSettingLinks.swift', 'submodules/TelegramCore/Sources/AyuGram/ShadowLinks.swift', 'submodules/TelegramCore/Sources/AyuGram/ShadowVoiceTime.swift', 'submodules/TelegramCore/Sources/AyuGram/ShadowReplyTimecode.swift'), 'Tests/ShadowSettings/SettingLinksTests.swift'),
         ('voice-time', 'submodules/TelegramCore/Sources/AyuGram/ShadowVoiceTime.swift', 'Tests/ShadowSettings/VoiceTimeTests.swift'),
+        ('chat-voice-speed', 'submodules/TelegramCore/Sources/AyuGram/ShadowChatVoiceSpeed.swift', 'Tests/ShadowSettings/ChatVoiceSpeedTests.swift'),
         ('reply-timecode', ('submodules/TelegramCore/Sources/AyuGram/ShadowReplyTimecode.swift', 'submodules/TelegramCore/Sources/AyuGram/ShadowVoiceTime.swift'), 'Tests/ShadowSettings/ReplyTimecodeTests.swift'),
         ('registration-date', 'submodules/TelegramCore/Sources/AyuGram/ShadowRegistrationDate.swift', 'Tests/ShadowSettings/RegistrationDateTests.swift'),
         ('build-status', 'submodules/TelegramCore/Sources/AyuGram/ShadowBuildStatus.swift', 'Tests/ShadowSettings/BuildStatusTests.swift'),

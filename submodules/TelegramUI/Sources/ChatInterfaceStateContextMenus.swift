@@ -1240,6 +1240,26 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             })))
         }
         
+        // Shadow: «Ответить с тайм-кодом» for a partly heard voice message or
+        // round video: the reply starts with the live position (ShadowReplyTimecode).
+        if !isPinnedMessages, !isReplyThreadHead, data.canReply, messages.count == 1, shadowReplyTimecodePosition(context: context, message: messages[0]) != nil {
+            let timecodeMessage = messages[0]
+            actions.append(.custom(ShadowTimecodeReplyContextItem(timecode: {
+                return shadowReplyTimecodePosition(context: context, message: timecodeMessage)?.timecode
+            }, action: { c, timecode in
+                interfaceInteraction.updateTextInputStateAndMode { state, mode in
+                    let text = NSMutableAttributedString(string: ShadowReplyTimecode.applying(timecode, to: ""))
+                    text.append(state.inputText)
+                    return (ChatTextInputState(inputText: text, selectionRange: text.length ..< text.length), mode)
+                }
+                interfaceInteraction.setupReplyMessage(timecodeMessage.id, nil, { transition, completed in
+                    c.dismiss(result: .custom(transition), completion: {
+                        completed()
+                    })
+                })
+            }), false))
+        }
+        
         if data.messageActions.options.contains(.sendScheduledNow) {
             actions.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.ScheduledMessages_SendNow, icon: { theme in
                 return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Resend"), color: theme.actionSheet.primaryTextColor)

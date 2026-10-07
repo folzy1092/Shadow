@@ -455,6 +455,19 @@ UI-проекция настроек выбирается в `TelegramRootContro
   неизвестная команда (не пасхалка) → тост `ShadowSettingLinks.unsupportedText`
   («работает с Shadow N, у вас M») с кнопкой «Обновить». Раньше такие ссылки
   молча открывали экран.
+- «Ответить с тайм-кодом» (1.5.0): пункт меню сообщения
+  (`ChatInterfaceStateContextMenus.swift`, после «Ответить»), свой узел
+  `TelegramUI/Sources/Chat/ShadowTimecodeReplyContextItem.swift` — вторая строка
+  тикает таймером 0.5 с из `shadowReplyTimecodePosition`. Ставит ответ и
+  `0:53 ` в начало поля ввода; работает и при выключенном «Тайм-код в ответах».
+- Своя скорость голосовых (1.5.0): тумблер `chatVoiceSpeed`, хранилище
+  `ShadowChatVoiceSpeed.swift` (UserDefaults, ключ «аккаунт/чат» → rate×1000,
+  тест `ChatVoiceSpeedTests.swift`). `MediaManager` стартует плеер голосовых со
+  скоростью чата (`initialVoicePlaybackRate`) и пишет `currentChat`; кнопка
+  скорости `MediaPlaybackHeaderPanelComponent.setRate` при включённом тумблере
+  пишет скорость чата и **не трогает** общую `voicePlaybackRate`. Другие
+  полоски плеера (вложения, поиск, медиа профиля) меняют общую, как раньше.
+  Экран списка — `SettingsUI/ShadowChatVoiceSpeedController.swift`.
 
 ## 5a. Замки чатов и второе пространство
 

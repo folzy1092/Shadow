@@ -806,6 +806,7 @@ private final class AyuCustomizationArguments {
     var openHeaderButtons: () -> Void = {}
     var selectVoiceTimeFormat: () -> Void = {}
     var selectReplyTimecodeMode: () -> Void = {}
+    var openChatVoiceSpeeds: () -> Void = {}
     var updateSetting: (@escaping (inout AyuGramSettings) -> Void) -> Void = { _ in }
     // true: background color, false: glyph color.
     var pickSettingsIconColor: (Bool) -> Void = { _ in }
@@ -977,6 +978,8 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
     case voiceTimeInPlayer(Bool)
     case replyTimecode(Bool)
     case replyTimecodeMode(Int32)
+    case chatVoiceSpeed(Bool)
+    case chatVoiceSpeedList(Int)
     case chatsFooter
 
     case bottomBarHeader
@@ -1041,7 +1044,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
             return AyuCustomizationSection.bottomBar.rawValue
         case .profilesHeader, .showProfileId, .showProfileDC, .showRegistrationDate, .hideOwnPhoneNumber, .profilesFooter:
             return AyuCustomizationSection.profiles.rawValue
-        case .mediaHeader, .roundVideoBackCamera, .showCameraTile, .cameraTileLivePreview, .cameraTileCompact, .localVoiceTranscription, .voiceTimeFormat, .voiceTimeRoundVideos, .voiceTimeInPlayer, .replyTimecode, .replyTimecodeMode, .mediaFooter:
+        case .mediaHeader, .roundVideoBackCamera, .showCameraTile, .cameraTileLivePreview, .cameraTileCompact, .localVoiceTranscription, .voiceTimeFormat, .voiceTimeRoundVideos, .voiceTimeInPlayer, .replyTimecode, .replyTimecodeMode, .chatVoiceSpeed, .chatVoiceSpeedList, .mediaFooter:
             return AyuCustomizationSection.media.rawValue
         case .customRoundVideosHeader, .customVideoMessageSpeed, .customRoundVideosFooter:
             return AyuCustomizationSection.customRoundVideos.rawValue
@@ -1090,6 +1093,8 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .voiceTimeInPlayer: return 114
         case .replyTimecode: return 117
         case .replyTimecodeMode: return 118
+        case .chatVoiceSpeed: return 119
+        case .chatVoiceSpeedList: return 120
         case .unlimitedPinnedChats: return 104
         case .settingsIconsHeader: return 105
         case .compactChatList: return 110
@@ -1160,6 +1165,8 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .voiceTimeInPlayer: return (28, 5)
         case .replyTimecode: return (28, 6)
         case .replyTimecodeMode: return (28, 7)
+        case .chatVoiceSpeed: return (28, 8)
+        case .chatVoiceSpeedList: return (28, 9)
         // After the media section (mediaFooter = 29), in display order.
         case .customRoundVideosHeader: return (29, 1)
         case .customVideoMessageSpeed: return (29, 2)
@@ -1331,6 +1338,12 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
             })
         case let .replyTimecodeMode(mode):
             return ItemListDisclosureItem(presentationData: presentationData, title: "Режим тайм-кода", label: ShadowReplyTimecode.modeTitle(mode), labelStyle: .detailText, sectionId: self.section, style: .blocks, action: arguments.selectReplyTimecodeMode)
+        case let .chatVoiceSpeed(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Своя скорость для чатов", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.updateSetting { $0.chatVoiceSpeed = value }
+            })
+        case let .chatVoiceSpeedList(count):
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Чаты со своей скоростью", label: count == 0 ? "Нет" : "\(count)", labelStyle: .detailText, sectionId: self.section, style: .blocks, action: arguments.openChatVoiceSpeeds)
         case .chatsFooter:
             return ItemListTextItem(presentationData: presentationData, text: .plain("«Скрыть папку «Все чаты»» убирает эту вкладку, остальные папки работают. «Скрыть истории» убирает ленту историй над списком чатов. «Скрыть кнопку подарка» убирает подарок из поля ввода. «Скрыть приветственный стикер» убирает карточку со стикером в пустом чате с незнакомым. «Скрыть значки Premium» убирает звёздочку и эмодзи-статус рядом с именами (галочки верификации остаются). «Скрыть рекламу в каналах» — спонсорские сообщения не загружаются; применяется при следующем открытии канала. «Безлимитные закрепы» снимают ограничение на закрепы в списке чатов, архиве, папках, «Избранном» и темах форумов; всё сверх лимита Telegram хранится только на этом устройстве."), sectionId: self.section)
         case .bottomBarHeader:
@@ -1388,7 +1401,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
                 arguments.updateSetting { $0.cameraTileCompact = value }
             })
         case .mediaFooter:
-            return ItemListTextItem(presentationData: presentationData, text: .plain("Начинать запись видеосообщений («кружков») с задней камеры. Во время записи можно переключиться на фронтальную. «Камера в галерее» показывает плитку камеры первой ячейкой в галерее вложений. «Живой предпросмотр камеры» запускает в этой плитке видео с камеры вживую вместо статичной иконки. «Компактная плитка камеры» занимает одну ячейку вместо двух — в первом ряду видно больше медиа. «Расшифровка голосовых на устройстве» без Premium распознаёт речь прямо на телефоне — аудио никуда не отправляется. «Время на голосовых» меняет время под голосовым во время прослушивания: сколько осталось (как в Telegram), сколько прошло, «прошло / всего», «-осталось / всего» или процент; пока голосовое не играет, видна его длина. «Также на кружках» применяет тот же формат к видеосообщениям, «Время в верхнем плеере» добавляет его в полоску плеера над чатом. «Тайм-код в ответах»: ответ текстом на недослушанное голосовое или кружок начинается с момента, где вы остановились, например «0:53 текст»; собеседник нажимает на 0:53 и слушает с этого места. Режим «Спрашивать» показывает окно при отправке, ответ в нём можно запомнить для чата на 30 минут."), sectionId: self.section)
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Начинать запись видеосообщений («кружков») с задней камеры. Во время записи можно переключиться на фронтальную. «Камера в галерее» показывает плитку камеры первой ячейкой в галерее вложений. «Живой предпросмотр камеры» запускает в этой плитке видео с камеры вживую вместо статичной иконки. «Компактная плитка камеры» занимает одну ячейку вместо двух — в первом ряду видно больше медиа. «Расшифровка голосовых на устройстве» без Premium распознаёт речь прямо на телефоне — аудио никуда не отправляется. «Время на голосовых» меняет время под голосовым во время прослушивания: сколько осталось (как в Telegram), сколько прошло, «прошло / всего», «-осталось / всего» или процент; пока голосовое не играет, видна его длина. «Также на кружках» применяет тот же формат к видеосообщениям, «Время в верхнем плеере» добавляет его в полоску плеера над чатом. «Тайм-код в ответах»: ответ текстом на недослушанное голосовое или кружок начинается с момента, где вы остановились, например «0:53 текст»; собеседник нажимает на 0:53 и слушает с этого места. Режим «Спрашивать» показывает окно при отправке, ответ в нём можно запомнить для чата на 30 минут. «Своя скорость для чатов»: кнопка скорости в полоске плеера меняет скорость голосовых только того чата, откуда играет голосовое, общая скорость остаётся прежней."), sectionId: self.section)
         case .customRoundVideosHeader:
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "КАСТОМНЫЕ КРУЖКИ", sectionId: self.section)
         case let .customVideoMessageSpeed(value):
@@ -1449,7 +1462,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
     }
 }
 
-private func ayuCustomizationEntries(settings: AyuGramSettings) -> [AyuCustomizationEntry] {
+private func ayuCustomizationEntries(settings: AyuGramSettings, chatVoiceSpeedCount: Int = 0) -> [AyuCustomizationEntry] {
     var entries: [AyuCustomizationEntry] = []
 
     entries.append(.buildInfo)
@@ -1520,6 +1533,10 @@ private func ayuCustomizationEntries(settings: AyuGramSettings) -> [AyuCustomiza
     entries.append(.replyTimecode(settings.replyTimecode))
     if settings.replyTimecode {
         entries.append(.replyTimecodeMode(settings.replyTimecodeMode))
+    }
+    entries.append(.chatVoiceSpeed(settings.chatVoiceSpeed))
+    if settings.chatVoiceSpeed {
+        entries.append(.chatVoiceSpeedList(chatVoiceSpeedCount))
     }
     entries.append(.mediaFooter)
 
@@ -1716,12 +1733,13 @@ func ayuCustomizationController(context: AccountContext, focus: ShadowSettingsSe
 
     let signal = combineLatest(queue: .mainQueue(),
         context.sharedContext.presentationData,
-        ayuGramSettings(postbox: context.account.postbox)
+        ayuGramSettings(postbox: context.account.postbox),
+        shadowChatVoiceSpeedCount(context: context)
     )
     |> deliverOnMainQueue
-    |> map { presentationData, settings -> (ItemListControllerState, (ItemListNodeState, Any)) in
+    |> map { presentationData, settings, chatVoiceSpeedCount -> (ItemListControllerState, (ItemListNodeState, Any)) in
         let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text(part?.title ?? "Кастомизация"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
-        let allEntries = ayuCustomizationEntries(settings: settings)
+        let allEntries = ayuCustomizationEntries(settings: settings, chatVoiceSpeedCount: chatVoiceSpeedCount)
         let entries = part.map { part in allEntries.filter { part.contains($0.section) } } ?? allEntries
         linkRows.stableIds = entries.map { $0.stableId }
         focusedIndex = shadowSettingsFocusIndex(stableIds: entries.map { $0.stableId }, target: focus)
@@ -1821,6 +1839,9 @@ func ayuCustomizationController(context: AccountContext, focus: ShadowSettingsSe
             ActionSheetItemGroup(items: [ActionSheetButtonItem(title: data.strings.Common_Cancel, action: { [weak sheet] in sheet?.dismissAnimated() })])
         ])
         presentControllerImpl?(sheet, nil)
+    }
+    arguments.openChatVoiceSpeeds = { [weak controller] in
+        controller?.push(shadowChatVoiceSpeedController(context: context))
     }
     arguments.selectReplyTimecodeMode = {
         let data = context.sharedContext.currentPresentationData.with { $0 }

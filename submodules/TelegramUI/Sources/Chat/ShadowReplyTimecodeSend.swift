@@ -30,8 +30,21 @@ func shadowReplyTimecodeCandidate(context: AccountContext, state: ChatPresentati
     guard let replySubject = state.interfaceState.replyMessageSubject, let replyMessage = state.replyMessage, replyMessage.id == replySubject.messageId else {
         return nil
     }
+    guard let (timecode, duration, isRoundVideo) = shadowReplyTimecodePosition(context: context, message: replyMessage) else {
+        return nil
+    }
+    let accountPeerId = context.account.peerId.toInt64()
+    let chatKey = ShadowReplyTimecode.chatKey(accountPeerId: accountPeerId, peerId: peerId.toInt64(), threadId: chatLocation.threadId)
+    let remembered = ShadowReplyTimecode.memory.answer(chat: chatKey, now: Date().timeIntervalSince1970)
+    let action = ShadowReplyTimecode.action(enabled: true, mode: settings.replyTimecodeMode, remembered: remembered)
+    return ShadowReplyTimecodeCandidate(timecode: timecode, duration: duration, isRoundVideo: isRoundVideo, chatKey: chatKey, action: action)
+}
+
+// Where the player is (or stopped) in a voice message or round video, as a
+// timecode; nil when it was not started or was heard to the end.
+func shadowReplyTimecodePosition(context: AccountContext, message: Message) -> (timecode: String, duration: Double, isRoundVideo: Bool)? {
     var file: TelegramMediaFile?
-    for media in replyMessage.media {
+    for media in message.media {
         if let media = media as? TelegramMediaFile, media.isVoice || media.isInstantVideo {
             file = media
         }
@@ -39,8 +52,7 @@ func shadowReplyTimecodeCandidate(context: AccountContext, state: ChatPresentati
     guard let file else {
         return nil
     }
-    let accountPeerId = context.account.peerId.toInt64()
-    let key = ShadowReplyTimecode.messageKey(accountPeerId: accountPeerId, peerId: replyMessage.id.peerId.toInt64(), namespace: replyMessage.id.namespace, id: replyMessage.id.id)
+    let key = ShadowReplyTimecode.messageKey(accountPeerId: context.account.peerId.toInt64(), peerId: message.id.peerId.toInt64(), namespace: message.id.namespace, id: message.id.id)
     guard let sample = ShadowReplyTimecode.positions.sample(key: key) else {
         return nil
     }
@@ -48,10 +60,7 @@ func shadowReplyTimecodeCandidate(context: AccountContext, state: ChatPresentati
     guard let timecode = ShadowReplyTimecode.timecode(position: sample.position(now: CACurrentMediaTime()), duration: duration) else {
         return nil
     }
-    let chatKey = ShadowReplyTimecode.chatKey(accountPeerId: accountPeerId, peerId: peerId.toInt64(), threadId: chatLocation.threadId)
-    let remembered = ShadowReplyTimecode.memory.answer(chat: chatKey, now: Date().timeIntervalSince1970)
-    let action = ShadowReplyTimecode.action(enabled: true, mode: settings.replyTimecodeMode, remembered: remembered)
-    return ShadowReplyTimecodeCandidate(timecode: timecode, duration: duration, isRoundVideo: file.isInstantVideo, chatKey: chatKey, action: action)
+    return (timecode, duration, file.isInstantVideo)
 }
 
 // "Добавить тайм-код 0:53?" with a checkbox that remembers the answer in this

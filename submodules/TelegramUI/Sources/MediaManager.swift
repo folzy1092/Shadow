@@ -443,8 +443,10 @@ public final class MediaManagerImpl: NSObject, MediaManager {
             let now = CACurrentMediaTime()
             var key: String?
             var sample: ShadowReplyTimecode.PlaybackSample?
+            var speedChat: String?
             if let (account, stateOrLoading, type) = accountStateAndType, case .voice = type, case let .state(state) = stateOrLoading, let item = state.item as? MessageMediaPlaylistItem {
                 let messageId = item.message.id
+                speedChat = ShadowChatVoiceSpeed.chatKey(accountPeerId: account.peerId.toInt64(), peerId: messageId.peerId.toInt64())
                 key = ShadowReplyTimecode.messageKey(accountPeerId: account.peerId.toInt64(), peerId: messageId.peerId.toInt64(), namespace: messageId.namespace, id: messageId.id)
                 var isPlaying = false
                 if case .playing = state.status.status {
@@ -459,6 +461,8 @@ public final class MediaManagerImpl: NSObject, MediaManager {
                 ShadowReplyTimecode.positions.record(key: key, sample: sample)
             }
             shadowReplyTimecodeKey = key
+            // The chat whose speed the player bar button changes.
+            ShadowChatVoiceSpeed.shared.currentChat = speedChat
         }))
 
         self.musicListenTrackingDisposable.set((self.musicMediaPlayerState
@@ -552,7 +556,12 @@ public final class MediaManagerImpl: NSObject, MediaManager {
                                     controlPlaybackWithProximity = playlist.context.sharedContext.currentMediaInputSettings.with({ $0.enableRaiseToSpeak })
                                 }
                                 
-                                let voiceMediaPlayer = SharedMediaPlayer(context: context, mediaManager: strongSelf, inForeground: strongSelf.inForeground, engine: context.engine, audioSession: strongSelf.audioSession, overlayMediaManager: strongSelf.overlayMediaManager, playlist: playlist, initialOrder: .reversed, initialLooping: .none, initialPlaybackRate: settings.voicePlaybackRate, playerIndex: nextPlayerIndex, controlPlaybackWithProximity: controlPlaybackWithProximity, type: type, continueInstantVideoLoopAfterFinish: continueInstantVideoLoopAfterFinish)
+                                // Shadow: a chat with its own voice speed starts at it (ShadowChatVoiceSpeed).
+                                var initialVoicePlaybackRate = settings.voicePlaybackRate
+                                if currentAyuGramSettings(accountId: context.account.id).chatVoiceSpeed, let location = playlist.location as? PeerMessagesPlaylistLocation, let messageId = location.messageId, let rate = ShadowChatVoiceSpeed.shared.rate(chat: ShadowChatVoiceSpeed.chatKey(accountPeerId: context.account.peerId.toInt64(), peerId: messageId.peerId.toInt64())) {
+                                    initialVoicePlaybackRate = AudioPlaybackRate(rawValue: rate)
+                                }
+                                let voiceMediaPlayer = SharedMediaPlayer(context: context, mediaManager: strongSelf, inForeground: strongSelf.inForeground, engine: context.engine, audioSession: strongSelf.audioSession, overlayMediaManager: strongSelf.overlayMediaManager, playlist: playlist, initialOrder: .reversed, initialLooping: .none, initialPlaybackRate: initialVoicePlaybackRate, playerIndex: nextPlayerIndex, controlPlaybackWithProximity: controlPlaybackWithProximity, type: type, continueInstantVideoLoopAfterFinish: continueInstantVideoLoopAfterFinish)
                                 strongSelf.voiceMediaPlayer = voiceMediaPlayer
                                 voiceMediaPlayer.playedToEnd = { [weak voiceMediaPlayer] in
                                     if let strongSelf = self, let voiceMediaPlayer = voiceMediaPlayer, voiceMediaPlayer === strongSelf.voiceMediaPlayer {

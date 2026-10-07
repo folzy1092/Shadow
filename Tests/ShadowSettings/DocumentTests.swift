@@ -66,6 +66,8 @@ struct DocumentTests {
         let restoredReplyTimecode = try ShadowSettingsDocument.decode(replyTimecode.encoded())
         check(restoredReplyTimecode.settings["replyTimecode"] == .bool(true), "Reply timecode is portable")
         check(restoredReplyTimecode.settings["replyTimecodeMode"] == .integer(0), "Reply timecode mode is portable")
+        let chatVoiceSpeed = try ShadowSettingsDocument.decode(ShadowSettingsDocument(settings: ["chatVoiceSpeed": .bool(true)]).encoded())
+        check(chatVoiceSpeed.settings["chatVoiceSpeed"] == .bool(true), "Chat voice speed is portable")
         expectFailure("Unsupported reply timecode mode") { _ = try ShadowSettingsDocument(settings: ["replyTimecodeMode": .integer(2)]) }
         let ghostPolicy = try ShadowSettingsDocument(settings: ["ghostAccountMode": .integer(3)])
         let restoredGhostPolicy = try ShadowSettingsDocument.decode(ghostPolicy.encoded())

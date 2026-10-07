@@ -75,6 +75,7 @@ public enum ShadowSettingsTransfer {
         "voiceTimeRoundVideos": \.voiceTimeRoundVideos,
         "voiceTimeInPlayer": \.voiceTimeInPlayer,
         "replyTimecode": \.replyTimecode,
+        "chatVoiceSpeed": \.chatVoiceSpeed,
         "monochromeSettingsIcons": \.monochromeSettingsIcons,
         "compactChatList": \.compactChatList,
         "onlineHistory": \.onlineHistory,

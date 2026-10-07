@@ -157,7 +157,19 @@ public final class MediaPlaybackHeaderPanelComponent: Component {
                     guard let self, let component = self.component else {
                         return
                     }
+                    // Shadow: with «Своя скорость для чатов» the voice speed belongs to
+                    // the chat the voice message plays from; the common speed stays.
+                    var shadowSpeedChat: String?
+                    if case .voice = component.data.kind, currentAyuGramSettings(accountId: component.context.account.id).chatVoiceSpeed {
+                        shadowSpeedChat = ShadowChatVoiceSpeed.shared.currentChat
+                    }
+                    if let shadowSpeedChat {
+                        ShadowChatVoiceSpeed.shared.set(chat: shadowSpeedChat, rate: rate.rawValue)
+                    }
                     let _ = (component.context.sharedContext.accountManager.transaction { transaction -> AudioPlaybackRate in
+                        if shadowSpeedChat != nil {
+                            return rate
+                        }
                         let settings = transaction.getSharedData(ApplicationSpecificSharedDataKeys.musicPlaybackSettings)?.get(MusicPlaybackSettings.self) ?? MusicPlaybackSettings.defaultSettings
                         
                         transaction.updateSharedData(ApplicationSpecificSharedDataKeys.musicPlaybackSettings, { _ in
