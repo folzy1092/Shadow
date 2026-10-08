@@ -40,12 +40,12 @@ class FeedContracts(unittest.TestCase):
         handled = set(re.findall(r'case "(\w+)":', controller))
         self.assertTrue(sent)
         self.assertEqual(sent - handled, set())
-        for call in ("Feed.init(", "Feed.setPosts(", "Feed.appendPosts(", "Feed.prependPosts(", "Feed.mediaReady(", "Feed.updatePost(", "Feed.setChips(", "Feed.setConfig("):
+        for call in ("Feed.init(", "Feed.setPosts(", "Feed.appendPosts(", "Feed.prependPosts(", "Feed.mediaReady(", "Feed.updateReactions(", "Feed.setChips(", "Feed.setConfig("):
             self.assertIn(call, controller)
             self.assertIn(call.split(".")[1].rstrip("("), page)
         # Instagram-like autoplay: a second in the middle of the screen, muted.
         self.assertIn("}, 1000);", page)
-        self.assertIn("v.muted = true", page)
+        self.assertIn("v.muted = false", page)
 
     def test_only_local_posts_without_ads(self):
         collect = read("TelegramCore/Sources/AyuGram/ShadowFeedCollect.swift")

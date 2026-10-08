@@ -337,6 +337,13 @@ public enum ShadowSettingLinks {
         ShadowSettingLink(screen: "profile", slug: "spoof-id", entryId: 1, key: "spoofProfileIdEnabled", title: "Подменить ID"),
         ShadowSettingLink(screen: "profile", slug: "spoof-dc", entryId: 3, key: "spoofProfileDcEnabled", title: "Подменить DC"),
         ShadowSettingLink(screen: "profile", slug: "spoof-phone", entryId: 5, key: "spoofProfilePhoneEnabled", title: "Подменить номер", icon: "phone"),
+        // 1.9.1: every setting has a link (choices that are not plain numbers open the row).
+        ShadowSettingLink(screen: "ghost", slug: "account-mode", entryId: 11, key: nil, title: "Призрак для аккаунта", since: "1.9.1"),
+        ShadowSettingLink(screen: "spy", slug: "attachment-size", entryId: 18, key: nil, title: "Лимит размера вложений", since: "1.9.1"),
+        ShadowSettingLink(screen: "spy", slug: "attachment-age", entryId: 19, key: nil, title: "Срок хранения вложений", since: "1.9.1"),
+        ShadowSettingLink(screen: "profile", slug: "spoof-id-value", entryId: 2, key: nil, title: "Подменённый ID", parentEntryId: 1, since: "1.9.1"),
+        ShadowSettingLink(screen: "profile", slug: "spoof-dc-value", entryId: 4, key: nil, title: "Подменённый DC", parentEntryId: 3, since: "1.9.1"),
+        ShadowSettingLink(screen: "profile", slug: "spoof-phone-value", entryId: 6, key: nil, title: "Подменённый номер", parentEntryId: 5, since: "1.9.1"),
 
         // Разное
         ShadowSettingLink(screen: "misc", slug: "story-camera-swipe", entryId: 0, key: "disableStoryCameraSwipe", title: "Отключить свайп к камере", icon: "camera"),

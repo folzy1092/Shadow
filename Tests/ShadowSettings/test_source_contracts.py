@@ -24,7 +24,8 @@ class TransferContracts(unittest.TestCase):
                             for key, value in paths.items()))
 
     def test_no_private_fields_in_export(self):
-        for forbidden in ['spoofProfile', 'customBannerEnabled', 'customProfileBackground', 'api_hash', 'authKey', 'session']:
+        # 1.9.1: the file carries every Shadow setting (Folzy); never account secrets.
+        for forbidden in ['api_hash', 'authKey', 'session', 'ghostLastSeenTimestamp', 'passcode', 'duress']:
             self.assertNotIn(forbidden, DOCUMENT)
         self.assertNotIn('JSONEncoder().encode(settings)', TRANSFER)
 

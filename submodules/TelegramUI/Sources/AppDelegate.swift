@@ -252,6 +252,8 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
     private let openNotificationSettingsWhenReadyDisposable = MetaDisposable()
     private let openChatWhenReadyDisposable = MetaDisposable()
     private let openUrlWhenReadyDisposable = MetaDisposable()
+    // Shadow: a settings file waiting for login and the passcode (1.9.1).
+    private let shadowSettingsFileDisposable = MetaDisposable()
     
     private let badgeDisposable = MetaDisposable()
     private let quickActionsDisposable = MetaDisposable()
@@ -2571,6 +2573,12 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
     }
     
     private func openUrl(url: URL) {
+        // Shadow: a .shadow-settings file (share sheet, AirDrop, Files) opens
+        // the settings import, not Telegram link parsing.
+        if ShadowSettingsFile.isSettingsFile(url) {
+            self.shadowOpenSettingsFile(url)
+            return
+        }
         let _ = (self.sharedContextPromise.get()
         |> take(1)
         |> mapToSignal { sharedApplicationContext -> Signal<(SharedAccountContextImpl, AuthorizedApplicationContext?, UnauthorizedApplicationContext?), NoError> in
@@ -2889,6 +2897,35 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
     }
     
     private var openUrlInProgress: URL?
+    // Shadow: the import preview after login, the passcode and the device
+    // access gate (it covers everything until access is granted). The file is
+    // moved out of Documents/Inbox right away; in the disguise / duress session
+    // it is dropped silently.
+    private func shadowOpenSettingsFile(_ url: URL) {
+        if ShadowDisguise.shared.hidesSettings {
+            try? FileManager.default.removeItem(at: url)
+            return
+        }
+        guard let file = ShadowSettingsFile.takeIncoming(url) else {
+            return
+        }
+        let signal = self.authorizedContext()
+        |> take(1)
+        |> mapToSignal { context -> Signal<AuthorizedApplicationContext, NoError> in
+            guard let appLockContext = context.context.sharedContext.appLockContext as? AppLockContextImpl else {
+                return .single(context)
+            }
+            return appLockContext.isCurrentlyLocked
+            |> filter { !$0 }
+            |> take(1)
+            |> map { _ in context }
+        }
+        self.shadowSettingsFileDisposable.set((signal
+        |> deliverOnMainQueue).start(next: { context in
+            shadowPresentIncomingSettingsFile(context: context.context, navigationController: context.rootController, file: file)
+        }))
+    }
+
     private func openUrlWhenReady(accountId: AccountRecordId? = nil, url: URL, external: Bool = false) {
         self.openUrlInProgress = url
         

@@ -80,6 +80,13 @@ public enum ShadowSettingsTransfer {
         "feedIncludeMuted": \.feedIncludeMuted,
         "feedIncludeArchived": \.feedIncludeArchived,
         "feedMarkRead": \.feedMarkRead,
+        "spoofProfileIdEnabled": \.spoofProfileIdEnabled,
+        "spoofProfileDcEnabled": \.spoofProfileDcEnabled,
+        "spoofProfilePhoneEnabled": \.spoofProfilePhoneEnabled,
+        "customBannerEnabled": \.customBannerEnabled,
+        "customProfileBackgroundEnabled": \.customProfileBackgroundEnabled,
+        "customProfileBackgroundForOthers": \.customProfileBackgroundForOthers,
+        "customProfileBackgroundForSettings": \.customProfileBackgroundForSettings,
         "updateChannelBeta": \.updateChannelBeta,
         "unlimitedPinnedChats": \.unlimitedPinnedChats,
         "localVoiceTranscription": \.localVoiceTranscription,
@@ -107,6 +114,21 @@ public enum ShadowSettingsTransfer {
         return self.booleanFields[key]
     }
 
+    // Sorted keys: the same settings always give the same text, so the
+    // preview does not report an unchanged list as a change.
+    static func json<T: Encodable>(_ value: T) -> String? {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        guard let data = try? encoder.encode(value) else {
+            return nil
+        }
+        return String(data: data, encoding: .utf8)
+    }
+
+    static func decodeJSON<T: Decodable>(_ text: String) -> T? {
+        return try? JSONDecoder().decode(T.self, from: Data(text.utf8))
+    }
+
     public static func document(from settings: AyuGramSettings) throws -> ShadowSettingsDocument {
         var values: [String: ShadowSettingValue] = [:]
         for (key, path) in self.booleanFields {
@@ -114,6 +136,21 @@ public enum ShadowSettingsTransfer {
         }
         values["editedIndicatorText"] = .text(settings.editedIndicatorText)
         values["deletedIndicatorText"] = .text(settings.deletedIndicatorText)
+        values["spoofProfileIdValue"] = .text(String(settings.spoofProfileIdValue.prefix(64)))
+        values["spoofProfileDcValue"] = .text(String(settings.spoofProfileDcValue.prefix(64)))
+        values["spoofProfilePhoneValue"] = .text(String(settings.spoofProfilePhoneValue.prefix(64)))
+        let rules = settings.chatPrivacyRules.filter { !$0.value.isDefault }
+        for (key, json) in [
+            ("messageFilters", ShadowSettingsTransfer.json(settings.messageFilters)),
+            ("shadowBannedPeerIds", ShadowSettingsTransfer.json(settings.shadowBannedPeerIds)),
+            ("quickReplyTemplates", ShadowSettingsTransfer.json(settings.quickReplyTemplates)),
+            ("headerButtons", ShadowSettingsTransfer.json(settings.headerButtons)),
+            ("chatPrivacyRules", ShadowSettingsTransfer.json(rules))
+        ] {
+            if let json {
+                values[key] = .text(json)
+            }
+        }
         values["mediaAutoCleanInterval"] = .integer(Int64(settings.mediaAutoCleanInterval))
         values["attachmentSizeLimit"] = .integer(settings.attachmentSizeLimit)
         values["bottomBarScrollMode"] = .integer(Int64(settings.bottomBarScrollMode))
@@ -147,6 +184,30 @@ public enum ShadowSettingsTransfer {
                 switch key {
                 case "editedIndicatorText": updated.editedIndicatorText = text
                 case "deletedIndicatorText": updated.deletedIndicatorText = text
+                case "spoofProfileIdValue": updated.spoofProfileIdValue = text
+                case "spoofProfileDcValue": updated.spoofProfileDcValue = text
+                case "spoofProfilePhoneValue": updated.spoofProfilePhoneValue = text
+                case "messageFilters":
+                    if let filters: [ShadowMessageFilter] = ShadowSettingsTransfer.decodeJSON(text) {
+                        updated.messageFilters = filters
+                    }
+                case "shadowBannedPeerIds":
+                    if let ids: [Int64] = ShadowSettingsTransfer.decodeJSON(text) {
+                        var seen = Set<Int64>()
+                        updated.shadowBannedPeerIds = ids.filter { seen.insert($0).inserted }
+                    }
+                case "quickReplyTemplates":
+                    if let templates: [String] = ShadowSettingsTransfer.decodeJSON(text) {
+                        updated.quickReplyTemplates = Array(templates.prefix(AyuGramSettings.quickReplyTemplatesLimit))
+                    }
+                case "headerButtons":
+                    if let buttons: ShadowHeaderButtons = ShadowSettingsTransfer.decodeJSON(text) {
+                        updated.headerButtons = buttons
+                    }
+                case "chatPrivacyRules":
+                    if let rules: [String: ShadowChatPrivacyRule] = ShadowSettingsTransfer.decodeJSON(text) {
+                        updated.chatPrivacyRules = rules.filter { !$0.value.isDefault }
+                    }
                 default: break
                 }
             case let .integer(number):

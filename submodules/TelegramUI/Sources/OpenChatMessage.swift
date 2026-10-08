@@ -279,6 +279,12 @@ func openChatMessageImpl(_ params: OpenChatMessageParams) -> Bool {
                             presentDocumentPreviewController(rootController: rootController, theme: presentationData.theme, strings: presentationData.strings, postbox: params.context.account.postbox, file: file, canShare: canShare)
                         }
                     }
+                    // Shadow: a settings file sent in a chat offers the import
+                    // preview first (1.9.1). «Открыть как файл» keeps the stock path.
+                    if let fileName = file.fileName, ShadowSettingsFile.isSettingsFileName(fileName), !ShadowDisguise.shared.hidesSettings, let navigationController = params.navigationController {
+                        shadowOfferSettingsImport(params: params, file: file, navigationController: navigationController, openAsFile: proceed)
+                        return true
+                    }
                     if file.mimeType.contains("image/svg") {
                         let presentationData = params.context.sharedContext.currentPresentationData.with { $0 }
                         params.present(textAlertController(context: params.context, title: nil, text: presentationData.strings.OpenFile_PotentiallyDangerousContentAlert, actions: [TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {}), TextAlertAction(type: .defaultAction, title: presentationData.strings.OpenFile_Proceed, action: { proceed() })] ), nil, .window(.root))
@@ -566,4 +572,61 @@ func openChatTheme(context: AccountContext, message: Message, pushController: @e
             })
         }
     }
+}
+
+// Shadow: «Настройки Shadow» sheet for a settings file in a chat. «Посмотреть и
+// применить» downloads the file (like opening it) and shows the same import
+// preview as Shadow → Резервная копия настроек; nothing changes before
+// «Импортировать».
+private func shadowOfferSettingsImport(params: OpenChatMessageParams, file: TelegramMediaFile, navigationController: NavigationController, openAsFile: @escaping () -> Void) {
+    let context = params.context
+    let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+    var author = ""
+    if let peer = params.message.author {
+        author = EnginePeer(peer).displayTitle(strings: presentationData.strings, displayOrder: presentationData.nameDisplayOrder)
+    }
+    let actionSheet = ActionSheetController(presentationData: presentationData)
+    actionSheet.setItemGroups([
+        ActionSheetItemGroup(items: [
+            ActionSheetTextItem(title: author.isEmpty ? "Файл настроек Shadow. Посмотреть изменения и применить их к этому аккаунту?" : "Настройки Shadow от \(author). Посмотреть изменения и применить их к этому аккаунту?", parseMarkdown: false),
+            ActionSheetButtonItem(title: "Посмотреть и применить", color: .accent, action: { [weak actionSheet] in
+                actionSheet?.dismissAnimated()
+                let mediaBox = context.account.postbox.mediaBox
+                let reference: MediaResourceReference = .media(media: .message(message: MessageReference(params.message), media: file), resource: file.resource)
+                let data: Signal<String?, NoError> = Signal { subscriber in
+                    let fetch = fetchedMediaResource(mediaBox: mediaBox, userLocation: .peer(params.message.id.peerId), userContentType: .file, reference: reference).start()
+                    let ready = (mediaBox.resourceData(file.resource)
+                    |> filter { $0.complete }
+                    |> take(1)).start(next: { data in
+                        subscriber.putNext(data.path)
+                        subscriber.putCompletion()
+                    })
+                    return ActionDisposable {
+                        fetch.dispose()
+                        ready.dispose()
+                    }
+                }
+                let _ = (data
+                |> timeout(30.0, queue: Queue.mainQueue(), alternate: .single(nil))
+                |> deliverOnMainQueue).start(next: { [weak navigationController] path in
+                    guard let navigationController else {
+                        return
+                    }
+                    guard let path, let copy = ShadowSettingsFile.takeIncoming(URL(fileURLWithPath: path)) else {
+                        params.present(textAlertController(context: context, title: "Настройки Shadow", text: "Не удалось загрузить файл. Попробуйте ещё раз.", actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]), nil, .window(.root))
+                        return
+                    }
+                    shadowPresentIncomingSettingsFile(context: context, navigationController: navigationController, file: copy)
+                })
+            }),
+            ActionSheetButtonItem(title: "Открыть как файл", color: .accent, action: { [weak actionSheet] in
+                actionSheet?.dismissAnimated()
+                openAsFile()
+            })
+        ]),
+        ActionSheetItemGroup(items: [ActionSheetButtonItem(title: presentationData.strings.Common_Cancel, color: .accent, font: .bold, action: { [weak actionSheet] in
+            actionSheet?.dismissAnimated()
+        })])
+    ])
+    params.present(actionSheet, nil, .window(.root))
 }

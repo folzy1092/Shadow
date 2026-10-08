@@ -40,9 +40,15 @@ public struct ShadowSettingsDocument: Codable, Equatable {
         "mediaAutoCleanKeepBots", "showProfileId", "showProfileDC",
         "showRegistrationDate", "hideOwnPhoneNumber",
         "hideStoriesBar", "hideGiftButton", "hideGreetingSticker", "offerGhostBeforeStories", "hidePremiumBadges", "hideSponsoredMessages", "adFilterChannels", "adFilterGroups", "adFilterForwarded", "adHideCompletely", "showChatStreak", "feedEnabled", "feedAutoplay", "feedShowFolders", "feedIncludeMuted", "feedIncludeArchived", "feedMarkRead", "messageFilterShowPlaceholder", "updateChannelBeta", "unlimitedPinnedChats", "localVoiceTranscription", "voiceTimeRoundVideos", "voiceTimeInPlayer", "replyTimecode", "chatVoiceSpeed", "monochromeSettingsIcons", "compactChatList", "onlineHistory", "saveViewedStories",
-        "screenshotAnonymize", "screenshotAnonymizeOwn", "screenshotAnonymizeOthers", "screenshotEnabled", "screenshotAvatars", "screenshotNames", "screenshotBadges", "screenshotTime"
+        "screenshotAnonymize", "screenshotAnonymizeOwn", "screenshotAnonymizeOthers", "screenshotEnabled", "screenshotAvatars", "screenshotNames", "screenshotBadges", "screenshotTime",
+        "spoofProfileIdEnabled", "spoofProfileDcEnabled", "spoofProfilePhoneEnabled", "customBannerEnabled", "customProfileBackgroundEnabled", "customProfileBackgroundForOthers", "customProfileBackgroundForSettings"
     ]
-    public static let textKeys: Set<String> = ["editedIndicatorText", "deletedIndicatorText"]
+    public static let textKeys: Set<String> = ["editedIndicatorText", "deletedIndicatorText", "spoofProfileIdValue", "spoofProfileDcValue", "spoofProfilePhoneValue"]
+    // Lists and tables, as JSON text (ShadowSettingsTransfer encodes and checks
+    // them): message filters, shadow ban, quick reply templates, header
+    // buttons, per-chat Ghost Mode rules (1.9.1: the file carries everything).
+    public static let jsonKeys: Set<String> = ["messageFilters", "shadowBannedPeerIds", "quickReplyTemplates", "headerButtons", "chatPrivacyRules"]
+    public static let maximumJSONBytes = 256 * 1024
     public static let integerKeys: Set<String> = [
         "mediaAutoCleanInterval", "attachmentSizeLimit", "bottomBarScrollMode", "ghostAccountMode",
         "screenshotBackground", "screenshotCustomColorARGB",
@@ -90,7 +96,7 @@ public struct ShadowSettingsDocument: Codable, Equatable {
             do {
                 if Self.booleanKeys.contains(key.stringValue) {
                     settings[key.stringValue] = .bool(try values.decode(Bool.self, forKey: key))
-                } else if Self.textKeys.contains(key.stringValue) {
+                } else if Self.textKeys.contains(key.stringValue) || Self.jsonKeys.contains(key.stringValue) {
                     settings[key.stringValue] = .text(try values.decode(String.self, forKey: key))
                 } else if Self.integerKeys.contains(key.stringValue) {
                     settings[key.stringValue] = .integer(try values.decode(Int64.self, forKey: key))
@@ -109,6 +115,7 @@ public struct ShadowSettingsDocument: Codable, Equatable {
             switch value {
             case .bool where booleanKeys.contains(key): break
             case let .text(text) where textKeys.contains(key) && text.count <= 64: break
+            case let .text(text) where jsonKeys.contains(key) && text.utf8.count <= maximumJSONBytes: break
             case let .integer(number) where key == "mediaAutoCleanInterval" && ageIntervals.contains(number): break
             case let .integer(number) where key == "attachmentSizeLimit" && sizeLimits.contains(number): break
             case let .integer(number) where key == "bottomBarScrollMode" && (0...3).contains(number): break
@@ -162,5 +169,60 @@ public struct ShadowSettingsDocument: Codable, Equatable {
         let data = try encoder.encode(self)
         guard data.count <= Self.maximumBytes else { throw ShadowSettingsTransferError.tooLarge }
         return data
+    }
+}
+
+// Shadow: the settings file type (1.9.1). Declared in the app's Info.plist
+// (UTExportedTypeDeclarations + CFBundleDocumentTypes, app.shadow.settings),
+// so the share sheet, AirDrop and Files open it in Shadow.
+public enum ShadowSettingsFile {
+    public static let typeIdentifier = "app.shadow.settings"
+    public static let fileExtension = "shadow-settings"
+    public static let exportFileName = "Shadow.shadow-settings"
+
+    // Opened by the system (share sheet, AirDrop, Files): only the own type.
+    public static func isSettingsFile(_ url: URL) -> Bool {
+        return url.isFileURL && url.pathExtension.lowercased() == fileExtension
+    }
+
+    // A file sent in a chat: the own type and older exports (*.shadow-settings.json).
+    public static func isSettingsFileName(_ name: String) -> Bool {
+        let lower = name.lowercased()
+        return lower.hasSuffix("." + fileExtension) || lower.hasSuffix("." + fileExtension + ".json")
+    }
+
+    // Moves an incoming file (iOS copies it to Documents/Inbox) into a fresh
+    // temporary folder and removes the Inbox copy. nil when it cannot be read.
+    public static func takeIncoming(_ url: URL, fileManager: FileManager = .default) -> URL? {
+        let directory = fileManager.temporaryDirectory.appendingPathComponent("shadow-settings-in-" + UUID().uuidString, isDirectory: true)
+        let target = directory.appendingPathComponent(exportFileName)
+        do {
+            try fileManager.createDirectory(at: directory, withIntermediateDirectories: true, attributes: nil)
+            let scoped = url.startAccessingSecurityScopedResource()
+            defer {
+                if scoped {
+                    url.stopAccessingSecurityScopedResource()
+                }
+            }
+            try fileManager.copyItem(at: url, to: target)
+        } catch {
+            try? fileManager.removeItem(at: directory)
+            try? fileManager.removeItem(at: url)
+            return nil
+        }
+        if url.path.contains("/Inbox/") {
+            try? fileManager.removeItem(at: url)
+        }
+        return target
+    }
+
+    // Removes the temporary folder of a taken file.
+    public static func discard(_ file: URL, fileManager: FileManager = .default) {
+        let directory = file.deletingLastPathComponent()
+        if directory.lastPathComponent.hasPrefix("shadow-settings-in-") {
+            try? fileManager.removeItem(at: directory)
+        } else {
+            try? fileManager.removeItem(at: file)
+        }
     }
 }

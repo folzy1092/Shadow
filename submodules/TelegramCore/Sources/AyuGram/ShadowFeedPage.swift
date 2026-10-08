@@ -11,7 +11,7 @@ public enum ShadowFeedPage {
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <style>
 :root {
   --page: #000; --card: #1c1c1e; --card2: #2c2c2e; --sep: #2c2c2e; --text: #fff; --sub: #8e8e93; --accent: #3e9bff; --green: #34c759; --red: #ff453a;
@@ -23,7 +23,7 @@ public enum ShadowFeedPage {
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html { -webkit-text-size-adjust: 100%; }
 body { margin: 0; background: var(--page); color: var(--text); font: 16px/1.38 -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif; padding-bottom: calc(110px + env(safe-area-inset-bottom)); -webkit-user-select: none; user-select: none; }
-.top { position: sticky; top: 0; z-index: 5; background: color-mix(in srgb, var(--page) 86%, transparent); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); padding-top: env(safe-area-inset-top); }
+.top { position: sticky; top: 0; z-index: 5; background: color-mix(in srgb, var(--page) 86%, transparent); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); }
 .navrow { display: flex; align-items: center; justify-content: space-between; height: 44px; padding: 0 12px; }
 .navbtn { color: var(--accent); font-size: 17px; background: none; border: none; padding: 6px; font-family: inherit; }
 .circle { width: 36px; height: 36px; border-radius: 18px; background: var(--card); display: grid; place-items: center; color: var(--text); border: none; font-size: 18px; line-height: 1; }
@@ -218,6 +218,12 @@ function render() {
   feed.innerHTML = html;
   observe();
 }
+// Only the reactions row: the photos and a playing video stay as they are.
+function updateReactionsRow(p) {
+  const el = document.querySelector(`[data-post="${CSS.escape(p.id)}"] .pfoot`);
+  if (!el) return;
+  el.innerHTML = reactionsHTML(p) + '<span class="sp"></span>' + (p.comments != null ? `<span class="ic cm" data-comments="${esc(p.id)}">💬 ${fmtN(p.comments)}</span>` : '') + (p.views != null ? `<span class="ic">👁 ${fmtN(p.views)}</span>` : '');
+}
 function replacePost(p) {
   const i = S.posts.findIndex(x => x.id === p.id);
   if (i < 0) return;
@@ -298,7 +304,7 @@ function autoplay() {
   if (best) {
     const v = best;
     // Like Instagram: starts after a second in the middle of the screen.
-    playTimer = setTimeout(() => { playing = v; v.muted = true; v.play().then(() => v.parentElement.classList.add('playing')).catch(() => {}); }, 1000);
+    playTimer = setTimeout(() => { playing = v; v.muted = false; v.play().then(() => v.parentElement.classList.add('playing')).catch(() => {}); }, 1000);
   }
 }
 let scrollTick = false;
@@ -328,7 +334,7 @@ function settingsSheet() {
     <div class="gtitle">Чтение</div>
     <div class="grp">
       <div class="row" data-setting="feedMarkRead"><div class="label">Отмечать прочитанным в канале<small>Пролистали пост — в канале он тоже прочитан</small></div>${sw(st.feedMarkRead)}</div>
-      <div class="row" data-setting="autoplay"><div class="label">Автозапуск видео без звука<small>Через секунду в середине экрана</small></div>${sw(st.autoplay)}</div>
+      <div class="row" data-setting="autoplay"><div class="label">Автозапуск видео<small>Со звуком, через секунду в середине экрана</small></div>${sw(st.autoplay)}</div>
     </div>
     <div class="grp">
       <div class="row act" data-action="collections"><div class="label">Подборки и порядок вкладок</div><span>›</span></div>
@@ -404,7 +410,24 @@ document.addEventListener('click', e => {
   if ((el = q('[data-expand]'))) { S.expanded[el.dataset.expand] = true; const p = S.posts.find(x => x.id === el.dataset.expand); if (p) replacePost(p); return; }
   if ((el = q('[data-menu]'))) { menuSheet(el.dataset.menu); return; }
   if ((el = q('[data-picker]'))) { pickerSheet(el.dataset.picker); return; }
-  if ((el = q('[data-react]'))) { closeSheet(); post({ action: 'react', id: el.dataset.id, key: el.dataset.react }); return; }
+  if ((el = q('[data-react]'))) {
+    closeSheet();
+    // Instant: the count and the highlight change right away; the app
+    // confirms with the real counts later (Feed.updateReactions).
+    const p = S.posts.find(x => x.id === el.dataset.id), key = el.dataset.react;
+    if (p) {
+      const had = p.reactions.find(r => r.mine);
+      p.reactions.forEach(r => { if (r.mine) { r.mine = false; r.count -= 1; } });
+      if (!had || had.key !== key) {
+        const r = p.reactions.find(x => x.key === key);
+        if (r) { r.mine = true; r.count += 1; } else p.reactions.push({ key: key, count: 1, mine: true });
+      }
+      p.reactions = p.reactions.filter(r => r.count > 0);
+      updateReactionsRow(p);
+    }
+    post({ action: 'react', id: el.dataset.id, key: key });
+    return;
+  }
   if ((el = q('[data-comments]'))) { closeSheet(); post({ action: 'comments', id: el.dataset.comments }); return; }
   if ((el = q('[data-open]'))) { closeSheet(); post({ action: 'open', id: el.dataset.open }); return; }
   if ((el = q('[data-setting]'))) {
@@ -469,6 +492,7 @@ window.Feed = {
     else { S.pendingNew = fresh.concat(S.pendingNew); showNewPill(); }
   },
   updatePost(p) { replacePost(p); },
+  updateReactions(p) { const i = S.posts.findIndex(x => x.id === p.id); if (i < 0) return; S.posts[i].reactions = p.reactions; updateReactionsRow(S.posts[i]); },
   removeChannel(peerId) { S.posts = S.posts.filter(p => p.peerId !== peerId); render(); },
   mediaReady(key, url) {
     S.media[key] = url;

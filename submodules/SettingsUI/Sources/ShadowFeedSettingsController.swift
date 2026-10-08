@@ -100,7 +100,7 @@ private enum ShadowFeedSettingsEntry: ItemListNodeEntry {
         case .optionsHeader:
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "ЧТО ПОКАЗЫВАТЬ", sectionId: self.section)
         case let .autoplay(value):
-            return ItemListSwitchItem(presentationData: presentationData, title: "Автозапуск видео без звука", value: value, sectionId: self.section, style: .blocks, updated: { value in
+            return ItemListSwitchItem(presentationData: presentationData, title: "Автозапуск видео со звуком", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 arguments.update { $0.feedAutoplay = value }
             })
         case let .folders(value):

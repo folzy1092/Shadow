@@ -7,6 +7,8 @@ import TelegramCore
 import TelegramPresentationData
 import ItemListUI
 import AccountContext
+import AlertUI
+import PresentationDataUtils
 
 private enum ShadowBackupEntry: ItemListNodeEntry {
     case export(Bool)
@@ -38,7 +40,7 @@ private enum ShadowBackupEntry: ItemListNodeEntry {
         case let .restore(value):
             title = "Отменить последний импорт"; enabled = value; action = { coordinator.confirmRestore() }
         case .info:
-            return ItemListTextItem(presentationData: presentationData, text: .plain("Переносятся настройки текущего аккаунта. Сессии, номера, подменённые данные профиля, фоны и история сообщений в файл не попадают. Перед импортом сохраняется одна резервная копия для отмены. Настройки, которых нет в файле, не меняются."), sectionId: self.section)
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Переносятся все настройки Shadow текущего аккаунта: тумблеры, фильтры и теневой бан, шаблоны ответов, кнопки шапки, правила призрака для чатов, подмена профиля. Не попадают: сессии и коды (замки чатов, второе пространство, экстренная защита), картинки баннера и фона, история сообщений. Файл .shadow-settings можно отправить другу: у него в чате он откроется сразу с предпросмотром. Перед импортом сохраняется одна резервная копия для отмены. Настройки, которых нет в файле, не меняются."), sectionId: self.section)
         }
         return ItemListActionItem(presentationData: presentationData, title: title, kind: enabled ? .generic : .disabled, alignment: .natural, sectionId: self.section, style: .blocks, action: {
             if enabled { action() }
@@ -92,7 +94,7 @@ private final class ShadowSettingsBackupCoordinator: NSObject, UIDocumentPickerD
                 do {
                     let data = try ShadowSettingsTransfer.document(from: settings).encoded()
                     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false, attributes: nil)
-                    let file = directory.appendingPathComponent("Shadow.shadow-settings.json")
+                    let file = directory.appendingPathComponent(ShadowSettingsFile.exportFileName)
                     try data.write(to: file, options: .atomic)
                     DispatchQueue.main.async { [weak self] in
                         self?.setBusy(false)
@@ -122,9 +124,10 @@ private final class ShadowSettingsBackupCoordinator: NSObject, UIDocumentPickerD
         guard !self.isBusy else { return }
         let picker: UIDocumentPickerViewController
         if #available(iOS 14.0, *) {
-            picker = UIDocumentPickerViewController(forOpeningContentTypes: [.json], asCopy: true)
+            // The own type and older *.shadow-settings.json exports.
+            picker = UIDocumentPickerViewController(forOpeningContentTypes: [UTType(exportedAs: ShadowSettingsFile.typeIdentifier, conformingTo: .json), .json], asCopy: true)
         } else {
-            picker = UIDocumentPickerViewController(documentTypes: ["public.json"], in: .import)
+            picker = UIDocumentPickerViewController(documentTypes: [ShadowSettingsFile.typeIdentifier, "public.json"], in: .import)
         }
         picker.allowsMultipleSelection = false
         picker.delegate = self
@@ -138,7 +141,20 @@ private final class ShadowSettingsBackupCoordinator: NSObject, UIDocumentPickerD
         controller.dismiss(animated: true) { [weak self] in self?.readFile(url) }
     }
 
-    private func readFile(_ url: URL) {
+    // A file opened from the share sheet, AirDrop, Files or a chat
+    // (shadowPresentIncomingSettingsFile): the same read and preview as the
+    // import button; the temporary copy goes away afterwards.
+    func openIncoming(_ url: URL) {
+        guard !self.isBusy else {
+            ShadowSettingsFile.discard(url)
+            self.message("Дождитесь окончания текущего импорта.")
+            return
+        }
+        self.setBusy(true)
+        self.readFile(url, discardAfterRead: true)
+    }
+
+    private func readFile(_ url: URL, discardAfterRead: Bool = false) {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             let scoped = url.startAccessingSecurityScopedResource()
             defer { if scoped { url.stopAccessingSecurityScopedResource() } }
@@ -153,6 +169,9 @@ private final class ShadowSettingsBackupCoordinator: NSObject, UIDocumentPickerD
                 }
             }
             let finalResult = result ?? .failure(coordinationError ?? NSError(domain: "ShadowSettings", code: 1, userInfo: [NSLocalizedDescriptionKey: "Не удалось прочитать файл."]))
+            if discardAfterRead {
+                ShadowSettingsFile.discard(url)
+            }
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
                 self.setBusy(false)
@@ -165,9 +184,17 @@ private final class ShadowSettingsBackupCoordinator: NSObject, UIDocumentPickerD
     }
 
     private func preview(_ document: ShadowSettingsDocument) {
-        self.disposable.set((ayuGramSettings(postbox: self.context.account.postbox)
-        |> take(1)
-        |> deliverOnMainQueue).start(next: { [weak self] current in
+        let context = self.context
+        let accountName: Signal<String, NoError> = context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: context.account.peerId))
+        |> map { peer -> String in
+            guard let peer else {
+                return ""
+            }
+            let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+            return peer.displayTitle(strings: presentationData.strings, displayOrder: presentationData.nameDisplayOrder)
+        }
+        self.disposable.set((combineLatest(ayuGramSettings(postbox: self.context.account.postbox) |> take(1), accountName)
+        |> deliverOnMainQueue).start(next: { [weak self] current, accountName in
             guard let self else { return }
             do {
                 let changed = try ShadowSettingsTransfer.changedKeys(document, from: current)
@@ -175,11 +202,15 @@ private final class ShadowSettingsBackupCoordinator: NSObject, UIDocumentPickerD
                 if changed.isEmpty { self.message("Настройки из файла уже применены."); return }
                 let ghost = updated.ghostMode ? "включён" : "выключен"
                 let sections = Set(changed.map { key -> String in
-                    if ["ghostMode", "hideOnlineStatus", "hideTyping", "hideReadReceipts", "hideStoryViews", "sendViaScheduled", "sendWithoutOnline"].contains(key) { return "Приватность" }
+                    if ["ghostMode", "hideOnlineStatus", "hideTyping", "hideReadReceipts", "hideStoryViews", "sendViaScheduled", "sendWithoutOnline", "chatPrivacyRules", "ghostAccountMode"].contains(key) { return "Приватность" }
+                    if ["messageFilters", "shadowBannedPeerIds", "messageFilterShowPlaceholder"].contains(key) || key.hasPrefix("adFilter") || key == "adHideCompletely" { return "Фильтры" }
+                    if key.hasPrefix("spoofProfile") || key.hasPrefix("customBanner") || key.hasPrefix("customProfileBackground") { return "Профиль" }
+                    if key.hasPrefix("feed") { return "Лента" }
                     if key.hasPrefix("keep") || key.hasPrefix("save") || key.hasPrefix("mediaAutoClean") || key == "showEditComparisonAction" || key == "attachmentSizeLimit" || key == "allowSaveRestrictedContent" || key == "askBeforeStoryView" { return "Архив и медиа" }
                     return "Интерфейс"
                 }).sorted().joined(separator: ", ")
-                let alert = UIAlertController(title: "Импорт в текущий аккаунт", message: "Формат: \(document.version)\nИзменений: \(changed.count)\nРазделы: \(sections)\n\nПосле импорта режим призрака: \(ghost).\nТекущие настройки будут сохранены для отмены.", preferredStyle: .alert)
+                let accountLine = accountName.isEmpty ? "" : "Аккаунт: \(accountName)\n"
+                let alert = UIAlertController(title: "Импорт в текущий аккаунт", message: "\(accountLine)Формат: \(document.version)\nИзменений: \(changed.count)\nРазделы: \(sections)\n\nПосле импорта режим призрака: \(ghost).\nТекущие настройки будут сохранены для отмены.", preferredStyle: .alert)
                 alert.addAction(UIAlertAction(title: "Отмена", style: .cancel))
                 alert.addAction(UIAlertAction(title: "Импортировать", style: .default, handler: { [weak self] _ in
                     self?.apply(document, expected: current)
@@ -223,7 +254,7 @@ private final class ShadowSettingsBackupCoordinator: NSObject, UIDocumentPickerD
     }
 }
 
-func shadowSettingsBackupController(context: AccountContext, focus: ShadowSettingsSearchItem? = nil) -> ViewController {
+func shadowSettingsBackupController(context: AccountContext, focus: ShadowSettingsSearchItem? = nil, incomingFile: URL? = nil) -> ViewController {
     var focusedIndex: Int?
     let coordinator = ShadowSettingsBackupCoordinator(context: context)
     let signal = combineLatest(queue: .mainQueue(), context.sharedContext.presentationData, shadowSettingsBackupAvailable(postbox: context.account.postbox), coordinator.busy.get())
@@ -236,8 +267,40 @@ func shadowSettingsBackupController(context: AccountContext, focus: ShadowSettin
     }
     let controller = ItemListController(context: context, state: signal)
     coordinator.controller = controller
+    if let incomingFile {
+        var pending: URL? = incomingFile
+        controller.didAppear = { [weak coordinator] _ in
+            guard let file = pending else {
+                return
+            }
+            pending = nil
+            coordinator?.openIncoming(file)
+        }
+    }
+    shadowSettingsBackupScreens.add(controller)
     if focus != nil {
         shadowSettingsInstallFocus(controller: controller, index: { focusedIndex }, color: shadowSettingsPulseColor(context.sharedContext.currentPresentationData.with { $0 }.theme))
     }
     return controller
+}
+
+// Open backup screens (weak), so a second file does not open a second screen.
+let shadowSettingsBackupScreens = NSHashTable<ViewController>.weakObjects()
+
+// Shadow (1.9.1): a settings file opened from the share sheet, AirDrop, Files
+// or tapped in a chat — the backup screen with the import preview. Nothing
+// is applied without «Импортировать». In the disguise / duress session the
+// file is dropped silently.
+public func shadowPresentIncomingSettingsFile(context: AccountContext, navigationController: NavigationController, file: URL) {
+    if ShadowDisguise.shared.hidesSettings {
+        ShadowSettingsFile.discard(file)
+        return
+    }
+    if !shadowSettingsBackupScreens.allObjects.isEmpty, let screen = shadowSettingsBackupScreens.allObjects.last, screen.view.window != nil {
+        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+        ShadowSettingsFile.discard(file)
+        screen.present(textAlertController(context: context, title: "Настройки Shadow", text: "Экран импорта уже открыт. Дождитесь окончания текущего импорта и откройте файл ещё раз.", actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+        return
+    }
+    navigationController.pushViewController(shadowSettingsBackupController(context: context, incomingFile: file))
 }

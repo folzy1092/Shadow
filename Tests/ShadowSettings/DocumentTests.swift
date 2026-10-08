@@ -27,8 +27,11 @@ struct DocumentTests {
         check(settings["ghostMode"] as? Bool == true, "JSON uses booleans, not Postbox's 0/1 encoding")
         check(object["format"] as? String == "shadow-settings", "Format marker")
 
-        let ignored = try ShadowSettingsDocument.decode(fixture("{\"ghostMode\":true,\"futureOption\":{\"nested\":[1,2]},\"spoofProfilePhoneValue\":\"private\"}"))
-        check(ignored.settings.count == 1, "Unknown and private fields must be ignored")
+        let ignored = try ShadowSettingsDocument.decode(fixture("{\"ghostMode\":true,\"futureOption\":{\"nested\":[1,2]},\"ghostLastSeenTimestamp\":5}"))
+        check(ignored.settings.count == 1, "Unknown and state fields must be ignored")
+        let full = try ShadowSettingsDocument.decode(fixture("{\"spoofProfilePhoneValue\":\"+7 000\",\"customBannerEnabled\":true,\"messageFilters\":\"[]\"}"))
+        check(full.settings["spoofProfilePhoneValue"] == .text("+7 000") && full.settings["customBannerEnabled"] == .bool(true) && full.settings["messageFilters"] == .text("[]"), "Profile spoof, banner and lists are transferable")
+        expectFailure("Lists must be JSON text") { _ = try ShadowSettingsDocument.decode(fixture("{\"messageFilters\":[1]}")) }
         let partial = try ShadowSettingsDocument.decode(fixture("{\"compactBottomBar\":true}"))
         check(partial.settings["ghostMode"] == nil, "Missing values must remain absent")
         let filterPlaceholder = try ShadowSettingsDocument.decode(fixture("{\"messageFilterShowPlaceholder\":false}"))
@@ -46,7 +49,8 @@ struct DocumentTests {
         expectFailure("Empty settings") { _ = try ShadowSettingsDocument.decode(fixture("{}")) }
         expectFailure("Only unknown fields") { _ = try ShadowSettingsDocument.decode(fixture("{\"token\":\"secret\"}")) }
         expectFailure("Large document") { _ = try ShadowSettingsDocument.decode(Data(repeating: 32, count: ShadowSettingsDocument.maximumBytes + 1)) }
-        expectFailure("Private fields cannot be exported") { _ = try ShadowSettingsDocument(settings: ["spoofProfilePhoneValue": .text("secret")]) }
+        expectFailure("State fields cannot be exported") { _ = try ShadowSettingsDocument(settings: ["ghostLastSeenTimestamp": .integer(1)]) }
+        expectFailure("Too long spoof value") { _ = try ShadowSettingsDocument(settings: ["spoofProfileIdValue": .text(String(repeating: "1", count: 65))]) }
         expectFailure("Wrong value type on export") { _ = try ShadowSettingsDocument(settings: ["ghostMode": .integer(1)]) }
         expectFailure("Overlong marker") { _ = try ShadowSettingsDocument(settings: ["editedIndicatorText": .text(String(repeating: "a", count: 65))]) }
         let marker = try ShadowSettingsDocument(settings: ["editedIndicatorText": .text(String(repeating: "a", count: 64))])

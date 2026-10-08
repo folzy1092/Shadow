@@ -117,12 +117,23 @@ final class ShadowFeedController: ViewController, WKScriptMessageHandler {
     }
 
     private func updateTabIcon() {
-        let configuration = UIImage.SymbolConfiguration(pointSize: 21.0, weight: .medium)
         let tabBar = self.presentationData.theme.rootController.tabBar
-        let base = UIImage(systemName: "newspaper", withConfiguration: configuration)
-        let selected = UIImage(systemName: "newspaper.fill", withConfiguration: configuration)
-        self.tabBarItem.image = generateTintedImage(image: base, color: tabBar.iconColor)
-        self.tabBarItem.selectedImage = generateTintedImage(image: selected, color: tabBar.selectedIconColor)
+        self.tabBarItem.image = ShadowFeedController.tabIcon("newspaper", color: tabBar.iconColor)
+        self.tabBarItem.selectedImage = ShadowFeedController.tabIcon("newspaper.fill", color: tabBar.selectedIconColor)
+    }
+
+    // The other tab icons are 30x30 canvases; the symbol is centred on one, so
+    // it sits on the same line as them in the normal and the compact bar.
+    static func tabIcon(_ name: String, color: UIColor) -> UIImage? {
+        let configuration = UIImage.SymbolConfiguration(pointSize: 19.0, weight: .medium)
+        guard let symbol = UIImage(systemName: name, withConfiguration: configuration)?.withTintColor(color, renderingMode: .alwaysOriginal) else {
+            return nil
+        }
+        let size = CGSize(width: 30.0, height: 30.0)
+        return UIGraphicsImageRenderer(size: size).image { _ in
+            let rect = CGRect(x: floor((size.width - symbol.size.width) / 2.0), y: floor((size.height - symbol.size.height) / 2.0), width: symbol.size.width, height: symbol.size.height)
+            symbol.draw(in: rect)
+        }
     }
 
     // MARK: - Page
@@ -152,7 +163,9 @@ final class ShadowFeedController: ViewController, WKScriptMessageHandler {
 
     override func containerLayoutUpdated(_ layout: ContainerViewLayout, transition: ContainedViewLayoutTransition) {
         super.containerLayoutUpdated(layout, transition: transition)
-        self.webView?.frame = CGRect(origin: CGPoint(), size: layout.size)
+        // Below the status bar: «Прочитать всё» and «⋯» must not sit under it.
+        let top = layout.statusBarHeight ?? layout.safeInsets.top
+        self.webView?.frame = CGRect(x: 0.0, y: top, width: layout.size.width, height: max(0.0, layout.size.height - top))
     }
 
     override func viewDidAppear(_ animated: Bool) {
@@ -609,7 +622,7 @@ final class ShadowFeedController: ViewController, WKScriptMessageHandler {
                 return
             }
             self.absorb(page)
-            self.evaluate("Feed.updatePost(\(self.encoded(post)))")
+            self.evaluate("Feed.updateReactions(\(self.encoded(post)))")
         }))
     }
 

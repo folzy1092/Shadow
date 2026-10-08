@@ -234,3 +234,13 @@
 открывается на весь экран, закрыть его нельзя, после конца само исчезает.
 Код — `TelegramUI/Sources/ShadowEasterEggs.swift`.
 
+**Добавлены в 1.9.1** (открывают строку настройки)
+
+| Ссылка | Настройка |
+|---|---|
+| `shadow://ghost/account-mode` | Призрак для аккаунта |
+| `shadow://spy/attachment-size` | Лимит размера вложений |
+| `shadow://spy/attachment-age` | Срок хранения вложений |
+| `shadow://profile/spoof-id-value` | Подменённый ID |
+| `shadow://profile/spoof-dc-value` | Подменённый DC |
+| `shadow://profile/spoof-phone-value` | Подменённый номер |

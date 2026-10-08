@@ -74,7 +74,7 @@ public enum ShadowChatStatsPage {
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>__TITLE__</title>
 <style>
 :root {
@@ -145,8 +145,8 @@ body { margin: 0; background: var(--page); color: var(--text); font: 15px/1.35 -
 .cmprow .h b { color: var(--text); font-weight: 600; }
 .legend { display: flex; gap: 14px; font-size: 12.5px; color: var(--sub); margin-bottom: 8px; align-items: center; }
 .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
-.heat { display: grid; grid-template-columns: 22px repeat(24, 1fr); gap: 2px; font-size: 10px; color: var(--muted); }
-.heat .cell { aspect-ratio: 1; border-radius: 3px; }
+.heat { display: grid; grid-template-columns: 20px repeat(24, minmax(0, 1fr)); gap: 1px; font-size: 10px; color: var(--muted); width: 100%; }
+.heat .cell { aspect-ratio: 1; border-radius: 2px; min-width: 0; }
 .heat .d { display: flex; align-items: center; }
 .awards { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .award { background: var(--card2); border-radius: 12px; padding: 10px; }
@@ -409,6 +409,13 @@ function awards() {
   return list;
 }
 
+// Both sides' favourites in «Сравнение» (they were only on the personal tabs).
+function favorites(title, field) {
+  const rows = [me, other].filter(p => p && p[field] && p[field].length);
+  if (!rows.length) return '';
+  return `<div class="box"><h4>${title}</h4>${rows.map(p => `<div style="margin:6px 0"><div class="hint" style="margin:0 0 4px"><i class="key" style="background:${colorOf(p)}"></i> ${esc(displayName(p))}</div><div class="chips">${p[field].slice(0, 5).map(chip).join('')}</div></div>`).join('')}</div>`;
+}
+
 function compareView() {
   if (!me || !other) return personView(me);
   const total = Math.max(1, R.total);
@@ -445,6 +452,9 @@ function compareView() {
   ${timeline}
   <div class="box"><h4>Когда вы общаетесь<small>чаще всего ${hm.peak}</small></h4>${hm.html}</div>
   ${aw.length ? `<div class="box"><h4>Награды</h4><div class="awards">${aw.join('')}</div></div>` : ''}
+  ${favorites('Любимые реакции', 'reactions')}
+  ${favorites('Любимые эмодзи', 'emoji')}
+  ${favorites('Любимые стикеры', 'topStickers')}
   <div class="box facts">
     <div class="f"><span>Общаетесь подряд</span><span>${fmt(R.streakCurrent)} ${plural(R.streakCurrent, 'день', 'дня', 'дней')} · рекорд ${fmt(R.streakBest)}</span></div>
     ${R.longestBreak > 0 ? `<div class="f"><span>Самый длинный перерыв</span><span>${gapText(R.longestBreak)} (${tsDate(R.longestBreakFrom)} — ${tsDate(R.longestBreakTo)})</span></div>` : ''}
