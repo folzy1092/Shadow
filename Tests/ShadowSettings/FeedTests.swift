@@ -29,6 +29,10 @@ struct FeedTests {
         check(F.html(text: "x", entities: [F.Entity(location: 5, length: 2, kind: .bold)]) == "x", "Out of range entity ignored")
         check(F.html(text: "<script>", entities: [F.Entity(location: 0, length: 8, kind: .spoiler)]) == "<span class=\"spoiler\">&lt;script&gt;</span>", "Spoiler, escaped")
         check(F.initials("Горизонт новостей") == "ГН" && F.initials("!!!") == "#", "Initials")
+        let quote = F.html(text: "Заголовок\nстрока два", entities: [F.Entity(location: 0, length: 20, kind: .blockquote), F.Entity(location: 0, length: 9, kind: .bold)])
+        check(quote == "<blockquote><b>Заголовок</b><br>строка два</blockquote>", "A quote with bold inside stays one quote")
+        let around = F.html(text: "до цитата после", entities: [F.Entity(location: 3, length: 6, kind: .blockquote)])
+        check(around == "до <blockquote>цитата</blockquote> после", "Text around a quote")
 
         // Post JSON round trip (the page reads these names).
         let post = F.Post(id: "1:0:2", peerId: 1, namespace: 0, messageId: 2, channel: "Канал", color: 3, initials: "К", timestamp: 100, html: "<b>x</b>", textLength: 1, forwardFrom: nil, media: [F.Media(key: "m1", kind: "photo", width: 10, height: 20)], views: 5, reactions: [F.Reaction(key: "👍", count: 2, mine: true)], comments: nil, unread: true, edited: false)

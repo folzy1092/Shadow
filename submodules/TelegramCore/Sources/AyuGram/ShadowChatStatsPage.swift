@@ -190,7 +190,7 @@ body { margin: 0; background: var(--page); color: var(--text); font: 15px/1.35 -
 .share .brand { font-size: .78em; letter-spacing: .14em; text-transform: uppercase; opacity: .7; }
 .share .ttl { font-size: 1.6em; font-weight: 800; margin-top: .4em; line-height: 1.15; }
 .share .pp { display: flex; align-items: center; gap: .6em; margin-top: .9em; opacity: .8; font-size: .9em; }
-.share .bign { font-size: 3.4em; font-weight: 800; letter-spacing: -.02em; margin-top: .4em; line-height: 1; }
+.share .bign { font-size: 3em; font-weight: 800; letter-spacing: -.02em; margin-top: .4em; line-height: 1; }
 .share .bigc { opacity: .7; }
 .share .bal { display: flex; height: .6em; border-radius: .3em; overflow: hidden; gap: 2px; margin: .8em 0 .3em; }
 .share .ball { display: flex; justify-content: space-between; opacity: .85; font-size: .85em; }
@@ -200,6 +200,10 @@ body { margin: 0; background: var(--page); color: var(--text); font: 15px/1.35 -
 .share .sg span { opacity: .7; font-size: .82em; }
 .share .em { font-size: 1.6em; margin-top: .7em; letter-spacing: .1em; }
 .share .aw { opacity: .85; margin-top: .4em; font-size: .9em; }
+.share .cf { display: flex; gap: .5em; margin-top: .6em; flex-wrap: wrap; }
+.share .cf span { display: inline-flex; align-items: center; gap: .25em; background: rgba(255,255,255,.07); border-radius: .8em; padding: .2em .5em; font-size: 1.1em; }
+.share .cf img { width: 1.5em; height: 1.5em; object-fit: contain; }
+.share .cf small { font-size: .7em; opacity: .75; }
 .share .ft { margin-top: auto; display: flex; justify-content: space-between; opacity: .55; font-size: .78em; }
 body.cardmode { background: transparent; padding: 0; }
 body.cardmode .share { border-radius: 0; }
@@ -537,7 +541,14 @@ function cardHTML(kind, hide) {
         <div><b>${fmt(R.streakBest)}</b><span>дней подряд — рекорд</span></div>
         <div><b>${dur(me.voiceSeconds + other.voiceSeconds)}</b><span>голосовых</span></div>
         <div><b>${HOUR_LABELS[peakH]}</b><span>любимый час</span></div>
+        <div><b>${fmt(Math.round(R.total / Math.max(1, R.daysWithMessages)))}</b><span>сообщений в день</span></div>
+        <div><b>${R.longestBreak > 0 ? gapText(R.longestBreak) : '—'}</b><span>самый длинный перерыв</span></div>
+        <div><b>${fmt(me.stickers + other.stickers)}</b><span>стикеров</span></div>
+        <div><b>${fmt(me.calls + other.calls)}</b><span>звонков · ${dur(me.callSeconds + other.callSeconds)}</span></div>
       </div>
+      ${R.bestDay ? `<div class="aw">🔥 Самый активный день: ${dayDate(R.bestDay.day, true)} — ${fmt(R.bestDay.count)} сообщ.</div>` : ''}
+      ${cardFaces([...me.reactions, ...other.reactions])}
+      ${cardFaces([...me.topStickers, ...other.topStickers])}
       ${topEmoji ? `<div class="em">${topEmoji}</div>` : ''}
       ${aw.length ? `<div class="aw">${aw.join(' · ')}</div>` : ''}`;
   } else {
@@ -560,6 +571,16 @@ function cardHTML(kind, hide) {
   h += '<div class="ft"><span>Посчитано в Shadow</span><span>только на телефоне</span></div>';
   return `<div class="share">${h}</div>`;
 }
+// A row of the top stickers or reactions on the share card (pictures when the
+// report has them, else their emoji).
+function cardFaces(items) {
+  const merged = {};
+  items.forEach(i => { merged[i.key] = merged[i.key] ? { key: i.key, label: i.label, count: merged[i.key].count + i.count } : { key: i.key, label: i.label, count: i.count }; });
+  const top = Object.values(merged).sort((a, b) => b.count - a.count).slice(0, 5);
+  if (!top.length) return '';
+  return `<div class="cf">${top.map(i => { const img = R.images && R.images[i.key]; const face = img ? `<img src="${img}" alt="">` : (i.key === 'stars' ? '⭐️' : (i.key.indexOf(':') > 0 ? esc(i.label || '✨') : esc(i.key))); return `<span>${face}<small>${fmt(i.count)}</small></span>`; }).join('')}</div>`;
+}
+
 function renderShareSheet() {
   const kinds = R.isGroup ? [['me', 'Только я']] : [['cmp', 'Сравнение'], ['me', 'Только я'], ['other', 'Только ' + esc(other ? other.name : '')]];
   document.getElementById('shareSheet').innerHTML = `

@@ -201,9 +201,14 @@ public enum ShadowFeed {
         }
     }
 
+    static func isBlock(_ kind: EntityKind) -> Bool {
+        return kind == .blockquote || kind == .pre
+    }
+
     // Text with entities (UTF-16 ranges, as Telegram stores them) to safe HTML.
-    // Overlapping entities are closed and reopened at every boundary, so the
-    // tags always nest.
+    // Quotes and code blocks are whole blocks (1.9.1: a quote with bold words
+    // inside used to break into a dozen quotes); inline entities are closed
+    // and reopened at every boundary inside them, so the tags always nest.
     public static func html(text: String, entities: [Entity]) -> String {
         let utf16 = Array(text.utf16)
         let count = utf16.count
@@ -211,10 +216,29 @@ public enum ShadowFeed {
         if valid.isEmpty {
             return escape(text)
         }
-        var boundaries = Set<Int>([0, count])
+        let inline = valid.filter { !isBlock($0.kind) }
+        var result = ""
+        var cursor = 0
+        for block in valid.filter({ isBlock($0.kind) }).sorted(by: { $0.location < $1.location }) where block.location >= cursor {
+            if block.location > cursor {
+                result += inlineHTML(utf16, start: cursor, end: block.location, entities: inline)
+            }
+            let end = min(count, block.location + block.length)
+            result += openTag(block.kind) + inlineHTML(utf16, start: block.location, end: end, entities: inline) + closeTag(block.kind)
+            cursor = end
+        }
+        if cursor < count {
+            result += inlineHTML(utf16, start: cursor, end: count, entities: inline)
+        }
+        return result
+    }
+
+    static func inlineHTML(_ utf16: [UInt16], start rangeStart: Int, end rangeEnd: Int, entities: [Entity]) -> String {
+        let valid = entities.filter { $0.location < rangeEnd && $0.location + $0.length > rangeStart }
+        var boundaries = Set<Int>([rangeStart, rangeEnd])
         for entity in valid {
-            boundaries.insert(entity.location)
-            boundaries.insert(min(count, entity.location + entity.length))
+            boundaries.insert(max(rangeStart, entity.location))
+            boundaries.insert(min(rangeEnd, entity.location + entity.length))
         }
         let points = boundaries.sorted()
         var result = ""
