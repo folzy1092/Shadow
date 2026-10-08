@@ -94,6 +94,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
     private var shadowFeedController: ShadowFeedController?
     private var shadowFeedLayout: (enabled: Bool, position: Int32)?
     private var shadowShowCallsTab = true
+    private var shadowFeedDisposable: Disposable?
 
     override public var minimizedContainer: MinimizedContainer? {
         didSet {
@@ -291,20 +292,9 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
             if let chatListController = self.chatListController {
                 (self.rootTabController as? TabBarControllerImpl)?.configureScrollVisibility(source: chatListController, mode: settings.bottomBarScrollMode)
             }
-            // Shadow: the feed tab follows its switch and position.
-            if let layout = self.shadowFeedLayout, layout.enabled != settings.feedEnabled || layout.position != settings.feedPosition {
-                self.shadowFeedLayout = (settings.feedEnabled, settings.feedPosition)
-                if settings.feedEnabled {
-                    if self.shadowFeedController == nil {
-                        self.shadowFeedController = ShadowFeedController(context: self.context)
-                    }
-                } else {
-                    self.shadowFeedController = nil
-                }
-                self.updateRootControllers(showCallsTab: self.shadowShowCallsTab)
-            }
-(self.rootTabController as? TabBarControllerImpl)?.updateLayout(transition: transition)
+            (self.rootTabController as? TabBarControllerImpl)?.updateLayout(transition: transition)
         })
+        self.shadowObserveFeedSettings()
     }
         
     public func updateRootControllers(showCallsTab: Bool) {
@@ -324,6 +314,37 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         }
 
         rootTabController.setControllers(controllers, selectedIndex: nil)
+    }
+
+    // Shadow: the feed tab follows its switch and position. A stream of its own:
+    // the visual-settings stream above must only relayout the bar, never
+    // rebuild the tabs (that switched the selected tab).
+    private func shadowObserveFeedSettings() {
+        self.shadowFeedDisposable?.dispose()
+        self.shadowFeedDisposable = (ayuGramSettings(postbox: self.context.account.postbox)
+        |> map { settings -> [Int32] in
+            return [settings.feedEnabled ? 1 : 0, settings.feedPosition]
+        }
+        |> distinctUntilChanged
+        |> deliverOnMainQueue).start(next: { [weak self] values in
+            guard let self, values.count == 2 else {
+                return
+            }
+            let enabled = values[0] != 0
+            let position = values[1]
+            if let layout = self.shadowFeedLayout, layout.enabled == enabled && layout.position == position {
+                return
+            }
+            self.shadowFeedLayout = (enabled, position)
+            if enabled {
+                if self.shadowFeedController == nil {
+                    self.shadowFeedController = ShadowFeedController(context: self.context)
+                }
+            } else {
+                self.shadowFeedController = nil
+            }
+            self.updateRootControllers(showCallsTab: self.shadowShowCallsTab)
+        })
     }
     
     // Called by applicationDidBecomeActive. Profile headers subscribe to their

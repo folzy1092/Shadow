@@ -24,7 +24,8 @@ class FeedContracts(unittest.TestCase):
     def test_tab(self):
         root = read("TelegramUI/Sources/TelegramRootController.swift")
         self.assertIn("shadowInsertFeed(feedController, into: &controllers, position: feedSettings.feedPosition)", root)
-        self.assertIn("layout.enabled != settings.feedEnabled || layout.position != settings.feedPosition", root)
+        self.assertIn("private func shadowObserveFeedSettings()", root)
+        self.assertIn("self.shadowObserveFeedSettings()", root)
         self.assertIn("controllers.firstIndex(where: { $0 === chatListController })", root)
         controller = read("TelegramUI/Sources/ShadowFeedController.swift")
         self.assertIn('self.tabBarItem.title = "Лента"', controller)
