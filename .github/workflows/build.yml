@@ -20,8 +20,13 @@ permissions:
   # "Проверить обновления" (ShadowBuildStatus) while the build runs.
   checks: write
 
+# One group per commit (Folzy, 2026-10-08): a new push no longer cancels the
+# build that is already running, builds of different commits run in parallel.
+# Duplicate runs GitHub sometimes creates for the same push still cancel each
+# other. An older build that finishes last does not become "latest", see the
+# release steps.
 concurrency:
-  group: shadow-build-${{ github.ref }}
+  group: shadow-build-${{ github.ref }}-${{ github.sha }}
   cancel-in-progress: true
 
 jobs:
@@ -210,11 +215,15 @@ jobs:
           ASSET="$RUNNER_TEMP/Shadow.ipa"
           cp /Users/Shared/telegram-ios/build/artifacts/Telegram.ipa "$ASSET"
           NOTES="$(printf '%s' "$COMMIT_MSG" | head -n 30)"
+          # Builds run in parallel: if a newer build already published, this
+          # one must not take over releases/latest (the in-app update check).
+          LATEST="$(python3 build-system/ci/shadow_latest_flag.py "$GITHUB_REPOSITORY" "$BUILD_NUMBER")"
           gh release create "$TAG" "$ASSET" \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "Shadow ${APP_VERSION}-${FORK_VERSION} (${BUILD_NUMBER})" \
-            --notes "$NOTES"
+            --notes "$NOTES" \
+            "--latest=${LATEST}"
 
       # The same release in the public data repo (folzy1092/tgfork), so IPA links
       # keep working if this repo goes private. Needs the TGFORK_RELEASE_TOKEN
@@ -236,11 +245,13 @@ jobs:
           ASSET="$RUNNER_TEMP/Shadow.ipa"
           [ -f "$ASSET" ] || cp /Users/Shared/telegram-ios/build/artifacts/Telegram.ipa "$ASSET"
           NOTES="$(printf '%s' "$COMMIT_MSG" | head -n 30)"
+          LATEST="$(python3 build-system/ci/shadow_latest_flag.py folzy1092/tgfork "$BUILD_NUMBER")"
           gh release create "$TAG" "$ASSET" \
             --repo folzy1092/tgfork \
             --target main \
             --title "Shadow ${APP_VERSION}-${FORK_VERSION} (${BUILD_NUMBER})" \
-            --notes "$NOTES"
+            --notes "$NOTES" \
+            "--latest=${LATEST}"
 
       - name: Upload debugging symbols
         uses: actions/upload-artifact@v4
