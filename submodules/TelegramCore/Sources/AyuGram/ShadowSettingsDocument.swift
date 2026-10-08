@@ -39,7 +39,7 @@ public struct ShadowSettingsDocument: Codable, Equatable {
         "saveAllIncomingMedia", "mediaAutoCleanKeepPinned", "mediaAutoCleanKeepChannels",
         "mediaAutoCleanKeepBots", "showProfileId", "showProfileDC",
         "showRegistrationDate", "hideOwnPhoneNumber",
-        "hideStoriesBar", "hideGiftButton", "hideGreetingSticker", "offerGhostBeforeStories", "hidePremiumBadges", "hideSponsoredMessages", "adFilterChannels", "adFilterGroups", "adFilterForwarded", "adHideCompletely", "messageFilterShowPlaceholder", "updateChannelBeta", "unlimitedPinnedChats", "localVoiceTranscription", "voiceTimeRoundVideos", "voiceTimeInPlayer", "replyTimecode", "chatVoiceSpeed", "monochromeSettingsIcons", "compactChatList", "onlineHistory", "saveViewedStories",
+        "hideStoriesBar", "hideGiftButton", "hideGreetingSticker", "offerGhostBeforeStories", "hidePremiumBadges", "hideSponsoredMessages", "adFilterChannels", "adFilterGroups", "adFilterForwarded", "adHideCompletely", "showChatStreak", "messageFilterShowPlaceholder", "updateChannelBeta", "unlimitedPinnedChats", "localVoiceTranscription", "voiceTimeRoundVideos", "voiceTimeInPlayer", "replyTimecode", "chatVoiceSpeed", "monochromeSettingsIcons", "compactChatList", "onlineHistory", "saveViewedStories",
         "screenshotAnonymize", "screenshotAnonymizeOwn", "screenshotAnonymizeOthers", "screenshotEnabled", "screenshotAvatars", "screenshotNames", "screenshotBadges", "screenshotTime"
     ]
     public static let textKeys: Set<String> = ["editedIndicatorText", "deletedIndicatorText"]

@@ -624,8 +624,13 @@ private func shadowRegistrationDateChanges() -> Signal<Void, NoError> {
         let token = NotificationCenter.default.addObserver(forName: ShadowRegistrationDateStore.didChangeNotification, object: nil, queue: nil, using: { _ in
             subscriber.putNext(Void())
         })
+        // Shadow: also a new «Общаемся N дней подряд» count.
+        let streakToken = NotificationCenter.default.addObserver(forName: ShadowChatStreakStore.didChangeNotification, object: nil, queue: nil, using: { _ in
+            subscriber.putNext(Void())
+        })
         return ActionDisposable {
             NotificationCenter.default.removeObserver(token)
+            NotificationCenter.default.removeObserver(streakToken)
         }
     }
 }

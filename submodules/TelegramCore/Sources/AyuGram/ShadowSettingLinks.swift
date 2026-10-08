@@ -291,6 +291,7 @@ public enum ShadowSettingLinks {
         ShadowSettingLink(screen: "customization", slug: "profile-id", entryId: 20, key: "showProfileId", title: "ID профиля (Bot API)"),
         ShadowSettingLink(screen: "customization", slug: "profile-dc", entryId: 21, key: "showProfileDC", title: "Дата-центр (DC)"),
         ShadowSettingLink(screen: "customization", slug: "registration-date", entryId: 22, key: "showRegistrationDate", title: "Дата регистрации"),
+        ShadowSettingLink(screen: "customization", slug: "chat-streak", entryId: 121, key: "showChatStreak", title: "Дни подряд в профиле", since: "1.8.0"),
         ShadowSettingLink(screen: "customization", slug: "hide-phone", entryId: 23, key: "hideOwnPhoneNumber", title: "Скрыть свой номер", icon: "phone"),
         ShadowSettingLink(screen: "customization", slug: "round-back-camera", entryId: 26, key: "roundVideoUseBackCamera", title: "Кружки на заднюю камеру", icon: "camera"),
         ShadowSettingLink(screen: "customization", slug: "camera-tile", entryId: 27, key: "showCameraTile", title: "Камера в галерее", icon: "camera"),

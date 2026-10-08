@@ -138,6 +138,7 @@
 | `shadow://customization/profile-id` | ID профиля (Bot API) |
 | `shadow://customization/profile-dc` | Дата-центр (DC) |
 | `shadow://customization/registration-date` | Дата регистрации |
+| `shadow://customization/chat-streak` | Дни подряд в профиле |
 | `shadow://customization/hide-phone` | Скрыть свой номер |
 | `shadow://customization/round-back-camera` | Кружки на заднюю камеру |
 | `shadow://customization/camera-tile` | Камера в галерее |

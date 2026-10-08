@@ -371,3 +371,65 @@ public enum ShadowChatStatsCollect {
         return picture |> timeout(10.0, queue: Queue.concurrentDefaultQueue(), alternate: .single(nil))
     }
 }
+
+// MARK: - Days in a row
+
+extension ShadowChatStatsCollect {
+    // How many times «Общаемся N дней подряд» may load older history while the
+    // run still reaches the oldest stored message (100 messages a time).
+    static let streakMaxRounds = 40
+
+    // Walks the stored messages of a private chat from the newest (calls and
+    // service messages do not count). When the run reaches the oldest stored
+    // message and older history exists, loads more like scrolling up and
+    // walks again.
+    public static func chatStreak(account: Account, peerId: PeerId) -> Signal<Int, NoError> {
+        let clock = ShadowChatStats.Clock.current
+        let today = clock.day(Int32(Date().timeIntervalSince1970))
+        let accountPeerId = account.peerId
+
+        func walk() -> Signal<(days: Int, finished: Bool, oldest: Int32?), NoError> {
+            return account.postbox.transaction { transaction -> (days: Int, finished: Bool, oldest: Int32?) in
+                var walker = ShadowChatStreak.Walker(today: today)
+                var oldest: Int32?
+                var oldestId: Int32?
+                transaction.scanTopMessages(peerId: peerId, namespace: Namespaces.Message.Cloud, limit: 1_000_000, { message in
+                    oldest = message.timestamp
+                    oldestId = message.id.id
+                    guard let item = ShadowChatStatsCollect.item(message: message, accountPeerId: accountPeerId, chatPeerId: peerId, isGroup: false), item.kind != .call else {
+                        return true
+                    }
+                    return walker.add(day: clock.day(message.timestamp), isMine: item.authorId == accountPeerId.toInt64())
+                })
+                if !walker.finished {
+                    let holes = transaction.getHoles(peerId: peerId, namespace: Namespaces.Message.Cloud)
+                    var olderHistory = false
+                    if let oldestId, let first = holes.rangeView.first {
+                        olderHistory = first.lowerBound < Int(oldestId)
+                    }
+                    if !olderHistory {
+                        walker.finishAtEnd()
+                    }
+                }
+                return (walker.days, walker.finished, oldest)
+            }
+        }
+
+        func round(_ index: Int) -> Signal<Int, NoError> {
+            return walk()
+            |> mapToSignal { result -> Signal<Int, NoError> in
+                guard !result.finished, index < ShadowChatStatsCollect.streakMaxRounds, let oldest = result.oldest else {
+                    return .single(result.days)
+                }
+                return ShadowChatStatsCollect.loadHistory(account: account, peerId: peerId, since: oldest - 86400)
+                |> filter { $0.done }
+                |> take(1)
+                |> mapToSignal { _ -> Signal<Int, NoError> in
+                    return round(index + 1)
+                }
+            }
+        }
+
+        return round(0)
+    }
+}

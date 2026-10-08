@@ -73,6 +73,7 @@ public enum ShadowSettingsTransfer {
         "adFilterGroups": \.adFilterGroups,
         "adFilterForwarded": \.adFilterForwarded,
         "adHideCompletely": \.adHideCompletely,
+        "showChatStreak": \.showChatStreak,
         "updateChannelBeta": \.updateChannelBeta,
         "unlimitedPinnedChats": \.unlimitedPinnedChats,
         "localVoiceTranscription": \.localVoiceTranscription,

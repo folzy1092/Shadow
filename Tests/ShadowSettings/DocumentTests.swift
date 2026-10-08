@@ -71,6 +71,8 @@ struct DocumentTests {
         let ads = try ShadowSettingsDocument.decode(ShadowSettingsDocument(settings: ["adFilterChannels": .bool(false), "adFilterGroups": .bool(true), "adFilterForwarded": .bool(true), "adHideCompletely": .bool(false)]).encoded())
         check(ads.settings["adFilterChannels"] == .bool(false) && ads.settings["adFilterGroups"] == .bool(true), "Ad places are portable")
         check(ads.settings["adFilterForwarded"] == .bool(true) && ads.settings["adHideCompletely"] == .bool(false), "Ad hiding is portable")
+        let streak = try ShadowSettingsDocument.decode(ShadowSettingsDocument(settings: ["showChatStreak": .bool(false)]).encoded())
+        check(streak.settings["showChatStreak"] == .bool(false), "Chat streak toggle is portable")
         expectFailure("Unsupported reply timecode mode") { _ = try ShadowSettingsDocument(settings: ["replyTimecodeMode": .integer(2)]) }
         let ghostPolicy = try ShadowSettingsDocument(settings: ["ghostAccountMode": .integer(3)])
         let restoredGhostPolicy = try ShadowSettingsDocument.decode(ghostPolicy.encoded())

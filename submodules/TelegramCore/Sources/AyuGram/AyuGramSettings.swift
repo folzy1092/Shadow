@@ -120,6 +120,8 @@ public struct AyuGramSettings: Codable, Equatable {
     // true: a hidden ad leaves no trace; false: a "Скрыта реклама" stub.
     // Separate from messageFilterShowPlaceholder (Folzy, 2026-10-08).
     public var adHideCompletely: Bool = true
+    // Shadow: «Общаемся N дней подряд» in private chat profiles (ShadowChatStreak.swift).
+    public var showChatStreak: Bool = true
     // Pin more chats than the server limit. Extra pins live on this device only.
     public var unlimitedPinnedChats: Bool = true
     // On-device transcription of voice messages for accounts without Premium.
@@ -445,6 +447,7 @@ public struct AyuGramSettings: Codable, Equatable {
         settings.adFilterChannels = false
         settings.adFilterGroups = false
         settings.adFilterForwarded = false
+        settings.showChatStreak = false
         return settings
     }
 
@@ -699,6 +702,7 @@ public struct AyuGramSettings: Codable, Equatable {
         self.adFilterGroups = ((try container.decodeIfPresent(Int32.self, forKey: "adFilterGroups")) ?? 0) != 0
         self.adFilterForwarded = ((try container.decodeIfPresent(Int32.self, forKey: "adFilterForwarded")) ?? 0) != 0
         self.adHideCompletely = ((try container.decodeIfPresent(Int32.self, forKey: "adHideCompletely")) ?? 1) != 0
+        self.showChatStreak = ((try container.decodeIfPresent(Int32.self, forKey: "showChatStreak")) ?? 1) != 0
         self.unlimitedPinnedChats = ((try container.decodeIfPresent(Int32.self, forKey: "unlimitedPinnedChats")) ?? 1) != 0
         self.localVoiceTranscription = ((try container.decodeIfPresent(Int32.self, forKey: "localVoiceTranscription")) ?? 1) != 0
         self.voiceTimeFormat = ShadowVoiceTime.normalized((try container.decodeIfPresent(Int32.self, forKey: "voiceTimeFormat")) ?? 0)
@@ -806,6 +810,7 @@ public struct AyuGramSettings: Codable, Equatable {
         try container.encode((self.adFilterGroups ? 1 : 0) as Int32, forKey: "adFilterGroups")
         try container.encode((self.adFilterForwarded ? 1 : 0) as Int32, forKey: "adFilterForwarded")
         try container.encode((self.adHideCompletely ? 1 : 0) as Int32, forKey: "adHideCompletely")
+        try container.encode((self.showChatStreak ? 1 : 0) as Int32, forKey: "showChatStreak")
         try container.encode((self.unlimitedPinnedChats ? 1 : 0) as Int32, forKey: "unlimitedPinnedChats")
         try container.encode((self.localVoiceTranscription ? 1 : 0) as Int32, forKey: "localVoiceTranscription")
         try container.encode(self.voiceTimeFormat, forKey: "voiceTimeFormat")

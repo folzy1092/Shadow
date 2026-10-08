@@ -1000,6 +1000,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
     case showProfileId(Bool)
     case showProfileDC(Bool)
     case showRegistrationDate(Bool)
+    case showChatStreak(Bool)
     case hideOwnPhoneNumber(Bool)
     case profilesFooter
 
@@ -1049,7 +1050,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
             return AyuCustomizationSection.chats.rawValue
         case .bottomBarHeader, .foldersAtBottom, .hideBottomSearch, .compactBottomBar, .bottomBarScrollMode, .bottomBarFooter:
             return AyuCustomizationSection.bottomBar.rawValue
-        case .profilesHeader, .showProfileId, .showProfileDC, .showRegistrationDate, .hideOwnPhoneNumber, .profilesFooter:
+        case .profilesHeader, .showProfileId, .showProfileDC, .showRegistrationDate, .showChatStreak, .hideOwnPhoneNumber, .profilesFooter:
             return AyuCustomizationSection.profiles.rawValue
         case .mediaHeader, .roundVideoBackCamera, .showCameraTile, .cameraTileLivePreview, .cameraTileCompact, .localVoiceTranscription, .voiceTimeFormat, .voiceTimeRoundVideos, .voiceTimeInPlayer, .replyTimecode, .replyTimecodeMode, .chatVoiceSpeed, .chatVoiceSpeedList, .mediaFooter:
             return AyuCustomizationSection.media.rawValue
@@ -1102,6 +1103,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .replyTimecodeMode: return 118
         case .chatVoiceSpeed: return 119
         case .chatVoiceSpeedList: return 120
+        case .showChatStreak: return 121
         case .unlimitedPinnedChats: return 104
         case .settingsIconsHeader: return 105
         case .compactChatList: return 110
@@ -1158,6 +1160,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .editedIndicatorText: return (2, 1)
         case .deletedIndicatorText: return (2, 2)
         case .bottomBarScrollMode: return (17, 1)
+        case .showChatStreak: return (22, 1)
         case .hideStoriesBar: return (12, 1)
         case .hideGiftButton: return (12, 2)
         case .hidePremiumBadges: return (12, 3)
@@ -1383,12 +1386,16 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
             return ItemListSwitchItem(presentationData: presentationData, title: "Дата регистрации", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 arguments.updateShowRegistrationDate(value)
             })
+        case let .showChatStreak(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Дни подряд в профиле", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.updateSetting { $0.showChatStreak = value }
+            })
         case let .hideOwnPhoneNumber(value):
             return ItemListSwitchItem(presentationData: presentationData, title: "Скрыть свой номер", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 arguments.updateHideOwnPhoneNumber(value)
             })
         case .profilesFooter:
-            return ItemListTextItem(presentationData: presentationData, text: .plain("Показывать в профилях пользователей, ботов и каналов дополнительные поля: числовой ID (в формате Bot API, копируется по удержанию), дата-центр фото профиля и дату регистрации. Если Telegram сообщил месяц регистрации, показывается он; иначе дата запрашивается у @ayugrambot (бот видит, чей ID проверяли) или оценивается по ID — такие значения помечены «≈».\n\n«Скрыть свой номер» полностью убирает плашку с вашим номером телефона в настройках/профиле."), sectionId: self.section)
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Показывать в профилях пользователей, ботов и каналов дополнительные поля: числовой ID (в формате Bot API, копируется по удержанию), дата-центр фото профиля и дату регистрации. Если Telegram сообщил месяц регистрации, показывается он; иначе дата запрашивается у @ayugrambot (бот видит, чей ID проверяли) или оценивается по ID — такие значения помечены «≈».\n\n«Дни подряд в профиле» — строка «Общаемся N дней подряд» у собеседника, с 2 дней: считаются дни, когда писали оба (реакции и звонки не в счёт), сегодняшний день серию не обрывает.\n\n«Скрыть свой номер» полностью убирает плашку с вашим номером телефона в настройках/профиле."), sectionId: self.section)
         case .mediaHeader:
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "МЕДИА", sectionId: self.section)
         case let .roundVideoBackCamera(value):
@@ -1525,6 +1532,7 @@ private func ayuCustomizationEntries(settings: AyuGramSettings, chatVoiceSpeedCo
     entries.append(.showProfileId(settings.showProfileId))
     entries.append(.showProfileDC(settings.showProfileDC))
     entries.append(.showRegistrationDate(settings.showRegistrationDate))
+    entries.append(.showChatStreak(settings.showChatStreak))
     entries.append(.hideOwnPhoneNumber(settings.hideOwnPhoneNumber))
     entries.append(.profilesFooter)
 

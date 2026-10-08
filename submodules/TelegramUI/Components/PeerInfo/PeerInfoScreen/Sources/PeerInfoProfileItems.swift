@@ -90,6 +90,36 @@ private func shadowRegistrationDateText(context: AccountContext, userId: EngineP
     return ShadowRegistrationDate.text(value)
 }
 
+// Shadow: «Общаемся N дней подряд» (ShadowChatStreak.swift). Shows the last
+// count and recounts in the background when it is older than 30 minutes or
+// from another day; the profile refreshes through
+// ShadowChatStreakStore.didChangeNotification.
+private func shadowChatStreakText(context: AccountContext, user: TelegramUser) -> String? {
+    guard ayuGramSettingsCurrent.showChatStreak, user.id != context.account.peerId, user.botInfo == nil, user.id.namespace == Namespaces.Peer.CloudUser else {
+        return nil
+    }
+    let accountPeerId = context.account.peerId.toInt64()
+    let peerId = user.id.toInt64()
+    if ShadowChatLockStore.shared.requiresUnlock(accountPeerId: accountPeerId, peerId: peerId) || ShadowSpaceStore.shared.isHidden(accountPeerId: accountPeerId, peerId: peerId) {
+        return nil
+    }
+    let store = ShadowChatStreakStore.shared
+    let now = Date().timeIntervalSince1970
+    let today = ShadowChatStats.Clock.current.day(Int32(now))
+    if store.needsUpdate(accountPeerId: accountPeerId, peerId: peerId, now: now, today: today), store.begin(accountPeerId: accountPeerId, peerId: peerId) {
+        let _ = (ShadowChatStatsCollect.chatStreak(account: context.account, peerId: user.id)
+        |> deliverOnMainQueue).start(next: { days in
+            store.set(accountPeerId: accountPeerId, peerId: peerId, days: days, date: Date().timeIntervalSince1970, day: today)
+        }, completed: {
+            store.end(accountPeerId: accountPeerId, peerId: peerId)
+        })
+    }
+    guard let value = store.value(accountPeerId: accountPeerId, peerId: peerId), value.day >= today - 1 else {
+        return nil
+    }
+    return ShadowChatStreak.text(days: value.days)
+}
+
 // Builds the AyuGram technical-info card (id / dc / registration date /
 // mutual contact) honouring the per-field toggles, Swiftgram-style: id/dc
 // render as a single compact line (the value is folded into the label, text
@@ -354,6 +384,11 @@ func infoItems(
         items[.ayugram]!.append(contentsOf: ayuGramProfileItems(peerId: user.id, photo: user.photo, registrationText: shadowRegistrationDateText(context: context, userId: user.id, cachedData: data.cachedData as? CachedUserData), isMutualContact: user.flags.contains(.mutualContact), isSelf: user.id == context.account.peerId, idBase: 3500, presentationData: presentationData, getController: { [weak interaction] in
             interaction?.getController()
         }))
+        // Shadow: «Общаемся N дней подряд».
+        if let streak = shadowChatStreakText(context: context, user: user) {
+            items[.ayugram]!.append(PeerInfoScreenLabeledValueItem(id: 3512, label: streak, text: "", textColor: .primary, action: nil, requestLayout: { _ in
+            }))
+        }
         // Shadow: local online history of this contact (spec 7.4).
         if ayuGramSettingsCurrent.onlineHistory, user.id != context.account.peerId {
             items[.ayugram]!.append(PeerInfoScreenDisclosureItem(id: 3510, text: "История в сети", icon: nil, action: { [weak interaction] in

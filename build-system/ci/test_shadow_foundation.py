@@ -33,6 +33,7 @@ def main():
         ('device-access', 'submodules/TelegramCore/Sources/AyuGram/ShadowDeviceAccess.swift', 'Tests/ShadowSettings/DeviceAccessTests.swift'),
         ('message-filters', 'submodules/TelegramCore/Sources/AyuGram/ShadowMessageFilters.swift', 'Tests/ShadowSettings/MessageFiltersTests.swift'),
         ('ad-filter', 'submodules/TelegramCore/Sources/AyuGram/ShadowAdFilter.swift', 'Tests/ShadowSettings/AdFilterTests.swift'),
+        ('chat-streak', 'submodules/TelegramCore/Sources/AyuGram/ShadowChatStreak.swift', 'Tests/ShadowSettings/ChatStreakTests.swift'),
         ('chat-stats', ('submodules/TelegramCore/Sources/AyuGram/ShadowChatStats.swift', 'submodules/TelegramCore/Sources/AyuGram/ShadowChatStatsPage.swift'), 'Tests/ShadowSettings/ChatStatsTests.swift'),
         ('links', 'submodules/TelegramCore/Sources/AyuGram/ShadowLinks.swift', 'Tests/ShadowSettings/LinksTests.swift'),
         ('header-buttons', 'submodules/TelegramCore/Sources/AyuGram/ShadowHeaderButtons.swift', 'Tests/ShadowSettings/HeaderButtonsTests.swift'),

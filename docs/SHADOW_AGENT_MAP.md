@@ -534,6 +534,17 @@ UI-проекция настроек выбирается в `TelegramRootContro
   (подсчёт идёт и после закрытия экрана), экран отчёта. Вход из профиля:
   «…» → «Итоги чата» (личные чаты и группы, не каналы, не закрытые чаты).
 
+- «Общаемся N дней подряд» (1.8.0): `ShadowChatStreak.swift` — `Walker`
+  (сообщения от новых к старым, день засчитан, если писали оба; сегодня не
+  обрывает), `ShadowChatStreakStore` (UserDefaults, пересчёт раз в 30 мин или
+  в новый день, уведомление `didChangeNotification` перестраивает профиль
+  через `shadowRegistrationDateChanges` в `PeerInfoData`). Подсчёт —
+  `ShadowChatStatsCollect.chatStreak`: если серия доходит до самого старого
+  сохранённого сообщения, дозагружает историю (до 40 раз по 100). Строка в
+  профиле (`PeerInfoProfileItems`, id 3512) с 2 дней, тумблер
+  `showChatStreak` в «Кастомизация → Профили». Не для ботов, себя, закрытых
+  и скрытых чатов.
+
 ## 5a. Замки чатов и второе пространство
 
 - Замки: `ShadowChatLock.swift` (хранилище), `TelegramUI/Sources/ShadowChatLockUI.swift`
