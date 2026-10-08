@@ -6,6 +6,7 @@ import AsyncDisplayKit
 import SwiftSignalKit
 import TelegramCore
 import TelegramPresentationData
+import TelegramUIPreferences
 import ItemListUI
 import ItemListPeerItem
 import PresentationDataUtils
@@ -98,21 +99,6 @@ final class ShadowChatStatsJobs {
             self.set(key, State(fraction: fraction, text: text, finished: false, failed: false))
         }))
     }
-}
-
-func shadowPlural(_ n: Int, _ one: String, _ few: String, _ many: String) -> String {
-    let a = abs(n) % 100
-    let b = a % 10
-    if a > 10 && a < 20 {
-        return many
-    }
-    if b > 1 && b < 5 {
-        return few
-    }
-    if b == 1 {
-        return one
-    }
-    return many
 }
 
 func shadowStatsDate(_ timestamp: Int32) -> String {
