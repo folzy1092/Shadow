@@ -1,7 +1,7 @@
 import Foundation
 
 enum ShadowSettingsSearchDestination: Int32 {
-    case customization, spy, ghost, misc, backup, filters, pushDiagnostics, quickReplies, chatLocks, secondSpace, emergency, autoUpdate, chatStats
+    case customization, spy, ghost, misc, backup, filters, pushDiagnostics, quickReplies, chatLocks, secondSpace, emergency, autoUpdate, chatStats, feed
 
     var title: String {
         switch self {
@@ -18,6 +18,7 @@ enum ShadowSettingsSearchDestination: Int32 {
         case .emergency: return "Экстренная защита"
         case .autoUpdate: return "Автообновление"
         case .chatStats: return "Итоги чатов"
+        case .feed: return "Лента"
         }
     }
 }
@@ -106,6 +107,13 @@ enum ShadowSettingsSearchIndex {
         ShadowSettingsSearchItem(destination: .misc, entryId: 1, title: "Подменить ID", description: "Визуальная подмена ID в профиле", keywords: "spoof profile id"),
         ShadowSettingsSearchItem(destination: .misc, entryId: 3, title: "Подменить DC", description: "Визуальная подмена дата-центра", keywords: "spoof dc data center"),
         ShadowSettingsSearchItem(destination: .misc, entryId: 5, title: "Подменить номер", description: "Визуальная подмена телефона", keywords: "spoof phone number"),
+        ShadowSettingsSearchItem(destination: .feed, entryId: 1, title: "Лента (бета)", description: "Вкладка с постами всех каналов одной лентой, новые сверху, без рекламы", keywords: "лента feed посты каналы твиттер вкладка бета новости"),
+        ShadowSettingsSearchItem(destination: .feed, entryId: 3, title: "Где кнопка ленты", description: "Левее контактов, между чатами и профилем или правее профиля", keywords: "лента кнопка вкладка положение место"),
+        ShadowSettingsSearchItem(destination: .feed, entryId: 7, title: "Автозапуск видео в ленте", description: "Видео без звука запускается, когда секунду стоит в середине экрана", keywords: "лента видео автозапуск autoplay"),
+        ShadowSettingsSearchItem(destination: .feed, entryId: 8, title: "Папки Telegram в ленте", description: "Ваши папки как вкладки над лентой", keywords: "лента папки вкладки чипы folders"),
+        ShadowSettingsSearchItem(destination: .feed, entryId: 9, title: "Каналы без звука в ленте", description: "Посты каналов с выключенными уведомлениями", keywords: "лента без звука muted каналы"),
+        ShadowSettingsSearchItem(destination: .feed, entryId: 10, title: "Каналы из архива в ленте", description: "Посты архивированных каналов", keywords: "лента архив archive каналы"),
+        ShadowSettingsSearchItem(destination: .feed, entryId: 11, title: "Лента отмечает прочитанным", description: "Пролистали пост в ленте — в канале он прочитан", keywords: "лента прочитано read отметка"),
         ShadowSettingsSearchItem(destination: .chatStats, entryId: 0, title: "Итоги чатов", description: "Статистика переписки за неделю, месяц, год или 5 лет: кто больше пишет, голосовые, эмодзи, стикеры, часы, сравнение и картинка", keywords: "итоги статистика stats wrapped переписка сравнение чат кто больше пишет сообщения голосовые"),
         ShadowSettingsSearchItem(destination: .autoUpdate, entryId: 0, title: "Сертификат для автообновления", description: "Выбрать .p12, .mobileprovision и пароль, чтобы Shadow сам подписывал и ставил обновления", keywords: "автообновление обновление подпись сертификат p12 mobileprovision профиль esign update sign install"),
         ShadowSettingsSearchItem(destination: .backup, entryId: 0, title: "Экспортировать настройки", description: "Перенести настройки без сессий и личных данных", keywords: "export backup json"),

@@ -147,6 +147,7 @@ private enum AyuHubEntry: ItemListNodeEntry {
     case messageScreenshot
     case filters
     case chatStats
+    case feed
     case quickReplies
     case misc
     case pushDiagnostics
@@ -169,7 +170,7 @@ private enum AyuHubEntry: ItemListNodeEntry {
             return AyuHubSection.privacy.rawValue
         case .appearanceHeader, .customization:
             return AyuHubSection.appearance.rawValue
-        case .toolsHeader, .messageScreenshot, .filters, .chatStats, .quickReplies, .misc, .pushDiagnostics:
+        case .toolsHeader, .messageScreenshot, .filters, .chatStats, .feed, .quickReplies, .misc, .pushDiagnostics:
             return AyuHubSection.tools.rawValue
         case .accountsHeader, .hiddenAccounts, .settingsSync, .backup:
             return AyuHubSection.accounts.rawValue
@@ -197,9 +198,10 @@ private enum AyuHubEntry: ItemListNodeEntry {
         case .messageScreenshot: return 31
         case .filters: return 32
         case .chatStats: return 33
-        case .quickReplies: return 34
-        case .misc: return 35
-        case .pushDiagnostics: return 36
+        case .feed: return 34
+        case .quickReplies: return 35
+        case .misc: return 36
+        case .pushDiagnostics: return 37
         case .accountsHeader: return 40
         case .hiddenAccounts: return 41
         case .settingsSync: return 42
@@ -255,6 +257,8 @@ private enum AyuHubEntry: ItemListNodeEntry {
             return row("Фильтры", "line.3.horizontal.decrease.circle.fill", ShadowIconColor.orange, "", { arguments.openFilters() })
         case .chatStats:
             return row("Итоги чатов", "chart.bar.fill", ShadowIconColor.blue, "", { arguments.openFeature(.chatStats) })
+        case .feed:
+            return row("Лента (бета)", "newspaper.fill", ShadowIconColor.orange, ayuGramSettingsCurrent.feedEnabled ? "Вкл" : "", { arguments.openFeature(.feed) })
         case .quickReplies:
             return row("Шаблоны ответов", "text.bubble.fill", ShadowIconColor.blue, "", { arguments.openFeature(.quickReplies) })
         case .misc:
@@ -305,6 +309,7 @@ func shadowSettingsSearchDestinationController(context: AccountContext, item: Sh
     case .backup: return shadowSettingsBackupController(context: context, focus: item)
     case .autoUpdate: return shadowAutoUpdateController(context: context, focus: item)
     case .chatStats: return shadowChatStatsListController(context: context)
+    case .feed: return shadowFeedSettingsController(context: context, focus: item)
     case .filters: return shadowMessageFiltersController(context: context)
     case .pushDiagnostics:
         if item.entryId == 0 {
@@ -378,6 +383,8 @@ public func ayuGramSettingsController(context: AccountContext, autoCheckUpdates:
             pushControllerImpl?(shadowEmergencyController(context: context))
         case .chatStats:
             pushControllerImpl?(shadowChatStatsListController(context: context))
+        case .feed:
+            pushControllerImpl?(shadowFeedSettingsController(context: context))
         default:
             break
         }
@@ -462,7 +469,7 @@ public func ayuGramSettingsController(context: AccountContext, autoCheckUpdates:
             entries += [.privacyHeader, .ghost(settings.ghostMode), .spy, .chatLocks, .secondSpace, .emergency]
             entries.append(.appearanceHeader)
             entries += ShadowCustomizationPart.allCases.map { .customization($0) }
-            entries += [.toolsHeader, .messageScreenshot, .filters, .chatStats, .quickReplies, .misc, .pushDiagnostics]
+            entries += [.toolsHeader, .messageScreenshot, .filters, .chatStats, .feed, .quickReplies, .misc, .pushDiagnostics]
             entries += [.accountsHeader, .hiddenAccounts, .settingsSync, .backup]
             let crashCount = ShadowCrashReports.shared.reports().count
             if crashCount > 0 {

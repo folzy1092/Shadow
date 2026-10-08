@@ -24,6 +24,7 @@ SCREEN_FILES = {
     "screenshot": ("SettingsUI/Sources/ShadowMessageScreenshotSettingsController.swift", "ScreenshotSettingEntry"),
     "locks": ("SettingsUI/Sources/ShadowChatLocksController.swift", "ShadowChatLocksEntry"),
     "space": ("SettingsUI/Sources/ShadowSecondSpaceController.swift", "ShadowSecondSpaceEntry"),
+    "feed": ("SettingsUI/Sources/ShadowFeedSettingsController.swift", "ShadowFeedSettingsEntry"),
 }
 
 

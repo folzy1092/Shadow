@@ -27,7 +27,8 @@ extension ShadowSettingsTransfer {
     private static let choiceFields: [String: WritableKeyPath<AyuGramSettings, Int32>] = [
         "voiceTimeFormat": \.voiceTimeFormat,
         "replyTimecodeMode": \.replyTimecodeMode,
-        "bottomBarScrollMode": \.bottomBarScrollMode
+        "bottomBarScrollMode": \.bottomBarScrollMode,
+        "feedPosition": \.feedPosition
     ]
 
     public static func intValue(_ key: String, in settings: AyuGramSettings) -> Int32? {

@@ -545,6 +545,32 @@ UI-проекция настроек выбирается в `TelegramRootContro
   `showChatStreak` в «Кастомизация → Профили». Не для ботов, себя, закрытых
   и скрытых чатов.
 
+## 5k. Лента (бета, 1.9.0)
+
+- Вкладка `TelegramUI/ShadowFeedController.swift` (WKWebView). Страница —
+  `ShadowFeedPage.html` (Foundation), пишется в
+  `tmp/shadow-feed-<аккаунт>/index.html`, грузится `loadFileURL` с доступом к
+  папке. Медиа качаются как в чате (`fetchedMediaResource`) и hard-link'ом
+  (иначе копией) кладутся рядом с расширением (`.jpg/.mp4`), странице уходит
+  `Feed.mediaReady(key, file)`. Видео больше 25 МБ — только постер.
+- Посты — `ShadowFeedCollect.swift`: каналы из списка чатов (архив по
+  тумблеру), по 40 последних постов не старше 21 дня, **без запросов истории**;
+  альбом — один пост; реклама/фильтры (`shadowLocalHideReason`), закрытые и
+  скрытые в пространстве каналы не попадают. Прочтение —
+  `applyMaxReadIndexInteractively` (правила призрака действуют).
+- Мост: страница шлёт `{action: …}` (`ready, chip, more, need, seen, open,
+  comments, react, url, readAll, hideChannel, saveCollection,
+  removeCollection, order, setting, copyLink`), контракт
+  `test_feed_contracts.py` следит, что каждый action обработан.
+- Подборки, порядок вкладок, убранные каналы, «вы остановились здесь» —
+  `ShadowFeedStore` (UserDefaults на аккаунт). Настройки `feed*` в
+  `AyuGramSettings`, экран `SettingsUI/ShadowFeedSettingsController.swift`
+  (хаб → «Лента (бета)», ссылки `shadow://feed/...`).
+- Место вкладки: `TelegramRootController` (`shadowInsertFeed`,
+  `ShadowFeed.Position`): A левее контактов, B между чатами и профилем, C
+  правее профиля. Вариант D (отдельный круг как поиск) требует правки
+  `TabBarComponent` — не сделан.
+
 ## 5a. Замки чатов и второе пространство
 
 - Замки: `ShadowChatLock.swift` (хранилище), `TelegramUI/Sources/ShadowChatLockUI.swift`

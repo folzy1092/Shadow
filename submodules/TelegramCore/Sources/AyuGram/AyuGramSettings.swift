@@ -122,6 +122,15 @@ public struct AyuGramSettings: Codable, Equatable {
     public var adHideCompletely: Bool = true
     // Shadow: «Общаемся N дней подряд» in private chat profiles (ShadowChatStreak.swift).
     public var showChatStreak: Bool = true
+    // Shadow: «Лента» (beta) — a tab with channel posts (ShadowFeed.swift).
+    public var feedEnabled: Bool = false
+    public var feedAutoplay: Bool = true
+    public var feedShowFolders: Bool = false
+    public var feedIncludeMuted: Bool = true
+    public var feedIncludeArchived: Bool = false
+    public var feedMarkRead: Bool = true
+    // ShadowFeed.Position: 0 left of contacts, 1 between chats and profile, 2 right of profile.
+    public var feedPosition: Int32 = 1
     // Pin more chats than the server limit. Extra pins live on this device only.
     public var unlimitedPinnedChats: Bool = true
     // On-device transcription of voice messages for accounts without Premium.
@@ -448,6 +457,7 @@ public struct AyuGramSettings: Codable, Equatable {
         settings.adFilterGroups = false
         settings.adFilterForwarded = false
         settings.showChatStreak = false
+        settings.feedEnabled = false
         return settings
     }
 
@@ -703,6 +713,13 @@ public struct AyuGramSettings: Codable, Equatable {
         self.adFilterForwarded = ((try container.decodeIfPresent(Int32.self, forKey: "adFilterForwarded")) ?? 0) != 0
         self.adHideCompletely = ((try container.decodeIfPresent(Int32.self, forKey: "adHideCompletely")) ?? 1) != 0
         self.showChatStreak = ((try container.decodeIfPresent(Int32.self, forKey: "showChatStreak")) ?? 1) != 0
+        self.feedEnabled = ((try container.decodeIfPresent(Int32.self, forKey: "feedEnabled")) ?? 0) != 0
+        self.feedAutoplay = ((try container.decodeIfPresent(Int32.self, forKey: "feedAutoplay")) ?? 1) != 0
+        self.feedShowFolders = ((try container.decodeIfPresent(Int32.self, forKey: "feedShowFolders")) ?? 0) != 0
+        self.feedIncludeMuted = ((try container.decodeIfPresent(Int32.self, forKey: "feedIncludeMuted")) ?? 1) != 0
+        self.feedIncludeArchived = ((try container.decodeIfPresent(Int32.self, forKey: "feedIncludeArchived")) ?? 0) != 0
+        self.feedMarkRead = ((try container.decodeIfPresent(Int32.self, forKey: "feedMarkRead")) ?? 1) != 0
+        self.feedPosition = ShadowFeed.Position.normalized((try container.decodeIfPresent(Int32.self, forKey: "feedPosition")) ?? 1).rawValue
         self.unlimitedPinnedChats = ((try container.decodeIfPresent(Int32.self, forKey: "unlimitedPinnedChats")) ?? 1) != 0
         self.localVoiceTranscription = ((try container.decodeIfPresent(Int32.self, forKey: "localVoiceTranscription")) ?? 1) != 0
         self.voiceTimeFormat = ShadowVoiceTime.normalized((try container.decodeIfPresent(Int32.self, forKey: "voiceTimeFormat")) ?? 0)
@@ -811,6 +828,13 @@ public struct AyuGramSettings: Codable, Equatable {
         try container.encode((self.adFilterForwarded ? 1 : 0) as Int32, forKey: "adFilterForwarded")
         try container.encode((self.adHideCompletely ? 1 : 0) as Int32, forKey: "adHideCompletely")
         try container.encode((self.showChatStreak ? 1 : 0) as Int32, forKey: "showChatStreak")
+        try container.encode((self.feedEnabled ? 1 : 0) as Int32, forKey: "feedEnabled")
+        try container.encode((self.feedAutoplay ? 1 : 0) as Int32, forKey: "feedAutoplay")
+        try container.encode((self.feedShowFolders ? 1 : 0) as Int32, forKey: "feedShowFolders")
+        try container.encode((self.feedIncludeMuted ? 1 : 0) as Int32, forKey: "feedIncludeMuted")
+        try container.encode((self.feedIncludeArchived ? 1 : 0) as Int32, forKey: "feedIncludeArchived")
+        try container.encode((self.feedMarkRead ? 1 : 0) as Int32, forKey: "feedMarkRead")
+        try container.encode(self.feedPosition, forKey: "feedPosition")
         try container.encode((self.unlimitedPinnedChats ? 1 : 0) as Int32, forKey: "unlimitedPinnedChats")
         try container.encode((self.localVoiceTranscription ? 1 : 0) as Int32, forKey: "localVoiceTranscription")
         try container.encode(self.voiceTimeFormat, forKey: "voiceTimeFormat")

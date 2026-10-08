@@ -90,7 +90,11 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
     private var storyUploadEventsDisposable: Disposable?
     // Only this root's account may project settings into the visible UI.
     private var ayuSettingsDisposable: Disposable?
-    
+    // Shadow: «Лента» (beta) tab and the state its place was built for.
+    private var shadowFeedController: ShadowFeedController?
+    private var shadowFeedLayout: (enabled: Bool, position: Int32)?
+    private var shadowShowCallsTab = true
+
     override public var minimizedContainer: MinimizedContainer? {
         didSet {
             self.minimizedContainer?.navigationController = self
@@ -245,9 +249,24 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         }
         accountSettingsController.parentController = self
         controllers.append(accountSettingsController)
-                
-        tabBarController.setControllers(controllers, selectedIndex: restoreSettignsController != nil ? (controllers.count - 1) : (controllers.count - 2))
-        
+
+        // Shadow: the feed tab, at the place chosen in its settings.
+        self.shadowShowCallsTab = showCallsTab
+        let feedSettings = currentAyuGramSettings(accountId: self.context.account.id)
+        self.shadowFeedLayout = (feedSettings.feedEnabled, feedSettings.feedPosition)
+        if feedSettings.feedEnabled {
+            let feedController = ShadowFeedController(context: self.context)
+            self.shadowFeedController = feedController
+            shadowInsertFeed(feedController, into: &controllers, position: feedSettings.feedPosition)
+        }
+        let initialIndex: Int
+        if restoreSettignsController != nil {
+            initialIndex = controllers.firstIndex(where: { $0 === accountSettingsController }) ?? (controllers.count - 1)
+        } else {
+            initialIndex = controllers.firstIndex(where: { $0 === chatListController }) ?? (controllers.count - 2)
+        }
+        tabBarController.setControllers(controllers, selectedIndex: initialIndex)
+
         self.contactsController = contactsController
         self.callListController = callListController
         self.chatListController = chatListController
@@ -272,7 +291,19 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
             if let chatListController = self.chatListController {
                 (self.rootTabController as? TabBarControllerImpl)?.configureScrollVisibility(source: chatListController, mode: settings.bottomBarScrollMode)
             }
-            (self.rootTabController as? TabBarControllerImpl)?.updateLayout(transition: transition)
+            // Shadow: the feed tab follows its switch and position.
+            if let layout = self.shadowFeedLayout, layout.enabled != settings.feedEnabled || layout.position != settings.feedPosition {
+                self.shadowFeedLayout = (settings.feedEnabled, settings.feedPosition)
+                if settings.feedEnabled {
+                    if self.shadowFeedController == nil {
+                        self.shadowFeedController = ShadowFeedController(context: self.context)
+                    }
+                } else {
+                    self.shadowFeedController = nil
+                }
+                self.updateRootControllers(showCallsTab: self.shadowShowCallsTab)
+            }
+(self.rootTabController as? TabBarControllerImpl)?.updateLayout(transition: transition)
         })
     }
         
@@ -287,7 +318,11 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         }
         controllers.append(self.chatListController!)
         controllers.append(self.accountSettingsController!)
-        
+        self.shadowShowCallsTab = showCallsTab
+        if let feedController = self.shadowFeedController {
+            shadowInsertFeed(feedController, into: &controllers, position: currentAyuGramSettings(accountId: self.context.account.id).feedPosition)
+        }
+
         rootTabController.setControllers(controllers, selectedIndex: nil)
     }
     
@@ -899,3 +934,9 @@ extension MediaEditorScreenImpl.Result: @retroactive MediaEditorScreenResult {
     }
 }
 #endif
+
+// Shadow: puts the feed tab at its place (ShadowFeed.Position) among the others.
+private func shadowInsertFeed(_ feedController: ViewController, into controllers: inout [ViewController], position: Int32) {
+    let index = ShadowFeed.Position.normalized(position).index(otherTabs: controllers.count)
+    controllers.insert(feedController, at: max(0, min(controllers.count, index)))
+}

@@ -214,10 +214,11 @@ public enum ShadowSettingLinks {
         "filters": "Фильтры",
         "screenshot": "Скриншоты сообщений",
         "locks": "Замки чатов",
-        "space": "Второе пространство"
+        "space": "Второе пространство",
+        "feed": "Лента"
     ]
 
-    public static let screenOrder: [String] = ["ghost", "spy", "customization", "screenshot", "filters", "profile", "misc", "locks", "space"]
+    public static let screenOrder: [String] = ["ghost", "spy", "customization", "screenshot", "filters", "profile", "misc", "locks", "space", "feed"]
 
     public static let all: [ShadowSettingLink] = [
         // Призрак (AyuGhostEntry)
@@ -323,6 +324,14 @@ public enum ShadowSettingLinks {
         ShadowSettingLink(screen: "filters", slug: "ads-groups", entryId: 40002, key: "adFilterGroups", title: "Реклама в группах", since: "1.6.0"),
         ShadowSettingLink(screen: "filters", slug: "ads-forwarded", entryId: 40003, key: "adFilterForwarded", title: "Реклама в пересланных", since: "1.6.0"),
         ShadowSettingLink(screen: "filters", slug: "ads-hide-completely", entryId: 40004, key: "adHideCompletely", title: "Скрывать рекламу полностью", since: "1.6.0"),
+        // Лента (shadowFeedSettingsController)
+        ShadowSettingLink(screen: "feed", slug: "enabled", entryId: 1, key: "feedEnabled", title: "Лента (бета)", since: "1.9.0"),
+        ShadowSettingLink(screen: "feed", slug: "position", entryId: 3, key: "feedPosition", title: "Где кнопка ленты", choices: ShadowFeed.Position.allCases.map { $0.title }, since: "1.9.0"),
+        ShadowSettingLink(screen: "feed", slug: "autoplay", entryId: 7, key: "feedAutoplay", title: "Автозапуск видео в ленте", since: "1.9.0"),
+        ShadowSettingLink(screen: "feed", slug: "folders", entryId: 8, key: "feedShowFolders", title: "Папки Telegram в ленте", since: "1.9.0"),
+        ShadowSettingLink(screen: "feed", slug: "muted", entryId: 9, key: "feedIncludeMuted", title: "Каналы без звука в ленте", since: "1.9.0"),
+        ShadowSettingLink(screen: "feed", slug: "archived", entryId: 10, key: "feedIncludeArchived", title: "Каналы из архива в ленте", since: "1.9.0"),
+        ShadowSettingLink(screen: "feed", slug: "mark-read", entryId: 11, key: "feedMarkRead", title: "Лента отмечает прочитанным", since: "1.9.0"),
 
         // Подмена профиля (AyuMiscEntry)
         ShadowSettingLink(screen: "profile", slug: "spoof-id", entryId: 1, key: "spoofProfileIdEnabled", title: "Подменить ID"),

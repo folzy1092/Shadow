@@ -185,6 +185,18 @@
 | `shadow://filters/ads-forwarded` | Реклама в пересланных |
 | `shadow://filters/ads-hide-completely` | Скрывать рекламу полностью |
 
+**Лента**
+
+| Ссылка | Тумблер |
+|---|---|
+| `shadow://feed/enabled` | Лента (бета) |
+| `shadow://feed/position` | Где кнопка ленты (`?value=0` левее контактов, `1` между чатами и профилем, `2` правее профиля) |
+| `shadow://feed/autoplay` | Автозапуск видео в ленте |
+| `shadow://feed/folders` | Папки Telegram в ленте |
+| `shadow://feed/muted` | Каналы без звука в ленте |
+| `shadow://feed/archived` | Каналы из архива в ленте |
+| `shadow://feed/mark-read` | Лента отмечает прочитанным |
+
 **Подмена профиля**
 
 | Ссылка | Тумблер |

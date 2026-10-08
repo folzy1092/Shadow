@@ -74,6 +74,12 @@ public enum ShadowSettingsTransfer {
         "adFilterForwarded": \.adFilterForwarded,
         "adHideCompletely": \.adHideCompletely,
         "showChatStreak": \.showChatStreak,
+        "feedEnabled": \.feedEnabled,
+        "feedAutoplay": \.feedAutoplay,
+        "feedShowFolders": \.feedShowFolders,
+        "feedIncludeMuted": \.feedIncludeMuted,
+        "feedIncludeArchived": \.feedIncludeArchived,
+        "feedMarkRead": \.feedMarkRead,
         "updateChannelBeta": \.updateChannelBeta,
         "unlimitedPinnedChats": \.unlimitedPinnedChats,
         "localVoiceTranscription": \.localVoiceTranscription,
@@ -113,6 +119,7 @@ public enum ShadowSettingsTransfer {
         values["bottomBarScrollMode"] = .integer(Int64(settings.bottomBarScrollMode))
         values["voiceTimeFormat"] = .integer(Int64(settings.voiceTimeFormat))
         values["replyTimecodeMode"] = .integer(Int64(settings.replyTimecodeMode))
+        values["feedPosition"] = .integer(Int64(settings.feedPosition))
         values["ghostAccountMode"] = .integer(Int64(settings.ghostAccountMode.rawValue))
         values["screenshotBackground"] = .integer(Int64(settings.messageScreenshot.background.rawValue))
         values["screenshotCustomColorARGB"] = .integer(Int64(settings.messageScreenshot.customColorARGB))
@@ -149,6 +156,7 @@ public enum ShadowSettingsTransfer {
                 case "bottomBarScrollMode": updated.bottomBarScrollMode = Int32(number)
                 case "voiceTimeFormat": updated.voiceTimeFormat = ShadowVoiceTime.normalized(Int32(number))
                 case "replyTimecodeMode": updated.replyTimecodeMode = ShadowReplyTimecode.normalizedMode(Int32(number))
+                case "feedPosition": updated.feedPosition = ShadowFeed.Position.normalized(Int32(clamping: number)).rawValue
                 case "settingsIconBackgroundColor": updated.settingsIconBackgroundColor = Int32(number)
                 case "settingsIconGlyphColor": updated.settingsIconGlyphColor = Int32(number)
                 case "ghostAccountMode":
