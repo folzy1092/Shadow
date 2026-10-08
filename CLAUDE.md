@@ -10,7 +10,10 @@ This file provides guidance to AI assistants when working with code in this repo
 > **Fork version = Г.О.Ф** (`ShadowVersion.fork` + `versions.json` → `fork`,
 > e.g. `1.1.1`): first digit — global overhaul, second — update with new
 > features, third — bug fixes and small updates. Bump it with every release;
-> details in SHADOW_AGENT_MAP §5d. Most of this file describes upstream Telegram; the
+> details in SHADOW_AGENT_MAP §5d. **A rework or tweak of an existing feature
+> is a small fix (third digit), not an update** (Folzy, 2026-10-08) — e.g. the
+> «призрак перед историями» rework was 1.5.2, not 1.6.0. The middle digit is
+> only for genuinely new features. Most of this file describes upstream Telegram; the
 > local-build/simulator instructions below assume a macOS dev machine.
 >
 > **Release notes are written by the agent** (Folzy does not write them): every
