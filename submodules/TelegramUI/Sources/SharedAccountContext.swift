@@ -111,6 +111,7 @@ import TextProcessingScreen
 import CreateBotScreen
 import EmojiStatusSelectionComponent
 import EntityKeyboard
+import StoryContainerScreen
 
 private final class AccountUserInterfaceInUseContext {
     let subscribers = Bag<(Bool) -> Void>()
@@ -1065,6 +1066,8 @@ public final class SharedAccountContextImpl: SharedAccountContext {
             ShadowDuressCoordinator.install(sharedContext: self, mainWindow: mainWindow)
             // Shadow: settings shared between ticked accounts (ShadowSettingsSync).
             ShadowSettingsSyncManager.install(sharedContext: self)
+            // Shadow: undo a temporary story ghost cut short by the app being killed.
+            ShadowStoryGhostSession.recoverAfterLaunch(sharedContext: self)
             
             self.widgetDataContext = WidgetDataContext(basePath: self.basePath, inForeground: self.applicationBindings.applicationInForeground, activeAccounts: self.activeAccountContexts
             |> map { _, accounts, _ in

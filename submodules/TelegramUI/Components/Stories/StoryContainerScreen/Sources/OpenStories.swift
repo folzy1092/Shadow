@@ -185,8 +185,9 @@ public extension StoryContainerScreen {
         // turn Ghost Mode on (with story views hidden) first.
         if ayuSettings.offerGhostBeforeStories, !ayuSettings.ghostMode, peerId != context.account.peerId {
             let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-            let proceed = { [weak parentController] in
+            let proceed = { [weak parentController] (ghostSession: ShadowStoryGhostSession?) in
                 guard let parentController else {
+                    ghostSession?.end()
                     return
                 }
                 openPeerStoriesCustomProceed(
@@ -201,29 +202,27 @@ public extension StoryContainerScreen {
                     transitionOut: transitionOut,
                     setFocusedItem: setFocusedItem,
                     setProgress: setProgress,
-                    completion: completion
+                    completion: completion,
+                    ghostSession: ghostSession
                 )
             }
+            // Shadow: «Включить призрака» turns Ghost Mode on only until the
+            // stories are closed (ShadowStoryGhostSession), then it goes back.
             let alertController = standardTextAlertController(
                 theme: AlertControllerTheme(presentationData: presentationData),
                 title: "Режим призрака выключен",
-                text: "Автор увидит, что вы смотрели историю. Включить призрак?",
+                text: "Автор увидит, что вы смотрели историю. Включить призрака, пока смотрите?",
                 actions: [
-                    TextAlertAction(type: .genericAction, title: "Смотреть так", action: {
-                        proceed()
-                    }),
-                    TextAlertAction(type: .defaultAction, title: "Включить призрак", action: {
-                        let _ = updateAyuGramSettings(postbox: context.account.postbox, { settings in
-                            var settings = settings
-                            settings.ghostMode = true
-                            settings.hideStoryViews = true
-                            settings.ghostAccountMode = .manual
-                            return settings
-                        }).start(completed: {
-                            proceed()
+                    TextAlertAction(type: .defaultAction, title: "Включить призрака", action: {
+                        ShadowStoryGhostSession.begin(context: context, completion: { session in
+                            proceed(session)
                         })
+                    }),
+                    TextAlertAction(type: .genericAction, title: "Смотреть так", action: {
+                        proceed(nil)
                     })
-                ]
+                ],
+                actionLayout: .vertical
             )
             parentController.present(alertController, in: .window(.root))
             return
@@ -246,7 +245,8 @@ public extension StoryContainerScreen {
                     transitionOut: transitionOut,
                     setFocusedItem: setFocusedItem,
                     setProgress: setProgress,
-                    completion: completion
+                    completion: completion,
+                    ghostSession: nil
                 )
             }
             let alertController = standardTextAlertController(
@@ -284,7 +284,8 @@ public extension StoryContainerScreen {
             transitionOut: transitionOut,
             setFocusedItem: setFocusedItem,
             setProgress: setProgress,
-            completion: completion
+            completion: completion,
+            ghostSession: nil
         )
     }
 
@@ -300,8 +301,12 @@ public extension StoryContainerScreen {
         transitionOut: @escaping (EnginePeer.Id) -> StoryContainerScreen.TransitionOut?,
         setFocusedItem: @escaping (Signal<EngineStoryId?, NoError>) -> Void,
         setProgress: @escaping (Signal<Never, NoError>) -> Void,
-        completion: @escaping (StoryContainerScreen) -> Void
+        completion: @escaping (StoryContainerScreen) -> Void,
+        ghostSession: ShadowStoryGhostSession?
     ) {
+        // Shadow: the temporary ghost ends with the screen; if the screen never
+        // appears (nothing to show, loading cancelled), it ends right away.
+        var didHandOverGhostSession = false
         let storyContent = StoryContentContextImpl(context: context, isHidden: isHidden, focusedPeerId: peerId, focusedStoryId: focusOnId, singlePeer: singlePeer, fixedOrder: initialOrder)
         let signal = storyContent.state
         |> take(1)
@@ -328,6 +333,9 @@ public extension StoryContainerScreen {
             if state.slice == nil {
                 return
             }
+            guard let parentController else {
+                return
+            }
             
             let transitionIn: StoryContainerScreen.TransitionIn? = transitionIn()
             
@@ -339,11 +347,22 @@ public extension StoryContainerScreen {
                     return transitionOut(peerId)
                 }
             )
+            if let ghostSession {
+                storyContainerScreen.shadowGhostSession = ghostSession
+                didHandOverGhostSession = true
+            }
             setFocusedItem(storyContainerScreen.focusedItem)
-            parentController?.push(storyContainerScreen)
+            parentController.push(storyContainerScreen)
             completion(storyContainerScreen)
         }
         |> ignoreValues
+        |> afterDisposed {
+            Queue.mainQueue().async {
+                if !didHandOverGhostSession {
+                    ghostSession?.end()
+                }
+            }
+        }
         
         setProgress(signal)
     }

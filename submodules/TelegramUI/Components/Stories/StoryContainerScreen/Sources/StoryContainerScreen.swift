@@ -2109,6 +2109,9 @@ public class StoryContainerScreen: ViewControllerComponentContainer, KeyShortcut
     
     public var customBackAction: (() -> Void)?
     public var performReorderAction: (() -> Void)?
+    // Shadow: temporary Ghost Mode from the offer before stories; it is
+    // turned back off when this screen closes for good (not for PiP).
+    var shadowGhostSession: ShadowStoryGhostSession?
     
     public init(
         context: AccountContext,
@@ -2142,6 +2145,7 @@ public class StoryContainerScreen: ViewControllerComponentContainer, KeyShortcut
     deinit {
         self.context.sharedContext.hasPreloadBlockingContent.set(.single(false))
         self.focusedItemPromise.set(.single(nil))
+        self.shadowGhostSession?.end()
     }
     
     override public func containerLayoutUpdated(_ layout: ContainerViewLayout, transition: ContainedViewLayoutTransition) {
@@ -2264,6 +2268,7 @@ public class StoryContainerScreen: ViewControllerComponentContainer, KeyShortcut
     override public func dismiss(completion: (() -> Void)? = nil) {
         if !self.isDismissed {
             self.isDismissed = true
+            self.shadowGhostSession?.end()
             
             self.statusBar.updateStatusBarStyle(.Ignore, animated: true)
             

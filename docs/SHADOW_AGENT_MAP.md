@@ -141,6 +141,20 @@ UI-проекция настроек выбирается в `TelegramRootContro
 - отправка без онлайна: `AyuDelayedSend.swift` (через schedule_date) + `EnqueueMessage.swift`;
 - уведомления о скриншотах **не отправляются никогда** (`ShadowScreenshotNotices.swift`).
 
+**Призрак перед историями (1.6.0).** Предложение в `OpenStories.swift`
+(`openPeerStoriesCustom`): кнопки столбиком — «Включить призрака» сверху,
+«Смотреть так» снизу. «Включить призрака» включает призрак только пока
+открыты истории: `ShadowStoryGhostSession` (модуль StoryContainerScreen)
+пишет прежние `ghostMode`/`hideStoryViews`/`ghostAccountMode` в UserDefaults
+(`shadow.storyGhostSession.v1`) до изменения, экран историй держит сессию
+(`StoryContainerScreen.shadowGhostSession`) и возвращает значения в
+`dismiss(completion:)` и `deinit` (PiP не закрывает экран — призрак
+остаётся). Истории не открылись — сессия кончается сразу (`afterDisposed`).
+Приложение убили с открытой историей — откат при следующем запуске
+(`recoverAfterLaunch` в `SharedAccountContextImpl`). Возвращаются только поля,
+которые всё ещё в значении сессии: ручное изменение за время просмотра
+сохраняется.
+
 ## 5b. Вайтлист устройств и фильтры сообщений
 
 - Вайтлист: `ShadowDeviceAccess.swift` (ID устройства в Keychain,
