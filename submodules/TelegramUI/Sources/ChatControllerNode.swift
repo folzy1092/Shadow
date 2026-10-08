@@ -5056,12 +5056,14 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             
             // Shadow: a timecode for a text reply to a voice message or round video
             // (ShadowReplyTimecode). In the ask mode the alert sends again with the answer.
+            // Text that already opens with a timecode («Ответить с тайм-кодом») is sent
+            // as is: the setting neither adds a second one nor asks.
             var shadowTimecodeText: String?
             if let shadowReplyTimecode {
                 if case let .add(timecode) = shadowReplyTimecode {
                     shadowTimecodeText = timecode
                 }
-            } else if !sendAsRichMessage, !effectiveInputText.string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, let candidate = shadowReplyTimecodeCandidate(context: self.context, state: effectivePresentationInterfaceState, chatLocation: self.chatLocation) {
+            } else if !sendAsRichMessage, !effectiveInputText.string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, !ShadowReplyTimecode.startsWithTimecode(effectiveInputText.string), let candidate = shadowReplyTimecodeCandidate(context: self.context, state: effectivePresentationInterfaceState, chatLocation: self.chatLocation) {
                 switch candidate.action {
                 case .add:
                     shadowTimecodeText = candidate.timecode

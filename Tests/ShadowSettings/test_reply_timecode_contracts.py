@@ -62,5 +62,15 @@ class ReplyTimecodeContracts(unittest.TestCase):
         self.assertIn("Tests/ShadowSettings/ReplyTimecodeTests.swift", runner)
 
 
+
+class MenuTimecodeWinsContracts(unittest.TestCase):
+    """«Ответить с тайм-кодом» + the setting must not give two timecodes."""
+
+    def test_setting_skips_text_that_already_has_a_timecode(self):
+        node = (SUB / "TelegramUI/Sources/ChatControllerNode.swift").read_text(encoding="utf-8")
+        self.assertIn("!ShadowReplyTimecode.startsWithTimecode(effectiveInputText.string), let candidate = shadowReplyTimecodeCandidate(", node)
+        core = (SUB / "TelegramCore/Sources/AyuGram/ShadowReplyTimecode.swift").read_text(encoding="utf-8")
+        self.assertIn("public static func startsWithTimecode(_ text: String) -> Bool", core)
+
 if __name__ == "__main__":
     unittest.main()

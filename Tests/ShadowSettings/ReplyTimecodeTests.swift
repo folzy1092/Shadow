@@ -17,6 +17,10 @@ struct ReplyTimecodeTests {
         check(ShadowReplyTimecode.timecode(position: 311.5, duration: 312) == nil, "Heard to the end: nothing")
         check(ShadowReplyTimecode.timecode(position: 1, duration: 1.5) == nil, "Too short a message")
         check(ShadowReplyTimecode.applying("0:53", to: "не согласен") == "0:53 не согласен", "Timecode goes first")
+        check(ShadowReplyTimecode.startsWithTimecode("0:38 нормалды"), "Menu timecode is detected")
+        check(ShadowReplyTimecode.startsWithTimecode("1:02:05 ок"), "Hours timecode is detected")
+        check(ShadowReplyTimecode.startsWithTimecode("12:07"), "Timecode alone")
+        check(!ShadowReplyTimecode.startsWithTimecode("нормалды 0:38"), "Timecode not at the start")
 
         // Modes.
         check(ShadowReplyTimecode.action(enabled: false, mode: 0, remembered: nil) == .skip, "Off")

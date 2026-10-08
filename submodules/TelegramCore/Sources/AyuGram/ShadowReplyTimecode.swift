@@ -42,6 +42,14 @@ public enum ShadowReplyTimecode {
         return "\(timecode) \(text)"
     }
 
+    // True when the text already opens with a timecode ("0:53 …", "1:02:05 …"),
+    // e.g. put there by «Ответить с тайм-кодом». Sending then adds no second
+    // one: the reply's own timecode wins over the setting.
+    public static func startsWithTimecode(_ text: String) -> Bool {
+        let trimmed = text.drop(while: { $0 == " " || $0 == "\n" })
+        return trimmed.range(of: "^[0-9]{1,2}(:[0-5][0-9]){1,2}(\\s|$)", options: .regularExpression) != nil
+    }
+
     // What sending does with a timecode.
     public enum Resolved: Equatable {
         case add(String)
