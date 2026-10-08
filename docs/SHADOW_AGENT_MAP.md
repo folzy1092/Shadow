@@ -141,7 +141,7 @@ UI-проекция настроек выбирается в `TelegramRootContro
 - отправка без онлайна: `AyuDelayedSend.swift` (через schedule_date) + `EnqueueMessage.swift`;
 - уведомления о скриншотах **не отправляются никогда** (`ShadowScreenshotNotices.swift`).
 
-**Призрак перед историями (1.6.0).** Предложение в `OpenStories.swift`
+**Призрак перед историями (1.5.2).** Предложение в `OpenStories.swift`
 (`openPeerStoriesCustom`): кнопки столбиком — «Включить призрака» сверху,
 «Смотреть так» снизу. «Включить призрака» включает призрак только пока
 открыты истории: `ShadowStoryGhostSession` (модуль StoryContainerScreen)
