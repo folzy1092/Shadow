@@ -327,7 +327,7 @@ function personView(p) {
     <div class="tile"><div class="t">Пишет первым за день</div><div class="v">${pct(p.firstOfDay, R.firstOfDayDays)}%</div><div class="s">${fmt(p.firstOfDay)} из ${fmt(R.firstOfDayDays)} дней</div></div>
     <div class="tile"><div class="t">Обычно отвечает за</div><div class="v">${shortDur(p.replySeconds)}</div><div class="s">медиана, паузы больше 6 ч не в счёт</div></div>
     <div class="tile"><div class="t">Ночью, 0:00–6:00</div><div class="v">${pct(p.night, p.messages)}%</div><div class="s">${fmt(p.night)} сообщ.</div></div>
-    <div class="tile"><div class="t">Удалено · изменено</div><div class="v">${fmt(p.deleted)} · ${fmt(p.edited)}</div><div class="s">удалённые сохранены Shadow</div></div>
+    ${R.countsDeleted === false ? `<div class="tile"><div class="t">Изменено</div><div class="v">${fmt(p.edited)}</div><div class="s">сообщений правили</div></div>` : `<div class="tile"><div class="t">Удалено · изменено</div><div class="v">${fmt(p.deleted)} · ${fmt(p.edited)}</div><div class="s">удалённые сохранены Shadow</div></div>`}
     <div class="tile wide"><div class="t">Ответов на сообщения · звонков</div><div class="v">${fmt(p.replies)} · ${fmt(p.calls)}</div><div class="s">звонки: ${dur(p.callSeconds)} всего</div></div>
   </div>
   ${chipsBox('Любимые реакции', p.reactions, 'вместе с премиум')}
@@ -439,7 +439,7 @@ function compareView() {
     rows.push(cmpRow('отвечает быстрее', 1 / Math.max(1, me.replySeconds), 1 / Math.max(1, other.replySeconds), shortDur(me.replySeconds), shortDur(other.replySeconds), me.replySeconds <= other.replySeconds));
   }
   rows.push(cmpRow('ночью', pct(me.night, me.messages), pct(other.night, other.messages), pct(me.night, me.messages) + '%', pct(other.night, other.messages) + '%'));
-  rows.push(cmpRow('удалено', me.deleted, other.deleted, fmt(me.deleted), fmt(other.deleted)));
+  if (R.countsDeleted !== false) rows.push(cmpRow('удалено', me.deleted, other.deleted, fmt(me.deleted), fmt(other.deleted)));
   const timeline = R.timelineLabels.length > 1 ? `<div class="box"><h4>${R.period >= 2 ? 'По месяцам' : 'По дням'}<small>сообщений</small></h4>
     <div class="legend"><span><i style="background:var(--me)"></i>Я</span><span><i style="background:var(--them)"></i>${esc(displayName(other))}</span></div>
     ${lineChart([{ name: 'я', values: me.timeline, color: 'var(--me)' }, { name: displayName(other), values: other.timeline, color: 'var(--them)' }])}</div>` : '';

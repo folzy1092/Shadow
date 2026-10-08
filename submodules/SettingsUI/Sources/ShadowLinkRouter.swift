@@ -64,6 +64,8 @@ public func shadowOpenLink(context: AccountContext, link: ShadowLinks.Link, navi
         push(shadowSecondSpaceController(context: context))
     case "feed":
         push(shadowFeedSettingsController(context: context))
+    case "stats":
+        push(shadowChatStatsListController(context: context))
     case "emergency":
         push(shadowEmergencyController(context: context))
     case "storage":

@@ -194,6 +194,8 @@ public enum ShadowChatStats {
         public var timeZoneOffset: Int32
         // key -> data: URI of a sticker or custom emoji picture (filled by the app).
         public var images: [String: String]
+        // false: messages kept after deletion were left out (nil in older reports).
+        public var countsDeleted: Bool?
 
         public var me: Person? {
             return self.people.first(where: { $0.id == self.meId })

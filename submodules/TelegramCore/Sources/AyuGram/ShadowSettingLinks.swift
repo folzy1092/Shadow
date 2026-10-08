@@ -215,10 +215,11 @@ public enum ShadowSettingLinks {
         "screenshot": "Скриншоты сообщений",
         "locks": "Замки чатов",
         "space": "Второе пространство",
-        "feed": "Лента"
+        "feed": "Лента",
+        "stats": "Итоги чатов"
     ]
 
-    public static let screenOrder: [String] = ["ghost", "spy", "customization", "screenshot", "filters", "profile", "misc", "locks", "space", "feed"]
+    public static let screenOrder: [String] = ["ghost", "spy", "customization", "screenshot", "filters", "profile", "misc", "locks", "space", "feed", "stats"]
 
     public static let all: [ShadowSettingLink] = [
         // Призрак (AyuGhostEntry)
@@ -324,6 +325,7 @@ public enum ShadowSettingLinks {
         ShadowSettingLink(screen: "filters", slug: "ads-groups", entryId: 40002, key: "adFilterGroups", title: "Реклама в группах", since: "1.6.0"),
         ShadowSettingLink(screen: "filters", slug: "ads-forwarded", entryId: 40003, key: "adFilterForwarded", title: "Реклама в пересланных", since: "1.6.0"),
         ShadowSettingLink(screen: "filters", slug: "ads-hide-completely", entryId: 40004, key: "adHideCompletely", title: "Скрывать рекламу полностью", since: "1.6.0"),
+        ShadowSettingLink(screen: "stats", slug: "count-deleted", entryId: 2, key: "chatStatsCountDeleted", title: "Итоги: считать удалённые", since: "1.9.3"),
         // Лента (shadowFeedSettingsController)
         ShadowSettingLink(screen: "feed", slug: "enabled", entryId: 1, key: "feedEnabled", title: "Лента (бета)", since: "1.9.0"),
         ShadowSettingLink(screen: "feed", slug: "position", entryId: 3, key: "feedPosition", title: "Где кнопка ленты", choices: ShadowFeed.Position.allCases.map { $0.title }, since: "1.9.0"),

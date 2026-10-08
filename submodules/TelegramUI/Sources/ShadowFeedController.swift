@@ -486,6 +486,10 @@ final class ShadowFeedController: ViewController, WKScriptMessageHandler {
             if let id = body["id"] as? String {
                 self.openComments(id)
             }
+        case "media":
+            if let key = body["key"] as? String {
+                self.openMedia(key)
+            }
         case "react":
             if let id = body["id"] as? String, let key = body["key"] as? String {
                 self.react(id, key: key)
@@ -585,6 +589,37 @@ final class ShadowFeedController: ViewController, WKScriptMessageHandler {
                 return
             }
             context.sharedContext.navigateToChatController(NavigateToChatControllerParams(navigationController: navigationController, context: context, chatLocation: .peer(peer), subject: .message(id: .id(ref.id), highlight: ChatControllerSubject.MessageHighlight(quote: nil), timecode: nil, setupReply: false), keepStack: .always))
+        })
+    }
+
+    // A media key is "m<peer>_<namespace>_<message>_<index>" (ShadowFeedCollect.mediaKey).
+    private func openMedia(_ key: String) {
+        let parts = key.dropFirst().split(separator: "_")
+        guard key.hasPrefix("m"), parts.count == 4, let peer = Int64(parts[0]), let namespace = Int32(parts[1]), let id = Int32(parts[2]) else {
+            return
+        }
+        let messageId = MessageId(peerId: PeerId(peer), namespace: namespace, id: id)
+        let context = self.context
+        let _ = (context.engine.data.get(TelegramEngine.EngineData.Item.Messages.Message(id: messageId))
+        |> deliverOnMainQueue).start(next: { [weak self] message in
+            guard let self, let message else {
+                return
+            }
+            let _ = context.sharedContext.openChatMessage(OpenChatMessageParams(context: context, chatLocation: nil, chatFilterTag: nil, chatLocationContextHolder: nil, message: message._asMessage(), standalone: false, reverseMessageGalleryOrder: false, navigationController: self.navigationController as? NavigationController, modal: true, dismissInput: {
+            }, present: { [weak self] c, a, _ in
+                self?.present(c, in: .window(.root), with: a, blockInteraction: true)
+            }, transitionNode: { _, _, _ in
+                return nil
+            }, addToTransitionSurface: { _ in
+            }, openUrl: { [weak self] url in
+                self?.openURL(url)
+            }, openPeer: { _, _ in
+            }, callPeer: { _, _ in
+            }, openConferenceCall: { _ in
+            }, enqueueMessage: { _ in
+            }, sendSticker: nil, sendEmoji: nil, setupTemporaryHiddenMedia: { _, _, _ in
+            }, chatAvatarHiddenMedia: { _, _ in
+            }))
         })
     }
 

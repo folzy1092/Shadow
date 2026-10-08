@@ -131,6 +131,8 @@ public struct AyuGramSettings: Codable, Equatable {
     public var feedMarkRead: Bool = true
     // ShadowFeed.Position: 0 left of contacts, 1 between chats and profile, 2 right of profile.
     public var feedPosition: Int32 = 1
+    // Shadow: «Итоги чатов» count messages kept after deletion (1.9.3).
+    public var chatStatsCountDeleted: Bool = true
     // Pin more chats than the server limit. Extra pins live on this device only.
     public var unlimitedPinnedChats: Bool = true
     // On-device transcription of voice messages for accounts without Premium.
@@ -720,6 +722,7 @@ public struct AyuGramSettings: Codable, Equatable {
         self.feedIncludeArchived = ((try container.decodeIfPresent(Int32.self, forKey: "feedIncludeArchived")) ?? 0) != 0
         self.feedMarkRead = ((try container.decodeIfPresent(Int32.self, forKey: "feedMarkRead")) ?? 1) != 0
         self.feedPosition = ShadowFeed.Position.normalized((try container.decodeIfPresent(Int32.self, forKey: "feedPosition")) ?? 1).rawValue
+        self.chatStatsCountDeleted = ((try container.decodeIfPresent(Int32.self, forKey: "chatStatsCountDeleted")) ?? 1) != 0
         self.unlimitedPinnedChats = ((try container.decodeIfPresent(Int32.self, forKey: "unlimitedPinnedChats")) ?? 1) != 0
         self.localVoiceTranscription = ((try container.decodeIfPresent(Int32.self, forKey: "localVoiceTranscription")) ?? 1) != 0
         self.voiceTimeFormat = ShadowVoiceTime.normalized((try container.decodeIfPresent(Int32.self, forKey: "voiceTimeFormat")) ?? 0)
@@ -835,6 +838,7 @@ public struct AyuGramSettings: Codable, Equatable {
         try container.encode((self.feedIncludeArchived ? 1 : 0) as Int32, forKey: "feedIncludeArchived")
         try container.encode((self.feedMarkRead ? 1 : 0) as Int32, forKey: "feedMarkRead")
         try container.encode(self.feedPosition, forKey: "feedPosition")
+        try container.encode((self.chatStatsCountDeleted ? 1 : 0) as Int32, forKey: "chatStatsCountDeleted")
         try container.encode((self.unlimitedPinnedChats ? 1 : 0) as Int32, forKey: "unlimitedPinnedChats")
         try container.encode((self.localVoiceTranscription ? 1 : 0) as Int32, forKey: "localVoiceTranscription")
         try container.encode(self.voiceTimeFormat, forKey: "voiceTimeFormat")

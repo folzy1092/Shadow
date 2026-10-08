@@ -146,6 +146,7 @@ public func shadowPresentChatStatsPeriod(context: AccountContext, peerId: Engine
 
 private enum ShadowChatStatsListEntry: ItemListNodeEntry {
     case add
+    case countDeleted(Bool)
     case header
     case report(Int32, EnginePeer, String, Bool)
     case missing(Int32, Int64, String, String)
@@ -154,7 +155,7 @@ private enum ShadowChatStatsListEntry: ItemListNodeEntry {
 
     var section: ItemListSectionId {
         switch self {
-        case .add:
+        case .add, .countDeleted:
             return 0
         case .header, .report, .missing, .empty, .info:
             return 1
@@ -164,7 +165,8 @@ private enum ShadowChatStatsListEntry: ItemListNodeEntry {
     var stableId: Int64 {
         switch self {
         case .add: return 0
-        case .header: return 1
+        case .countDeleted: return 2
+        case .header: return 3
         case let .report(index, _, _, _): return 100 + Int64(index)
         case let .missing(index, _, _, _): return 100 + Int64(index)
         case .empty: return 100_000
@@ -182,6 +184,10 @@ private enum ShadowChatStatsListEntry: ItemListNodeEntry {
         case .add:
             return ItemListActionItem(presentationData: presentationData, title: "Новые итоги", kind: .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: {
                 arguments.add()
+            })
+        case let .countDeleted(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Считать удалённые сообщения", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.setCountDeleted(value)
             })
         case .header:
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "ГОТОВЫЕ", sectionId: self.section)
@@ -203,7 +209,7 @@ private enum ShadowChatStatsListEntry: ItemListNodeEntry {
         case .empty:
             return ItemListTextItem(presentationData: presentationData, text: .plain("Итогов пока нет. Нажмите «Новые итоги» или откройте профиль собеседника → «…» → «Итоги чата»."), sectionId: self.section)
         case .info:
-            return ItemListTextItem(presentationData: presentationData, text: .plain("У каждого чата одни итоги: если подвести их заново, старые заменяются. Смахните влево, чтобы удалить. Всё считается на телефоне."), sectionId: self.section)
+            return ItemListTextItem(presentationData: presentationData, text: .plain("У каждого чата одни итоги: если подвести их заново, старые заменяются. Смахните влево, чтобы удалить. Всё считается на телефоне. «Считать удалённые» — сообщения, сохранённые анти-удалением; выключено — их нет в итогах, новые итоги считаются без них."), sectionId: self.section)
         }
     }
 }
@@ -216,6 +222,7 @@ private final class ShadowChatStatsListArguments {
     let open: (EnginePeer.Id, String) -> Void
     let remove: (Int64) -> Void
     let setRevealed: (EnginePeer.Id?, EnginePeer.Id?) -> Void
+    var setCountDeleted: (Bool) -> Void = { _ in }
 
     init(context: AccountContext, dateTimeFormat: PresentationDateTimeFormat, nameDisplayOrder: PresentationPersonNameOrder, add: @escaping () -> Void, open: @escaping (EnginePeer.Id, String) -> Void, remove: @escaping (Int64) -> Void, setRevealed: @escaping (EnginePeer.Id?, EnginePeer.Id?) -> Void) {
         self.context = context
@@ -300,10 +307,18 @@ public func shadowChatStatsListController(context: AccountContext) -> ViewContro
         }
     }
 
-    let signal = combineLatest(queue: .mainQueue(), context.sharedContext.presentationData, rowsWithPeers, revealedPeerId.get())
-    |> map { presentationData, data, revealed -> (ItemListControllerState, (ItemListNodeState, Any)) in
+    arguments.setCountDeleted = { value in
+        let _ = updateAyuGramSettings(postbox: context.account.postbox) { current in
+            var current = current
+            current.chatStatsCountDeleted = value
+            return current
+        }.startStandalone()
+    }
+    let linkRows = ShadowSettingsLinkRows()
+    let signal = combineLatest(queue: .mainQueue(), context.sharedContext.presentationData, rowsWithPeers, revealedPeerId.get(), ayuGramSettings(postbox: context.account.postbox))
+    |> map { presentationData, data, revealed, settings -> (ItemListControllerState, (ItemListNodeState, Any)) in
         let (rows, peers) = data
-        var entries: [ShadowChatStatsListEntry] = [.add, .header]
+        var entries: [ShadowChatStatsListEntry] = [.add, .countDeleted(settings.chatStatsCountDeleted), .header]
         for (index, row) in rows.enumerated() {
             if let peer = peers[EnginePeer.Id(row.peerId)] {
                 entries.append(.report(Int32(index), peer, row.text, revealed == peer.id))
@@ -312,10 +327,12 @@ public func shadowChatStatsListController(context: AccountContext) -> ViewContro
             }
         }
         entries.append(rows.isEmpty ? .empty : .info)
+        linkRows.stableIds = entries.map { Int32(clamping: $0.stableId) }
         let state = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Итоги чатов"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
         return (state, (ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, animateChanges: true), arguments))
     }
     let controller = ItemListController(context: context, state: signal)
+    shadowSettingsInstallLinkMenu(controller: controller, context: context, screen: "stats", rows: linkRows)
     pushControllerImpl = { [weak controller] c in
         controller?.push(c)
     }

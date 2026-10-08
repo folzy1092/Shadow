@@ -51,6 +51,7 @@ body { margin: 0; background: var(--page); color: var(--text); font: 16px/1.38 -
 .ptext pre { padding: 8px; white-space: pre-wrap; margin: 6px 0; }
 .ptext blockquote { margin: 6px 0; padding: 2px 10px; border-left: 3px solid var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); border-radius: 4px; }
 .spoiler { background: var(--sub); color: transparent; border-radius: 4px; }
+.ce img { width: 1.25em; height: 1.25em; object-fit: contain; vertical-align: -0.25em; }
 .spoiler.shown { background: none; color: inherit; }
 .readmore { color: var(--accent); font-size: 15px; margin-top: 2px; }
 .media { margin-top: 8px; border-radius: 14px; overflow: hidden; display: grid; gap: 2px; background: var(--media); }
@@ -165,13 +166,13 @@ function mediaHTML(p) {
       else inner = (src ? `<video src="${src}" ${poster ? `poster="${poster}"` : ''} muted playsinline loop preload="metadata" data-auto="1"></video>` : (poster ? `<img src="${poster}" alt="">` : '')) + (m.kind === 'video' ? '<div class="play"></div>' : '');
       const badge = m.kind === 'video' && m.duration ? `<span class="badge">${dur(m.duration)}</span>` : m.kind === 'gif' ? '<span class="badge">GIF</span>' : '';
       const rest = i === shown.length - 1 && n > shown.length ? `<div class="more-n">+${n - shown.length}</div>` : '';
-      return `<div class="m ${n === 1 ? 'single' : ''}" style="${style}" data-key="${esc(m.key)}" data-kind="${m.kind}" data-open="${esc(p.id)}">${inner}${badge}${rest}</div>`;
+      return `<div class="m ${n === 1 ? 'single' : ''}" style="${style}" data-key="${esc(m.key)}" data-kind="${m.kind}" data-post-id="${esc(p.id)}" data-media="${esc(m.key)}">${inner}${badge}${rest}</div>`;
     }).join('') + '</div>';
   }
   for (const m of other) {
     const icon = { voice: '🎤', round: '⏺', audio: '🎵', file: '📄', sticker: '🖼', poll: '📊', location: '📍' }[m.kind] || '📎';
     const text = m.title ? esc(m.title) : { voice: 'Голосовое', round: 'Видеосообщение', audio: 'Аудио', file: 'Файл', sticker: 'Стикер', poll: 'Опрос', location: 'Геопозиция' }[m.kind] || 'Вложение';
-    html += `<div class="att" data-open="${esc(p.id)}">${icon} ${text}${m.duration ? ' · ' + dur(m.duration) : ''}</div>`;
+    html += `<div class="att" data-media="${esc(m.key)}">${icon} ${text}${m.duration ? ' · ' + dur(m.duration) : ''}</div>`;
   }
   return html;
 }
@@ -216,6 +217,7 @@ function render() {
   });
   html += S.hasMore ? '<div class="loading" id="more">Загрузка…</div>' : '<div class="loading">Дальше постов на телефоне нет</div>';
   feed.innerHTML = html;
+  hydrateEmoji(feed);
   observe();
 }
 // Only the reactions row: the photos and a playing video stay as they are.
@@ -224,12 +226,19 @@ function updateReactionsRow(p) {
   if (!el) return;
   el.innerHTML = reactionsHTML(p) + '<span class="sp"></span>' + (p.comments != null ? `<span class="ic cm" data-comments="${esc(p.id)}">💬 ${fmtN(p.comments)}</span>` : '') + (p.views != null ? `<span class="ic">👁 ${fmtN(p.views)}</span>` : '');
 }
+// Premium emoji pictures that are already here.
+function hydrateEmoji(root) {
+  root.querySelectorAll('.ce[data-ce]').forEach(span => {
+    const src = S.media['ce:' + span.dataset.ce];
+    if (src && !span.querySelector('img')) span.innerHTML = `<img src="${src}" alt="">`;
+  });
+}
 function replacePost(p) {
   const i = S.posts.findIndex(x => x.id === p.id);
   if (i < 0) return;
   S.posts[i] = p;
   const el = document.querySelector(`[data-post="${CSS.escape(p.id)}"]`);
-  if (el) { el.outerHTML = postHTML(p); observe(); }
+  if (el) { el.outerHTML = postHTML(p); observe(); hydrateEmoji(document); }
 }
 
 // ---------- Visibility: media, seen, autoplay, more ----------
@@ -260,6 +269,7 @@ function requestMedia(id) {
   const keys = [];
   if (!S.media['avatar:' + p.peerId]) keys.push('avatar:' + p.peerId);
   p.media.forEach(m => { if (!S.media[m.key]) keys.push(m.key); });
+  (p.html.match(/data-ce="(\d+)"/g) || []).forEach(x => { const k = 'ce:' + x.slice(9, -1); if (!S.media[k] && keys.indexOf(k) < 0) keys.push(k); });
   const fresh = keys.filter(k => !S.requested.has(k));
   if (fresh.length) { fresh.forEach(k => S.requested.add(k)); post({ action: 'need', keys: fresh }); }
 }
@@ -429,6 +439,9 @@ document.addEventListener('click', e => {
     return;
   }
   if ((el = q('[data-comments]'))) { closeSheet(); post({ action: 'comments', id: el.dataset.comments }); return; }
+  // Media open right here: photos and videos in the viewer, voice and round
+  // videos play in the player; the post opens only from its header.
+  if ((el = q('[data-media]'))) { if (playing) { playing.pause(); } post({ action: 'media', key: el.dataset.media }); return; }
   if ((el = q('[data-open]'))) { closeSheet(); post({ action: 'open', id: el.dataset.open }); return; }
   if ((el = q('[data-setting]'))) {
     const key = el.dataset.setting;
@@ -498,6 +511,10 @@ window.Feed = {
     S.media[key] = url;
     let kind = key.endsWith(':poster') ? 'poster' : key.indexOf('avatar:') === 0 ? 'avatar' : 'media';
     const baseKey = kind === 'poster' ? key.slice(0, -7) : key;
+    if (key.indexOf('ce:') === 0) {
+      hydrateEmoji(document);
+      return;
+    }
     if (kind === 'avatar') {
       const peer = key.slice(7);
       document.querySelectorAll('.ava').forEach(a => {
@@ -508,7 +525,7 @@ window.Feed = {
       return;
     }
     document.querySelectorAll(`.m[data-key="${CSS.escape(baseKey)}"]`).forEach(m => {
-      const p = S.posts.find(x => x.id === m.dataset.open);
+      const p = S.posts.find(x => x.id === m.dataset.postId);
       if (p) replacePost(p);
     });
   }

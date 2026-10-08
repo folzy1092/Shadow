@@ -79,7 +79,7 @@ struct DocumentTests {
         check(streak.settings["showChatStreak"] == .bool(false), "Chat streak toggle is portable")
         let feed = try ShadowSettingsDocument.decode(ShadowSettingsDocument(settings: ["feedEnabled": .bool(true), "feedPosition": .integer(2), "feedAutoplay": .bool(false)]).encoded())
         check(feed.settings["feedEnabled"] == .bool(true) && feed.settings["feedPosition"] == .integer(2) && feed.settings["feedAutoplay"] == .bool(false), "Feed settings are portable")
-        expectFailure("Unsupported feed position") { _ = try ShadowSettingsDocument(settings: ["feedPosition": .integer(3)]) }
+        expectFailure("Unsupported feed position") { _ = try ShadowSettingsDocument(settings: ["feedPosition": .integer(4)]) }
         expectFailure("Unsupported reply timecode mode") { _ = try ShadowSettingsDocument(settings: ["replyTimecodeMode": .integer(2)]) }
         let ghostPolicy = try ShadowSettingsDocument(settings: ["ghostAccountMode": .integer(3)])
         let restoredGhostPolicy = try ShadowSettingsDocument.decode(ghostPolicy.encoded())

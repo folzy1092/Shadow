@@ -19,7 +19,14 @@ class FeedContracts(unittest.TestCase):
                      "public var feedPosition: Int32 = 1", "settings.feedEnabled = false"):
             self.assertIn(line, settings)
         document = read("TelegramCore/Sources/AyuGram/ShadowSettingsDocument.swift")
-        self.assertIn('key == "feedPosition" && (0...2).contains(number)', document)
+        self.assertIn('key == "feedPosition" && (0...3).contains(number)', document)
+        component = read("TelegramUI/Components/TabBarComponent/Sources/TabBarComponent.swift")
+        self.assertIn("final class TabBarLeadingButtonView: UIView", component)
+        self.assertIn("let leadingSize = CGSize(width: barHeight, height: barHeight)", component)
+        node = read("../submodules/TabBarUI/Sources/TabBarContollerNode.swift".replace("../submodules/", ""))
+        self.assertIn('static let leadingItemIdentifier = "shadow.tab.leading"', node)
+        root = read("TelegramUI/Sources/TelegramRootController.swift")
+        self.assertIn('place == .leading ? "shadow.tab.leading" : nil', root)
 
     def test_tab(self):
         root = read("TelegramUI/Sources/TelegramRootController.swift")

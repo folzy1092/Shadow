@@ -892,14 +892,8 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
             // Shadow: reserve width for the forwards counter (icon + count),
             // positioned after the view count and before the replies counter.
             if arguments.forwardCount > 0 {
-                let countString: String
-                if arguments.forwardCount > 1000000 {
-                    countString = "\(arguments.forwardCount / 1000000)M"
-                } else if arguments.forwardCount > 1000 {
-                    countString = "\(arguments.forwardCount / 1000)K"
-                } else {
-                    countString = "\(arguments.forwardCount)"
-                }
+                // Shadow: the same number format as the views next to it.
+                let countString = ayuGramSettingsCurrent.showExactViewCounts ? "\(arguments.forwardCount)" : compactNumericCountString(arguments.forwardCount, decimalSeparator: arguments.presentationData.dateTimeFormat.decimalSeparator)
 
                 let layoutAndApply = makeForwardCountLayout(TextNodeLayoutArguments(attributedString: NSAttributedString(string: countString, font: dateFont, textColor: dateColor), backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: CGSize(width: 100.0, height: 100.0)))
                 reactionInset += 14.0 + layoutAndApply.0.size.width + 4.0
@@ -1278,7 +1272,9 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
                         let _ = dateApply()
 
                         if let currentAyuEditedIcon = currentAyuEditedIcon {
-                            let ayuEditedIconFrame = CGRect(origin: CGPoint(x: leftOffset + leftInset + backgroundInsets.left, y: backgroundInsets.top + 1.0 + offset + verticalInset + floor((date.size.height - ayuEditedIconSize.height) / 2.0)), size: ayuEditedIconSize)
+                            // The pencil glyph sits high in its picture: 1.5 pt lower it is on
+                            // the line of the views icon and the time.
+                            let ayuEditedIconFrame = CGRect(origin: CGPoint(x: leftOffset + leftInset + backgroundInsets.left, y: backgroundInsets.top + 2.5 + offset + verticalInset + floor((date.size.height - ayuEditedIconSize.height) / 2.0)), size: ayuEditedIconSize)
                             currentAyuEditedIcon.displaysAsynchronously = false
                             if currentAyuEditedIcon.image !== ayuEditedImage {
                                 currentAyuEditedIcon.image = ayuEditedImage
@@ -1543,7 +1539,8 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
                                     currentForwardsIcon.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.15)
                                 }
                             }
-                            let forwardsIconFrame = CGRect(origin: CGPoint(x: reactionOffset - 2.0, y: backgroundInsets.top + offset + verticalInset + floor((date.size.height - forwardsIconSize.height) / 2.0)), size: forwardsIconSize)
+                            // Same line as the count and the views icon (+1, like them).
+                            let forwardsIconFrame = CGRect(origin: CGPoint(x: reactionOffset - 2.0, y: backgroundInsets.top + 1.0 + offset + verticalInset + floor((date.size.height - forwardsIconSize.height) / 2.0)), size: forwardsIconSize)
                             animation.animator.updateFrame(layer: currentForwardsIcon.layer, frame: forwardsIconFrame, completion: nil)
                             reactionOffset += 9.0
                         } else if let forwardsIcon = strongSelf.forwardsIcon {

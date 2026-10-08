@@ -15,6 +15,7 @@ struct FeedTests {
         check(F.Position.beforeSettings.index(otherTabs: 3) == 2, "B: before settings (3 tabs)")
         check(F.Position.beforeSettings.index(otherTabs: 4) == 3, "B: before settings (with calls)")
         check(F.Position.afterSettings.index(otherTabs: 4) == 4, "C: last")
+        check(F.Position.leading.index(otherTabs: 4) == 0 && F.Position.normalized(3) == .leading, "D: separate round button")
         check(F.Position.normalized(7) == .beforeSettings && F.Position.normalized(0) == .beforeContacts, "Normalized")
 
         // Text.

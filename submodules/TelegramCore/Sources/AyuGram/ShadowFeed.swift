@@ -13,12 +13,15 @@ public enum ShadowFeed {
         case beforeContacts = 0
         case beforeSettings = 1
         case afterSettings = 2
+        // A round button left of the tabs, like search on the right.
+        case leading = 3
 
         public var title: String {
             switch self {
             case .beforeContacts: return "Левее контактов"
             case .beforeSettings: return "Между чатами и профилем"
             case .afterSettings: return "Правее профиля"
+            case .leading: return "Отдельной кнопкой слева"
             }
         }
 
@@ -29,7 +32,7 @@ public enum ShadowFeed {
         // Index of the feed tab among `count` other tabs, settings being last.
         public func index(otherTabs count: Int) -> Int {
             switch self {
-            case .beforeContacts: return 0
+            case .beforeContacts, .leading: return 0
             case .beforeSettings: return max(0, count - 1)
             case .afterSettings: return count
             }
@@ -141,6 +144,8 @@ public enum ShadowFeed {
         case spoiler
         case blockquote
         case link(String)
+        // Premium emoji: its fallback emoji, swapped for the picture on the page.
+        case customEmoji(Int64)
     }
 
     public struct Entity: Equatable {
@@ -184,6 +189,8 @@ public enum ShadowFeed {
         case .blockquote: return "<blockquote>"
         case let .link(url):
             return "<a data-url=\"\(escape(url))\">"
+        case let .customEmoji(fileId):
+            return "<span class=\"ce\" data-ce=\"\(fileId)\">"
         }
     }
 
@@ -195,7 +202,7 @@ public enum ShadowFeed {
         case .strikethrough: return "</s>"
         case .code: return "</code>"
         case .pre: return "</pre>"
-        case .spoiler: return "</span>"
+        case .spoiler, .customEmoji: return "</span>"
         case .link: return "</a>"
         case .blockquote: return "</blockquote>"
         }

@@ -35,6 +35,7 @@ func shadowSettingLinkController(context: AccountContext, setting: ShadowSetting
     case "screenshot": return shadowMessageScreenshotSettingsController(context: context, focus: focus)
     case "locks": return shadowChatLocksController(context: context, focus: focus)
     case "space": return shadowSecondSpaceController(context: context, focus: focus)
+    case "stats": return shadowChatStatsListController(context: context)
     case "feed": return shadowFeedSettingsController(context: context, focus: ShadowSettingsSearchItem(destination: .feed, entryId: setting.entryId, title: setting.title, description: "", keywords: ""))
     default: return nil
     }
@@ -170,7 +171,7 @@ func shadowSettingsInstallLinkMenu(controller: ItemListController, context: Acco
         }
         // Shadow: the long press doubles as the short help of the setting
         // (its search-index description).
-        let destinations: [String: ShadowSettingsSearchDestination] = ["customization": .customization, "spy": .spy, "ghost": .ghost, "profile": .misc, "misc": .pushDiagnostics, "filters": .filters, "locks": .chatLocks, "space": .secondSpace, "feed": .feed]
+        let destinations: [String: ShadowSettingsSearchDestination] = ["customization": .customization, "spy": .spy, "ghost": .ghost, "profile": .misc, "misc": .pushDiagnostics, "filters": .filters, "locks": .chatLocks, "space": .secondSpace, "feed": .feed, "stats": .chatStats]
         let help = destinations[screen].flatMap { destination in ShadowSettingsSearchIndex.items.first(where: { $0.destination == destination && $0.entryId == setting.entryId }) }?.description ?? ""
         var items: [ActionSheetItem] = [ActionSheetTextItem(title: setting.title + (help.isEmpty ? "" : "\n\n" + help) + "\n\n" + setting.link(.open), parseMarkdown: false)]
         if setting.isSwitchable, let key = setting.key {

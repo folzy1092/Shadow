@@ -265,11 +265,14 @@ public enum ShadowChatStatsCollect {
                 })
             }
 
+            let countDeleted = currentAyuGramSettings(transaction: transaction).chatStatsCountDeleted
             let builder = ShadowChatStats.Builder(accountPeerId: accountPeerId.toInt64(), peerId: peerId.toInt64(), title: title, isGroup: isGroup, period: period, from: since, to: now, names: names)
-            for item in items {
+            for item in items where countDeleted || !item.isDeleted {
                 builder.add(item)
             }
-            return (builder.build(generated: now), stickerFiles)
+            var report = builder.build(generated: now)
+            report.countsDeleted = countDeleted
+            return (report, stickerFiles)
         }
 
         return counted

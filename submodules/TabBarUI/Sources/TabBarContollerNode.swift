@@ -9,6 +9,24 @@ import TabBarComponent
 import GlassControls
 
 final class TabBarControllerNode: ASDisplayNode {
+    // Shadow: a tab whose UITabBarItem has this accessibilityIdentifier is drawn
+    // as a round button left of the tabs (the feed, ShadowFeed.Position.leading).
+    static let leadingItemIdentifier = "shadow.tab.leading"
+
+    private func leadingComponent() -> TabBarComponent.Leading? {
+        guard let index = self.tabBarItems.firstIndex(where: { $0.item.accessibilityIdentifier == TabBarControllerNode.leadingItemIdentifier }) else {
+            return nil
+        }
+        let item = self.tabBarItems[index].item
+        let itemId = ObjectIdentifier(item)
+        return TabBarComponent.Leading(image: item.image, selectedImage: item.selectedImage, isSelected: index == self.selectedIndex, badge: item.badgeValue, action: { [weak self] in
+            guard let self, let index = self.tabBarItems.firstIndex(where: { ObjectIdentifier($0.item) == itemId }) else {
+                return
+            }
+            self.itemSelected(index, false, [])
+        })
+    }
+
     private struct Params: Equatable {
         let layout: ContainerViewLayout
         let toolbar: Toolbar?
@@ -250,7 +268,7 @@ final class TabBarControllerNode: ASDisplayNode {
                 showTabNames: params.showTabNames,
                 hideBottomSearch: params.hideBottomSearch,
                 strings: self.strings,
-                items: self.tabBarItems.map { item in
+                items: self.tabBarItems.filter { $0.item.accessibilityIdentifier != TabBarControllerNode.leadingItemIdentifier }.map { item in
                     let itemId = AnyHashable(ObjectIdentifier(item.item))
                     
                     let index = self.tabBarItems.firstIndex(where: { AnyHashable(ObjectIdentifier($0.item)) == itemId }) ?? 0
@@ -301,7 +319,8 @@ final class TabBarControllerNode: ASDisplayNode {
                     )
                 },
                 selectedId: selectedId,
-                outerInsets: UIEdgeInsets(top: 0.0, left: sideInset, bottom: tabBarBottomInset, right: sideInset)
+                outerInsets: UIEdgeInsets(top: 0.0, left: sideInset, bottom: tabBarBottomInset, right: sideInset),
+                leading: self.leadingComponent()
             )),
             environment: {},
             containerSize: CGSize(width: params.layout.size.width - sideInset * 2.0, height: 100.0)

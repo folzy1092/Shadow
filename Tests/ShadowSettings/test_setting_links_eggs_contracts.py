@@ -25,6 +25,7 @@ SCREEN_FILES = {
     "locks": ("SettingsUI/Sources/ShadowChatLocksController.swift", "ShadowChatLocksEntry"),
     "space": ("SettingsUI/Sources/ShadowSecondSpaceController.swift", "ShadowSecondSpaceEntry"),
     "feed": ("SettingsUI/Sources/ShadowFeedSettingsController.swift", "ShadowFeedSettingsEntry"),
+    "stats": ("SettingsUI/Sources/ShadowChatStatsUI.swift", "ShadowChatStatsListEntry"),
 }
 
 

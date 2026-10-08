@@ -244,3 +244,4 @@
 | `shadow://profile/spoof-id-value` | Подменённый ID |
 | `shadow://profile/spoof-dc-value` | Подменённый DC |
 | `shadow://profile/spoof-phone-value` | Подменённый номер |
+| `shadow://stats/count-deleted` | Итоги: считать удалённые |

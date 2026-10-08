@@ -39,7 +39,7 @@ public struct ShadowSettingsDocument: Codable, Equatable {
         "saveAllIncomingMedia", "mediaAutoCleanKeepPinned", "mediaAutoCleanKeepChannels",
         "mediaAutoCleanKeepBots", "showProfileId", "showProfileDC",
         "showRegistrationDate", "hideOwnPhoneNumber",
-        "hideStoriesBar", "hideGiftButton", "hideGreetingSticker", "offerGhostBeforeStories", "hidePremiumBadges", "hideSponsoredMessages", "adFilterChannels", "adFilterGroups", "adFilterForwarded", "adHideCompletely", "showChatStreak", "feedEnabled", "feedAutoplay", "feedShowFolders", "feedIncludeMuted", "feedIncludeArchived", "feedMarkRead", "messageFilterShowPlaceholder", "updateChannelBeta", "unlimitedPinnedChats", "localVoiceTranscription", "voiceTimeRoundVideos", "voiceTimeInPlayer", "replyTimecode", "chatVoiceSpeed", "monochromeSettingsIcons", "compactChatList", "onlineHistory", "saveViewedStories",
+        "hideStoriesBar", "hideGiftButton", "hideGreetingSticker", "offerGhostBeforeStories", "hidePremiumBadges", "hideSponsoredMessages", "adFilterChannels", "adFilterGroups", "adFilterForwarded", "adHideCompletely", "showChatStreak", "chatStatsCountDeleted", "feedEnabled", "feedAutoplay", "feedShowFolders", "feedIncludeMuted", "feedIncludeArchived", "feedMarkRead", "messageFilterShowPlaceholder", "updateChannelBeta", "unlimitedPinnedChats", "localVoiceTranscription", "voiceTimeRoundVideos", "voiceTimeInPlayer", "replyTimecode", "chatVoiceSpeed", "monochromeSettingsIcons", "compactChatList", "onlineHistory", "saveViewedStories",
         "screenshotAnonymize", "screenshotAnonymizeOwn", "screenshotAnonymizeOthers", "screenshotEnabled", "screenshotAvatars", "screenshotNames", "screenshotBadges", "screenshotTime",
         "spoofProfileIdEnabled", "spoofProfileDcEnabled", "spoofProfilePhoneEnabled", "customBannerEnabled", "customProfileBackgroundEnabled", "customProfileBackgroundForOthers", "customProfileBackgroundForSettings"
     ]
@@ -124,7 +124,7 @@ public struct ShadowSettingsDocument: Codable, Equatable {
             // ShadowReplyTimecode modes: always, ask.
             case let .integer(number) where key == "replyTimecodeMode" && (0...1).contains(number): break
             // ShadowFeed.Position.
-            case let .integer(number) where key == "feedPosition" && (0...2).contains(number): break
+            case let .integer(number) where key == "feedPosition" && (0...3).contains(number): break
             // ShadowGhostAccountMode raw values: manual, alwaysOn, alwaysOff, followPrevious.
             case let .integer(number) where key == "ghostAccountMode" && (0...3).contains(number): break
             // Keep raw 3 valid for backward-compatible imports: old format used 3 for black.

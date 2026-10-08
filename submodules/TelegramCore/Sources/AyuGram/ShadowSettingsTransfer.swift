@@ -74,6 +74,7 @@ public enum ShadowSettingsTransfer {
         "adFilterForwarded": \.adFilterForwarded,
         "adHideCompletely": \.adHideCompletely,
         "showChatStreak": \.showChatStreak,
+        "chatStatsCountDeleted": \.chatStatsCountDeleted,
         "feedEnabled": \.feedEnabled,
         "feedAutoplay": \.feedAutoplay,
         "feedShowFolders": \.feedShowFolders,

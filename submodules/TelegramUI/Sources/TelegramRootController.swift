@@ -958,6 +958,10 @@ extension MediaEditorScreenImpl.Result: @retroactive MediaEditorScreenResult {
 
 // Shadow: puts the feed tab at its place (ShadowFeed.Position) among the others.
 private func shadowInsertFeed(_ feedController: ViewController, into controllers: inout [ViewController], position: Int32) {
-    let index = ShadowFeed.Position.normalized(position).index(otherTabs: controllers.count)
+    let place = ShadowFeed.Position.normalized(position)
+    // «Отдельной кнопкой»: TabBarControllerNode draws this tab as a round
+    // button left of the others (TabBarControllerNode.leadingItemIdentifier).
+    feedController.tabBarItem.accessibilityIdentifier = place == .leading ? "shadow.tab.leading" : nil
+    let index = place.index(otherTabs: controllers.count)
     controllers.insert(feedController, at: max(0, min(controllers.count, index)))
 }

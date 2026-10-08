@@ -48,6 +48,9 @@ private enum ShadowFeedSettingsEntry: ItemListNodeEntry {
             if value == 0 {
                 return 3
             }
+            if value == 3 {
+                return 4
+            }
             return value == 1 ? 5 : 6
         case .optionsHeader: return 30
         case .autoplay: return 7

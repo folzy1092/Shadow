@@ -246,6 +246,68 @@ public final class NavigationSearchView: UIView {
     }
 }
 
+// Shadow: a round button left of the tabs, mirroring the search button —
+// «Лента» in the «Отдельной кнопкой» place (ShadowFeed.Position.leading).
+final class TabBarLeadingButtonView: UIView {
+    private let backgroundView: GlassBackgroundView
+    private let selectionView: UIView
+    private let iconView: UIImageView
+    private let badgeLabel: UILabel
+    var action: (() -> Void)?
+
+    override init(frame: CGRect) {
+        self.backgroundView = GlassBackgroundView()
+        self.selectionView = UIView()
+        self.iconView = UIImageView()
+        self.badgeLabel = UILabel()
+        super.init(frame: frame)
+        self.addSubview(self.backgroundView)
+        self.backgroundView.contentView.addSubview(self.selectionView)
+        self.backgroundView.contentView.addSubview(self.iconView)
+        self.addSubview(self.badgeLabel)
+        self.badgeLabel.textAlignment = .center
+        self.badgeLabel.font = UIFont.systemFont(ofSize: 12.0, weight: .semibold)
+        self.badgeLabel.textColor = .white
+        self.badgeLabel.clipsToBounds = true
+        self.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(self.onTap(_:))))
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    @objc private func onTap(_ recognizer: UITapGestureRecognizer) {
+        if case .ended = recognizer.state {
+            self.action?()
+        }
+    }
+
+    func update(size: CGSize, theme: PresentationTheme, leading: TabBarComponent.Leading, transition: ComponentTransition) {
+        transition.setFrame(view: self.backgroundView, frame: CGRect(origin: CGPoint(), size: size))
+        self.backgroundView.update(size: size, cornerRadius: size.height * 0.5, isDark: theme.overallDarkAppearance, tintColor: .init(kind: .panel), isInteractive: true, transition: transition)
+        let inset: CGFloat = 4.0
+        let selectionFrame = CGRect(x: inset, y: inset, width: size.width - inset * 2.0, height: size.height - inset * 2.0)
+        self.selectionView.frame = selectionFrame
+        self.selectionView.layer.cornerRadius = selectionFrame.height * 0.5
+        self.selectionView.backgroundColor = theme.overallDarkAppearance ? UIColor(white: 1.0, alpha: 0.12) : UIColor(white: 0.0, alpha: 0.06)
+        self.selectionView.alpha = leading.isSelected ? 1.0 : 0.0
+        self.iconView.image = leading.isSelected ? (leading.selectedImage ?? leading.image) : leading.image
+        if let image = self.iconView.image {
+            self.iconView.frame = CGRect(x: floor((size.width - image.size.width) * 0.5), y: floor((size.height - image.size.height) * 0.5), width: image.size.width, height: image.size.height)
+        }
+        if let badge = leading.badge, !badge.isEmpty {
+            self.badgeLabel.isHidden = false
+            self.badgeLabel.text = badge
+            self.badgeLabel.backgroundColor = theme.rootController.tabBar.badgeBackgroundColor
+            let width = max(18.0, ceil(self.badgeLabel.intrinsicContentSize.width) + 10.0)
+            self.badgeLabel.frame = CGRect(x: size.width - width + 2.0, y: -2.0, width: width, height: 18.0)
+            self.badgeLabel.layer.cornerRadius = 9.0
+        } else {
+            self.badgeLabel.isHidden = true
+        }
+    }
+}
+
 public final class TabBarComponent: Component {
     public final class Item: Equatable {
         public enum Content: Equatable {
@@ -346,6 +408,27 @@ public final class TabBarComponent: Component {
         }
     }
     
+    // Shadow: a tab drawn as a separate round button left of the tabs.
+    public final class Leading: Equatable {
+        public let image: UIImage?
+        public let selectedImage: UIImage?
+        public let isSelected: Bool
+        public let badge: String?
+        public let action: () -> Void
+
+        public init(image: UIImage?, selectedImage: UIImage?, isSelected: Bool, badge: String?, action: @escaping () -> Void) {
+            self.image = image
+            self.selectedImage = selectedImage
+            self.isSelected = isSelected
+            self.badge = badge
+            self.action = action
+        }
+
+        public static func ==(lhs: Leading, rhs: Leading) -> Bool {
+            return lhs.image === rhs.image && lhs.selectedImage === rhs.selectedImage && lhs.isSelected == rhs.isSelected && lhs.badge == rhs.badge
+        }
+    }
+
     public let theme: PresentationTheme
     public let tintSelectedItem: Bool
     public let isLiftedStateEnabled: Bool
@@ -358,6 +441,7 @@ public final class TabBarComponent: Component {
     public let search: Search?
     public let selectedId: AnyHashable?
     public let outerInsets: UIEdgeInsets
+    public let leading: Leading?
     
     public init(
         theme: PresentationTheme,
@@ -369,7 +453,8 @@ public final class TabBarComponent: Component {
         items: [Item],
         search: Search?,
         selectedId: AnyHashable?,
-        outerInsets: UIEdgeInsets
+        outerInsets: UIEdgeInsets,
+        leading: Leading? = nil
     ) {
         self.theme = theme
         self.tintSelectedItem = tintSelectedItem
@@ -381,6 +466,7 @@ public final class TabBarComponent: Component {
         self.search = search
         self.selectedId = selectedId
         self.outerInsets = outerInsets
+        self.leading = leading
     }
     
     public static func ==(lhs: TabBarComponent, rhs: TabBarComponent) -> Bool {
@@ -414,6 +500,9 @@ public final class TabBarComponent: Component {
         if lhs.outerInsets != rhs.outerInsets {
             return false
         }
+        if lhs.leading != rhs.leading {
+            return false
+        }
         return true
     }
     
@@ -427,6 +516,8 @@ public final class TabBarComponent: Component {
         private var selectedItemViews: [AnyHashable: ComponentView<Empty>] = [:]
 
         private var searchView: NavigationSearchView?
+        private var leadingView: TabBarLeadingButtonView?
+        private var leadingOffset: CGFloat = 0.0
         
         private var tabSelectionRecognizer: TabSelectionRecognizer?
         private var itemWithActiveContextGesture: AnyHashable?
@@ -543,7 +634,7 @@ public final class TabBarComponent: Component {
             switch recognizer.state {
             case .began:
                 if let search = component.search, search.isActive {
-                } else if let itemId = self.item(at: recognizer.location(in: self)), let itemView = self.itemViews[itemId]?.view {
+                } else if let itemId = self.item(at: self.leadingOffset > 0.0 ? recognizer.location(in: self.contextGestureContainerView) : recognizer.location(in: self)), let itemView = self.itemViews[itemId]?.view {
                     if let pendingDoubleTapItemValue = self.pendingDoubleTapItem, pendingDoubleTapItemValue.id != itemId {
                         self.pendingDoubleTapItem = nil
                         pendingDoubleTapItemValue.timer.invalidate()
@@ -557,7 +648,7 @@ public final class TabBarComponent: Component {
                 if let search = component.search, search.isActive {
                 } else if var selectionGestureState = self.selectionGestureState {
                     selectionGestureState.currentX = selectionGestureState.startX + recognizer.translation(in: self).x
-                    if let itemId = self.item(at: recognizer.location(in: self)) {
+                    if let itemId = self.item(at: self.leadingOffset > 0.0 ? recognizer.location(in: self.contextGestureContainerView) : recognizer.location(in: self)) {
                         selectionGestureState.itemId = itemId
                     }
                     self.selectionGestureState = selectionGestureState
@@ -689,6 +780,10 @@ public final class TabBarComponent: Component {
             if component.search != nil {
                 availableItemsWidth -= barHeight + 8.0
             }
+            // Shadow: room for the round button left of the tabs.
+            let leadingWidth: CGFloat = (component.leading != nil && !(component.search?.isActive ?? false)) ? barHeight + 8.0 : 0.0
+            availableItemsWidth -= leadingWidth
+            self.leadingOffset = leadingWidth
             
             var unboundItemWidths: [CGFloat] = []
             
@@ -880,7 +975,7 @@ public final class TabBarComponent: Component {
                 self.measureItemViews.removeValue(forKey: id)
             }
             
-            var tabsFrame = CGRect(origin: CGPoint(), size: tabsSize)
+            var tabsFrame = CGRect(origin: CGPoint(x: leadingWidth, y: 0.0), size: tabsSize)
             if let search = component.search, search.isActive {
                 tabsFrame.size = CGSize(width: 48.0, height: 48.0)
                 tabsFrame.origin.y = tabsSize.height - 48.0
@@ -895,6 +990,9 @@ public final class TabBarComponent: Component {
                 lensSelection = (selectionGestureState.currentX, selectionGestureState.itemWidth + innerInset * 2.0)
             } else if let selectionFrame {
                 lensSelection = (selectionFrame.minX - innerInset, selectionFrame.width + innerInset * 2.0)
+            } else if component.leading?.isSelected == true {
+                // The selected tab is the round button: no selection in the tabs.
+                lensSelection = (0.0, 0.0)
             } else {
                 lensSelection = (0.0, component.showTabNames ? 56.0 : 40.0)
             }
@@ -912,6 +1010,27 @@ public final class TabBarComponent: Component {
             self.liquidLensView.update(size: lensSize, selectionOrigin: CGPoint(x: lensSelection.x, y: 0.0), selectionSize: CGSize(width: lensSelection.width, height: lensSize.height), inset: 4.0, isDark: component.theme.overallDarkAppearance, isLifted: self.selectionGestureState != nil && component.isLiftedStateEnabled, isCollapsed: isLensCollapsed, transition: transition.withUserData(LiquidLensView.TransitionInfo(disableAnimationWorkarounds: !component.isLiftedStateEnabled)))
 
             var size = tabsSize
+            size.width += leadingWidth
+
+            if let leading = component.leading, leadingWidth > 0.0 {
+                let leadingView: TabBarLeadingButtonView
+                var leadingTransition = transition
+                if let current = self.leadingView {
+                    leadingView = current
+                } else {
+                    leadingTransition = leadingTransition.withAnimation(.none)
+                    leadingView = TabBarLeadingButtonView(frame: CGRect())
+                    self.leadingView = leadingView
+                    self.backgroundContainer.contentView.addSubview(leadingView)
+                }
+                leadingView.action = leading.action
+                let leadingSize = CGSize(width: barHeight, height: barHeight)
+                leadingView.update(size: leadingSize, theme: component.theme, leading: leading, transition: leadingTransition)
+                leadingTransition.setFrame(view: leadingView, frame: CGRect(origin: CGPoint(), size: leadingSize))
+            } else if let leadingView = self.leadingView {
+                self.leadingView = nil
+                leadingView.removeFromSuperview()
+            }
 
             if let search = component.search {
                 let searchSize: CGSize

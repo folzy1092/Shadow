@@ -183,6 +183,8 @@ public enum ShadowFeedCollect {
                 kind = .blockquote
             case let .TextUrl(url):
                 kind = .link(url)
+            case let .CustomEmoji(_, fileId):
+                kind = .customEmoji(fileId)
             case .Url:
                 guard location >= 0, location + length <= text.length else {
                     continue
@@ -294,7 +296,19 @@ public enum ShadowFeedCollect {
                     forwardFrom = forwardInfo.author?.debugDisplayTitle ?? forwardInfo.authorSignature ?? "скрытый пользователь"
                 }
                 let title = peer.debugDisplayTitle
-                let html = ShadowFeed.html(text: textMessage.text, entities: entities(textMessage))
+                let textEntities = entities(textMessage)
+                let html = ShadowFeed.html(text: textMessage.text, entities: textEntities)
+                // Premium emoji pictures: a static thumbnail or a static sticker file.
+                for entity in textEntities {
+                    guard case let .customEmoji(fileId) = entity.kind, sources["ce:\(fileId)"] == nil, let file = transaction.getMedia(MediaId(namespace: Namespaces.Media.CloudFile, id: fileId)) as? TelegramMediaFile else {
+                        continue
+                    }
+                    if let thumbnail = largestImageRepresentation(file.previewRepresentations) {
+                        sources["ce:\(fileId)"] = .resource(reference: .media(media: .customEmoji(media: file), resource: thumbnail.resource), resource: thumbnail.resource, peerId: ref.id.peerId, kind: "emoji", fileExtension: "webp", size: nil)
+                    } else if !file.isAnimatedSticker && !file.isVideoSticker {
+                        sources["ce:\(fileId)"] = .resource(reference: .media(media: .customEmoji(media: file), resource: file.resource), resource: file.resource, peerId: ref.id.peerId, kind: "emoji", fileExtension: "webp", size: file.size)
+                    }
+                }
                 if let avatar = peer.smallProfileImage, let peerReference = PeerReference(peer) {
                     sources["avatar:\(peer.id.toInt64())"] = .resource(reference: .avatar(peer: peerReference, resource: avatar.resource), resource: avatar.resource, peerId: peer.id, kind: "avatar", fileExtension: "jpg", size: nil)
                 }
