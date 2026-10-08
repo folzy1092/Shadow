@@ -118,7 +118,7 @@ private final class ShadowTimecodeReplyContextItemNode: ASDisplayNode, ContextMe
     }
 
     private var statusFont: UIFont {
-        return Font.regular(self.presentationData.listsFontSize.baseDisplaySize * 13.0 / 17.0)
+        return Font.regular(self.presentationData.listsFontSize.baseDisplaySize * 14.0 / 17.0)
     }
 
     private func applyTheme() {
@@ -137,33 +137,46 @@ private final class ShadowTimecodeReplyContextItemNode: ASDisplayNode, ContextMe
         self.currentTimecode = timecode
         self.statusNode.attributedText = NSAttributedString(string: timecode, font: self.statusFont, textColor: self.presentationData.theme.contextMenu.secondaryColor)
         if let size = self.validLayout {
-            let statusSize = self.statusNode.updateLayout(CGSize(width: size.width - 80.0, height: .greatestFiniteMagnitude))
+            let statusSize = self.statusNode.updateLayout(CGSize(width: max(1.0, size.width - ShadowTimecodeReplyContextItemNode.textLeftInset - ShadowTimecodeReplyContextItemNode.rightInset), height: .greatestFiniteMagnitude))
             self.statusNode.frame = CGRect(origin: self.statusNode.frame.origin, size: statusSize)
         }
     }
 
+    // Same metrics as the standard menu item (ContextControllerActionsStackNode):
+    // icon on the left at x = 20, text starts at x = 60, 18pt right inset.
+    private static let iconSideInset: CGFloat = 20.0
+    private static let standardIconWidth: CGFloat = 32.0
+    private static let textLeftInset: CGFloat = 60.0
+    private static let rightInset: CGFloat = 18.0
+    // The menu measures items against 240pt, which cuts «Ответить с тайм-кодом»
+    // once the icon sits on the left. This item measures against a wider limit
+    // so the whole menu grows a little and the title fits on one line.
+    private static let maxTextWidth: CGFloat = 300.0
+
     func updateLayout(constrainedWidth: CGFloat, constrainedHeight: CGFloat) -> (CGSize, (CGSize, ContainedViewLayoutTransition) -> Void) {
-        let sideInset: CGFloat = 16.0
-        let iconSideInset: CGFloat = 12.0
         let verticalInset: CGFloat = 11.0
-        let standardIconWidth: CGFloat = 32.0
-        let rightTextInset: CGFloat = sideInset + standardIconWidth + iconSideInset
+        let textLeftInset = ShadowTimecodeReplyContextItemNode.textLeftInset
+        let rightInset = ShadowTimecodeReplyContextItemNode.rightInset
+        let iconSideInset = ShadowTimecodeReplyContextItemNode.iconSideInset
+        let standardIconWidth = ShadowTimecodeReplyContextItemNode.standardIconWidth
 
-        let textSize = self.textNode.updateLayout(CGSize(width: constrainedWidth - sideInset - rightTextInset, height: .greatestFiniteMagnitude))
-        let statusSize = self.statusNode.updateLayout(CGSize(width: constrainedWidth - sideInset - rightTextInset, height: .greatestFiniteMagnitude))
+        let maxTextWidth = max(constrainedWidth - textLeftInset - rightInset, ShadowTimecodeReplyContextItemNode.maxTextWidth)
+        let textSize = self.textNode.updateLayout(CGSize(width: maxTextWidth, height: .greatestFiniteMagnitude))
+        let statusSize = self.statusNode.updateLayout(CGSize(width: maxTextWidth, height: .greatestFiniteMagnitude))
 
-        let verticalSpacing: CGFloat = 2.0
+        let verticalSpacing: CGFloat = 1.0
         let combinedTextHeight = textSize.height + verticalSpacing + statusSize.height
-        return (CGSize(width: max(textSize.width, statusSize.width) + sideInset + rightTextInset, height: verticalInset * 2.0 + combinedTextHeight), { [weak self] size, transition in
+        return (CGSize(width: max(textSize.width, statusSize.width) + textLeftInset + rightInset, height: verticalInset * 2.0 + combinedTextHeight), { [weak self] size, transition in
             guard let self else {
                 return
             }
             self.validLayout = size
             let verticalOrigin = floor((size.height - combinedTextHeight) / 2.0)
-            transition.updateFrameAdditive(node: self.textNode, frame: CGRect(origin: CGPoint(x: sideInset, y: verticalOrigin), size: textSize))
-            transition.updateFrameAdditive(node: self.statusNode, frame: CGRect(origin: CGPoint(x: sideInset, y: verticalOrigin + verticalSpacing + textSize.height), size: statusSize))
+            let textWidth = max(1.0, size.width - textLeftInset - rightInset)
+            transition.updateFrameAdditive(node: self.textNode, frame: CGRect(origin: CGPoint(x: textLeftInset, y: verticalOrigin), size: CGSize(width: min(textSize.width, textWidth), height: textSize.height)))
+            transition.updateFrameAdditive(node: self.statusNode, frame: CGRect(origin: CGPoint(x: textLeftInset, y: verticalOrigin + verticalSpacing + textSize.height), size: statusSize))
             if let image = self.iconNode.image {
-                let iconFrame = CGRect(origin: CGPoint(x: size.width - standardIconWidth - iconSideInset + floor((standardIconWidth - image.size.width) / 2.0), y: floor((size.height - image.size.height) / 2.0)), size: image.size)
+                let iconFrame = CGRect(origin: CGPoint(x: iconSideInset + floor((standardIconWidth - image.size.width) / 2.0), y: floor((size.height - image.size.height) / 2.0)), size: image.size)
                 transition.updateFrame(node: self.iconNode, frame: iconFrame)
             }
             let bounds = CGRect(origin: CGPoint(), size: size)
