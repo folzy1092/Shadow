@@ -12,8 +12,15 @@ import AlertUI
 // Shadow: message filters screen, modelled on AyuGram Desktop — a list of
 // regex filters, each edited in its own sheet (ShadowMessageFilterEditController),
 // plus the shadow-ban list (users whose messages are hidden without blocking).
+// On top: ads by their legal marking (ShadowAdFilter.swift), per place.
 
 private enum ShadowMessageFiltersEntry: ItemListNodeEntry {
+    case adHeader
+    case adChannels(Bool)
+    case adGroups(Bool)
+    case adForwarded(Bool)
+    case adHideCompletely(Bool)
+    case adInfo
     case showPlaceholder(Bool)
     case placeholderInfo
     case add
@@ -26,19 +33,30 @@ private enum ShadowMessageFiltersEntry: ItemListNodeEntry {
 
     var section: ItemListSectionId {
         switch self {
-        case .showPlaceholder, .placeholderInfo:
+        case .adHeader, .adChannels, .adGroups, .adForwarded, .adHideCompletely, .adInfo:
             return 0
-        case .add, .filter, .empty:
+        case .showPlaceholder, .placeholderInfo:
             return 1
-        case .help:
+        case .add, .filter, .empty:
             return 2
-        case .banHeader, .banned, .banInfo:
+        case .help:
             return 3
+        case .banHeader, .banned, .banInfo:
+            return 4
         }
     }
 
+    // stableId is also the setting link's entryId (ShadowSettingLinks), so the
+    // older rows keep theirs; the ad rows came later with ids 40000+ and the
+    // order goes by section first.
     var stableId: Int32 {
         switch self {
+        case .adHeader: return 40000
+        case .adChannels: return 40001
+        case .adGroups: return 40002
+        case .adForwarded: return 40003
+        case .adHideCompletely: return 40004
+        case .adInfo: return 40005
         case .showPlaceholder: return 0
         case .placeholderInfo: return 1
         case .add: return 2
@@ -52,12 +70,35 @@ private enum ShadowMessageFiltersEntry: ItemListNodeEntry {
     }
 
     static func < (lhs: ShadowMessageFiltersEntry, rhs: ShadowMessageFiltersEntry) -> Bool {
+        if lhs.section != rhs.section {
+            return lhs.section < rhs.section
+        }
         return lhs.stableId < rhs.stableId
     }
 
     func item(presentationData: ItemListPresentationData, arguments: Any) -> ListViewItem {
         let arguments = arguments as! ShadowMessageFiltersArguments
         switch self {
+        case .adHeader:
+            return ItemListSectionHeaderItem(presentationData: presentationData, text: "РЕКЛАМА", sectionId: self.section)
+        case let .adChannels(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "В каналах", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.updateSettings { $0.adFilterChannels = value }
+            })
+        case let .adGroups(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "В группах", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.updateSettings { $0.adFilterGroups = value }
+            })
+        case let .adForwarded(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "В пересланных", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.updateSettings { $0.adFilterForwarded = value }
+            })
+        case let .adHideCompletely(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Скрывать полностью", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.updateSettings { $0.adHideCompletely = value }
+            })
+        case .adInfo:
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Реклама находится по обязательной маркировке: erid, «Реклама. ООО …», ИНН рекламодателя, #реклама. Список признаков общий для всех и обновляется без новой версии. «Скрывать полностью» включено — поста нет совсем, выключено — на его месте строка «Скрыта реклама». В пересланных — пересланная реклама в личных чатах и группах."), sectionId: self.section)
         case let .showPlaceholder(value):
             return ItemListSwitchItem(presentationData: presentationData, title: "Плашка «Скрыто локальным фильтром»", value: value, maximumNumberOfLines: 2, sectionId: self.section, style: .blocks, updated: { value in
                 arguments.setShowPlaceholder(value)
@@ -99,12 +140,14 @@ private enum ShadowMessageFiltersEntry: ItemListNodeEntry {
 }
 
 private final class ShadowMessageFiltersArguments {
+    let updateSettings: (@escaping (inout AyuGramSettings) -> Void) -> Void
     let setShowPlaceholder: (Bool) -> Void
     let add: () -> Void
     let edit: (ShadowMessageFilter) -> Void
     let unban: (EnginePeer.Id, String) -> Void
 
-    init(setShowPlaceholder: @escaping (Bool) -> Void, add: @escaping () -> Void, edit: @escaping (ShadowMessageFilter) -> Void, unban: @escaping (EnginePeer.Id, String) -> Void) {
+    init(updateSettings: @escaping (@escaping (inout AyuGramSettings) -> Void) -> Void, setShowPlaceholder: @escaping (Bool) -> Void, add: @escaping () -> Void, edit: @escaping (ShadowMessageFilter) -> Void, unban: @escaping (EnginePeer.Id, String) -> Void) {
+        self.updateSettings = updateSettings
         self.setShowPlaceholder = setShowPlaceholder
         self.add = add
         self.edit = edit
@@ -150,7 +193,13 @@ func shadowMessageFiltersController(context: AccountContext, focus: ShadowSettin
     var focusedIndex: Int?
     var presentControllerImpl: ((ViewController) -> Void)?
 
-    let arguments = ShadowMessageFiltersArguments(setShowPlaceholder: { value in
+    let arguments = ShadowMessageFiltersArguments(updateSettings: { f in
+        let _ = updateAyuGramSettings(postbox: context.account.postbox) { current in
+            var current = current
+            f(&current)
+            return current
+        }.startStandalone()
+    }, setShowPlaceholder: { value in
         let _ = updateAyuGramSettings(postbox: context.account.postbox) { current in
             var current = current
             current.messageFilterShowPlaceholder = value
@@ -189,7 +238,15 @@ func shadowMessageFiltersController(context: AccountContext, focus: ShadowSettin
     let signal = combineLatest(queue: .mainQueue(), context.sharedContext.presentationData, settings, bannedPeers)
     |> deliverOnMainQueue
     |> map { presentationData, settings, bannedPeers -> (ItemListControllerState, (ItemListNodeState, Any)) in
-        var entries: [ShadowMessageFiltersEntry] = [.showPlaceholder(settings.messageFilterShowPlaceholder), .placeholderInfo, .add]
+        var entries: [ShadowMessageFiltersEntry] = [
+            .adHeader,
+            .adChannels(settings.adFilterChannels),
+            .adGroups(settings.adFilterGroups),
+            .adForwarded(settings.adFilterForwarded),
+            .adHideCompletely(settings.adHideCompletely),
+            .adInfo,
+            .showPlaceholder(settings.messageFilterShowPlaceholder), .placeholderInfo, .add
+        ]
         for (index, filter) in settings.messageFilters.enumerated() {
             entries.append(.filter(Int32(index), filter))
         }

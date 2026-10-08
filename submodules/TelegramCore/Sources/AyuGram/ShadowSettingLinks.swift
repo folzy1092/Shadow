@@ -318,6 +318,10 @@ public enum ShadowSettingLinks {
 
         // Фильтры
         ShadowSettingLink(screen: "filters", slug: "placeholder", entryId: 0, key: "messageFilterShowPlaceholder", title: "Плашка «Скрыто локальным фильтром»"),
+        ShadowSettingLink(screen: "filters", slug: "ads-channels", entryId: 40001, key: "adFilterChannels", title: "Реклама в каналах", since: "1.6.0"),
+        ShadowSettingLink(screen: "filters", slug: "ads-groups", entryId: 40002, key: "adFilterGroups", title: "Реклама в группах", since: "1.6.0"),
+        ShadowSettingLink(screen: "filters", slug: "ads-forwarded", entryId: 40003, key: "adFilterForwarded", title: "Реклама в пересланных", since: "1.6.0"),
+        ShadowSettingLink(screen: "filters", slug: "ads-hide-completely", entryId: 40004, key: "adHideCompletely", title: "Скрывать рекламу полностью", since: "1.6.0"),
 
         // Подмена профиля (AyuMiscEntry)
         ShadowSettingLink(screen: "profile", slug: "spoof-id", entryId: 1, key: "spoofProfileIdEnabled", title: "Подменить ID"),

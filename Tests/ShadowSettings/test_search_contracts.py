@@ -13,7 +13,7 @@ class SearchContracts(unittest.TestCase):
     def test_destinations_reference_existing_entries(self):
         enums = {'customization': 'AyuCustomizationEntry', 'spy': 'AyuSpyEntry',
                  'ghost': 'AyuGhostEntry', 'misc': 'AyuMiscEntry'}
-        ids = {'backup': {0, 1, 2}, 'filters': {0}, 'pushDiagnostics': {0, 1}}
+        ids = {'backup': {0, 1, 2}, 'filters': {0, 40001, 40002, 40003, 40004}, 'pushDiagnostics': {0, 1}}
         ids['quickReplies'] = {0}
         ids['chatLocks'] = {0}
         ids['secondSpace'] = {0}

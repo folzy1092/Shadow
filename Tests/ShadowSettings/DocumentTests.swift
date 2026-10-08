@@ -68,6 +68,9 @@ struct DocumentTests {
         check(restoredReplyTimecode.settings["replyTimecodeMode"] == .integer(0), "Reply timecode mode is portable")
         let chatVoiceSpeed = try ShadowSettingsDocument.decode(ShadowSettingsDocument(settings: ["chatVoiceSpeed": .bool(true)]).encoded())
         check(chatVoiceSpeed.settings["chatVoiceSpeed"] == .bool(true), "Chat voice speed is portable")
+        let ads = try ShadowSettingsDocument.decode(ShadowSettingsDocument(settings: ["adFilterChannels": .bool(false), "adFilterGroups": .bool(true), "adFilterForwarded": .bool(true), "adHideCompletely": .bool(false)]).encoded())
+        check(ads.settings["adFilterChannels"] == .bool(false) && ads.settings["adFilterGroups"] == .bool(true), "Ad places are portable")
+        check(ads.settings["adFilterForwarded"] == .bool(true) && ads.settings["adHideCompletely"] == .bool(false), "Ad hiding is portable")
         expectFailure("Unsupported reply timecode mode") { _ = try ShadowSettingsDocument(settings: ["replyTimecodeMode": .integer(2)]) }
         let ghostPolicy = try ShadowSettingsDocument(settings: ["ghostAccountMode": .integer(3)])
         let restoredGhostPolicy = try ShadowSettingsDocument.decode(ghostPolicy.encoded())

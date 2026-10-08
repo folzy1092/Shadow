@@ -179,6 +179,10 @@
 | Ссылка | Тумблер |
 |---|---|
 | `shadow://filters/placeholder` | Плашка «Скрыто локальным фильтром» |
+| `shadow://filters/ads-channels` | Реклама в каналах |
+| `shadow://filters/ads-groups` | Реклама в группах |
+| `shadow://filters/ads-forwarded` | Реклама в пересланных |
+| `shadow://filters/ads-hide-completely` | Скрывать рекламу полностью |
 
 **Подмена профиля**
 

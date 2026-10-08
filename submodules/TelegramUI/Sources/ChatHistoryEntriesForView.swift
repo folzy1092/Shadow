@@ -937,25 +937,18 @@ func chatHistoryEntriesForView(
     }
 
     let shadowSettings = currentAyuGramSettings(accountId: context.account.id)
-    if !shadowSettings.messageFilters.isEmpty || !shadowSettings.shadowBannedPeerIds.isEmpty {
-        // Placeholder off: a matched message or album leaves the chat entirely.
-        let showPlaceholder = shadowSettings.messageFilterShowPlaceholder
-        // Shadow ban: other people's messages from a banned user; own messages stay.
-        let isBanned: (Message) -> Bool = { message in
-            guard let authorId = message.author?.id, authorId != context.account.peerId else {
-                return false
-            }
-            return shadowSettings.isShadowBanned(peerId: authorId.toInt64())
-        }
-        let placeholderText: (Message) -> String = { message in
-            return isBanned(message) ? "Скрыто: теневой бан" : "Скрыто локальным фильтром"
-        }
+    // Shadow ban, message filters and ads (ShadowLocalHide.swift). A hidden
+    // message turns into a stub or, with its placeholder switched off, leaves
+    // the chat entirely: filters and the ban follow messageFilterShowPlaceholder,
+    // ads follow adHideCompletely.
+    if shadowLocalHideIsActive(settings: shadowSettings) {
+        let accountPeerId = context.account.peerId
         entries = entries.flatMap { entry -> [ChatHistoryEntry] in
             switch entry {
             case let .MessageEntry(message, presentation, isRead, location, selection, attributes):
-                guard isBanned(message) || shadowSettings.matchesMessageFilter(text: message.text) else { return [entry] }
-                guard showPlaceholder else { return [] }
-                let placeholder = shadowFilteredPlaceholder(message, text: placeholderText(message))
+                guard let reason = shadowLocalHideReason(message, settings: shadowSettings, accountPeerId: accountPeerId) else { return [entry] }
+                guard reason.showsPlaceholder(settings: shadowSettings) else { return [] }
+                let placeholder = shadowFilteredPlaceholder(message, text: reason.placeholderText)
                 return [.MessageEntry(placeholder, presentation, isRead, location, selection, attributes)]
             case let .MessageGroupEntry(_, messages, presentation):
                 // Telegram renders an album as several separate bubbles. Keeping
@@ -963,12 +956,21 @@ func chatHistoryEntriesForView(
                 // layout with mixed entry types, which could crash when opened.
                 // One matching caption hides the whole local album as one safe,
                 // media-free placeholder.
-                guard let hiddenItem = messages.first(where: { isBanned($0.0) || shadowSettings.matchesMessageFilter(text: $0.0.text) }) else {
+                var hiddenIndex: Int?
+                var hiddenReason: ShadowLocalHideReason?
+                for index in messages.indices {
+                    if let reason = shadowLocalHideReason(messages[index].0, settings: shadowSettings, accountPeerId: accountPeerId) {
+                        hiddenIndex = index
+                        hiddenReason = reason
+                        break
+                    }
+                }
+                guard let index = hiddenIndex, let reason = hiddenReason else {
                     return [entry]
                 }
-                guard showPlaceholder else { return [] }
-                let (message, isRead, selection, attributes, location) = hiddenItem
-                let placeholder = shadowFilteredPlaceholder(message, text: placeholderText(message))
+                guard reason.showsPlaceholder(settings: shadowSettings) else { return [] }
+                let (message, isRead, selection, attributes, location) = messages[index]
+                let placeholder = shadowFilteredPlaceholder(message, text: reason.placeholderText)
                 return [.MessageEntry(placeholder, presentation, isRead, location, selection, attributes)]
             default:
                 return [entry]

@@ -17,10 +17,13 @@ class ShadowBanContracts(unittest.TestCase):
         self.assertIn("try container.encode(self.shadowBannedPeerIds, forKey: \"shadowBannedPeerIdsV1\")", settings)
 
     def test_history_hides_banned_authors_but_not_own_messages(self):
+        # One check for the chat and the chat list (ShadowLocalHide.swift).
+        hide = read("TelegramCore/Sources/AyuGram/ShadowLocalHide.swift")
+        self.assertIn("authorId != accountPeerId, settings.isShadowBanned(peerId: authorId.toInt64())", hide)
+        self.assertIn('"Скрыто: теневой бан"', hide)
         history = read("TelegramUI/Sources/ChatHistoryEntriesForView.swift")
-        self.assertIn("authorId != context.account.peerId", history)
-        self.assertIn('"Скрыто: теневой бан"', history)
-        self.assertIn("isBanned($0.0) || shadowSettings.matchesMessageFilter(text: $0.0.text)", history)
+        self.assertIn("let accountPeerId = context.account.peerId", history)
+        self.assertIn("shadowLocalHideReason(messages[index].0, settings: shadowSettings, accountPeerId: accountPeerId)", history)
 
     def test_entry_points(self):
         peer_info = read("TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoScreenPerformButtonAction.swift")

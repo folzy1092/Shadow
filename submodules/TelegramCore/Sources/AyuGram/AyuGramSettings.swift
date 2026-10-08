@@ -111,6 +111,15 @@ public struct AyuGramSettings: Codable, Equatable {
     public var offerGhostBeforeStories: Bool = false
     public var hidePremiumBadges: Bool = false
     public var hideSponsoredMessages: Bool = false
+    // Shadow: ads by their legal marking (ShadowAdFilter.swift), per place:
+    // channel posts, group messages, forwarded messages in groups and private
+    // chats.
+    public var adFilterChannels: Bool = true
+    public var adFilterGroups: Bool = false
+    public var adFilterForwarded: Bool = false
+    // true: a hidden ad leaves no trace; false: a "Скрыта реклама" stub.
+    // Separate from messageFilterShowPlaceholder (Folzy, 2026-10-08).
+    public var adHideCompletely: Bool = true
     // Pin more chats than the server limit. Extra pins live on this device only.
     public var unlimitedPinnedChats: Bool = true
     // On-device transcription of voice messages for accounts without Premium.
@@ -433,6 +442,9 @@ public struct AyuGramSettings: Codable, Equatable {
         settings.showProfileId = false
         settings.showProfileDC = false
         settings.showRegistrationDate = false
+        settings.adFilterChannels = false
+        settings.adFilterGroups = false
+        settings.adFilterForwarded = false
         return settings
     }
 
@@ -467,6 +479,10 @@ public struct AyuGramSettings: Codable, Equatable {
 
     public func isShadowBanned(peerId: Int64) -> Bool {
         return self.shadowBannedPeerIds.contains(peerId)
+    }
+
+    public var adScope: ShadowAdScope {
+        return ShadowAdScope(channels: self.adFilterChannels, groups: self.adFilterGroups, forwarded: self.adFilterForwarded)
     }
 
     public func matchesMessageFilter(text: String) -> Bool {
@@ -679,6 +695,10 @@ public struct AyuGramSettings: Codable, Equatable {
         self.offerGhostBeforeStories = ((try container.decodeIfPresent(Int32.self, forKey: "offerGhostBeforeStories")) ?? 0) != 0
         self.hidePremiumBadges = ((try container.decodeIfPresent(Int32.self, forKey: "hidePremiumBadges")) ?? 0) != 0
         self.hideSponsoredMessages = ((try container.decodeIfPresent(Int32.self, forKey: "hideSponsoredMessages")) ?? 0) != 0
+        self.adFilterChannels = ((try container.decodeIfPresent(Int32.self, forKey: "adFilterChannels")) ?? 1) != 0
+        self.adFilterGroups = ((try container.decodeIfPresent(Int32.self, forKey: "adFilterGroups")) ?? 0) != 0
+        self.adFilterForwarded = ((try container.decodeIfPresent(Int32.self, forKey: "adFilterForwarded")) ?? 0) != 0
+        self.adHideCompletely = ((try container.decodeIfPresent(Int32.self, forKey: "adHideCompletely")) ?? 1) != 0
         self.unlimitedPinnedChats = ((try container.decodeIfPresent(Int32.self, forKey: "unlimitedPinnedChats")) ?? 1) != 0
         self.localVoiceTranscription = ((try container.decodeIfPresent(Int32.self, forKey: "localVoiceTranscription")) ?? 1) != 0
         self.voiceTimeFormat = ShadowVoiceTime.normalized((try container.decodeIfPresent(Int32.self, forKey: "voiceTimeFormat")) ?? 0)
@@ -782,6 +802,10 @@ public struct AyuGramSettings: Codable, Equatable {
         try container.encode((self.offerGhostBeforeStories ? 1 : 0) as Int32, forKey: "offerGhostBeforeStories")
         try container.encode((self.hidePremiumBadges ? 1 : 0) as Int32, forKey: "hidePremiumBadges")
         try container.encode((self.hideSponsoredMessages ? 1 : 0) as Int32, forKey: "hideSponsoredMessages")
+        try container.encode((self.adFilterChannels ? 1 : 0) as Int32, forKey: "adFilterChannels")
+        try container.encode((self.adFilterGroups ? 1 : 0) as Int32, forKey: "adFilterGroups")
+        try container.encode((self.adFilterForwarded ? 1 : 0) as Int32, forKey: "adFilterForwarded")
+        try container.encode((self.adHideCompletely ? 1 : 0) as Int32, forKey: "adHideCompletely")
         try container.encode((self.unlimitedPinnedChats ? 1 : 0) as Int32, forKey: "unlimitedPinnedChats")
         try container.encode((self.localVoiceTranscription ? 1 : 0) as Int32, forKey: "localVoiceTranscription")
         try container.encode(self.voiceTimeFormat, forKey: "voiceTimeFormat")

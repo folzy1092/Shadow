@@ -1435,6 +1435,8 @@ public class Account {
         // Shadow: значки поддержавших exteraGram / AyuGram — свой источник,
         // грузится так же: кэш с диска, затем обновление в фоне.
         startAyuExteraConfigIfNeeded()
+        // Shadow: ad markers (shadow-ad-markers.json in tgfork), same way.
+        ShadowAdMarkersStore.shared.startIfNeeded()
 
         let extractedExpr1: [Signal<AccountRunningImportantTasks, NoError>] = [
             managedSynchronizeChatInputStateOperations(postbox: self.postbox, network: self.network, messageMediaPreuploadManager: self.messageMediaPreuploadManager, auxiliaryMethods: self.auxiliaryMethods) |> map { inputStates in

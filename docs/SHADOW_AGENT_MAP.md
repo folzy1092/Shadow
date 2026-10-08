@@ -32,8 +32,11 @@ Postbox-рефакторинг. Этот файл описывает то, чт�
   (~25–55 мин), перед сборкой гоняет тесты. **Push, где изменены только
   `*.md`, сборку и диагностику не запускает** (`paths-ignore`). Чтобы не
   запускать сборку для другого служебного коммита, добавьте `[skip ci]` в
-  сообщение. Новый push в `master` отменяет идущую сборку
-  (`cancel-in-progress`).
+  сообщение. С 2026-10-08 новый push **не** отменяет идущую сборку:
+  группа concurrency своя у каждого коммита, сборки разных коммитов идут
+  параллельно (дубли одного push по-прежнему гасят друг друга). Старая
+  сборка, закончившая позже новой, не становится `releases/latest`
+  (`build-system/ci/shadow_latest_flag.py` → `--latest=false`).
   - Обе папки контрактов, обе гоняет CI:
     `python3 -B -m unittest discover -s Tests/ShadowSettings -p 'test_*.py'` и
     `python3 -B -m unittest discover -s Tests/ShadowVisualSettings -p 'test_*.py'`
@@ -184,6 +187,24 @@ UI-проекция настроек выбирается в `TelegramRootContro
   `ChatHistoryEntriesForView`. «В фильтры»: `TextSelectionNode.shadowAddToFilter`
   и меню @username (`ChatControllerOpenUsernameContextMenu`) через
   `ChatControllerInteraction.shadowAddMessageFilter`.
+
+- Реклама (1.6.0): `ShadowAdFilter.swift` — маркеры (регулярки без учёта
+  регистра: erid, «Реклама. ООО …», ИНН, #реклама, «на правах рекламы»…),
+  `builtIn` + файл `shadow-ad-markers.json` в `folzy1092/tgfork` (main;
+  `"patterns": ["…"]` или `[{"regex": "…", "note": "…"}]`, пустой или битый
+  файл игнорируется). `ShadowAdMarkersStore` грузит его как значки: кэш с
+  диска, затем сеть (`Account.swift`). Реферальные ссылки и подписи «По
+  вопросам рекламы» маркерами **не** считаются (решение Folzy). Тумблеры
+  `adFilterChannels` (вкл), `adFilterGroups`, `adFilterForwarded`,
+  `adHideCompletely` (вкл: поста нет; выкл: строка «Скрыта реклама»), раздел
+  «РЕКЛАМА» сверху экрана «Фильтры». Свои исходящие не прячутся. Ищется в
+  тексте, скрытых ссылках, URL-кнопках и URL превью ссылки.
+- Одна проверка «спрятано ли сообщение» для чата и списка чатов:
+  `ShadowLocalHide.swift` (`shadowLocalHideReason` → теневой бан / фильтр /
+  реклама). `ChatHistoryEntriesForView` делает плашку или убирает сообщение,
+  `ChatListItem` при спрятанном последнем сообщении показывает пустое превью
+  (без текста, автора, миниатюры и значка типа). Новое место, где видно
+  содержимое сообщений (например, лента), должно звать эту же функцию.
 
 ## 5c. Быстрые ссылки и архив
 

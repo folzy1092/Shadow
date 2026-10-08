@@ -32,6 +32,7 @@ def main():
         ('duress', ('submodules/TelegramCore/Sources/AyuGram/ShadowDuress.swift', 'submodules/TelegramCore/Sources/AyuGram/ShadowSpaces.swift', 'submodules/TelegramCore/Sources/AyuGram/ShadowChatLock.swift', 'submodules/TelegramCore/Sources/AyuGram/ShadowDisguise.swift'), 'Tests/ShadowSettings/DuressTests.swift'),
         ('device-access', 'submodules/TelegramCore/Sources/AyuGram/ShadowDeviceAccess.swift', 'Tests/ShadowSettings/DeviceAccessTests.swift'),
         ('message-filters', 'submodules/TelegramCore/Sources/AyuGram/ShadowMessageFilters.swift', 'Tests/ShadowSettings/MessageFiltersTests.swift'),
+        ('ad-filter', 'submodules/TelegramCore/Sources/AyuGram/ShadowAdFilter.swift', 'Tests/ShadowSettings/AdFilterTests.swift'),
         ('links', 'submodules/TelegramCore/Sources/AyuGram/ShadowLinks.swift', 'Tests/ShadowSettings/LinksTests.swift'),
         ('header-buttons', 'submodules/TelegramCore/Sources/AyuGram/ShadowHeaderButtons.swift', 'Tests/ShadowSettings/HeaderButtonsTests.swift'),
         ('setting-links', ('submodules/TelegramCore/Sources/AyuGram/ShadowSettingLinks.swift', 'submodules/TelegramCore/Sources/AyuGram/ShadowLinks.swift', 'submodules/TelegramCore/Sources/AyuGram/ShadowVoiceTime.swift', 'submodules/TelegramCore/Sources/AyuGram/ShadowReplyTimecode.swift'), 'Tests/ShadowSettings/SettingLinksTests.swift'),

@@ -2625,6 +2625,10 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
             let contentData: ContentData
             // Shadow: the chat (or, in the Saved Messages list, Saved Messages itself) is locked.
             var shadowIsLocked = false
+            // Shadow: the last message is hidden on this device (ad, filter,
+            // shadow ban — ShadowLocalHide.swift): the row shows only the
+            // avatar and the title, no text, author or thumbnail.
+            var shadowPreviewHidden = false
             
             var hideAuthor = false
             switch contentPeer {
@@ -2671,6 +2675,19 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         richTextPreview = nil
                     }
                     
+                    if !shadowIsLocked, let lastMessage = messages.last {
+                        let shadowSettings = currentAyuGramSettings(accountId: item.context.account.id)
+                        if shadowLocalHideIsActive(settings: shadowSettings), shadowLocalHideReason(lastMessage, settings: shadowSettings, accountPeerId: item.context.account.peerId) != nil {
+                            shadowPreviewHidden = true
+                            messageText = ""
+                            messageEntities = []
+                            spoilers = nil
+                            customEmojiRanges = nil
+                            richTextPreview = nil
+                            initialHideAuthor = true
+                        }
+                    }
+
                     contentData = .chat(itemPeer: itemPeer, threadInfo: threadInfo, peer: peer, hideAuthor: hideAuthor, messageText: messageText, messageEntities: messageEntities, spoilers: spoilers, customEmojiRanges: customEmojiRanges, richTextPreview: richTextPreview)
                     hideAuthor = initialHideAuthor
                 case let .group(groupPeers):
@@ -3082,7 +3099,8 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                             attributedText = mutableAttributedText
                         }
                         
-                        if !ignoreForwardedIcon {
+                        // Shadow: a hidden last message gets no type icon either.
+                        if !ignoreForwardedIcon && !shadowPreviewHidden {
                             if case .savedMessagesChats = item.chatListLocation {
                             } else if let forwardInfo = message.forwardInfo, !forwardInfo.flags.contains(.isImported) && !message.id.peerId.isVerificationCodes {
                                 messageTypeIcon = .forward
@@ -3130,6 +3148,9 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                             displayMediaPreviews = false
                         } else if shadowIsLocked || (ShadowChatLockStore.shared.hidesPreview && ShadowChatLockStore.shared.isLocked(accountPeerId: item.context.account.peerId.toInt64(), peerId: message.id.peerId.toInt64())) {
                             // Shadow: no media thumbnails for a locked chat.
+                            displayMediaPreviews = false
+                        } else if shadowPreviewHidden {
+                            // Shadow: nor for a hidden last message.
                             displayMediaPreviews = false
                         }
                         if displayMediaPreviews {

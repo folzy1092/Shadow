@@ -95,8 +95,9 @@ class ShadowPrivacyFeatures(unittest.TestCase):
     def test_filter_hides_a_whole_media_album_as_one_safe_placeholder(self):
         source = (UI / "Sources/ChatHistoryEntriesForView.swift").read_text()
         block = source.split("case let .MessageGroupEntry(_, messages, presentation):", 1)[1].split("case let .MessageEntry", 1)[0]
-        self.assertIn("guard let hiddenItem = messages.first", block)
-        self.assertIn("shadowFilteredPlaceholder(message, text: placeholderText(message))", block)
+        self.assertIn("for index in messages.indices {", block)
+        self.assertIn("let (message, isRead, selection, attributes, location) = messages[index]", block)
+        self.assertIn("shadowFilteredPlaceholder(message, text: reason.placeholderText)", block)
         self.assertIn("return [.MessageEntry(placeholder", block)
         self.assertNotIn("return messages.map", block)
         self.assertIn("private func shadowFilteredPlaceholder", source)
