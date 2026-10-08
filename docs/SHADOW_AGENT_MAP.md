@@ -509,6 +509,31 @@ UI-проекция настроек выбирается в `TelegramRootContro
   полоски плеера (вложения, поиск, медиа профиля) меняют общую, как раньше.
   Экран списка — `SettingsUI/ShadowChatVoiceSpeedController.swift`.
 
+## 5j. Итоги чатов (1.7.0)
+
+- Движок (Foundation, тест `ChatStatsTests.swift`): `ShadowChatStats.swift` —
+  `Item` (одно сообщение), `Builder` (счётчики, ответы, первый за день, серия
+  «оба писали», перерывы, лента по дням/месяцам, тепловая карта), `Report`
+  (Codable), `ShadowChatStatsStore` (Application Support/shadow-chat-stats/
+  <аккаунт>/<чат>.json — **один отчёт на чат**, пересчёт заменяет).
+  Время ответа — медиана, паузы > 6 ч не считаются; «первый за день» — день с
+  4:00; серия — календарные дни, когда писали оба, сегодня не обрывает.
+- Сбор (`ShadowChatStatsCollect.swift`): `loadHistory` дозагружает дыры
+  периода через `fetchMessageHistoryHole` по 100 сообщений с паузой 0,35 с
+  (как прокрутка вверх), сверху вниз, до сообщения старше начала периода.
+  `report` читает период `scanTopMessages` (остановка по `false` починена в
+  Postbox: `break scan`), картинки топ-стикеров и кастомных реакций кладёт в
+  отчёт как data: URI (миниатюра, ≤ 300 КБ, иначе эмодзи стикера).
+- Страница (`ShadowChatStatsPage.swift`): один HTML с данными внутри для
+  экрана (WKWebView, mode app — кнопки шлют `shadow` message handler), файла
+  (mode file, можно анонимно — `ShadowChatStats.anonymized`) и картинки (mode
+  card, 360×640 → снимок 1080×1920). JS читает только поля `Report`/`Person`
+  (контракт `test_chat_stats_contracts.py`).
+- UI (`SettingsUI/ShadowChatStatsUI.swift`): строка «Итоги чатов» в хабе
+  (инструменты), список (свайп — удалить), шторка периода, `ShadowChatStatsJobs`
+  (подсчёт идёт и после закрытия экрана), экран отчёта. Вход из профиля:
+  «…» → «Итоги чата» (личные чаты и группы, не каналы, не закрытые чаты).
+
 ## 5a. Замки чатов и второе пространство
 
 - Замки: `ShadowChatLock.swift` (хранилище), `TelegramUI/Sources/ShadowChatLockUI.swift`

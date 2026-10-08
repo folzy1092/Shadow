@@ -134,7 +134,7 @@ class ShadowPrivacyFeatures(unittest.TestCase):
         # Grouped by purpose; Кастомизация is split into parts.
         self.assertIn("entries += [.privacyHeader, .ghost(settings.ghostMode), .spy, .chatLocks, .secondSpace, .emergency]", hub)
         self.assertIn("entries += ShadowCustomizationPart.allCases.map { .customization($0) }", hub)
-        self.assertIn("entries += [.toolsHeader, .messageScreenshot, .filters, .quickReplies, .misc, .pushDiagnostics]", hub)
+        self.assertIn("entries += [.toolsHeader, .messageScreenshot, .filters, .chatStats, .quickReplies, .misc, .pushDiagnostics]", hub)
         self.assertIn("entries += [.accountsHeader, .hiddenAccounts, .settingsSync, .backup]", hub)
         for part in ("Сообщения", "Чаты и звонки", "Профили", "Медиа и камера", "Иконки"):
             self.assertIn(f'return "{part}"', hub)

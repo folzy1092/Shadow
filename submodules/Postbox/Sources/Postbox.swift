@@ -4381,12 +4381,14 @@ final class PostboxImpl {
         let lowerBound = MessageIndex.lowerBound(peerId: peerId, namespace: namespace)
         var index = MessageIndex.upperBound(peerId: peerId, namespace: namespace)
         var remainingLimit = limit
-        while remainingLimit > 0 {
+        // Shadow: `f` returning false stops the whole scan, not just the
+        // current batch of 10 (ShadowChatStatsCollect stops at a timestamp).
+        scan: while remainingLimit > 0 {
             let messages = self.messageHistoryTable.fetch(peerId: peerId, namespace: namespace, tag: nil, customTag: nil, threadId: nil, from: index, includeFrom: false, to: lowerBound, ignoreMessagesInTimestampRange: nil, ignoreMessageIds: Set(), limit: 10)
             remainingLimit -= 10
             for message in messages {
                 if !f(self.renderIntermediateMessage(message)) {
-                    break
+                    break scan
                 }
             }
             if let last = messages.last {

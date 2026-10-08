@@ -518,6 +518,23 @@ extension PeerInfoScreenNode {
                     })))
                 }
 
+                // Shadow: «Итоги чата» — private chats and groups, not channels.
+                var shadowStatsAllowed = true
+                if case let .channel(channel) = chatPeer, case .broadcast = channel.info {
+                    shadowStatsAllowed = false
+                }
+                if !ShadowDisguise.shared.hidesSettings && !shadowExportCovered && shadowStatsAllowed && chatPeer.id != strongSelf.context.account.peerId {
+                    items.append(.action(ContextMenuActionItem(text: "Итоги чата", icon: { theme in
+                        generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Statistics"), color: theme.contextMenu.primaryColor)
+                    }, action: { [weak self] _, f in
+                        f(.dismissWithoutContent)
+                        guard let self, let controller = self.controller, let peer = self.data?.peer else {
+                            return
+                        }
+                        shadowPresentChatStatsPeriod(context: self.context, peerId: shadowExportPeerId, title: peer.compactDisplayTitle, from: controller)
+                    })))
+                }
+
                 // Shadow: shadow ban — hide this user's messages without blocking.
                 if case .user = peer, peer.id != strongSelf.context.account.peerId, !ShadowDisguise.shared.hidesSettings {
                     let isBanned = shadowIsShadowBanned(context: strongSelf.context, peerId: peer.id)

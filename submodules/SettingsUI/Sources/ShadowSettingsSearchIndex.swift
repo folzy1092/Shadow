@@ -1,7 +1,7 @@
 import Foundation
 
 enum ShadowSettingsSearchDestination: Int32 {
-    case customization, spy, ghost, misc, backup, filters, pushDiagnostics, quickReplies, chatLocks, secondSpace, emergency, autoUpdate
+    case customization, spy, ghost, misc, backup, filters, pushDiagnostics, quickReplies, chatLocks, secondSpace, emergency, autoUpdate, chatStats
 
     var title: String {
         switch self {
@@ -17,6 +17,7 @@ enum ShadowSettingsSearchDestination: Int32 {
         case .secondSpace: return "Второе пространство"
         case .emergency: return "Экстренная защита"
         case .autoUpdate: return "Автообновление"
+        case .chatStats: return "Итоги чатов"
         }
     }
 }
@@ -104,6 +105,7 @@ enum ShadowSettingsSearchIndex {
         ShadowSettingsSearchItem(destination: .misc, entryId: 1, title: "Подменить ID", description: "Визуальная подмена ID в профиле", keywords: "spoof profile id"),
         ShadowSettingsSearchItem(destination: .misc, entryId: 3, title: "Подменить DC", description: "Визуальная подмена дата-центра", keywords: "spoof dc data center"),
         ShadowSettingsSearchItem(destination: .misc, entryId: 5, title: "Подменить номер", description: "Визуальная подмена телефона", keywords: "spoof phone number"),
+        ShadowSettingsSearchItem(destination: .chatStats, entryId: 0, title: "Итоги чатов", description: "Статистика переписки за неделю, месяц, год или 5 лет: кто больше пишет, голосовые, эмодзи, стикеры, часы, сравнение и картинка", keywords: "итоги статистика stats wrapped переписка сравнение чат кто больше пишет сообщения голосовые"),
         ShadowSettingsSearchItem(destination: .autoUpdate, entryId: 0, title: "Сертификат для автообновления", description: "Выбрать .p12, .mobileprovision и пароль, чтобы Shadow сам подписывал и ставил обновления", keywords: "автообновление обновление подпись сертификат p12 mobileprovision профиль esign update sign install"),
         ShadowSettingsSearchItem(destination: .backup, entryId: 0, title: "Экспортировать настройки", description: "Перенести настройки без сессий и личных данных", keywords: "export backup json"),
         ShadowSettingsSearchItem(destination: .backup, entryId: 1, title: "Импортировать настройки", description: "Применить файл к текущему аккаунту", keywords: "import settings json"),
