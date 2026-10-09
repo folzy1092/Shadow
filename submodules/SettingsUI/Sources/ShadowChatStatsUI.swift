@@ -62,7 +62,8 @@ final class ShadowChatStatsJobs {
         let disposables = DisposableSet()
         self.disposables[key] = disposables
         let now = Int32(Date().timeIntervalSince1970)
-        let since = period.start(now: now)
+        // The previous period too, for the comparison (1.11.0).
+        let since = period.scanStart(now: now)
         self.set(key, State(fraction: 0.02, text: "Загружаю переписку…", finished: false, failed: false))
 
         let account = context.account
@@ -122,7 +123,7 @@ public func shadowPresentChatStatsPeriod(context: AccountContext, peerId: Engine
     let presentationData = context.sharedContext.currentPresentationData.with { $0 }
     let actionSheet = ActionSheetController(presentationData: presentationData)
     var items: [ActionSheetItem] = [
-        ActionSheetTextItem(title: "Итоги с «\(title)». Чем длиннее период, тем дольше загрузка истории: она идёт так же, как при прокрутке чата вверх.", parseMarkdown: false)
+        ActionSheetTextItem(title: "Итоги с «\(title)». Чем длиннее период, тем дольше загрузка истории: она идёт так же, как при прокрутке чата вверх. Для сравнения грузится и прошлый период такой же длины (кроме 5 лет).", parseMarkdown: false)
     ]
     for period in ShadowChatStats.Period.allCases {
         items.append(ActionSheetButtonItem(title: period.title, color: .accent, action: { [weak actionSheet, weak controller] in
@@ -146,6 +147,7 @@ public func shadowPresentChatStatsPeriod(context: AccountContext, peerId: Engine
 
 private enum ShadowChatStatsListEntry: ItemListNodeEntry {
     case add
+    case monthlyReminder(Bool)
     case countDeleted(Bool)
     case header
     case report(Int32, EnginePeer, String, Bool)
@@ -155,7 +157,7 @@ private enum ShadowChatStatsListEntry: ItemListNodeEntry {
 
     var section: ItemListSectionId {
         switch self {
-        case .add, .countDeleted:
+        case .add, .monthlyReminder, .countDeleted:
             return 0
         case .header, .report, .missing, .empty, .info:
             return 1
@@ -165,6 +167,7 @@ private enum ShadowChatStatsListEntry: ItemListNodeEntry {
     var stableId: Int64 {
         switch self {
         case .add: return 0
+        case .monthlyReminder: return 1
         case .countDeleted: return 2
         case .header: return 3
         case let .report(index, _, _, _): return 100 + Int64(index)
@@ -184,6 +187,10 @@ private enum ShadowChatStatsListEntry: ItemListNodeEntry {
         case .add:
             return ItemListActionItem(presentationData: presentationData, title: "Новые итоги", kind: .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: {
                 arguments.add()
+            })
+        case let .monthlyReminder(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Напоминать раз в месяц", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.setMonthlyReminder(value)
             })
         case let .countDeleted(value):
             return ItemListSwitchItem(presentationData: presentationData, title: "Считать удалённые сообщения", value: value, sectionId: self.section, style: .blocks, updated: { value in
@@ -209,7 +216,7 @@ private enum ShadowChatStatsListEntry: ItemListNodeEntry {
         case .empty:
             return ItemListTextItem(presentationData: presentationData, text: .plain("Итогов пока нет. Нажмите «Новые итоги» или откройте профиль собеседника → «…» → «Итоги чата»."), sectionId: self.section)
         case .info:
-            return ItemListTextItem(presentationData: presentationData, text: .plain("У каждого чата одни итоги: если подвести их заново, старые заменяются. Смахните влево, чтобы удалить. Всё считается на телефоне. «Считать удалённые» — сообщения, сохранённые анти-удалением; выключено — их нет в итогах, новые итоги считаются без них."), sectionId: self.section)
+            return ItemListTextItem(presentationData: presentationData, text: .plain("У каждого чата одни итоги: если подвести их заново, старые заменяются. Смахните влево, чтобы удалить. Всё считается на телефоне. «Напоминать раз в месяц» — уведомление 1-го числа в 12:00, нажатие открывает этот экран. «Считать удалённые» — сообщения, сохранённые анти-удалением; выключено — их нет в итогах, новые итоги считаются без них."), sectionId: self.section)
         }
     }
 }
@@ -223,6 +230,7 @@ private final class ShadowChatStatsListArguments {
     let remove: (Int64) -> Void
     let setRevealed: (EnginePeer.Id?, EnginePeer.Id?) -> Void
     var setCountDeleted: (Bool) -> Void = { _ in }
+    var setMonthlyReminder: (Bool) -> Void = { _ in }
 
     init(context: AccountContext, dateTimeFormat: PresentationDateTimeFormat, nameDisplayOrder: PresentationPersonNameOrder, add: @escaping () -> Void, open: @escaping (EnginePeer.Id, String) -> Void, remove: @escaping (Int64) -> Void, setRevealed: @escaping (EnginePeer.Id?, EnginePeer.Id?) -> Void) {
         self.context = context
@@ -314,11 +322,22 @@ public func shadowChatStatsListController(context: AccountContext) -> ViewContro
             return current
         }.startStandalone()
     }
+    // The reminder lives in UserDefaults: a promise re-renders the switch.
+    let reminder = ValuePromise<Bool>(ShadowChatStatsReminder.isEnabled, ignoreRepeated: false)
+    var presentAlertImpl: ((String) -> Void)?
+    arguments.setMonthlyReminder = { value in
+        ShadowChatStatsReminder.setEnabled(value, completion: { ok in
+            reminder.set(ShadowChatStatsReminder.isEnabled)
+            if !ok {
+                presentAlertImpl?("Уведомления для Telegram выключены. Разрешите их в Настройках iOS, чтобы получать напоминание.")
+            }
+        })
+    }
     let linkRows = ShadowSettingsLinkRows()
-    let signal = combineLatest(queue: .mainQueue(), context.sharedContext.presentationData, rowsWithPeers, revealedPeerId.get(), ayuGramSettings(postbox: context.account.postbox))
-    |> map { presentationData, data, revealed, settings -> (ItemListControllerState, (ItemListNodeState, Any)) in
+    let signal = combineLatest(queue: .mainQueue(), context.sharedContext.presentationData, rowsWithPeers, revealedPeerId.get(), ayuGramSettings(postbox: context.account.postbox), reminder.get())
+    |> map { presentationData, data, revealed, settings, reminderEnabled -> (ItemListControllerState, (ItemListNodeState, Any)) in
         let (rows, peers) = data
-        var entries: [ShadowChatStatsListEntry] = [.add, .countDeleted(settings.chatStatsCountDeleted), .header]
+        var entries: [ShadowChatStatsListEntry] = [.add, .monthlyReminder(reminderEnabled), .countDeleted(settings.chatStatsCountDeleted), .header]
         for (index, row) in rows.enumerated() {
             if let peer = peers[EnginePeer.Id(row.peerId)] {
                 entries.append(.report(Int32(index), peer, row.text, revealed == peer.id))
@@ -338,6 +357,10 @@ public func shadowChatStatsListController(context: AccountContext) -> ViewContro
     }
     currentController = { [weak controller] in
         return controller
+    }
+    presentAlertImpl = { [weak controller] text in
+        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+        controller?.present(textAlertController(context: context, title: nil, text: text, actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]), in: .window(.root))
     }
     return controller
 }
@@ -535,6 +558,9 @@ final class ShadowChatStatsController: ViewController, WKScriptMessageHandler {
             let kind = ShadowChatStatsPage.CardKind(rawValue: body["kind"] as? String ?? "cmp") ?? .compare
             let hideName = body["hideName"] as? Bool ?? false
             self.shareImage(report: report, kind: kind, hideName: hideName)
+        case "shareSlide":
+            let index = (body["index"] as? Int) ?? (body["index"] as? NSNumber)?.intValue ?? 0
+            self.shareSlide(report: report, index: index)
         case "shareFile":
             self.askShareFile(report: report)
         case "recalculate":
@@ -549,6 +575,22 @@ final class ShadowChatStatsController: ViewController, WKScriptMessageHandler {
 
     private func shareImage(report: ShadowChatStats.Report, kind: ShadowChatStatsPage.CardKind, hideName: Bool) {
         let html = ShadowChatStatsPage.render(report, options: ShadowChatStatsPage.Options(mode: .card, dark: true, card: kind, hideName: hideName))
+        self.cardRenderer = ShadowStatsCardRenderer(html: html, in: self.view, completion: { [weak self] image in
+            guard let self else {
+                return
+            }
+            self.cardRenderer = nil
+            guard let image else {
+                self.toast("Не получилось сделать картинку.")
+                return
+            }
+            self.presentShare([image])
+        })
+    }
+
+    // One slide of «Смотреть историей» as a 1080×1920 picture (1.11.0).
+    private func shareSlide(report: ShadowChatStats.Report, index: Int) {
+        let html = ShadowChatStatsPage.render(report, options: ShadowChatStatsPage.Options(mode: .card, dark: true, slide: index))
         self.cardRenderer = ShadowStatsCardRenderer(html: html, in: self.view, completion: { [weak self] image in
             guard let self else {
                 return

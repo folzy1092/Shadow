@@ -328,6 +328,7 @@ public enum ShadowSettingLinks {
         ShadowSettingLink(screen: "filters", slug: "ads-forwarded", entryId: 40003, key: "adFilterForwarded", title: "Реклама в пересланных", since: "1.6.0"),
         ShadowSettingLink(screen: "filters", slug: "ads-hide-completely", entryId: 40004, key: "adHideCompletely", title: "Скрывать рекламу полностью", since: "1.6.0"),
         ShadowSettingLink(screen: "stats", slug: "count-deleted", entryId: 2, key: "chatStatsCountDeleted", title: "Итоги: считать удалённые", since: "1.9.3"),
+        ShadowSettingLink(screen: "stats", slug: "monthly-reminder", entryId: 1, key: nil, title: "Итоги: напоминать раз в месяц", since: "1.11.0"),
         // Лента (shadowFeedSettingsController)
         ShadowSettingLink(screen: "feed", slug: "enabled", entryId: 1, key: "feedEnabled", title: "Лента (бета)", since: "1.9.0"),
         ShadowSettingLink(screen: "feed", slug: "position", entryId: 3, key: "feedPosition", title: "Где кнопка ленты", choices: ShadowFeed.Position.allCases.map { $0.title }, since: "1.9.0"),

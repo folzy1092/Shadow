@@ -19,7 +19,7 @@ class SearchContracts(unittest.TestCase):
         ids['secondSpace'] = {0}
         ids['emergency'] = {0, 1}
         ids['autoUpdate'] = {0, 1, 2}
-        ids['chatStats'] = {0, 2}
+        ids['chatStats'] = {0, 1, 2}
         ids['feed'] = {1, 3, 7, 8, 9, 10, 11}
         for destination, name in enums.items():
             enum = UI.split(f'private enum {name}:', 1)[1].split('\nprivate ', 1)[0]

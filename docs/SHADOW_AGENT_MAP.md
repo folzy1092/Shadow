@@ -534,6 +534,25 @@ UI-проекция настроек выбирается в `TelegramRootContro
   (подсчёт идёт и после закрытия экрана), экран отчёта. Вход из профиля:
   «…» → «Итоги чата» (личные чаты и группы, не каналы, не закрытые чаты).
 
+- Итоги 1.11.0 (всё в отчёте, поля опциональные — старые отчёты открываются):
+  `Period.previousStart/scanStart` — грузится и сканируется прошлый период
+  такой же длины (кроме 5 лет) и всегда не меньше 14 дней; второй `Builder`
+  на прошлый период → `Report.previous` (`ShadowChatStats.summary`).
+  В `Builder`: `records` (самое длинное сообщение в символах, голосовое,
+  кружок, звонок, самый жаркий час), `typicalDay` (медианы по дням от 4:00),
+  у `Person` — `moods` (`ShadowChatStats.Mood`, эмодзи текста + реакции),
+  `uniqueWords` (личные: от 2 раз, у другого ни разу), ожидания
+  `waitLongCount/waitTotalSeconds/waitLongest/waitLongestAt/unanswered`
+  (личные: паузы 1–24 ч, больше суток — «без ответа»), `replyPairs` (группы,
+  по `Item.replyToAuthorId` из `ReplyMessageAttribute`), `moodTimeline`,
+  `twoWeeks` (`ShadowChatStats.twoWeeks`). Страница: блоки на вкладках,
+  «Смотреть историей» — слайды `slides()` (просмотр как истории, тап слева —
+  назад), «Поделиться этим слайдом» → action `shareSlide` → картинка в режиме
+  card с `Options.slide`. «Напоминать раз в месяц» —
+  `SettingsUI/ShadowChatStatsReminder.swift`: UserDefaults устройства,
+  локальное уведомление 1-го числа в 12:00 с `userInfo["url"] =
+  "shadow://stats"` (AppDelegate открывает его по нажатию).
+
 - «Общаемся N дней подряд» (1.8.0): `ShadowChatStreak.swift` — `Walker`
   (сообщения от новых к старым, день засчитан, если писали оба; сегодня не
   обрывает), `ShadowChatStreakStore` (UserDefaults, пересчёт раз в 30 мин или

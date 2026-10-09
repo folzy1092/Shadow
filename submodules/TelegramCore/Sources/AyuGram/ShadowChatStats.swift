@@ -43,6 +43,23 @@ public enum ShadowChatStats {
         public func start(now: Int32) -> Int32 {
             return now - self.days * 86400
         }
+
+        // The previous period of the same length, for «По сравнению с прошлым»
+        // (1.11.0). None for 5 years: that would be ten years of history.
+        public func previousStart(now: Int32) -> Int32? {
+            switch self {
+            case .week, .month, .year:
+                return now - self.days * 2 * 86400
+            case .fiveYears:
+                return nil
+            }
+        }
+
+        // How far back history is loaded and scanned: the previous period,
+        // and always at least two weeks («Две недели на одном графике»).
+        public func scanStart(now: Int32) -> Int32 {
+            return min(self.previousStart(now: now) ?? self.start(now: now), now - 14 * 86400)
+        }
     }
 
     public enum Kind: Int {
@@ -83,8 +100,10 @@ public enum ShadowChatStats {
         public var isDeleted: Bool
         public var isEdited: Bool
         public var reactions: [Reaction]
+        // Author of the message this one replies to (groups: «Кто кому отвечает»).
+        public var replyToAuthorId: Int64?
 
-        public init(timestamp: Int32, authorId: Int64, text: String = "", kind: Kind = .text, duration: Int32 = 0, stickerKey: String? = nil, stickerLabel: String? = nil, isForward: Bool = false, isReply: Bool = false, hasLink: Bool = false, isDeleted: Bool = false, isEdited: Bool = false, reactions: [Reaction] = []) {
+        public init(timestamp: Int32, authorId: Int64, text: String = "", kind: Kind = .text, duration: Int32 = 0, stickerKey: String? = nil, stickerLabel: String? = nil, isForward: Bool = false, isReply: Bool = false, hasLink: Bool = false, isDeleted: Bool = false, isEdited: Bool = false, reactions: [Reaction] = [], replyToAuthorId: Int64? = nil) {
             self.timestamp = timestamp
             self.authorId = authorId
             self.text = text
@@ -98,6 +117,7 @@ public enum ShadowChatStats {
             self.isDeleted = isDeleted
             self.isEdited = isEdited
             self.reactions = reactions
+            self.replyToAuthorId = replyToAuthorId
         }
     }
 
@@ -121,6 +141,113 @@ public enum ShadowChatStats {
         public init(day: Int32, count: Int) {
             self.day = day
             self.count = count
+        }
+    }
+
+    // A record of the period: the longest message (characters), voice
+    // message, round video, call (seconds) and the busiest clock hour
+    // (messages; authorId 0 — the whole chat).
+    public struct Record: Codable, Equatable {
+        public var kind: String
+        public var authorId: Int64
+        public var value: Int
+        public var timestamp: Int32
+
+        public init(kind: String, authorId: Int64, value: Int, timestamp: Int32) {
+            self.kind = kind
+            self.authorId = authorId
+            self.value = value
+            self.timestamp = timestamp
+        }
+    }
+
+    // «Ваш обычный день»: medians over the days with messages. A day runs
+    // from 4:00, so a talk past midnight belongs to the evening it started.
+    // Minutes are local clock minutes (0…1439).
+    public struct TypicalDay: Codable, Equatable {
+        public var days: Int
+        public var messages: Int
+        public var startMinute: Int
+        public var endMinute: Int
+        public var spanMinutes: Int
+        public var busyWeekday: Int
+        public var quietWeekday: Int
+
+        public init(days: Int, messages: Int, startMinute: Int, endMinute: Int, spanMinutes: Int, busyWeekday: Int, quietWeekday: Int) {
+            self.days = days
+            self.messages = messages
+            self.startMinute = startMinute
+            self.endMinute = endMinute
+            self.spanMinutes = spanMinutes
+            self.busyWeekday = busyWeekday
+            self.quietWeekday = quietWeekday
+        }
+    }
+
+    // Groups: how many times `from` replied to a message of `to`.
+    public struct ReplyPair: Codable, Equatable {
+        public var from: Int64
+        public var to: Int64
+        public var count: Int
+
+        public init(from: Int64, to: Int64, count: Int) {
+            self.from = from
+            self.to = to
+            self.count = count
+        }
+    }
+
+    public struct PersonCount: Codable, Equatable {
+        public var id: Int64
+        public var messages: Int
+
+        public init(id: Int64, messages: Int) {
+            self.id = id
+            self.messages = messages
+        }
+    }
+
+    // The previous period of the same length, counted the same way.
+    public struct PeriodSummary: Codable, Equatable {
+        public var from: Int32
+        public var to: Int32
+        public var total: Int
+        public var daysWithMessages: Int
+        public var words: Int
+        public var voiceSeconds: Int
+        public var roundCount: Int
+        public var stickers: Int
+        public var calls: Int
+        public var callSeconds: Int
+        public var people: [PersonCount]
+
+        public init(from: Int32, to: Int32, total: Int, daysWithMessages: Int, words: Int, voiceSeconds: Int, roundCount: Int, stickers: Int, calls: Int, callSeconds: Int, people: [PersonCount]) {
+            self.from = from
+            self.to = to
+            self.total = total
+            self.daysWithMessages = daysWithMessages
+            self.words = words
+            self.voiceSeconds = voiceSeconds
+            self.roundCount = roundCount
+            self.stickers = stickers
+            self.calls = calls
+            self.callSeconds = callSeconds
+            self.people = people
+        }
+    }
+
+    // «Две недели на одном графике»: messages per day of the last 7 days
+    // (ending today) and of the 7 days before, oldest first. `firstDay` is
+    // the local day of `current[0]`.
+    public struct TwoWeeks: Codable, Equatable {
+        public var firstDay: Int32
+        public var current: [Int]
+        public var previous: [Int]
+
+        public init(firstDay: Int32, current: [Int], previous: [Int]) {
+            self.firstDay = firstDay
+            self.current = current
+            self.previous = previous
         }
     }
 
@@ -157,6 +284,19 @@ public enum ShadowChatStats {
         public var reactions: [Count] = []
         public var topWords: [Count] = []
         public var bestDay: DayCount?
+        // 1.11.0 (nil in older reports).
+        // Mood by emoji in own messages and reactions given (keys: Mood).
+        public var moods: [Count]?
+        // Private chats: words this person uses and the other never does.
+        public var uniqueWords: [Count]?
+        // «Кто кого ждёт» (private chats): waits for an answer of 1…24 h,
+        // their sum, the longest wait (up to a week) and when it began, and
+        // turns left without an answer for more than a day.
+        public var waitLongCount: Int?
+        public var waitTotalSeconds: Int?
+        public var waitLongest: Int?
+        public var waitLongestAt: Int32?
+        public var unanswered: Int?
 
         public init(id: Int64, name: String) {
             self.id = id
@@ -165,7 +305,7 @@ public enum ShadowChatStats {
     }
 
     public struct Report: Codable, Equatable {
-        public static let currentVersion = 1
+        public static let currentVersion = 2
 
         public var version: Int
         public var accountPeerId: Int64
@@ -196,6 +336,14 @@ public enum ShadowChatStats {
         public var images: [String: String]
         // false: messages kept after deletion were left out (nil in older reports).
         public var countsDeleted: Bool?
+        // 1.11.0 (nil in older reports).
+        public var records: [Record]?
+        public var typicalDay: TypicalDay?
+        public var replyPairs: [ReplyPair]?
+        // The dominant mood of each timeline bucket ("" — too few emoji).
+        public var moodTimeline: [String]?
+        public var previous: PeriodSummary?
+        public var twoWeeks: TwoWeeks?
 
         public var me: Person? {
             return self.people.first(where: { $0.id == self.meId })
@@ -231,6 +379,55 @@ public enum ShadowChatStats {
             result.append(String(character))
         }
         return result
+    }
+
+    // MARK: - Mood
+
+    // «Настроение по эмодзи»: an emoji (or a reaction) counts for one mood.
+    // Skin tones and the emoji variation selector are ignored.
+    public enum Mood: String, CaseIterable {
+        case laugh
+        case love
+        case joy
+        case sad
+        case angry
+        case wow
+        case meh
+    }
+
+    static let moodEmoji: [String: Mood] = {
+        var result: [String: Mood] = [:]
+        let table: [(Mood, String)] = [
+            (.laugh, "😂 🤣 😹 😆 😅 😝 😜 🤪"),
+            (.love, "❤ 😍 🥰 😘 💕 💖 💗 💘 💞 💓 😻 💋 🫶 ♥ 🧡 💛 💚 💙 💜 🖤 🤍 🤎 💝 ❣ 😚 😙 🩷 🩵"),
+            (.joy, "😊 🙂 😄 😃 😀 😁 ☺ 🥳 🎉 👍 👌 🔥 ✨ 💯 🤩 😎 🤗 👏 🙌 💪 😇 🥹"),
+            (.sad, "😢 😭 😔 😞 😟 🥺 💔 😿 😥 😓 ☹ 🙁 😩 😫 😪 😣 😖"),
+            (.angry, "😡 🤬 😠 👿 💢 😤 🖕 👎"),
+            (.wow, "😮 😱 😳 🤯 😲 😯 🙀 😨 👀 🫢 😧 😦 😰"),
+            (.meh, "🤔 🧐 🤨 😐 😑 🙄 😒 🫤 😶 🤷")
+        ]
+        for (mood, list) in table {
+            for emoji in list.split(separator: " ") {
+                result[ShadowChatStats.normalizedEmoji(String(emoji))] = mood
+            }
+        }
+        return result
+    }()
+
+    static func normalizedEmoji(_ emoji: String) -> String {
+        var scalars = String.UnicodeScalarView()
+        for scalar in emoji.unicodeScalars {
+            // Variation selector-16 and skin tones.
+            if scalar.value == 0xFE0F || (0x1F3FB ... 0x1F3FF).contains(scalar.value) {
+                continue
+            }
+            scalars.append(scalar)
+        }
+        return String(scalars)
+    }
+
+    public static func mood(of emoji: String) -> Mood? {
+        return moodEmoji[normalizedEmoji(emoji)]
     }
 
     // Words without links, @mentions, numbers and emoji.
@@ -346,6 +543,13 @@ public enum ShadowChatStats {
     // pauses longer than this are not a reply time (asleep, busy).
     public static let maxReplyPause: Int32 = 6 * 3600
 
+    // «Кто кого ждёт»: a long wait is 1…24 h; more than a day is «без ответа».
+    public static let longWait = 3600
+    public static let unansweredAfter = 24 * 3600
+    public static let longestWaitLimit = 7 * 86400
+    // «Только у одного из вас»: a word used at least this many times.
+    public static let uniqueWordMinimum = 2
+
     public final class Builder {
         private struct Accumulator {
             var person: Person
@@ -356,6 +560,7 @@ public enum ShadowChatStats {
             var words: [String: Int] = [:]
             var days: [Int32: Int] = [:]
             var replySamples: [Int32] = []
+            var moods: [String: Int] = [:]
         }
 
         public let accountPeerId: Int64
@@ -372,6 +577,12 @@ public enum ShadowChatStats {
         private var chatDays: [Int32: Int] = [:]
         private var heatmap = [[Int]](repeating: [Int](repeating: 0, count: 24), count: 7)
         private var firstMessage: Int32?
+        // 1.11.0
+        private var records: [String: Record] = [:]
+        private var hourSlots: [Int64: Int] = [:]
+        private var morningDays: [Int32: (first: Int32, last: Int32, count: Int)] = [:]
+        private var dayMoods: [Int32: [String: Int]] = [:]
+        private var replyPairs: [String: Int] = [:]
 
         public init(accountPeerId: Int64, peerId: Int64, title: String, isGroup: Bool, period: Period, from: Int32, to: Int32, names: [Int64: String], clock: Clock = .current) {
             self.accountPeerId = accountPeerId
@@ -393,6 +604,25 @@ public enum ShadowChatStats {
             return self.names[id] ?? (id == self.accountPeerId ? "Я" : "Участник")
         }
 
+        // Keeps the larger value; on a tie, the earlier one.
+        private func record(_ kind: String, authorId: Int64, value: Int, timestamp: Int32) {
+            guard value > 0 else {
+                return
+            }
+            if let current = self.records[kind], current.value > value || (current.value == value && current.timestamp <= timestamp) {
+                return
+            }
+            self.records[kind] = Record(kind: kind, authorId: authorId, value: value, timestamp: timestamp)
+        }
+
+        private func addMood(_ emoji: String, to acc: inout Accumulator, day: Int32) {
+            guard let mood = ShadowChatStats.mood(of: emoji) else {
+                return
+            }
+            acc.moods[mood.rawValue, default: 0] += 1
+            self.dayMoods[day, default: [:]][mood.rawValue, default: 0] += 1
+        }
+
         public func add(_ item: Item) {
             guard item.timestamp >= self.from, item.timestamp <= self.to else {
                 return
@@ -404,6 +634,7 @@ public enum ShadowChatStats {
             if item.kind == .call {
                 acc.person.calls += 1
                 acc.person.callSeconds += Int(item.duration)
+                self.record("call", authorId: item.authorId, value: Int(item.duration), timestamp: item.timestamp)
                 return
             }
             acc.person.messages += 1
@@ -422,14 +653,27 @@ public enum ShadowChatStats {
             if self.firstMessage == nil || item.timestamp < self.firstMessage! {
                 self.firstMessage = item.timestamp
             }
+            let slot = (Int64(item.timestamp) + Int64(self.clock.offset)) / 3600
+            self.hourSlots[slot, default: 0] += 1
+            let morning = self.clock.morningDay(item.timestamp)
+            if let current = self.morningDays[morning] {
+                self.morningDays[morning] = (first: min(current.first, item.timestamp), last: max(current.last, item.timestamp), count: current.count + 1)
+            } else {
+                self.morningDays[morning] = (first: item.timestamp, last: item.timestamp, count: 1)
+            }
+            if self.isGroup, let to = item.replyToAuthorId, to != item.authorId {
+                self.replyPairs["\(item.authorId):\(to)", default: 0] += 1
+            }
 
             switch item.kind {
             case .voice:
                 acc.person.voiceCount += 1
                 acc.person.voiceSeconds += Int(item.duration)
+                self.record("voice", authorId: item.authorId, value: Int(item.duration), timestamp: item.timestamp)
             case .round:
                 acc.person.roundCount += 1
                 acc.person.roundSeconds += Int(item.duration)
+                self.record("round", authorId: item.authorId, value: Int(item.duration), timestamp: item.timestamp)
             case .sticker:
                 acc.person.stickers += 1
                 if let key = item.stickerKey {
@@ -459,7 +703,9 @@ public enum ShadowChatStats {
                 }
                 for emoji in ShadowChatStats.emoji(in: item.text) {
                     acc.emoji[emoji, default: 0] += 1
+                    self.addMood(emoji, to: &acc, day: day)
                 }
+                self.record("text", authorId: item.authorId, value: item.text.count, timestamp: item.timestamp)
             }
             if item.isReply {
                 acc.person.replies += 1
@@ -476,6 +722,7 @@ public enum ShadowChatStats {
             for reaction in item.reactions {
                 var reactor = reaction.authorId == item.authorId ? acc : (self.people[reaction.authorId] ?? Accumulator(person: Person(id: reaction.authorId, name: self.name(reaction.authorId))))
                 reactor.reactions[reaction.key, default: 0] += 1
+                self.addMood(reaction.key, to: &reactor, day: day)
                 if reaction.authorId == item.authorId {
                     acc = reactor
                 } else {
@@ -567,10 +814,86 @@ public enum ShadowChatStats {
                 previous = entry
             }
 
+            // «Кто кого ждёт» (private chats): a turn is a run of messages of one
+            // person; the wait is the time from its last message to the
+            // other's next one.
+            typealias Wait = (long: Int, total: Int, longest: Int, longestAt: Int32, unanswered: Int)
+            typealias Turn = (author: Int64, first: Int32, last: Int32)
+            let noWait: Wait = (long: 0, total: 0, longest: 0, longestAt: 0, unanswered: 0)
+            var waits: [Int64: Wait] = [:]
+            if !self.isGroup {
+                var turns: [Turn] = []
+                for entry in self.order {
+                    if let lastTurn = turns.last, lastTurn.author == entry.authorId {
+                        turns[turns.count - 1].last = entry.timestamp
+                    } else {
+                        let turn: Turn = (author: entry.authorId, first: entry.timestamp, last: entry.timestamp)
+                        turns.append(turn)
+                    }
+                }
+                for (index, turn) in turns.enumerated() {
+                    var value = waits[turn.author] ?? noWait
+                    if index + 1 < turns.count {
+                        let wait = Int(turns[index + 1].first - turn.last)
+                        if wait > ShadowChatStats.unansweredAfter {
+                            value.unanswered += 1
+                        } else if wait >= ShadowChatStats.longWait {
+                            value.long += 1
+                            value.total += wait
+                        }
+                        if wait <= ShadowChatStats.longestWaitLimit && wait > value.longest {
+                            value.longest = wait
+                            value.longestAt = turn.last
+                        }
+                    } else if Int(self.to - turn.last) > ShadowChatStats.unansweredAfter {
+                        value.unanswered += 1
+                    }
+                    waits[turn.author] = value
+                }
+            }
+
+            // Words only one side of a private chat uses.
+            var uniqueWords: [Int64: [Count]] = [:]
+            if !self.isGroup, self.people.count == 2 {
+                let ids = Array(self.people.keys)
+                for id in ids {
+                    guard let mine = self.people[id], let theirs = self.people.first(where: { $0.key != id })?.value else {
+                        continue
+                    }
+                    let only = mine.words.filter { $0.value >= ShadowChatStats.uniqueWordMinimum && theirs.words[$0.key] == nil }
+                    uniqueWords[id] = ShadowChatStats.top(only, limit: 8)
+                }
+            }
+
             let (labels, bucket) = self.timelineBuckets()
+            var moodBuckets = [[String: Int]](repeating: [:], count: labels.count)
+            for (day, moods) in self.dayMoods {
+                if let index = bucket(day) {
+                    for (mood, count) in moods {
+                        moodBuckets[index][mood, default: 0] += count
+                    }
+                }
+            }
+            let moodTimeline = moodBuckets.map { counts -> String in
+                guard counts.values.reduce(0, +) >= 3, let best = ShadowChatStats.top(counts, limit: 1).first else {
+                    return ""
+                }
+                return best.key
+            }
+
             var result: [Person] = []
             for (_, acc) in self.people {
                 var person = acc.person
+                person.moods = ShadowChatStats.top(acc.moods, limit: Mood.allCases.count)
+                if !self.isGroup {
+                    person.uniqueWords = uniqueWords[person.id] ?? []
+                    let wait = waits[person.id] ?? noWait
+                    person.waitLongCount = wait.long
+                    person.waitTotalSeconds = wait.total
+                    person.waitLongest = wait.longest
+                    person.waitLongestAt = wait.longest > 0 ? wait.longestAt : nil
+                    person.unanswered = wait.unanswered
+                }
                 person.emoji = ShadowChatStats.top(acc.emoji, limit: 8)
                 person.topStickers = ShadowChatStats.top(acc.stickers, limit: 5, labels: acc.stickerLabels)
                 person.reactions = ShadowChatStats.top(acc.reactions, limit: 6)
@@ -619,7 +942,28 @@ public enum ShadowChatStats {
                 bestDay = DayCount(day: best.key, count: best.value)
             }
 
-            return Report(
+            // Records: the busiest clock hour joins the per-message ones.
+            if let busiest = self.hourSlots.max(by: { lhs, rhs in lhs.value != rhs.value ? lhs.value < rhs.value : lhs.key > rhs.key }), busiest.value > 1 {
+                self.record("hour", authorId: 0, value: busiest.value, timestamp: Int32(clamping: busiest.key * 3600 - Int64(self.clock.offset)))
+            }
+            let recordOrder = ["text", "voice", "round", "call", "hour"]
+            let records = recordOrder.compactMap { self.records[$0] }
+
+            var pairs: [ReplyPair] = []
+            for (key, count) in self.replyPairs {
+                let parts = key.split(separator: ":")
+                if parts.count == 2, let from = Int64(parts[0]), let to = Int64(parts[1]) {
+                    pairs.append(ReplyPair(from: from, to: to, count: count))
+                }
+            }
+            pairs.sort(by: { lhs, rhs in
+                if lhs.count != rhs.count {
+                    return lhs.count > rhs.count
+                }
+                return (lhs.from, lhs.to) < (rhs.from, rhs.to)
+            })
+
+            var report = Report(
                 version: Report.currentVersion,
                 accountPeerId: self.accountPeerId,
                 peerId: self.peerId,
@@ -647,7 +991,78 @@ public enum ShadowChatStats {
                 timeZoneOffset: self.clock.offset,
                 images: [:]
             )
+            report.records = records
+            report.typicalDay = self.typicalDay()
+            report.replyPairs = self.isGroup ? Array(pairs.prefix(20)) : nil
+            report.moodTimeline = moodTimeline
+            return report
         }
+
+        // Medians over the days (from 4:00) with at least one message.
+        private func typicalDay() -> TypicalDay? {
+            guard self.morningDays.count >= 2 else {
+                return nil
+            }
+            let shift = Int64(self.clock.offset) - 4 * 3600
+            func minuteOfMorningDay(_ timestamp: Int32) -> Int32 {
+                return Int32((Int64(timestamp) + shift).floorMod(86400) / 60)
+            }
+            let values = Array(self.morningDays.values)
+            let starts = values.map { minuteOfMorningDay($0.first) }
+            let ends = values.map { minuteOfMorningDay($0.last) }
+            let spans = values.map { Int32(($0.last - $0.first) / 60) }
+            let counts = values.map { Int32($0.count) }
+            let toClock: (Int) -> Int = { ($0 + 240) % 1440 }
+            let weekdayTotals = self.heatmap.map { $0.reduce(0, +) }
+            let busy = weekdayTotals.indices.max(by: { weekdayTotals[$0] != weekdayTotals[$1] ? weekdayTotals[$0] < weekdayTotals[$1] : $0 > $1 }) ?? 0
+            let quiet = weekdayTotals.indices.min(by: { weekdayTotals[$0] != weekdayTotals[$1] ? weekdayTotals[$0] < weekdayTotals[$1] : $0 < $1 }) ?? 0
+            return TypicalDay(
+                days: values.count,
+                messages: ShadowChatStats.median(counts) ?? 0,
+                startMinute: toClock(ShadowChatStats.median(starts) ?? 0),
+                endMinute: toClock(ShadowChatStats.median(ends) ?? 0),
+                spanMinutes: ShadowChatStats.median(spans) ?? 0,
+                busyWeekday: busy,
+                quietWeekday: quiet
+            )
+        }
+    }
+
+    // MARK: - Previous period, two weeks
+
+    public static func summary(_ report: Report) -> PeriodSummary {
+        let people = report.people.filter { $0.messages > 0 }.map { PersonCount(id: $0.id, messages: $0.messages) }
+        return PeriodSummary(
+            from: report.from,
+            to: report.to,
+            total: report.total,
+            daysWithMessages: report.daysWithMessages,
+            words: report.people.reduce(0) { $0 + $1.words },
+            voiceSeconds: report.people.reduce(0) { $0 + $1.voiceSeconds },
+            roundCount: report.people.reduce(0) { $0 + $1.roundCount },
+            stickers: report.people.reduce(0) { $0 + $1.stickers },
+            calls: report.people.reduce(0) { $0 + $1.calls },
+            callSeconds: report.people.reduce(0) { $0 + $1.callSeconds },
+            people: people
+        )
+    }
+
+    // Messages (not calls) per local day: the 7 days ending today and the 7
+    // before them.
+    public static func twoWeeks(items: [Item], now: Int32, clock: Clock) -> TwoWeeks {
+        let today = clock.day(now)
+        let firstDay = today - 6
+        var current = [Int](repeating: 0, count: 7)
+        var previous = [Int](repeating: 0, count: 7)
+        for item in items where item.kind != .call && item.timestamp <= now {
+            let day = clock.day(item.timestamp)
+            if day >= firstDay && day <= today {
+                current[Int(day - firstDay)] += 1
+            } else if day >= firstDay - 7 && day < firstDay {
+                previous[Int(day - firstDay + 7)] += 1
+            }
+        }
+        return TwoWeeks(firstDay: firstDay, current: current, previous: previous)
     }
 
     // MARK: - Anonymous copy

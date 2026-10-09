@@ -59,6 +59,39 @@ class ChatStatsContracts(unittest.TestCase):
             self.assertIn(action, page)
         self.assertIn("window.webkit.messageHandlers.shadow.postMessage", page)
 
+    def test_new_metrics_wiring(self):
+        """1.11.0: previous period, slides, monthly reminder."""
+        collect = read("TelegramCore/Sources/AyuGram/ShadowChatStatsCollect.swift")
+        self.assertIn("let since = period.scanStart(now: now)", collect)
+        self.assertIn("if let previousStart = period.previousStart(now: now) {", collect)
+        self.assertIn("report.twoWeeks = ShadowChatStats.twoWeeks(", collect)
+        self.assertIn("item.replyToAuthorId = replied?.author?.id.toInt64()", collect)
+        ui = read("SettingsUI/Sources/ShadowChatStatsUI.swift")
+        self.assertIn("let since = period.scanStart(now: now)", ui)
+        self.assertIn('case "shareSlide":', ui)
+        self.assertIn("ShadowChatStatsPage.Options(mode: .card, dark: true, slide: index)", ui)
+        self.assertIn('title: "Напоминать раз в месяц"', ui)
+        reminder = read("SettingsUI/Sources/ShadowChatStatsReminder.swift")
+        self.assertIn('static let url = "shadow://stats"', reminder)
+        self.assertIn('content.userInfo = ["url": url]', reminder)
+        self.assertIn("date.day = 1", reminder)
+        # AppDelegate opens userInfo["url"] of a tapped notification.
+        app = read("TelegramUI/Sources/AppDelegate.swift")
+        self.assertIn('response.notification.request.content.userInfo["url"] as? String', app)
+        page = read("TelegramCore/Sources/AyuGram/ShadowChatStatsPage.swift")
+        for name in ("comparisonBox()", "typicalDayBox(", "recordsBox()", "waitBox()", "moodBox(", "uniqueWordsBox()", "replyPairsBox()", "twoWeeksBox()", "function slides()", "storyOpen()"):
+            self.assertIn(name, page)
+        self.assertIn("post({ action: 'shareSlide', index: story.index })", page)
+        self.assertIn("CONFIG.slide != null ? slideHTML(CONFIG.slide)", page)
+        stats = read("TelegramCore/Sources/AyuGram/ShadowChatStats.swift")
+        # New fields are optional: reports saved by older versions still decode.
+        report = stats[stats.index("public struct Report"):stats.index("public var me: Person?")]
+        for field in ("records", "typicalDay", "replyPairs", "moodTimeline", "previous", "twoWeeks"):
+            self.assertRegex(report, rf"public var {field}: [^\n]*\?\n")
+        person = stats[stats.index("public struct Person"):stats.index("public init(id: Int64, name: String)")]
+        for field in ("moods", "uniqueWords", "waitLongCount", "waitTotalSeconds", "waitLongest", "waitLongestAt", "unanswered"):
+            self.assertRegex(person, rf"public var {field}: [^\n]*\?\n")
+
     def test_foundation_suite(self):
         script = (ROOT / "build-system/ci/test_shadow_foundation.py").read_text(encoding="utf-8")
         self.assertIn("Tests/ShadowSettings/ChatStatsTests.swift", script)

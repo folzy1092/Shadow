@@ -214,7 +214,9 @@ public enum ShadowChatStatsCollect {
     // MARK: - Report
 
     public static func report(account: Account, peerId: PeerId, period: ShadowChatStats.Period, now: Int32) -> Signal<ShadowChatStats.Report?, NoError> {
-        let since = period.start(now: now)
+        // Scanned from here: the previous period and two weeks at least (1.11.0).
+        let since = period.scanStart(now: now)
+        let periodStart = period.start(now: now)
         let accountPeerId = account.peerId
         let counted: Signal<(ShadowChatStats.Report, [Int64: (TelegramMediaFile, MessageReference)])?, NoError> = account.postbox.transaction { transaction -> (ShadowChatStats.Report, [Int64: (TelegramMediaFile, MessageReference)])? in
             guard let peer = transaction.getPeer(peerId) else {
@@ -255,7 +257,12 @@ public enum ShadowChatStatsCollect {
                     if let author = message.author, names[author.id.toInt64()] == nil {
                         names[author.id.toInt64()] = author.debugDisplayTitle
                     }
-                    if let item = ShadowChatStatsCollect.item(message: message, accountPeerId: accountPeerId, chatPeerId: chatPeerId, isGroup: isGroup) {
+                    if var item = ShadowChatStatsCollect.item(message: message, accountPeerId: accountPeerId, chatPeerId: chatPeerId, isGroup: isGroup) {
+                        // «Кто кому отвечает»: the author of the replied message.
+                        if isGroup, item.isReply, let reply = message.attributes.first(where: { $0 is ReplyMessageAttribute }) as? ReplyMessageAttribute {
+                            let replied = message.associatedMessages[reply.messageId] ?? transaction.getMessage(reply.messageId)
+                            item.replyToAuthorId = replied?.author?.id.toInt64()
+                        }
                         items.append(item)
                         if item.kind == .sticker, let file = message.media.first(where: { $0 is TelegramMediaFile }) as? TelegramMediaFile, stickerFiles[file.fileId.id] == nil {
                             stickerFiles[file.fileId.id] = (file, MessageReference(message))
@@ -266,12 +273,22 @@ public enum ShadowChatStatsCollect {
             }
 
             let countDeleted = currentAyuGramSettings(transaction: transaction).chatStatsCountDeleted
-            let builder = ShadowChatStats.Builder(accountPeerId: accountPeerId.toInt64(), peerId: peerId.toInt64(), title: title, isGroup: isGroup, period: period, from: since, to: now, names: names)
-            for item in items where countDeleted || !item.isDeleted {
+            let counted = items.filter { countDeleted || !$0.isDeleted }
+            let builder = ShadowChatStats.Builder(accountPeerId: accountPeerId.toInt64(), peerId: peerId.toInt64(), title: title, isGroup: isGroup, period: period, from: periodStart, to: now, names: names)
+            for item in counted {
                 builder.add(item)
             }
             var report = builder.build(generated: now)
             report.countsDeleted = countDeleted
+            // The previous period of the same length, counted the same way.
+            if let previousStart = period.previousStart(now: now) {
+                let previous = ShadowChatStats.Builder(accountPeerId: accountPeerId.toInt64(), peerId: peerId.toInt64(), title: title, isGroup: isGroup, period: period, from: previousStart, to: periodStart - 1, names: names)
+                for item in counted where item.timestamp < periodStart {
+                    previous.add(item)
+                }
+                report.previous = ShadowChatStats.summary(previous.build(generated: now))
+            }
+            report.twoWeeks = ShadowChatStats.twoWeeks(items: counted, now: now, clock: .current)
             return (report, stickerFiles)
         }
 

@@ -136,6 +136,91 @@ struct ChatStatsTests {
         check(card.contains("\"card\":\"other\"") && card.contains("\"hideName\":true") && card.contains("\"theme\":\"dark\""), "Card config")
         let fileName = ShadowChatStatsPage.fileName(hostile)
         check(fileName.hasPrefix("Итоги — ") && fileName.hasSuffix(".html") && !fileName.dropLast(5).contains("<") && !fileName.contains("/"), "File name without forbidden characters")
+        // 1.11.0: records. Longest text is his "Привет 😂 го завтра" (18
+        // characters; the forwarded "ок" does not count), the busiest hour is
+        // day 1 10:00 with 3 messages.
+        func rec(_ kind: String) -> S.Record? { return report.records?.first(where: { $0.kind == kind }) }
+        check(rec("text") == S.Record(kind: "text", authorId: friend, value: 18, timestamp: monday + 10 * 3600), "Longest message")
+        check(rec("voice")?.value == 45 && rec("round")?.value == 20 && rec("call") == S.Record(kind: "call", authorId: friend, value: 300, timestamp: monday + 2 * 86400 + 12 * 3600), "Longest voice, round, call")
+        check(rec("hour") == S.Record(kind: "hour", authorId: 0, value: 3, timestamp: monday + 10 * 3600), "Busiest hour")
+        check(report.records?.map { $0.kind } == ["text", "voice", "round", "call", "hour"], "Record order")
+
+        // Typical day (days from 4:00): day 1 10:00–10:12 (3), day 2 9:00 to
+        // 02:00 next night (3), day 3 13:00 (1).
+        check(report.typicalDay == S.TypicalDay(days: 3, messages: 3, startMinute: 600, endMinute: 780, spanMinutes: 12, busyWeekday: 0, quietWeekday: 3), "Typical day medians")
+
+        // Who waits: his long waits 22 h 48 min and 10 h, one turn left
+        // unanswered at the end; my long waits 7 h and 11 h.
+        check(mine.waitLongCount == 2 && mine.waitTotalSeconds == 64800 && mine.unanswered == 0, "My waits")
+        check(mine.waitLongest == 39600 && mine.waitLongestAt == monday + 2 * 86400 + 2 * 3600, "My longest wait")
+        check(his.waitLongCount == 2 && his.waitTotalSeconds == 118080 && his.unanswered == 1 && his.waitLongest == 82080, "His waits")
+
+        // Mood: his 😂 and his 👍 reaction; too few emoji for a timeline mood.
+        check(his.moods == [S.Count(key: "joy", count: 1), S.Count(key: "laugh", count: 1)] && mine.moods == [], "Moods")
+        check(report.moodTimeline?.count == 7 && report.moodTimeline?.allSatisfy({ $0.isEmpty }) == true, "Mood timeline needs 3 emoji")
+        check(S.mood(of: "👍🏽") == .joy && S.mood(of: "❤️") == .love && S.mood(of: "❤") == .love && S.mood(of: "a") == nil, "Mood of an emoji")
+
+        // Words only one side uses (at least twice, never by the other).
+        let words = S.Builder(accountPeerId: me, peerId: friend, title: "Матвей", isGroup: false, period: .week, from: monday, to: monday + 86400, names: [me: "Я", friend: "Матвей"], clock: utc)
+        words.add(S.Item(timestamp: monday + 10, authorId: me, text: "жиза жиза ок"))
+        words.add(S.Item(timestamp: monday + 20, authorId: friend, text: "ок ок норм"))
+        let wordsReport = words.build(generated: monday + 100)
+        check(wordsReport.me?.uniqueWords == [S.Count(key: "жиза", count: 2)] && wordsReport.other?.uniqueWords == [], "Unique words")
+
+        // Groups: who replies to whom; replies to oneself do not count.
+        let replies = S.Builder(accountPeerId: me, peerId: -5, title: "Группа", isGroup: true, period: .week, from: monday, to: monday + 86400, names: [me: "Я", 3: "Глеб"], clock: utc)
+        replies.add(S.Item(timestamp: monday + 10, authorId: 3, text: "a", isReply: true, replyToAuthorId: me))
+        replies.add(S.Item(timestamp: monday + 20, authorId: 3, text: "b", isReply: true, replyToAuthorId: me))
+        replies.add(S.Item(timestamp: monday + 30, authorId: me, text: "c", isReply: true, replyToAuthorId: 3))
+        replies.add(S.Item(timestamp: monday + 40, authorId: 4, text: "d", isReply: true, replyToAuthorId: 4))
+        let repliesReport = replies.build(generated: monday + 100)
+        check(repliesReport.replyPairs == [S.ReplyPair(from: 3, to: me, count: 2), S.ReplyPair(from: me, to: 3, count: 1)], "Reply pairs")
+        check(report.replyPairs == nil && repliesReport.me?.waitLongCount == nil, "No reply pairs in private chats, no waits in groups")
+
+        // Previous period summary and the two weeks.
+        let summary = S.summary(report)
+        check(summary.total == 7 && summary.daysWithMessages == 3 && summary.calls == 1 && summary.callSeconds == 300 && summary.people.count == 2, "Summary")
+        let now = monday + 20 * 86400 + 12 * 3600
+        let two = S.twoWeeks(items: [
+            S.Item(timestamp: now, authorId: me),
+            S.Item(timestamp: now - 7 * 86400, authorId: me),
+            S.Item(timestamp: now - 13 * 86400, authorId: friend),
+            S.Item(timestamp: now - 14 * 86400, authorId: friend),
+            S.Item(timestamp: now - 3600, authorId: friend, kind: .call, duration: 10)
+        ], now: now, clock: utc)
+        check(two.firstDay == utc.day(now) - 6 && two.current == [0, 0, 0, 0, 0, 0, 1] && two.previous == [1, 0, 0, 0, 0, 0, 1], "Two weeks, calls and older days left out")
+        check(S.Period.week.scanStart(now: now) == now - 14 * 86400 && S.Period.month.scanStart(now: now) == now - 60 * 86400, "Scan covers the previous period")
+        check(S.Period.year.previousStart(now: now) == now - 730 * 86400 && S.Period.fiveYears.previousStart(now: now) == nil && S.Period.fiveYears.scanStart(now: now) == S.Period.fiveYears.start(now: now), "No previous period for 5 years")
+
+        // A report saved by 1.10 (no new fields) still opens.
+        var old = report
+        old.records = nil
+        old.typicalDay = nil
+        old.replyPairs = nil
+        old.moodTimeline = nil
+        old.previous = nil
+        old.twoWeeks = nil
+        old.people = old.people.map { person in
+            var person = person
+            person.moods = nil
+            person.uniqueWords = nil
+            person.waitLongCount = nil
+            person.waitTotalSeconds = nil
+            person.waitLongest = nil
+            person.waitLongestAt = nil
+            person.unanswered = nil
+            return person
+        }
+        if let data = try? JSONEncoder().encode(old) {
+            let text = String(decoding: data, as: UTF8.self)
+            check(!text.contains("\"records\"") && !text.contains("\"moods\""), "Old report has no new keys")
+            check((try? JSONDecoder().decode(S.Report.self, from: data)) == old, "Old report decodes")
+        } else {
+            check(false, "Old report encodes")
+        }
+        let slide = ShadowChatStatsPage.render(report, options: ShadowChatStatsPage.Options(mode: .card, dark: true, slide: 3))
+        check(slide.contains("\"slide\":3") && slide.contains("function slides()"), "Slide card config")
+
         print("Shadow chat stats: \(count) checks passed")
     }
 }

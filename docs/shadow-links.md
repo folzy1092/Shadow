@@ -249,3 +249,4 @@
 | `shadow://profile/spoof-dc-value` | Подменённый DC |
 | `shadow://profile/spoof-phone-value` | Подменённый номер |
 | `shadow://stats/count-deleted` | Итоги: считать удалённые |
+| `shadow://stats/monthly-reminder` | Итоги: напоминать раз в месяц (только открыть) |
