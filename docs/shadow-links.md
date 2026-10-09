@@ -123,6 +123,8 @@
 | `shadow://customization/hide-ads` | Скрыть рекламу в каналах |
 | `shadow://customization/unlimited-pins` | Безлимитные закрепы |
 | `shadow://customization/compact-chats` | Компактный список чатов |
+| `shadow://customization/chat-banners` | Фоны чатов |
+| `shadow://customization/chat-banners-photos` | Фоны чатов: фото и чаты (только открыть) |
 | `shadow://customization/voice-transcription` | Расшифровка голосовых на устройстве |
 | `shadow://customization/voice-time` | Время на голосовых, `?value=0…5`: по умолчанию, текущий таймкод, прошло / всего, осталось / всего, прошло и процент, процент |
 | `shadow://customization/voice-time-round` | Время на голосовых: также на кружках |

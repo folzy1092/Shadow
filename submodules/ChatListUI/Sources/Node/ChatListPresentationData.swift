@@ -15,8 +15,11 @@ public final class ChatListPresentationData {
     public let preferUsernameForBots: Bool
     // Shadow: compact rows (smaller avatar, one line of preview).
     public let compactChatList: Bool
+    // Shadow: «Фоны чатов» — the photo behind this row (only on a row's own
+    // copy made by ShadowChatBannerBatch; the list-wide value is always nil).
+    public let shadowChatBanner: ShadowChatBannerAppearance?
     
-    public init(theme: PresentationTheme, fontSize: PresentationFontSize, strings: PresentationStrings, dateTimeFormat: PresentationDateTimeFormat, nameSortOrder: PresentationPersonNameOrder, nameDisplayOrder: PresentationPersonNameOrder, disableAnimations: Bool, preferUsernameForNonContacts: Bool = false, preferUsernameForBots: Bool = false, compactChatList: Bool = false) {
+    public init(theme: PresentationTheme, fontSize: PresentationFontSize, strings: PresentationStrings, dateTimeFormat: PresentationDateTimeFormat, nameSortOrder: PresentationPersonNameOrder, nameDisplayOrder: PresentationPersonNameOrder, disableAnimations: Bool, preferUsernameForNonContacts: Bool = false, preferUsernameForBots: Bool = false, compactChatList: Bool = false, shadowChatBanner: ShadowChatBannerAppearance? = nil) {
         self.theme = theme
         self.fontSize = fontSize
         self.strings = strings
@@ -27,6 +30,11 @@ public final class ChatListPresentationData {
         self.preferUsernameForNonContacts = preferUsernameForNonContacts
         self.preferUsernameForBots = preferUsernameForBots
         self.compactChatList = compactChatList
+        self.shadowChatBanner = shadowChatBanner
+    }
+
+    public func withShadowChatBanner(_ banner: ShadowChatBannerAppearance?, theme: PresentationTheme) -> ChatListPresentationData {
+        return ChatListPresentationData(theme: theme, fontSize: self.fontSize, strings: self.strings, dateTimeFormat: self.dateTimeFormat, nameSortOrder: self.nameSortOrder, nameDisplayOrder: self.nameDisplayOrder, disableAnimations: self.disableAnimations, preferUsernameForNonContacts: self.preferUsernameForNonContacts, preferUsernameForBots: self.preferUsernameForBots, compactChatList: self.compactChatList, shadowChatBanner: banner)
     }
 
     public func withPreferUsernameForNonContacts(_ enabled: Bool, botsEnabled: Bool) -> ChatListPresentationData {

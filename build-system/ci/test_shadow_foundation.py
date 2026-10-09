@@ -35,6 +35,7 @@ def main():
         ('ad-filter', 'submodules/TelegramCore/Sources/AyuGram/ShadowAdFilter.swift', 'Tests/ShadowSettings/AdFilterTests.swift'),
         ('feed', 'submodules/TelegramCore/Sources/AyuGram/ShadowFeed.swift', 'Tests/ShadowSettings/FeedTests.swift'),
         ('chat-streak', 'submodules/TelegramCore/Sources/AyuGram/ShadowChatStreak.swift', 'Tests/ShadowSettings/ChatStreakTests.swift'),
+        ('chat-banners', 'submodules/TelegramCore/Sources/AyuGram/ShadowChatBanners.swift', 'Tests/ShadowSettings/ChatBannersTests.swift'),
         ('chat-stats', ('submodules/TelegramCore/Sources/AyuGram/ShadowChatStats.swift', 'submodules/TelegramCore/Sources/AyuGram/ShadowChatStatsPage.swift'), 'Tests/ShadowSettings/ChatStatsTests.swift'),
         ('links', 'submodules/TelegramCore/Sources/AyuGram/ShadowLinks.swift', 'Tests/ShadowSettings/LinksTests.swift'),
         ('header-buttons', 'submodules/TelegramCore/Sources/AyuGram/ShadowHeaderButtons.swift', 'Tests/ShadowSettings/HeaderButtonsTests.swift'),

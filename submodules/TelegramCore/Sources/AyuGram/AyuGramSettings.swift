@@ -160,6 +160,8 @@ public struct AyuGramSettings: Codable, Equatable {
     public var monochromeSettingsIcons: Bool = false
     // Compact chat list rows: smaller avatar, one line of preview.
     public var compactChatList: Bool = false
+    // «Фоны чатов»: a photo behind chosen chats' rows (ShadowChatBanners.swift).
+    public var chatBannersEnabled: Bool = false
     // Local history of when contacts were online (ShadowOnlineHistory).
     public var onlineHistory: Bool = false
     // Keep a local copy of viewed stories (ShadowStoryArchive).
@@ -460,6 +462,7 @@ public struct AyuGramSettings: Codable, Equatable {
         settings.adFilterForwarded = false
         settings.showChatStreak = false
         settings.feedEnabled = false
+        settings.chatBannersEnabled = false
         return settings
     }
 
@@ -739,6 +742,7 @@ public struct AyuGramSettings: Codable, Equatable {
         }
         self.monochromeSettingsIcons = ((try container.decodeIfPresent(Int32.self, forKey: "monochromeSettingsIcons")) ?? 0) != 0
         self.compactChatList = ((try container.decodeIfPresent(Int32.self, forKey: "compactChatList")) ?? 0) != 0
+        self.chatBannersEnabled = ((try container.decodeIfPresent(Int32.self, forKey: "chatBannersEnabled")) ?? 0) != 0
         self.onlineHistory = ((try container.decodeIfPresent(Int32.self, forKey: "onlineHistory")) ?? 0) != 0
         self.saveViewedStories = ((try container.decodeIfPresent(Int32.self, forKey: "saveViewedStories")) ?? 0) != 0
         self.settingsIconBackgroundColor = ((try container.decodeIfPresent(Int32.self, forKey: "settingsIconBackgroundColor")) ?? 0x1C1C1E) & 0xFFFFFF
@@ -851,6 +855,7 @@ public struct AyuGramSettings: Codable, Equatable {
         try container.encode(self.headerButtons, forKey: "headerButtonsV1")
         try container.encode((self.monochromeSettingsIcons ? 1 : 0) as Int32, forKey: "monochromeSettingsIcons")
         try container.encode((self.compactChatList ? 1 : 0) as Int32, forKey: "compactChatList")
+        try container.encode((self.chatBannersEnabled ? 1 : 0) as Int32, forKey: "chatBannersEnabled")
         try container.encode((self.onlineHistory ? 1 : 0) as Int32, forKey: "onlineHistory")
         try container.encode((self.saveViewedStories ? 1 : 0) as Int32, forKey: "saveViewedStories")
         try container.encode(self.settingsIconBackgroundColor, forKey: "settingsIconBackgroundColor")

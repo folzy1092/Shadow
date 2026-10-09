@@ -821,6 +821,7 @@ private final class AyuCustomizationArguments {
     var selectVoiceTimeFormat: () -> Void = {}
     var selectReplyTimecodeMode: () -> Void = {}
     var openChatVoiceSpeeds: () -> Void = {}
+    var openChatBanners: () -> Void = {}
     var updateSetting: (@escaping (inout AyuGramSettings) -> Void) -> Void = { _ in }
     // true: background color, false: glyph color.
     var pickSettingsIconColor: (Bool) -> Void = { _ in }
@@ -986,6 +987,8 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
     case hideSponsoredMessages(Bool)
     case unlimitedPinnedChats(Bool)
     case compactChatList(Bool)
+    case chatBanners(Bool)
+    case chatBannersList(Int)
     case localVoiceTranscription(Bool)
     case voiceTimeFormat(Int32)
     case voiceTimeRoundVideos(Bool)
@@ -1053,7 +1056,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .appearanceHeader, .showMessageSeconds, .editedIndicatorAsPencil, .editedIndicatorText, .deletedIndicatorText, .regularEmojiFirst, .doubleTapToEdit, .showExactLastSeen, .showExactLastSeenSeconds, .wideChannelPosts, .showExactViewCounts, .showForwardCount, .appearanceFooter:
             return AyuCustomizationSection.appearance.rawValue
         case .headerButtons: return AyuCustomizationSection.chats.rawValue
-        case .chatsHeader, .hideAllChatsFolder, .hideStoriesBar, .hideGiftButton, .hideGreetingSticker, .hidePremiumBadges, .hideSponsoredMessages, .unlimitedPinnedChats, .compactChatList, .chatsFooter:
+        case .chatsHeader, .hideAllChatsFolder, .hideStoriesBar, .hideGiftButton, .hideGreetingSticker, .hidePremiumBadges, .hideSponsoredMessages, .unlimitedPinnedChats, .compactChatList, .chatBanners, .chatBannersList, .chatsFooter:
             return AyuCustomizationSection.chats.rawValue
         case .bottomBarHeader, .foldersAtBottom, .hideBottomSearch, .compactBottomBar, .bottomBarScrollMode, .bottomBarFooter:
             return AyuCustomizationSection.bottomBar.rawValue
@@ -1114,6 +1117,8 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .unlimitedPinnedChats: return 104
         case .settingsIconsHeader: return 105
         case .compactChatList: return 110
+        case .chatBanners: return 122
+        case .chatBannersList: return 123
         case .monochromeSettingsIcons: return 106
         case .settingsIconBackground: return 107
         case .settingsIconGlyph: return 108
@@ -1175,6 +1180,8 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .unlimitedPinnedChats: return (12, 5)
         case .compactChatList: return (12, 6)
         case .hideGreetingSticker: return (12, 7)
+        case .chatBanners: return (12, 8)
+        case .chatBannersList: return (12, 9)
         case .cameraTileCompact: return (28, 1)
         case .localVoiceTranscription: return (28, 2)
         case .voiceTimeFormat: return (28, 3)
@@ -1335,6 +1342,12 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
             return ItemListSwitchItem(presentationData: presentationData, title: "Компактный список чатов", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 arguments.updateSetting { $0.compactChatList = value }
             })
+        case let .chatBanners(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Фоны чатов", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.updateSetting { $0.chatBannersEnabled = value }
+            })
+        case let .chatBannersList(count):
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Фото и чаты", label: count == 0 ? "Нет" : "\(count) фото", labelStyle: .detailText, sectionId: self.section, style: .blocks, action: arguments.openChatBanners)
         case let .localVoiceTranscription(value):
             return ItemListSwitchItem(presentationData: presentationData, title: "Расшифровка голосовых на устройстве", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 arguments.updateSetting { $0.localVoiceTranscription = value }
@@ -1362,7 +1375,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case let .chatVoiceSpeedList(count):
             return ItemListDisclosureItem(presentationData: presentationData, title: "Чаты со своей скоростью", label: count == 0 ? "Нет" : "\(count)", labelStyle: .detailText, sectionId: self.section, style: .blocks, action: arguments.openChatVoiceSpeeds)
         case .chatsFooter:
-            return ItemListTextItem(presentationData: presentationData, text: .plain("«Скрыть папку «Все чаты»» убирает эту вкладку, остальные папки работают. «Скрыть истории» убирает ленту историй над списком чатов. «Скрыть кнопку подарка» убирает подарок из поля ввода. «Скрыть приветственный стикер» убирает карточку со стикером в пустом чате с незнакомым. «Скрыть значки Premium» убирает звёздочку и эмодзи-статус рядом с именами (галочки верификации остаются). «Скрыть рекламу в каналах» — спонсорские сообщения не загружаются; применяется при следующем открытии канала. «Безлимитные закрепы» снимают ограничение на закрепы в списке чатов, архиве, папках, «Избранном» и темах форумов; всё сверх лимита Telegram хранится только на этом устройстве."), sectionId: self.section)
+            return ItemListTextItem(presentationData: presentationData, text: .plain("«Скрыть папку «Все чаты»» убирает эту вкладку, остальные папки работают. «Скрыть истории» убирает ленту историй над списком чатов. «Скрыть кнопку подарка» убирает подарок из поля ввода. «Скрыть приветственный стикер» убирает карточку со стикером в пустом чате с незнакомым. «Скрыть значки Premium» убирает звёздочку и эмодзи-статус рядом с именами (галочки верификации остаются). «Скрыть рекламу в каналах» — спонсорские сообщения не загружаются; применяется при следующем открытии канала. «Безлимитные закрепы» снимают ограничение на закрепы в списке чатов, архиве, папках, «Избранном» и темах форумов; всё сверх лимита Telegram хранится только на этом устройстве. «Фоны чатов» ставят своё фото под строку выбранных чатов в списке (все папки и архив); фото хранятся только на этом устройстве."), sectionId: self.section)
         case .bottomBarHeader:
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "НИЖНИЙ ИНТЕРФЕЙС", sectionId: self.section)
         case let .foldersAtBottom(value):
@@ -1483,7 +1496,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
     }
 }
 
-private func ayuCustomizationEntries(settings: AyuGramSettings, chatVoiceSpeedCount: Int = 0) -> [AyuCustomizationEntry] {
+private func ayuCustomizationEntries(settings: AyuGramSettings, chatVoiceSpeedCount: Int = 0, chatBannersCount: Int = 0) -> [AyuCustomizationEntry] {
     var entries: [AyuCustomizationEntry] = []
 
     entries.append(.buildInfo)
@@ -1526,6 +1539,10 @@ private func ayuCustomizationEntries(settings: AyuGramSettings, chatVoiceSpeedCo
     entries.append(.unlimitedPinnedChats(settings.unlimitedPinnedChats))
     entries.append(.compactChatList(settings.compactChatList))
     entries.append(.hideGreetingSticker(settings.hideGreetingSticker))
+    entries.append(.chatBanners(settings.chatBannersEnabled))
+    if settings.chatBannersEnabled {
+        entries.append(.chatBannersList(chatBannersCount))
+    }
     entries.append(.chatsFooter)
 
     entries.append(.bottomBarHeader)
@@ -1753,15 +1770,17 @@ func ayuCustomizationController(context: AccountContext, focus: ShadowSettingsSe
         }
     )
 
+    let chatBannersCount: Signal<Int, NoError> = shadowChatBannersCount(context: context)
     let signal = combineLatest(queue: .mainQueue(),
         context.sharedContext.presentationData,
         ayuGramSettings(postbox: context.account.postbox),
-        shadowChatVoiceSpeedCount(context: context)
+        shadowChatVoiceSpeedCount(context: context),
+        chatBannersCount
     )
     |> deliverOnMainQueue
-    |> map { presentationData, settings, chatVoiceSpeedCount -> (ItemListControllerState, (ItemListNodeState, Any)) in
+    |> map { presentationData, settings, chatVoiceSpeedCount, chatBannersCount -> (ItemListControllerState, (ItemListNodeState, Any)) in
         let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text(part?.title ?? "Кастомизация"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
-        let allEntries = ayuCustomizationEntries(settings: settings, chatVoiceSpeedCount: chatVoiceSpeedCount)
+        let allEntries = ayuCustomizationEntries(settings: settings, chatVoiceSpeedCount: chatVoiceSpeedCount, chatBannersCount: chatBannersCount)
         let entries = part.map { part in allEntries.filter { part.contains($0.section) } } ?? allEntries
         linkRows.stableIds = entries.map { $0.stableId }
         focusedIndex = shadowSettingsFocusIndex(stableIds: entries.map { $0.stableId }, target: focus)
@@ -1865,6 +1884,9 @@ func ayuCustomizationController(context: AccountContext, focus: ShadowSettingsSe
     arguments.openChatVoiceSpeeds = { [weak controller] in
         controller?.push(shadowChatVoiceSpeedController(context: context))
     }
+    arguments.openChatBanners = { [weak controller] in
+        controller?.push(shadowChatBannersController(context: context))
+    }
     arguments.selectReplyTimecodeMode = {
         let data = context.sharedContext.currentPresentationData.with { $0 }
         let sheet = ActionSheetController(presentationData: data)
@@ -1892,7 +1914,7 @@ func ayuCustomizationController(context: AccountContext, focus: ShadowSettingsSe
 
 // Retained delegate for the banner photo picker: returns the picked image (or
 // nil on cancel) and always dismisses the picker.
-private final class BannerImagePickerDelegate: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+final class BannerImagePickerDelegate: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
     private let completion: (UIImage?) -> Void
     // Self-retain cycle held only for the picker's lifetime (see retainSelf()).
     private var selfReference: BannerImagePickerDelegate?

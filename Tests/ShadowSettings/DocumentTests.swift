@@ -77,6 +77,8 @@ struct DocumentTests {
         check(ads.settings["adFilterForwarded"] == .bool(true) && ads.settings["adHideCompletely"] == .bool(false), "Ad hiding is portable")
         let streak = try ShadowSettingsDocument.decode(ShadowSettingsDocument(settings: ["showChatStreak": .bool(false)]).encoded())
         check(streak.settings["showChatStreak"] == .bool(false), "Chat streak toggle is portable")
+        let banners = try ShadowSettingsDocument.decode(ShadowSettingsDocument(settings: ["chatBannersEnabled": .bool(true)]).encoded())
+        check(banners.settings["chatBannersEnabled"] == .bool(true), "Chat banners toggle is portable")
         let feed = try ShadowSettingsDocument.decode(ShadowSettingsDocument(settings: ["feedEnabled": .bool(true), "feedPosition": .integer(2), "feedAutoplay": .bool(false)]).encoded())
         check(feed.settings["feedEnabled"] == .bool(true) && feed.settings["feedPosition"] == .integer(2) && feed.settings["feedAutoplay"] == .bool(false), "Feed settings are portable")
         expectFailure("Unsupported feed position") { _ = try ShadowSettingsDocument(settings: ["feedPosition": .integer(4)]) }

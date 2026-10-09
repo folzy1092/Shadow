@@ -389,6 +389,8 @@ public struct ChatListNodeState: Equatable {
 }
 
 private func mappedInsertEntries(context: AccountContext, nodeInteraction: ChatListNodeInteraction, location: ChatListControllerLocation, isPremium: Bool, filterData: ChatListItemFilterData?, chatListFilters: [ChatListFilter]?, mode: ChatListNodeMode, isPeerEnabled: ((EnginePeer) -> Bool)?, entries: [ChatListNodeViewTransitionInsertEntry], presentationData: ChatListPresentationData) -> [ListViewInsertItem] {
+    // Shadow: «Фоны чатов» — rows of chats with a photo get their own presentation data.
+    let shadowBanners = ShadowChatBannerBatch(context: context, location: location)
     return entries.map { entry -> ListViewInsertItem in
         switch entry.entry {
         case .HeaderEntry:
@@ -462,7 +464,7 @@ private func mappedInsertEntries(context: AccountContext, nodeInteraction: ChatL
             switch mode {
                 case .chatList:
                     return ListViewInsertItem(index: entry.index, previousIndex: entry.previousIndex, item: ChatListItem(
-                        presentationData: presentationData,
+                        presentationData: shadowBanners.presentationData(presentationData, peerId: peer.peerId),
                         context: context,
                         chatListLocation: location,
                         filterData: filterData,
@@ -802,6 +804,8 @@ private func mappedInsertEntries(context: AccountContext, nodeInteraction: ChatL
 }
 
 private func mappedUpdateEntries(context: AccountContext, nodeInteraction: ChatListNodeInteraction, location: ChatListControllerLocation, isPremium: Bool, filterData: ChatListItemFilterData?, chatListFilters: [ChatListFilter]?, mode: ChatListNodeMode, isPeerEnabled: ((EnginePeer) -> Bool)?, entries: [ChatListNodeViewTransitionUpdateEntry], presentationData: ChatListPresentationData) -> [ListViewUpdateItem] {
+    // Shadow: «Фоны чатов» — rows of chats with a photo get their own presentation data.
+    let shadowBanners = ShadowChatBannerBatch(context: context, location: location)
     return entries.map { entry -> ListViewUpdateItem in
         switch entry.entry {
             case let .PeerEntry(peerEntry):
@@ -830,7 +834,7 @@ private func mappedUpdateEntries(context: AccountContext, nodeInteraction: ChatL
                 switch mode {
                     case .chatList:
                         return ListViewUpdateItem(index: entry.index, previousIndex: entry.previousIndex, item: ChatListItem(
-                            presentationData: presentationData,
+                            presentationData: shadowBanners.presentationData(presentationData, peerId: peer.peerId),
                             context: context,
                             chatListLocation: location,
                             filterData: filterData,
@@ -1326,6 +1330,8 @@ public final class ChatListNode: ListViewImpl {
     private let shadowNamesDisposable = MetaDisposable()
     private var shadowChatLockObserver: NSObjectProtocol?
     private var shadowSpaceObserver: NSObjectProtocol?
+    private var shadowChatBannersObserver: NSObjectProtocol?
+    private let shadowChatBannersDisposable = MetaDisposable()
     private var activityStatusesDisposable: Disposable?
     
     private let scrollToTopOptionPromise = Promise<ChatListGlobalScrollOption>(.none)
@@ -3246,6 +3252,45 @@ public final class ChatListNode: ListViewImpl {
                 return state
             }
         })
+        // Shadow: «Фоны чатов» — a photo, its chats or settings changed, or the
+        // feature was switched: re-render the rows (ShadowChatBannerBatch decides
+        // each row's photo while mapping entries).
+        let shadowBannersBasePath = context.account.postbox.mediaBox.basePath
+        self.shadowChatBannersObserver = NotificationCenter.default.addObserver(forName: ShadowChatBannerStore.didChangeNotification, object: nil, queue: .main, using: { [weak self] notification in
+            guard let self else {
+                return
+            }
+            if let basePath = notification.userInfo?["basePath"] as? String, basePath != shadowBannersBasePath {
+                return
+            }
+            self.shadowRefreshChatBanners()
+        })
+        let shadowBannersEnabled: Signal<Bool, NoError> = ayuGramSettings(postbox: context.account.postbox)
+        |> map { settings -> Bool in
+            return settings.chatBannersEnabled
+        }
+        |> distinctUntilChanged
+        |> deliverOnMainQueue
+        var shadowBannersEnabledValue: Bool?
+        self.shadowChatBannersDisposable.set(shadowBannersEnabled.start(next: { [weak self] value in
+            // The first value is the current state: rows were mapped with it.
+            // ShadowChatBannerBatch reads the cached settings snapshot, which
+            // may be refreshed a moment after this signal: re-render after it.
+            if let previous = shadowBannersEnabledValue, previous != value {
+                Queue.mainQueue().after(0.2, {
+                    self?.shadowRefreshChatBanners()
+                })
+            }
+            shadowBannersEnabledValue = value
+        }))
+    }
+    
+    private func shadowRefreshChatBanners() {
+        self.updateState { state in
+            var state = state
+            state.presentationData = state.presentationData.withPreferUsernameForNonContacts(state.presentationData.preferUsernameForNonContacts, botsEnabled: state.presentationData.preferUsernameForBots)
+            return state
+        }
     }
     
     deinit {
@@ -3257,6 +3302,10 @@ public final class ChatListNode: ListViewImpl {
         if let shadowSpaceObserver = self.shadowSpaceObserver {
             NotificationCenter.default.removeObserver(shadowSpaceObserver)
         }
+        if let shadowChatBannersObserver = self.shadowChatBannersObserver {
+            NotificationCenter.default.removeObserver(shadowChatBannersObserver)
+        }
+        self.shadowChatBannersDisposable.dispose()
         self.activityStatusesDisposable?.dispose()
         self.updatedFilterDisposable.dispose()
         self.pollFilterUpdatesDisposable?.dispose()

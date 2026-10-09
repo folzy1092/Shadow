@@ -97,6 +97,7 @@ public enum ShadowSettingsTransfer {
         "chatVoiceSpeed": \.chatVoiceSpeed,
         "monochromeSettingsIcons": \.monochromeSettingsIcons,
         "compactChatList": \.compactChatList,
+        "chatBannersEnabled": \.chatBannersEnabled,
         "onlineHistory": \.onlineHistory,
         "saveViewedStories": \.saveViewedStories,
         "screenshotAnonymize": \.messageScreenshot.anonymize,

@@ -1383,6 +1383,11 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
     
     private let backgroundNode: ASDisplayNode
     private let highlightedBackgroundNode: ASDisplayNode
+    // Shadow: «Фоны чатов» — the row's photo and its dimming (ShadowChatBannerRendering.swift).
+    private var shadowBannerNode: ASDisplayNode?
+    private var shadowBannerDimNode: ASDisplayNode?
+    private weak var shadowBannerImage: UIImage?
+    private var shadowSeparatorTinted = false
     
     let contextContainer: ContextControllerSourceNode
     let mainContentContainerNode: ASDisplayNode
@@ -5560,6 +5565,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                     strongSelf.highlightedBackgroundNode.backgroundColor = highlightedBackgroundColor
                     let topNegativeInset: CGFloat = 0.0
                     strongSelf.highlightedBackgroundNode.frame = CGRect(origin: CGPoint(x: strongSelf.revealOffset, y: layoutOffset - separatorHeight - topNegativeInset), size: CGSize(width: layout.contentSize.width, height: layout.contentSize.height + separatorHeight + topNegativeInset))
+                    strongSelf.shadowUpdateChatBanner(item: item, size: CGSize(width: layout.contentSize.width, height: itemHeight), alpha: item.interaction.inlineNavigationLocation.flatMap { 1.0 - $0.progress } ?? 1.0, transition: transition)
                     transition.updateCornerRadius(node: strongSelf.highlightedBackgroundNode, cornerRadius: strongSelf.isRevealOptionsActive ? 26.0 : 0.0)
                     
                     if let peerPresence = peerPresence {
@@ -5709,6 +5715,61 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
 
         let highlightedBackgroundFrame = self.highlightedBackgroundNode.frame
         transition.updateFrame(node: self.highlightedBackgroundNode, frame: CGRect(origin: CGPoint(x: offset, y: highlightedBackgroundFrame.minY), size: highlightedBackgroundFrame.size))
+
+        // Shadow: the photo slides with the row, like the highlight.
+        if let shadowBannerNode = self.shadowBannerNode {
+            let bannerFrame = shadowBannerNode.frame
+            transition.updateFrame(node: shadowBannerNode, frame: CGRect(origin: CGPoint(x: offset, y: bannerFrame.minY), size: bannerFrame.size))
+        }
+    }
+
+    // Shadow: «Фоны чатов». The photo lies over the plain row background and
+    // under the separator, highlight and content; contentsRect picks the band
+    // of the photo for this row (aspect fill + the user's vertical position).
+    private func shadowUpdateChatBanner(item: ChatListItem, size: CGSize, alpha: CGFloat, transition: ContainedViewLayoutTransition) {
+        guard let banner = item.presentationData.shadowChatBanner, size.width > 0.0, size.height > 0.0 else {
+            if let shadowBannerNode = self.shadowBannerNode {
+                shadowBannerNode.removeFromSupernode()
+                self.shadowBannerNode = nil
+                self.shadowBannerDimNode = nil
+                self.shadowBannerImage = nil
+            }
+            if self.shadowSeparatorTinted {
+                self.shadowSeparatorTinted = false
+                self.separatorNode.backgroundColor = item.presentationData.theme.chatList.itemSeparatorColor
+            }
+            return
+        }
+        let bannerNode: ASDisplayNode
+        let dimNode: ASDisplayNode
+        if let currentNode = self.shadowBannerNode, let currentDimNode = self.shadowBannerDimNode {
+            bannerNode = currentNode
+            dimNode = currentDimNode
+        } else {
+            bannerNode = ASDisplayNode()
+            bannerNode.isLayerBacked = true
+            bannerNode.displaysAsynchronously = false
+            bannerNode.clipsToBounds = true
+            dimNode = ASDisplayNode()
+            dimNode.isLayerBacked = true
+            dimNode.displaysAsynchronously = false
+            bannerNode.addSubnode(dimNode)
+            self.insertSubnode(bannerNode, aboveSubnode: self.backgroundNode)
+            self.shadowBannerNode = bannerNode
+            self.shadowBannerDimNode = dimNode
+        }
+        if self.shadowBannerImage !== banner.image {
+            self.shadowBannerImage = banner.image
+            bannerNode.contents = banner.image.cgImage
+        }
+        bannerNode.layer.contentsRect = banner.contentsRect(size: size)
+        transition.updateFrame(node: bannerNode, frame: CGRect(origin: CGPoint(x: self.revealOffset, y: 0.0), size: size))
+        dimNode.backgroundColor = UIColor(white: 0.0, alpha: banner.dim)
+        transition.updateFrame(node: dimNode, frame: CGRect(origin: CGPoint(), size: size))
+        transition.updateAlpha(node: bannerNode, alpha: alpha)
+        // A barely visible separator between photo rows.
+        self.shadowSeparatorTinted = true
+        self.separatorNode.backgroundColor = UIColor(white: banner.lightText ? 1.0 : 0.0, alpha: 0.08)
     }
 
     override public func revealOptionsActiveStateUpdated(isActive: Bool, transition: ContainedViewLayoutTransition) {

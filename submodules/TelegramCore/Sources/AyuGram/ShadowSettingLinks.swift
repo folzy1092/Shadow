@@ -277,6 +277,8 @@ public enum ShadowSettingLinks {
         ShadowSettingLink(screen: "customization", slug: "hide-ads", entryId: 102, key: "hideSponsoredMessages", title: "Скрыть рекламу в каналах"),
         ShadowSettingLink(screen: "customization", slug: "unlimited-pins", entryId: 104, key: "unlimitedPinnedChats", title: "Безлимитные закрепы", icon: "pin"),
         ShadowSettingLink(screen: "customization", slug: "compact-chats", entryId: 110, key: "compactChatList", title: "Компактный список чатов"),
+        ShadowSettingLink(screen: "customization", slug: "chat-banners", entryId: 122, key: "chatBannersEnabled", title: "Фоны чатов", icon: "photo", since: "1.10.0"),
+        ShadowSettingLink(screen: "customization", slug: "chat-banners-photos", entryId: 123, key: nil, title: "Фоны чатов: фото и чаты", parentEntryId: 122, since: "1.10.0"),
         ShadowSettingLink(screen: "customization", slug: "hide-greeting", entryId: 116, key: "hideGreetingSticker", title: "Скрыть приветственный стикер"),
         ShadowSettingLink(screen: "customization", slug: "voice-transcription", entryId: 103, key: "localVoiceTranscription", title: "Расшифровка голосовых на устройстве", icon: "waveform"),
         ShadowSettingLink(screen: "customization", slug: "voice-time", entryId: 112, key: "voiceTimeFormat", title: "Время на голосовых", icon: "timer", choices: ShadowVoiceTime.formats.map { ShadowVoiceTime.title($0) }),

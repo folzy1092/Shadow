@@ -571,6 +571,41 @@ UI-проекция настроек выбирается в `TelegramRootContro
   правее профиля. Вариант D (отдельный круг как поиск) требует правки
   `TabBarComponent` — не сделан.
 
+## 5l. Фоны чатов (бета, 1.10.0)
+
+- Своё фото под строкой выбранных чатов в списке (все папки и архив; не
+  форумы и не «Сохранённые» чаты). Тумблер `chatBannersEnabled`
+  («Кастомизация → Чаты и звонки → Фоны чатов», ссылка
+  `shadow://customization/chat-banners`), экран «Фото и чаты» —
+  `SettingsUI/ShadowChatBannersController.swift`: список фото, «Загрузить
+  фото», редактор (превью строки «Folzy · Привет! Как тебе фон? 👀» с
+  ползунками «Затемнение» и «Положение фото», фото двигается пальцем по
+  превью; запись в хранилище — когда палец отпущен), выбор чатов
+  (`makeContactMultiselectionController`, как папки), «Удалить фото».
+- Модель (Foundation, тест `ChatBannersTests.swift`):
+  `TelegramCore/AyuGram/ShadowChatBanners.swift` — у фото свои чаты,
+  затемнение 0…0.9, положение 0…1; чат может быть только у одного фото
+  (`setPeers` забирает его у других); видимая полоса
+  (`visibleRect`, как aspect fill) и выбор цвета текста по яркости полосы
+  после затемнения (`prefersLightText`, порог 0.58).
+- Хранилище: `ShadowChatBannerStore.swift`, на аккаунт, только на
+  устройстве: папка `shadow-chat-banners/` внутри `ayu-saved-media`
+  (`index.json` + `<id>.jpg`, фото ужимается до 2000 px). Изменение →
+  `ShadowChatBannerStore.didChangeNotification`. В синхронизацию аккаунтов и
+  экспорт настроек входит только тумблер (фото привязаны к чатам аккаунта).
+- Список чатов: `ChatListNode.mappedInsertEntries/mappedUpdateEntries`
+  создают `ShadowChatBannerBatch` и строке с фото дают свой
+  `ChatListPresentationData` (`shadowChatBanner` + тема с инвертированными
+  цветами текста, если фото светлое/тёмное — `ShadowChatBannerThemes`, не
+  больше двух производных тем на базовую). Смена фото/тумблера пересобирает
+  строки (новый экземпляр presentation data, как у замков). Рисует
+  `ChatListItemNode.shadowUpdateChatBanner`: фото над `backgroundNode`, под
+  разделителем и подсветкой нажатия, едет вместе со свайпом; разделитель
+  почти прозрачный. Картинки и профиль яркости кэширует
+  `ShadowChatBannerImageCache` (ImageIO, до 1400 px).
+- Не проверено на устройстве: кольца онлайна и звезды рисуются цветом фона
+  темы поверх фото.
+
 ## 5a. Замки чатов и второе пространство
 
 - Замки: `ShadowChatLock.swift` (хранилище), `TelegramUI/Sources/ShadowChatLockUI.swift`
