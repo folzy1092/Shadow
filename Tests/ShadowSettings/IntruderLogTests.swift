@@ -42,6 +42,16 @@ struct IntruderLogTests {
         }
         check(log.pending().count == 1, "Removed")
 
+        // 1.10.1: where the photo goes.
+        check(log.sendsToSaved && log.savesToGallery, "Both destinations on by default")
+        log.sendsToSaved = false
+        log.savesToGallery = false
+        check(!log.beginCapture(now: start.addingTimeInterval(1000)), "Nowhere to put a photo: no capture")
+        log.savesToGallery = true
+        check(log.beginCapture(now: start.addingTimeInterval(2000)), "Gallery only still captures")
+        log.endCapture()
+        check(ShadowIntruderLog.Reason(rawValue: "biometrics") == .biometrics, "Face ID reason parses from a file name")
+
         print("Shadow intruder log: \(count) checks passed")
     }
 }

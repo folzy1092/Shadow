@@ -252,9 +252,15 @@ public final class PasscodeEntryController: ViewController {
         
         self.hasOngoingBiometricsRequest = true
         
-        self.biometricsDisposable.set((LocalAuth.auth(reason: self.presentationData.strings.EnterPasscode_TouchId) |> deliverOnMainQueue).start(next: { [weak self] result, evaluatedPolicyDomainState in
+        self.biometricsDisposable.set((LocalAuth.authDetailed(reason: self.presentationData.strings.EnterPasscode_TouchId) |> deliverOnMainQueue).start(next: { [weak self] value in
+            let (result, evaluatedPolicyDomainState, biometryRejected) = value
             guard let strongSelf = self else {
                 return
+            }
+            // Shadow: Face ID / Touch ID did not recognize the face (not a
+            // cancel) — front-camera photo, like a wrong code (1.10.1).
+            if biometryRejected && strongSelf.applicationBindings.isMainApp {
+                ShadowIntruderCamera.captureIfEnabled(reason: .biometrics)
             }
             
             if #available(iOSApplicationExtension 9.0, iOS 9.0, *) {

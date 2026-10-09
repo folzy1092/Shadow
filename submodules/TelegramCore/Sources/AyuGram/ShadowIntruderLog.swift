@@ -14,6 +14,8 @@ public final class ShadowIntruderLog {
     public enum Reason: String, CaseIterable {
         case passcode
         case chatLock
+        // Face ID / Touch ID did not recognize the face (1.10.1).
+        case biometrics
 
         public var title: String {
             switch self {
@@ -21,6 +23,8 @@ public final class ShadowIntruderLog {
                 return "неверный код-пароль"
             case .chatLock:
                 return "неверный пароль замка чата"
+            case .biometrics:
+                return "Face ID / Touch ID не узнал лицо"
             }
         }
     }
@@ -39,6 +43,8 @@ public final class ShadowIntruderLog {
 
     private enum Key {
         static let enabled = "shadow.intruder.enabled.v1"
+        static let sendsToSaved = "shadow.intruder.sendsToSaved.v1"
+        static let savesToGallery = "shadow.intruder.savesToGallery.v1"
     }
 
     private let defaults: UserDefaults
@@ -61,10 +67,34 @@ public final class ShadowIntruderLog {
         }
     }
 
-    // True when a new photo should be taken now (enabled and not rate-limited).
+    // «В Избранное» (1.10.1): the photo waits in this log and is sent to Saved
+    // Messages after the next unlock, then removed here. On by default (the
+    // behaviour before the switch existed).
+    public var sendsToSaved: Bool {
+        get {
+            return (self.defaults.object(forKey: Key.sendsToSaved) as? Bool) ?? true
+        }
+        set {
+            self.defaults.set(newValue, forKey: Key.sendsToSaved)
+        }
+    }
+
+    // «В галерею» (1.10.1): the photo goes straight to the photo library and
+    // stays there. On by default (it was always saved when access was given).
+    public var savesToGallery: Bool {
+        get {
+            return (self.defaults.object(forKey: Key.savesToGallery) as? Bool) ?? true
+        }
+        set {
+            self.defaults.set(newValue, forKey: Key.savesToGallery)
+        }
+    }
+
+    // True when a new photo should be taken now (enabled, has somewhere to go
+    // and not rate-limited).
     public func beginCapture(now: Date = Date()) -> Bool {
         // Stock Telegram has no such camera: off in the Full disguise.
-        guard self.isEnabled, !ShadowDisguise.shared.isFull else {
+        guard self.isEnabled, self.sendsToSaved || self.savesToGallery, !ShadowDisguise.shared.isFull else {
             return false
         }
         self.lock.lock()

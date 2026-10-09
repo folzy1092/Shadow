@@ -632,6 +632,13 @@ UI-проекция настроек выбирается в `TelegramRootContro
 - Фото при неверном пароле: `ShadowIntruderLog` (очередь, `isCapturing`),
   `PasscodeUI/ShadowIntruderCamera` (снимок + галерея),
   `TelegramUI/ShadowIntruderDelivery` (отправка в «Избранное»).
+  С 1.10.1 снимок и после неудачного Face ID / Touch ID: `LocalAuth.authDetailed`
+  отдаёт `biometryRejected` (`LAError.authenticationFailed`; отмена и «Ввести
+  пароль» не считаются) — экран код-пароля и `ShadowChatLockUI.authenticate`,
+  причина `.biometrics`. Куда идёт снимок — два тумблера устройства
+  (UserDefaults, по умолчанию оба вкл): `sendsToSaved` (файл в очередь →
+  «Избранное», потом удаляется) и `savesToGallery` (сразу в Фото). Оба выкл —
+  `beginCapture` не снимает.
 - Экстренная защита (`SettingsUI/ShadowEmergencyController`):
   `ShadowDuress.swift` — код под принуждением (проверка в
   `PasscodeEntryController`) и настройки тревожного жеста. Сессия duress

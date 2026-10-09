@@ -72,10 +72,17 @@ public final class ShadowIntruderCamera: NSObject, AVCapturePhotoCaptureDelegate
             if let image = UIImage(data: data), let compressed = image.jpegData(compressionQuality: 0.7) {
                 jpeg = compressed
             }
-            // save() ends the capture whether or not the file was written.
+            // save()/endCapture() end the capture whether or not a file was written.
             self.didSave = true
-            ShadowIntruderLog.shared.save(jpeg: jpeg, reason: self.reason)
-            ShadowIntruderCamera.saveToPhotoLibrary(jpeg: jpeg)
+            let log = ShadowIntruderLog.shared
+            if log.savesToGallery {
+                ShadowIntruderCamera.saveToPhotoLibrary(jpeg: jpeg)
+            }
+            if log.sendsToSaved {
+                log.save(jpeg: jpeg, reason: self.reason)
+            } else {
+                log.endCapture()
+            }
         }
         self.queue.async {
             self.finish()

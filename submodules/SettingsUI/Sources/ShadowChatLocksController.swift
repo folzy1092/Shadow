@@ -25,6 +25,8 @@ private enum ShadowChatLocksEntry: ItemListNodeEntry {
     case passwordAction(hasPassword: Bool)
     case passwordFooter
     case intruderPhoto(Bool)
+    case intruderSaved(Bool)
+    case intruderGallery(Bool)
     case intruderFooter
     case chatsHeader
     case chat(index: Int, peerId: EnginePeer.Id, title: String)
@@ -42,7 +44,7 @@ private enum ShadowChatLocksEntry: ItemListNodeEntry {
         switch self {
         case .passwordAction, .passwordFooter:
             return ShadowChatLocksSection.password.rawValue
-        case .intruderPhoto, .intruderFooter:
+        case .intruderPhoto, .intruderSaved, .intruderGallery, .intruderFooter:
             return ShadowChatLocksSection.intruder.rawValue
         case .chatsHeader, .chat, .chatsEmpty, .chatsFooter:
             return ShadowChatLocksSection.chats.rawValue
@@ -71,11 +73,22 @@ private enum ShadowChatLocksEntry: ItemListNodeEntry {
         case .resetFooter: return 10_008
         case .intruderPhoto: return 10_009
         case .intruderFooter: return 10_010
+        case .intruderSaved: return 10_011
+        case .intruderGallery: return 10_012
+        }
+    }
+
+    // Display order: the two destinations sit between the switch and its footer.
+    private var sortValue: Double {
+        switch self {
+        case .intruderSaved: return 10_009.3
+        case .intruderGallery: return 10_009.6
+        default: return Double(self.stableId)
         }
     }
 
     static func <(lhs: ShadowChatLocksEntry, rhs: ShadowChatLocksEntry) -> Bool {
-        return lhs.stableId < rhs.stableId
+        return lhs.sortValue < rhs.sortValue
     }
 
     func item(presentationData: ItemListPresentationData, arguments: Any) -> ListViewItem {
@@ -89,8 +102,16 @@ private enum ShadowChatLocksEntry: ItemListNodeEntry {
             return ItemListSwitchItem(presentationData: presentationData, title: "Фото при неверном пароле", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 arguments.setIntruderPhoto(value)
             })
+        case let .intruderSaved(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Отправлять в «Избранное»", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.setIntruderSaved(value)
+            })
+        case let .intruderGallery(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Сохранять в галерею", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.setIntruderGallery(value)
+            })
         case .intruderFooter:
-            return ItemListTextItem(presentationData: presentationData, text: .plain("Если кто-то ошибётся с паролем замка или код-паролем Telegram, фронтальная камера сделает снимок. Снимок сразу сохраняется в галерею, а после следующей разблокировки приходит вам в «Избранное» с временем и причиной. Face ID сам по себе снимок не делает — только неверный пароль."), sectionId: self.section)
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Фронтальная камера делает снимок, если Face ID / Touch ID не узнал лицо (отмена не считается) или кто-то ошибся с паролем замка или код-паролем Telegram. Неудачная попытка владельца тоже даёт снимок. «В Избранное» — снимок придёт после следующей разблокировки с временем и причиной и не останется на устройстве. «В галерею» — сохраняется в Фото сразу. Включены оба — и туда, и туда. Выключены оба — снимков нет."), sectionId: self.section)
         case .chatsHeader:
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "ЗАБЛОКИРОВАННЫЕ ЧАТЫ", sectionId: self.section)
         case let .chat(_, peerId, title):
@@ -128,6 +149,8 @@ private final class ShadowChatLocksArguments {
     let resetNow: () -> Void
     let cancelReset: () -> Void
     var setIntruderPhoto: (Bool) -> Void = { _ in }
+    var setIntruderSaved: (Bool) -> Void = { _ in }
+    var setIntruderGallery: (Bool) -> Void = { _ in }
     var setHidesPreview: (Bool) -> Void = { _ in }
 
     init(changePassword: @escaping () -> Void, unlock: @escaping (EnginePeer.Id) -> Void, reset: @escaping () -> Void, resetNow: @escaping () -> Void, cancelReset: @escaping () -> Void) {
@@ -242,11 +265,28 @@ func shadowChatLocksController(context: AccountContext, focus: ShadowSettingsSea
                 }
                 ShadowIntruderCamera.requestPhotoLibraryAccess(completion: { photosGranted in
                     if !photosGranted {
-                        ShadowChatLockPasswordPrompt.showMessage(context: context, title: "Нет доступа к фото", message: "Снимки будут приходить только в «Избранное». Чтобы они сразу сохранялись в галерею, разрешите Telegram добавлять фото в Настройках iOS.")
+                        ShadowChatLockPasswordPrompt.showMessage(context: context, title: "Нет доступа к фото", message: "В галерею снимки не попадут, пока вы не разрешите Telegram добавлять фото в Настройках iOS.")
                     }
                 })
             }
         })
+    }
+
+    arguments.setIntruderSaved = { value in
+        ShadowIntruderLog.shared.sendsToSaved = value
+        bump()
+    }
+
+    arguments.setIntruderGallery = { value in
+        ShadowIntruderLog.shared.savesToGallery = value
+        bump()
+        if value && !ShadowIntruderCamera.canSaveToPhotoLibrary {
+            ShadowIntruderCamera.requestPhotoLibraryAccess(completion: { granted in
+                if !granted {
+                    ShadowChatLockPasswordPrompt.showMessage(context: context, title: "Нет доступа к фото", message: "Чтобы снимки сохранялись в галерею, разрешите Telegram добавлять фото в Настройках iOS.")
+                }
+            })
+        }
     }
 
     let lockedPeers: Signal<[(EnginePeer.Id, String)], NoError> = revision.get()
@@ -295,6 +335,10 @@ func shadowChatLocksController(context: AccountContext, focus: ShadowSettingsSea
         }
         entries.append(.resetFooter)
         entries.append(.intruderPhoto(ShadowIntruderLog.shared.isEnabled))
+        if ShadowIntruderLog.shared.isEnabled {
+            entries.append(.intruderSaved(ShadowIntruderLog.shared.sendsToSaved))
+            entries.append(.intruderGallery(ShadowIntruderLog.shared.savesToGallery))
+        }
         entries.append(.intruderFooter)
         linkRows.stableIds = entries.map { $0.stableId }
         focusedIndex = shadowSettingsFocusIndex(stableIds: entries.map { $0.stableId }, target: focus)

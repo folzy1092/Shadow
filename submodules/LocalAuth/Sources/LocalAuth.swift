@@ -141,6 +141,29 @@ public struct LocalAuth {
         }
     }
     
+    // Shadow: like auth(reason:), but also tells whether the biometrics did not
+    // recognize the user (LAError.authenticationFailed) — as opposed to a
+    // cancel, the password fallback or biometrics being unavailable.
+    public static func authDetailed(reason: String) -> Signal<(success: Bool, domainState: Data?, biometryRejected: Bool), NoError> {
+        return Signal { subscriber in
+            let context = LAContext()
+            let policy = LAPolicy(rawValue: Int(kLAPolicyDeviceOwnerAuthenticationWithBiometrics))!
+            if LAContext().canEvaluatePolicy(policy, error: nil) {
+                context.evaluatePolicy(policy, localizedReason: reason, reply: { result, error in
+                    let rejected = !result && (error as? LAError)?.code == .authenticationFailed
+                    subscriber.putNext((result, context.evaluatedPolicyDomainState, rejected))
+                    subscriber.putCompletion()
+                })
+            } else {
+                subscriber.putNext((false, nil, false))
+                subscriber.putCompletion()
+            }
+            return ActionDisposable {
+                context.invalidate()
+            }
+        }
+    }
+
     private static func bundleSeedId() -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword as String,

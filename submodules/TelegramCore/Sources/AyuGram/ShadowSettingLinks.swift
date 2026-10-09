@@ -356,6 +356,8 @@ public enum ShadowSettingLinks {
         // Защитные: ссылка только открывает
         ShadowSettingLink(screen: "locks", slug: "hide-preview", entryId: 10_002, key: nil, title: "Прятать последнее сообщение", isProtected: true),
         ShadowSettingLink(screen: "locks", slug: "intruder-photo", entryId: 10_009, key: nil, title: "Фото при неверном пароле", isProtected: true),
+        ShadowSettingLink(screen: "locks", slug: "intruder-saved", entryId: 10_011, key: nil, title: "Фото злоумышленника: в «Избранное»", isProtected: true, parentEntryId: 10_009, since: "1.10.1"),
+        ShadowSettingLink(screen: "locks", slug: "intruder-gallery", entryId: 10_012, key: nil, title: "Фото злоумышленника: в галерею", isProtected: true, parentEntryId: 10_009, since: "1.10.1"),
         ShadowSettingLink(screen: "space", slug: "exclusive", entryId: 8, key: nil, title: "Во втором — только его чаты", isProtected: true)
     ]
 }

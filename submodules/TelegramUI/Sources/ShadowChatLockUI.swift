@@ -78,11 +78,15 @@ enum ShadowChatLockUI {
             })
         }
         if LocalAuth.biometricAuthentication != nil {
-            let _ = (LocalAuth.auth(reason: reason)
-            |> deliverOnMainQueue).startStandalone(next: { result, _ in
-                if result {
+            let _ = (LocalAuth.authDetailed(reason: reason)
+            |> deliverOnMainQueue).startStandalone(next: { value in
+                if value.success {
                     completion(true)
                 } else {
+                    // Shadow: the face was not recognized (not a cancel) — photo (1.10.1).
+                    if value.biometryRejected {
+                        ShadowIntruderCamera.captureIfEnabled(reason: .biometrics)
+                    }
                     passwordFallback()
                 }
             })

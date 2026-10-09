@@ -71,6 +71,22 @@ class ChatLockContracts(unittest.TestCase):
         app = read("TelegramUI/Sources/ApplicationContext.swift")
         self.assertIn("ShadowIntruderDelivery.deliverPending(context: self.context)", app)
 
+    def test_intruder_photo_on_rejected_biometrics(self):
+        # 1.10.1: a face Face ID / Touch ID did not recognize (not a cancel).
+        auth = read("LocalAuth/Sources/LocalAuth.swift")
+        self.assertIn("(error as? LAError)?.code == .authenticationFailed", auth)
+        entry = read("PasscodeUI/Sources/PasscodeEntryController.swift")
+        self.assertIn("if biometryRejected && strongSelf.applicationBindings.isMainApp {", entry)
+        self.assertIn("ShadowIntruderCamera.captureIfEnabled(reason: .biometrics)", entry)
+        ui = read("TelegramUI/Sources/ShadowChatLockUI.swift")
+        self.assertIn("if value.biometryRejected {", ui)
+        camera = read("PasscodeUI/Sources/ShadowIntruderCamera.swift")
+        self.assertIn("if log.savesToGallery {", camera)
+        self.assertIn("if log.sendsToSaved {", camera)
+        screen = read("SettingsUI/Sources/ShadowChatLocksController.swift")
+        self.assertIn('title: "Отправлять в «Избранное»"', screen)
+        self.assertIn('title: "Сохранять в галерею"', screen)
+
     def test_unlocking_requires_authentication(self):
         ui = read("TelegramUI/Sources/ShadowChatLockUI.swift")
         unlock = ui.split("static func unlockChatPermanently", 1)[1].split("\n    }\n", 1)[0]
