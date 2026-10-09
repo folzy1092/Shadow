@@ -216,10 +216,11 @@ public func shadowChatBannersController(context: AccountContext) -> ViewControll
     |> map { presentationData, index -> (ItemListControllerState, (ItemListNodeState, Any)) in
         var entries: [ShadowChatBannersEntry] = [.info]
         for (i, banner) in index.banners.enumerated() {
-            var thumbnail = thumbnails[banner.id]
+            let thumbnailKey = banner.id + (banner.mirrored ? "|m" : "")
+            var thumbnail = thumbnails[thumbnailKey]
             if thumbnail == nil, let image = ShadowChatBannerImageCache.shared.image(path: ShadowChatBannerStore.shared.imagePath(basePath: basePath, id: banner.id)) {
-                let made = shadowChatBannerThumbnail(image.image)
-                thumbnails[banner.id] = made
+                let made = shadowChatBannerThumbnail(image.image(mirrored: banner.mirrored))
+                thumbnails[thumbnailKey] = made
                 thumbnail = made
             }
             entries.append(.photo(index: i, id: banner.id, thumbnail: thumbnail, chats: banner.peerIds.count))
@@ -250,6 +251,7 @@ private final class ShadowChatBannerEditorArguments {
     let commit: (Double, Double) -> Void
     let chooseChats: () -> Void
     let delete: () -> Void
+    var setMirrored: (Bool) -> Void = { _ in }
 
     init(context: AccountContext, commit: @escaping (Double, Double) -> Void, chooseChats: @escaping () -> Void, delete: @escaping () -> Void) {
         self.context = context
@@ -261,13 +263,14 @@ private final class ShadowChatBannerEditorArguments {
 
 private enum ShadowChatBannerEditorEntry: ItemListNodeEntry {
     case preview(image: ShadowChatBannerImage, banner: ShadowChatBanner, peer: EnginePeer?)
+    case mirrored(Bool)
     case chats(count: Int)
     case chatsFooter(String)
     case delete
 
     var section: ItemListSectionId {
         switch self {
-        case .preview: return 0
+        case .preview, .mirrored: return 0
         case .chats, .chatsFooter: return 1
         case .delete: return 2
         }
@@ -279,6 +282,17 @@ private enum ShadowChatBannerEditorEntry: ItemListNodeEntry {
         case .chats: return 1
         case .chatsFooter: return 2
         case .delete: return 3
+        case .mirrored: return 4
+        }
+    }
+
+    private var sortIndex: Int {
+        switch self {
+        case .preview: return 0
+        case .mirrored: return 1
+        case .chats: return 2
+        case .chatsFooter: return 3
+        case .delete: return 4
         }
     }
 
@@ -290,6 +304,8 @@ private enum ShadowChatBannerEditorEntry: ItemListNodeEntry {
             } else {
                 return false
             }
+        case let .mirrored(value):
+            if case let .mirrored(rhsValue) = rhs { return value == rhsValue } else { return false }
         case let .chats(count):
             if case let .chats(rhsCount) = rhs { return count == rhsCount } else { return false }
         case let .chatsFooter(text):
@@ -300,7 +316,7 @@ private enum ShadowChatBannerEditorEntry: ItemListNodeEntry {
     }
 
     static func <(lhs: ShadowChatBannerEditorEntry, rhs: ShadowChatBannerEditorEntry) -> Bool {
-        return lhs.stableId < rhs.stableId
+        return lhs.sortIndex < rhs.sortIndex
     }
 
     func item(presentationData: ItemListPresentationData, arguments: Any) -> ListViewItem {
@@ -308,6 +324,10 @@ private enum ShadowChatBannerEditorEntry: ItemListNodeEntry {
         switch self {
         case let .preview(image, banner, peer):
             return ShadowChatBannerPreviewItem(presentationData: presentationData, context: arguments.context, image: image, banner: banner, peer: peer, sectionId: self.section, commit: arguments.commit)
+        case let .mirrored(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Отразить по горизонтали", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.setMirrored(value)
+            })
         case let .chats(count):
             return ItemListDisclosureItem(presentationData: presentationData, title: "Чаты с этим фоном", label: count == 0 ? "Выбрать" : shadowChatBannerChatsLabel(count), labelStyle: .detailText, sectionId: self.section, style: .blocks, action: {
                 arguments.chooseChats()
@@ -387,6 +407,14 @@ func shadowChatBannerEditorController(context: AccountContext, bannerId: String)
         presentImpl?(sheet)
     })
 
+    arguments.setMirrored = { value in
+        guard var banner = ShadowChatBannerStore.shared.index(basePath: basePath).banner(id: bannerId), banner.mirrored != value else {
+            return
+        }
+        banner.mirrored = value
+        ShadowChatBannerStore.shared.update(basePath: basePath, banner: banner)
+    }
+
     let accountPeer: Signal<EnginePeer?, NoError> = context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: context.account.peerId))
 
     let chatNames: Signal<(ShadowChatBannersIndex, [String]), NoError> = shadowChatBannersIndex(context: context)
@@ -414,6 +442,7 @@ func shadowChatBannerEditorController(context: AccountContext, bannerId: String)
         var entries: [ShadowChatBannerEditorEntry] = []
         if let banner = index.banner(id: bannerId), let image = ShadowChatBannerImageCache.shared.image(path: ShadowChatBannerStore.shared.imagePath(basePath: basePath, id: bannerId)) {
             entries.append(.preview(image: image, banner: banner, peer: accountPeer))
+            entries.append(.mirrored(banner.mirrored))
             entries.append(.chats(count: banner.peerIds.count))
             entries.append(.chatsFooter(names.isEmpty ? "Выберите чаты, под строкой которых будет это фото." : names.joined(separator: ", ")))
             entries.append(.delete)
@@ -650,8 +679,8 @@ private final class ShadowChatBannerPreviewItemNode: ListViewItemNode, ItemListI
         self.offsetTitleLabel.alpha = movable ? 1.0 : 0.5
         self.hintLabel.isHidden = !movable
 
-        if previous?.image !== item.image {
-            self.photoLayer.contents = item.image.image.cgImage
+        if previous?.image !== item.image || previous?.banner.mirrored != item.banner.mirrored {
+            self.photoLayer.contents = item.image.image(mirrored: item.banner.mirrored).cgImage
         }
         let peerId = item.peer?.id
         if let peer = item.peer, self.avatarPeerId != peerId {

@@ -584,7 +584,8 @@ UI-проекция настроек выбирается в `TelegramRootContro
   (`makeContactMultiselectionController`, как папки), «Удалить фото».
 - Модель (Foundation, тест `ChatBannersTests.swift`):
   `TelegramCore/AyuGram/ShadowChatBanners.swift` — у фото свои чаты,
-  затемнение 0…0.9, положение 0…1; чат может быть только у одного фото
+  затемнение 0…0.9, положение 0…1, `mirrored` (1.10.1, отражение по
+  горизонтали — `ShadowChatBannerImage.image(mirrored:)`); чат может быть только у одного фото
   (`setPeers` забирает его у других); видимая полоса
   (`visibleRect`, как aspect fill) и выбор цвета текста по яркости полосы
   после затемнения (`prefersLightText`, порог 0.58).

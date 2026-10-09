@@ -48,11 +48,41 @@ public final class ShadowChatBannerImage {
     public let image: UIImage
     public let aspect: Double
     public let profile: [Double]
+    private let lock = NSLock()
+    private var mirroredValue: UIImage?
 
     init(image: UIImage, aspect: Double, profile: [Double]) {
         self.image = image
         self.aspect = aspect
         self.profile = profile
+    }
+
+    // The photo mirrored left-to-right (drawn once, on first use). The
+    // brightness profile is per row, so mirroring does not change it.
+    public func image(mirrored: Bool) -> UIImage {
+        guard mirrored else {
+            return self.image
+        }
+        self.lock.lock()
+        defer { self.lock.unlock() }
+        if let mirroredValue = self.mirroredValue {
+            return mirroredValue
+        }
+        var result = self.image
+        if let cgImage = self.image.cgImage {
+            let width = cgImage.width
+            let height = cgImage.height
+            if let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.noneSkipFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue) {
+                context.translateBy(x: CGFloat(width), y: 0.0)
+                context.scaleBy(x: -1.0, y: 1.0)
+                context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+                if let flipped = context.makeImage() {
+                    result = UIImage(cgImage: flipped)
+                }
+            }
+        }
+        self.mirroredValue = result
+        return result
     }
 
     // Brightness under the text of a row of `rowAspect` with these settings.
@@ -295,7 +325,7 @@ final class ShadowChatBannerBatch {
             return nil
         }
         let lightText = image.prefersLightText(rowAspect: ShadowChatBannerRows.estimatedRowAspect(compact: compact), offset: banner.offset, dim: banner.dim)
-        let appearance = ShadowChatBannerAppearance(id: banner.id, image: image.image, imageAspect: image.aspect, dim: CGFloat(banner.dim), offset: banner.offset, lightText: lightText)
+        let appearance = ShadowChatBannerAppearance(id: banner.id, image: image.image(mirrored: banner.mirrored), imageAspect: image.aspect, dim: CGFloat(banner.dim), offset: banner.offset, lightText: lightText)
         self.appearances[key] = appearance
         return appearance
     }

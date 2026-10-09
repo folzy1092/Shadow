@@ -22,17 +22,21 @@ public struct ShadowChatBanner: Codable, Equatable {
     public var offset: Double
     public var peerIds: [Int64]
     public var created: Double
+    // Mirrored left-to-right (1.10.1): moves what is on the left of the photo
+    // out from under the avatar.
+    public var mirrored: Bool
 
-    public init(id: String, dim: Double = ShadowChatBanners.defaultDim, offset: Double = 0.5, peerIds: [Int64] = [], created: Double = 0.0) {
+    public init(id: String, dim: Double = ShadowChatBanners.defaultDim, offset: Double = 0.5, peerIds: [Int64] = [], created: Double = 0.0, mirrored: Bool = false) {
         self.id = id
         self.dim = ShadowChatBanners.clampDim(dim)
         self.offset = ShadowChatBanners.clampOffset(offset)
         self.peerIds = peerIds
         self.created = created
+        self.mirrored = mirrored
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, dim, offset, peerIds, created
+        case id, dim, offset, peerIds, created, mirrored
     }
 
     public init(from decoder: Decoder) throws {
@@ -42,6 +46,7 @@ public struct ShadowChatBanner: Codable, Equatable {
         self.offset = ShadowChatBanners.clampOffset((try? container.decodeIfPresent(Double.self, forKey: .offset)) ?? 0.5)
         self.peerIds = (try? container.decodeIfPresent([Int64].self, forKey: .peerIds)) ?? []
         self.created = (try? container.decodeIfPresent(Double.self, forKey: .created)) ?? 0.0
+        self.mirrored = (try? container.decodeIfPresent(Bool.self, forKey: .mirrored)) ?? false
     }
 }
 
