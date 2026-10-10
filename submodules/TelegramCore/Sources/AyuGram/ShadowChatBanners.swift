@@ -6,6 +6,16 @@ import Foundation
 // (like a cover: the visible band slides up and down the photo). A chat has at
 // most one photo: binding it to another photo moves it.
 //
+// One photo can be set on «Все чаты» (1.11.1): every chat without its own photo
+// gets it, also chats that appear later, except its `excludedPeerIds`. Chats
+// bound to other photos keep theirs. The chats such a photo had before keep
+// their binding in `peerIds` (unused while «Все чаты» is on) and get it back
+// when it is switched off.
+//
+// «Узор» (`pattern`, 1.11.1) is for seamless pictures: the photo is scaled to
+// the row width and repeated top to bottom, fixed to the list, so rows of any
+// height continue it without seams.
+//
 // Storage is per account, on the device only, next to the other fork images
 // (AyuSavedMedia directory) in `shadow-chat-banners/`: `index.json` plus one
 // `<id>.jpg` per photo. Nothing is sent anywhere.
@@ -25,18 +35,27 @@ public struct ShadowChatBanner: Codable, Equatable {
     // Mirrored left-to-right (1.10.1): moves what is on the left of the photo
     // out from under the avatar.
     public var mirrored: Bool
+    // «Все чаты» (1.11.1): at most one photo of the index has it.
+    public var allChats: Bool
+    // Chats without any photo while `allChats` is on.
+    public var excludedPeerIds: [Int64]
+    // «Узор (без стыков)» (1.11.1).
+    public var pattern: Bool
 
-    public init(id: String, dim: Double = ShadowChatBanners.defaultDim, offset: Double = 0.5, peerIds: [Int64] = [], created: Double = 0.0, mirrored: Bool = false) {
+    public init(id: String, dim: Double = ShadowChatBanners.defaultDim, offset: Double = 0.5, peerIds: [Int64] = [], created: Double = 0.0, mirrored: Bool = false, allChats: Bool = false, excludedPeerIds: [Int64] = [], pattern: Bool = false) {
         self.id = id
         self.dim = ShadowChatBanners.clampDim(dim)
         self.offset = ShadowChatBanners.clampOffset(offset)
         self.peerIds = peerIds
         self.created = created
         self.mirrored = mirrored
+        self.allChats = allChats
+        self.excludedPeerIds = excludedPeerIds
+        self.pattern = pattern
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, dim, offset, peerIds, created, mirrored
+        case id, dim, offset, peerIds, created, mirrored, allChats, excludedPeerIds, pattern
     }
 
     public init(from decoder: Decoder) throws {
@@ -47,6 +66,9 @@ public struct ShadowChatBanner: Codable, Equatable {
         self.peerIds = (try? container.decodeIfPresent([Int64].self, forKey: .peerIds)) ?? []
         self.created = (try? container.decodeIfPresent(Double.self, forKey: .created)) ?? 0.0
         self.mirrored = (try? container.decodeIfPresent(Bool.self, forKey: .mirrored)) ?? false
+        self.allChats = (try? container.decodeIfPresent(Bool.self, forKey: .allChats)) ?? false
+        self.excludedPeerIds = (try? container.decodeIfPresent([Int64].self, forKey: .excludedPeerIds)) ?? []
+        self.pattern = (try? container.decodeIfPresent(Bool.self, forKey: .pattern)) ?? false
     }
 }
 
@@ -61,27 +83,58 @@ public struct ShadowChatBannersIndex: Codable, Equatable {
         return self.banners.first(where: { $0.id == id })
     }
 
-    // The photo of a chat, if any.
+    // The photo set on «Все чаты», if any.
+    public var allChatsBanner: ShadowChatBanner? {
+        return self.banners.first(where: { $0.allChats })
+    }
+
+    // The photo of a chat, if any: its own photo first, then the «Все чаты»
+    // photo unless the chat is excluded from it. (The chat list resolves a
+    // whole batch with `ShadowChatBannerResolver`, same rules.)
     public func banner(peerId: Int64) -> ShadowChatBanner? {
-        return self.banners.first(where: { $0.peerIds.contains(peerId) })
+        if let banner = self.banners.first(where: { !$0.allChats && $0.peerIds.contains(peerId) }) {
+            return banner
+        }
+        if let banner = self.allChatsBanner, !banner.excludedPeerIds.contains(peerId) {
+            return banner
+        }
+        return nil
     }
 
     // Binds exactly `peerIds` to the photo: chats not in the list lose it,
-    // chats in the list are taken away from any other photo.
+    // chats in the list are taken away from any other photo. «Все чаты» and
+    // its exclusions are left as they are (a chat's own photo wins anyway).
     public mutating func setPeers(_ peerIds: [Int64], bannerId: String) {
         guard let index = self.banners.firstIndex(where: { $0.id == bannerId }) else {
             return
         }
-        var unique: [Int64] = []
-        var seen = Set<Int64>()
-        for peerId in peerIds where !seen.contains(peerId) {
-            seen.insert(peerId)
-            unique.append(peerId)
-        }
+        let unique = ShadowChatBanners.unique(peerIds)
+        let seen = Set(unique)
         for i in self.banners.indices where i != index {
             self.banners[i].peerIds.removeAll(where: { seen.contains($0) })
         }
         self.banners[index].peerIds = unique
+    }
+
+    // Switches «Все чаты» on the photo; switching it on takes it off any other
+    // photo (their exclusions are kept for when it comes back).
+    public mutating func setAllChats(_ value: Bool, bannerId: String) {
+        guard let index = self.banners.firstIndex(where: { $0.id == bannerId }) else {
+            return
+        }
+        if value {
+            for i in self.banners.indices where i != index {
+                self.banners[i].allChats = false
+            }
+        }
+        self.banners[index].allChats = value
+    }
+
+    public mutating func setExcluded(_ peerIds: [Int64], bannerId: String) {
+        guard let index = self.banners.firstIndex(where: { $0.id == bannerId }) else {
+            return
+        }
+        self.banners[index].excludedPeerIds = ShadowChatBanners.unique(peerIds)
     }
 
     public mutating func update(_ banner: ShadowChatBanner) {
@@ -90,6 +143,9 @@ public struct ShadowChatBannersIndex: Codable, Equatable {
             banner.dim = ShadowChatBanners.clampDim(banner.dim)
             banner.offset = ShadowChatBanners.clampOffset(banner.offset)
             self.banners[index] = banner
+            if banner.allChats {
+                self.setAllChats(true, bannerId: banner.id)
+            }
         }
     }
 
@@ -98,10 +154,53 @@ public struct ShadowChatBannersIndex: Codable, Equatable {
     }
 }
 
+// The photo of every chat of a batch of chat-list rows, built once from the
+// index (a dictionary instead of a search per row). Same rules as
+// `ShadowChatBannersIndex.banner(peerId:)`.
+public struct ShadowChatBannerResolver {
+    private let byPeer: [Int64: ShadowChatBanner]
+    private let allChats: ShadowChatBanner?
+    private let excluded: Set<Int64>
+
+    public init(index: ShadowChatBannersIndex) {
+        var byPeer: [Int64: ShadowChatBanner] = [:]
+        for banner in index.banners where !banner.allChats {
+            for peerId in banner.peerIds where byPeer[peerId] == nil {
+                byPeer[peerId] = banner
+            }
+        }
+        let allChats = index.allChatsBanner
+        self.byPeer = byPeer
+        self.allChats = allChats
+        self.excluded = Set(allChats?.excludedPeerIds ?? [])
+    }
+
+    public func banner(peerId: Int64) -> ShadowChatBanner? {
+        if let banner = self.byPeer[peerId] {
+            return banner
+        }
+        if let allChats = self.allChats, !self.excluded.contains(peerId) {
+            return allChats
+        }
+        return nil
+    }
+}
+
 public enum ShadowChatBanners {
     public static let defaultDim: Double = 0.45
     public static let maxDim: Double = 0.9
     public static let directoryName = "shadow-chat-banners"
+
+    // Duplicates dropped, order kept.
+    public static func unique(_ peerIds: [Int64]) -> [Int64] {
+        var result: [Int64] = []
+        var seen = Set<Int64>()
+        for peerId in peerIds where !seen.contains(peerId) {
+            seen.insert(peerId)
+            result.append(peerId)
+        }
+        return result
+    }
 
     public static func clampDim(_ value: Double) -> Double {
         if !value.isFinite {
@@ -160,6 +259,38 @@ public enum ShadowChatBanners {
             sum += profile[i]
         }
         return sum / Double(end - start)
+    }
+
+    // Average brightness of the whole photo: a «Узор» row can show any part of
+    // it.
+    public static func averageLuminance(profile: [Double]) -> Double {
+        guard !profile.isEmpty else {
+            return 0.0
+        }
+        return profile.reduce(0.0, +) / Double(profile.count)
+    }
+
+    // «Узор»: height of one copy of the photo scaled to the row width (at
+    // least 2 points, so a strip-like photo does not need hundreds of copies).
+    public static func patternTileHeight(imageAspect: Double, rowWidth: Double) -> Double {
+        guard imageAspect > 0.0, imageAspect.isFinite, rowWidth > 0.0, rowWidth.isFinite else {
+            return 0.0
+        }
+        return max(2.0, rowWidth / imageAspect)
+    }
+
+    // «Узор»: the copies start at the top of the list, so a row whose top is
+    // `rowY` points down the list draws its first copy at -shift and
+    // neighbouring rows continue each other. 0 <= shift < tileHeight.
+    public static func patternShift(rowY: Double, tileHeight: Double) -> Double {
+        guard tileHeight > 0.0, rowY.isFinite else {
+            return 0.0
+        }
+        var shift = rowY.truncatingRemainder(dividingBy: tileHeight)
+        if shift < 0.0 {
+            shift += tileHeight
+        }
+        return shift
     }
 
     // The brightness under the text once the black dimming layer is applied.

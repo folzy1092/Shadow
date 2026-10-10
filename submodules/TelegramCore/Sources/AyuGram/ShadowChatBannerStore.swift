@@ -87,6 +87,18 @@ public final class ShadowChatBannerStore {
         }
     }
 
+    public func setAllChats(basePath: String, bannerId: String, value: Bool) {
+        self.modify(basePath: basePath) { index in
+            index.setAllChats(value, bannerId: bannerId)
+        }
+    }
+
+    public func setExcluded(basePath: String, bannerId: String, peerIds: [Int64]) {
+        self.modify(basePath: basePath) { index in
+            index.setExcluded(peerIds, bannerId: bannerId)
+        }
+    }
+
     public func remove(basePath: String, id: String) {
         try? FileManager.default.removeItem(atPath: self.imagePath(basePath: basePath, id: id))
         self.modify(basePath: basePath) { index in

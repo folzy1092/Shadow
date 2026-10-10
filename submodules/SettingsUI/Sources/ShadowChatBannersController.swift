@@ -13,7 +13,9 @@ import LocalizedPeerData
 
 // Shadow: «Фоны чатов» settings (Кастомизация → Чаты и звонки → Фото и чаты).
 // The list of photos; a photo opens its editor: live preview of a chat row with
-// dimming and vertical position, the chats it is bound to, delete. Model and
+// dimming and vertical position (at the real row size, so it is cut like in the
+// list), «Узор», «Все чаты» with exclusions or the chats it is bound to,
+// delete. Model and
 // storage — TelegramCore ShadowChatBanners.swift / ShadowChatBannerStore.swift,
 // drawing in the chat list — ChatListUI ShadowChatBannerRendering.swift.
 
@@ -55,6 +57,14 @@ private func shadowChatBannerChatsLabel(_ count: Int) -> String {
     } else {
         return "\(count) чатов"
     }
+}
+
+// «Все чаты» / «Все чаты, кроме 3» / «2 чата».
+private func shadowChatBannerLabel(_ banner: ShadowChatBanner) -> String {
+    if banner.allChats {
+        return banner.excludedPeerIds.isEmpty ? "Все чаты" : "Все чаты, кроме \(banner.excludedPeerIds.count)"
+    }
+    return shadowChatBannerChatsLabel(banner.peerIds.count)
 }
 
 // Photos from the camera roll can be huge: keep at most 2000 px on the long side.
@@ -128,7 +138,7 @@ private final class ShadowChatBannersArguments {
 
 private enum ShadowChatBannersEntry: ItemListNodeEntry {
     case info
-    case photo(index: Int, id: String, thumbnail: UIImage?, chats: Int)
+    case photo(index: Int, id: String, thumbnail: UIImage?, label: String)
     case add
     case footer
 
@@ -163,9 +173,9 @@ private enum ShadowChatBannersEntry: ItemListNodeEntry {
         switch lhs {
         case .info:
             if case .info = rhs { return true } else { return false }
-        case let .photo(index, id, thumbnail, chats):
-            if case let .photo(rhsIndex, rhsId, rhsThumbnail, rhsChats) = rhs {
-                return index == rhsIndex && id == rhsId && thumbnail === rhsThumbnail && chats == rhsChats
+        case let .photo(index, id, thumbnail, label):
+            if case let .photo(rhsIndex, rhsId, rhsThumbnail, rhsLabel) = rhs {
+                return index == rhsIndex && id == rhsId && thumbnail === rhsThumbnail && label == rhsLabel
             } else {
                 return false
             }
@@ -184,9 +194,9 @@ private enum ShadowChatBannersEntry: ItemListNodeEntry {
         let arguments = arguments as! ShadowChatBannersArguments
         switch self {
         case .info:
-            return ItemListTextItem(presentationData: presentationData, text: .plain("Своё фото под строкой чата в списке — во всех папках и в архиве. У каждого фото свои чаты, затемнение и положение; цвет текста подстраивается под фото сам. Фото хранятся только на этом устройстве."), sectionId: self.section)
-        case let .photo(index, id, thumbnail, chats):
-            return ItemListDisclosureItem(presentationData: presentationData, icon: thumbnail, title: "Фото \(index + 1)", label: shadowChatBannerChatsLabel(chats), labelStyle: .detailText, sectionId: self.section, style: .blocks, action: {
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Своё фото под строкой чата в списке — во всех папках и в архиве. У каждого фото свои чаты, затемнение и положение; одно фото можно поставить на все чаты сразу. Цвет текста подстраивается под фото сам. Фото хранятся только на этом устройстве."), sectionId: self.section)
+        case let .photo(index, id, thumbnail, label):
+            return ItemListDisclosureItem(presentationData: presentationData, icon: thumbnail, title: "Фото \(index + 1)", label: label, labelStyle: .detailText, sectionId: self.section, style: .blocks, action: {
                 arguments.open(id)
             })
         case .add:
@@ -194,7 +204,7 @@ private enum ShadowChatBannersEntry: ItemListNodeEntry {
                 arguments.add()
             })
         case .footer:
-            return ItemListTextItem(presentationData: presentationData, text: .plain("Чат может быть привязан только к одному фото: если выбрать его для другого фото, он переедет туда."), sectionId: self.section)
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Чат может быть привязан только к одному фото: если выбрать его для другого фото, он переедет туда. Своё фото чата важнее фото «Все чаты»."), sectionId: self.section)
         }
     }
 }
@@ -223,7 +233,7 @@ public func shadowChatBannersController(context: AccountContext) -> ViewControll
                 thumbnails[thumbnailKey] = made
                 thumbnail = made
             }
-            entries.append(.photo(index: i, id: banner.id, thumbnail: thumbnail, chats: banner.peerIds.count))
+            entries.append(.photo(index: i, id: banner.id, thumbnail: thumbnail, label: shadowChatBannerLabel(banner)))
         }
         entries.append(.add)
         entries.append(.footer)
@@ -252,6 +262,8 @@ private final class ShadowChatBannerEditorArguments {
     let chooseChats: () -> Void
     let delete: () -> Void
     var setMirrored: (Bool) -> Void = { _ in }
+    var setPattern: (Bool) -> Void = { _ in }
+    var setAllChats: (Bool) -> Void = { _ in }
 
     init(context: AccountContext, commit: @escaping (Double, Double) -> Void, chooseChats: @escaping () -> Void, delete: @escaping () -> Void) {
         self.context = context
@@ -262,16 +274,20 @@ private final class ShadowChatBannerEditorArguments {
 }
 
 private enum ShadowChatBannerEditorEntry: ItemListNodeEntry {
-    case preview(image: ShadowChatBannerImage, banner: ShadowChatBanner, peer: EnginePeer?)
+    case preview(image: ShadowChatBannerImage, banner: ShadowChatBanner, peer: EnginePeer?, fontSize: PresentationFontSize, compact: Bool)
     case mirrored(Bool)
-    case chats(count: Int)
+    case pattern(Bool)
+    case patternFooter
+    case allChats(Bool)
+    // Chats with this photo, or — with «Все чаты» on — the chats without it.
+    case chats(allChats: Bool, count: Int)
     case chatsFooter(String)
     case delete
 
     var section: ItemListSectionId {
         switch self {
-        case .preview, .mirrored: return 0
-        case .chats, .chatsFooter: return 1
+        case .preview, .mirrored, .pattern, .patternFooter: return 0
+        case .allChats, .chats, .chatsFooter: return 1
         case .delete: return 2
         }
     }
@@ -283,6 +299,9 @@ private enum ShadowChatBannerEditorEntry: ItemListNodeEntry {
         case .chatsFooter: return 2
         case .delete: return 3
         case .mirrored: return 4
+        case .pattern: return 5
+        case .patternFooter: return 6
+        case .allChats: return 7
         }
     }
 
@@ -290,24 +309,33 @@ private enum ShadowChatBannerEditorEntry: ItemListNodeEntry {
         switch self {
         case .preview: return 0
         case .mirrored: return 1
-        case .chats: return 2
-        case .chatsFooter: return 3
-        case .delete: return 4
+        case .pattern: return 2
+        case .patternFooter: return 3
+        case .allChats: return 4
+        case .chats: return 5
+        case .chatsFooter: return 6
+        case .delete: return 7
         }
     }
 
     static func ==(lhs: ShadowChatBannerEditorEntry, rhs: ShadowChatBannerEditorEntry) -> Bool {
         switch lhs {
-        case let .preview(image, banner, peer):
-            if case let .preview(rhsImage, rhsBanner, rhsPeer) = rhs {
-                return image === rhsImage && banner == rhsBanner && peer == rhsPeer
+        case let .preview(image, banner, peer, fontSize, compact):
+            if case let .preview(rhsImage, rhsBanner, rhsPeer, rhsFontSize, rhsCompact) = rhs {
+                return image === rhsImage && banner == rhsBanner && peer == rhsPeer && fontSize == rhsFontSize && compact == rhsCompact
             } else {
                 return false
             }
         case let .mirrored(value):
             if case let .mirrored(rhsValue) = rhs { return value == rhsValue } else { return false }
-        case let .chats(count):
-            if case let .chats(rhsCount) = rhs { return count == rhsCount } else { return false }
+        case let .pattern(value):
+            if case let .pattern(rhsValue) = rhs { return value == rhsValue } else { return false }
+        case .patternFooter:
+            if case .patternFooter = rhs { return true } else { return false }
+        case let .allChats(value):
+            if case let .allChats(rhsValue) = rhs { return value == rhsValue } else { return false }
+        case let .chats(allChats, count):
+            if case let .chats(rhsAllChats, rhsCount) = rhs { return allChats == rhsAllChats && count == rhsCount } else { return false }
         case let .chatsFooter(text):
             if case let .chatsFooter(rhsText) = rhs { return text == rhsText } else { return false }
         case .delete:
@@ -322,13 +350,28 @@ private enum ShadowChatBannerEditorEntry: ItemListNodeEntry {
     func item(presentationData: ItemListPresentationData, arguments: Any) -> ListViewItem {
         let arguments = arguments as! ShadowChatBannerEditorArguments
         switch self {
-        case let .preview(image, banner, peer):
-            return ShadowChatBannerPreviewItem(presentationData: presentationData, context: arguments.context, image: image, banner: banner, peer: peer, sectionId: self.section, commit: arguments.commit)
+        case let .preview(image, banner, peer, fontSize, compact):
+            return ShadowChatBannerPreviewItem(presentationData: presentationData, context: arguments.context, image: image, banner: banner, peer: peer, fontSize: fontSize, compact: compact, sectionId: self.section, commit: arguments.commit)
         case let .mirrored(value):
             return ItemListSwitchItem(presentationData: presentationData, title: "Отразить по горизонтали", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 arguments.setMirrored(value)
             })
-        case let .chats(count):
+        case let .pattern(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Узор (без стыков)", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.setPattern(value)
+            })
+        case .patternFooter:
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Для бесшовных картинок: фото во всю ширину строки повторяется сверху вниз и продолжается из строки в строку, без стыков и растяжения."), sectionId: self.section)
+        case let .allChats(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Все чаты", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.setAllChats(value)
+            })
+        case let .chats(allChats, count):
+            if allChats {
+                return ItemListDisclosureItem(presentationData: presentationData, title: "Исключения", label: count == 0 ? "Нет" : shadowChatBannerChatsLabel(count), labelStyle: .detailText, sectionId: self.section, style: .blocks, action: {
+                    arguments.chooseChats()
+                })
+            }
             return ItemListDisclosureItem(presentationData: presentationData, title: "Чаты с этим фоном", label: count == 0 ? "Выбрать" : shadowChatBannerChatsLabel(count), labelStyle: .detailText, sectionId: self.section, style: .blocks, action: {
                 arguments.chooseChats()
             })
@@ -360,9 +403,14 @@ func shadowChatBannerEditorController(context: AccountContext, bannerId: String)
         ShadowChatBannerStore.shared.update(basePath: basePath, banner: banner)
     }, chooseChats: {
         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-        let current = ShadowChatBannerStore.shared.index(basePath: basePath).banner(id: bannerId)?.peerIds ?? []
+        guard let banner = ShadowChatBannerStore.shared.index(basePath: basePath).banner(id: bannerId) else {
+            return
+        }
+        // «Все чаты» on: the same picker chooses the exclusions.
+        let excluding = banner.allChats
+        let current = excluding ? banner.excludedPeerIds : banner.peerIds
         let picker = context.sharedContext.makeContactMultiselectionController(ContactMultiselectionControllerParams(context: context, mode: .chatSelection(ContactMultiselectionControllerMode.ChatSelection(
-            title: "Чаты с этим фоном",
+            title: excluding ? "Исключения" : "Чаты с этим фоном",
             searchPlaceholder: presentationData.strings.ChatListFilter_AddChatsSearchPlaceholder,
             selectedChats: Set(current.map { EnginePeer.Id($0) }),
             additionalCategories: nil,
@@ -382,16 +430,21 @@ func shadowChatBannerEditorController(context: AccountContext, bannerId: String)
                     selected.append(id.toInt64())
                 }
             }
-            ShadowChatBannerStore.shared.setPeers(basePath: basePath, bannerId: bannerId, peerIds: selected)
+            if excluding {
+                ShadowChatBannerStore.shared.setExcluded(basePath: basePath, bannerId: bannerId, peerIds: selected)
+            } else {
+                ShadowChatBannerStore.shared.setPeers(basePath: basePath, bannerId: bannerId, peerIds: selected)
+            }
             picker?.dismiss()
         })
         pushImpl?(picker)
     }, delete: {
         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+        let allChats = ShadowChatBannerStore.shared.index(basePath: basePath).banner(id: bannerId)?.allChats ?? false
         let sheet = ActionSheetController(presentationData: presentationData)
         sheet.setItemGroups([
             ActionSheetItemGroup(items: [
-                ActionSheetTextItem(title: "Фото пропадёт со строк всех привязанных чатов.", parseMarkdown: false),
+                ActionSheetTextItem(title: allChats ? "Фото пропадёт у всех чатов без своего фото." : "Фото пропадёт со строк всех привязанных чатов.", parseMarkdown: false),
                 ActionSheetButtonItem(title: "Удалить фото", color: .destructive, action: { [weak sheet] in
                     sheet?.dismissAnimated()
                     let path = ShadowChatBannerStore.shared.imagePath(basePath: basePath, id: bannerId)
@@ -414,12 +467,28 @@ func shadowChatBannerEditorController(context: AccountContext, bannerId: String)
         banner.mirrored = value
         ShadowChatBannerStore.shared.update(basePath: basePath, banner: banner)
     }
+    arguments.setPattern = { value in
+        guard var banner = ShadowChatBannerStore.shared.index(basePath: basePath).banner(id: bannerId), banner.pattern != value else {
+            return
+        }
+        banner.pattern = value
+        ShadowChatBannerStore.shared.update(basePath: basePath, banner: banner)
+    }
+    arguments.setAllChats = { value in
+        guard let banner = ShadowChatBannerStore.shared.index(basePath: basePath).banner(id: bannerId), banner.allChats != value else {
+            return
+        }
+        ShadowChatBannerStore.shared.setAllChats(basePath: basePath, bannerId: bannerId, value: value)
+    }
 
     let accountPeer: Signal<EnginePeer?, NoError> = context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: context.account.peerId))
 
+    // Names of the chats shown under the switch: bound chats, or exclusions.
     let chatNames: Signal<(ShadowChatBannersIndex, [String]), NoError> = shadowChatBannersIndex(context: context)
     |> mapToSignal { index -> Signal<(ShadowChatBannersIndex, [String]), NoError> in
-        let ids = (index.banner(id: bannerId)?.peerIds ?? []).map { EnginePeer.Id($0) }
+        let banner = index.banner(id: bannerId)
+        let rawIds = (banner?.allChats ?? false) ? (banner?.excludedPeerIds ?? []) : (banner?.peerIds ?? [])
+        let ids = rawIds.map { EnginePeer.Id($0) }
         if ids.isEmpty {
             return .single((index, []))
         }
@@ -441,10 +510,25 @@ func shadowChatBannerEditorController(context: AccountContext, bannerId: String)
         let (index, names) = chatNames
         var entries: [ShadowChatBannerEditorEntry] = []
         if let banner = index.banner(id: bannerId), let image = ShadowChatBannerImageCache.shared.image(path: ShadowChatBannerStore.shared.imagePath(basePath: basePath, id: bannerId)) {
-            entries.append(.preview(image: image, banner: banner, peer: accountPeer))
+            // The chat list's font size and compact mode: the preview row has
+            // the size of a real row.
+            let compact = currentAyuGramSettings(accountId: context.account.id).compactChatList
+            entries.append(.preview(image: image, banner: banner, peer: accountPeer, fontSize: presentationData.listsFontSize, compact: compact))
             entries.append(.mirrored(banner.mirrored))
-            entries.append(.chats(count: banner.peerIds.count))
-            entries.append(.chatsFooter(names.isEmpty ? "Выберите чаты, под строкой которых будет это фото." : names.joined(separator: ", ")))
+            entries.append(.pattern(banner.pattern))
+            entries.append(.patternFooter)
+            entries.append(.allChats(banner.allChats))
+            if banner.allChats {
+                entries.append(.chats(allChats: true, count: banner.excludedPeerIds.count))
+                var footer = "Свои фото у отдельных чатов важнее этого."
+                if !names.isEmpty {
+                    footer += " Без фона: " + names.joined(separator: ", ") + "."
+                }
+                entries.append(.chatsFooter(footer))
+            } else {
+                entries.append(.chats(allChats: false, count: banner.peerIds.count))
+                entries.append(.chatsFooter(names.isEmpty ? "Выберите чаты, под строкой которых будет это фото." : names.joined(separator: ", ")))
+            }
             entries.append(.delete)
         }
         let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Фон"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
@@ -467,25 +551,32 @@ func shadowChatBannerEditorController(context: AccountContext, bannerId: String)
 
 // MARK: - Preview with sliders
 
-// A chat row as it will look in the list («Folzy · Привет! Как тебе фон? 👀»)
-// over the photo, then «Затемнение» and «Положение». Sliders and dragging the
-// photo on the preview update it at once; the store is written when the finger
-// lifts (every write re-renders the chat list).
+// Chat rows exactly as the list draws them: the full list width and the real
+// row height (the list's font size and compact mode, ShadowChatBannerRows), so
+// the photo is cut and the text color picked the same way as in the list. One
+// row («Folzy · Привет! Как тебе фон? 👀»); with «Узор» three rows, to see that
+// they continue each other. Then «Затемнение» and «Положение» (not needed for
+// «Узор»). Sliders and dragging the photo on the preview update it at once; the
+// store is written when the finger lifts (every write re-renders the chat list).
 private final class ShadowChatBannerPreviewItem: ListViewItem, ItemListItem {
     let presentationData: ItemListPresentationData
     let context: AccountContext
     let image: ShadowChatBannerImage
     let banner: ShadowChatBanner
     let peer: EnginePeer?
+    let fontSize: PresentationFontSize
+    let compact: Bool
     let sectionId: ItemListSectionId
     let commit: (Double, Double) -> Void
 
-    init(presentationData: ItemListPresentationData, context: AccountContext, image: ShadowChatBannerImage, banner: ShadowChatBanner, peer: EnginePeer?, sectionId: ItemListSectionId, commit: @escaping (Double, Double) -> Void) {
+    init(presentationData: ItemListPresentationData, context: AccountContext, image: ShadowChatBannerImage, banner: ShadowChatBanner, peer: EnginePeer?, fontSize: PresentationFontSize, compact: Bool, sectionId: ItemListSectionId, commit: @escaping (Double, Double) -> Void) {
         self.presentationData = presentationData
         self.context = context
         self.image = image
         self.banner = banner
         self.peer = peer
+        self.fontSize = fontSize
+        self.compact = compact
         self.sectionId = sectionId
         self.commit = commit
     }
@@ -524,14 +615,17 @@ private final class ShadowChatBannerPreviewItem: ListViewItem, ItemListItem {
 }
 
 private final class ShadowChatBannerPreviewItemNode: ListViewItemNode, ItemListItemNode {
-    private static let rowHeight: CGFloat = 76.0
     private static let sideInset: CGFloat = 16.0
+    private static let patternRows = 3
 
     // The node is created off the main thread: UIKit views are made in didLoad.
     private let avatarNode = AvatarNode(font: avatarPlaceholderFont(size: 26.0))
     private var cardView: UIView!
     private var photoLayer: CALayer!
+    private var patternLayer: ShadowChatBannerPatternLayer!
     private var dimLayer: CALayer!
+    // «Узор»: separators and placeholder content of the extra rows.
+    private var extraLayers: [CALayer] = []
     private var titleLabel: UILabel!
     private var textLabel: UILabel!
     private var timeLabel: UILabel!
@@ -547,7 +641,8 @@ private final class ShadowChatBannerPreviewItemNode: ListViewItemNode, ItemListI
     private var offset: Double = 0.5
     private var isEditing = false
     private var panStartOffset: Double = 0.5
-    private var cardSize = CGSize()
+    private var rowSize = CGSize()
+    private var rows = 1
     private var avatarPeerId: EnginePeer.Id?
 
     var tag: ItemListItemTag? {
@@ -567,6 +662,7 @@ private final class ShadowChatBannerPreviewItemNode: ListViewItemNode, ItemListI
 
         self.cardView = UIView()
         self.photoLayer = CALayer()
+        self.patternLayer = ShadowChatBannerPatternLayer()
         self.dimLayer = CALayer()
         self.titleLabel = UILabel()
         self.textLabel = UILabel()
@@ -579,17 +675,18 @@ private final class ShadowChatBannerPreviewItemNode: ListViewItemNode, ItemListI
         self.hintLabel = UILabel()
 
         self.cardView.clipsToBounds = true
-        self.cardView.layer.cornerRadius = 12.0
         self.photoLayer.contentsGravity = .resize
         self.photoLayer.masksToBounds = true
         self.dimLayer.backgroundColor = UIColor.black.cgColor
         self.cardView.layer.addSublayer(self.photoLayer)
+        self.cardView.layer.addSublayer(self.patternLayer)
         self.cardView.layer.addSublayer(self.dimLayer)
+        for _ in 0 ..< (ShadowChatBannerPreviewItemNode.patternRows - 1) * 4 {
+            let layer = CALayer()
+            self.cardView.layer.addSublayer(layer)
+            self.extraLayers.append(layer)
+        }
         self.cardView.addSubview(self.avatarNode.view)
-        self.titleLabel.font = Font.medium(16.0)
-        self.textLabel.font = Font.regular(15.0)
-        self.textLabel.numberOfLines = 2
-        self.timeLabel.font = Font.regular(14.0)
         self.timeLabel.textAlignment = .right
         self.cardView.addSubview(self.titleLabel)
         self.cardView.addSubview(self.textLabel)
@@ -625,9 +722,21 @@ private final class ShadowChatBannerPreviewItemNode: ListViewItemNode, ItemListI
         }
     }
 
+    private static func contentHeight(item: ShadowChatBannerPreviewItem) -> CGFloat {
+        let rowHeight = ShadowChatBannerRows.rowHeight(fontSize: item.fontSize, compact: item.compact)
+        let rows = item.banner.pattern ? ShadowChatBannerPreviewItemNode.patternRows : 1
+        var height: CGFloat = 8.0 + rowHeight * CGFloat(rows) + 16.0 + 24.0 + 34.0
+        if item.banner.pattern {
+            height += 6.0
+        } else {
+            height += 10.0 + 24.0 + 34.0 + 6.0 + 36.0
+        }
+        return height
+    }
+
     func asyncLayout() -> (_ item: ShadowChatBannerPreviewItem, _ params: ListViewItemLayoutParams) -> (ListViewItemNodeLayout, () -> Void) {
         return { item, params in
-            let height: CGFloat = 8.0 + ShadowChatBannerPreviewItemNode.rowHeight + 16.0 + 24.0 + 34.0 + 10.0 + 24.0 + 34.0 + 6.0 + 36.0
+            let height = ShadowChatBannerPreviewItemNode.contentHeight(item: item)
             let layout = ListViewItemNodeLayout(contentSize: CGSize(width: params.width, height: height), insets: UIEdgeInsets(top: 8.0, left: 0.0, bottom: 0.0, right: 0.0))
             return (layout, { [weak self] in
                 self?.apply(item: item, params: params)
@@ -645,13 +754,20 @@ private final class ShadowChatBannerPreviewItemNode: ListViewItemNode, ItemListI
             self.offset = item.banner.offset
         }
         let theme = item.presentationData.theme
+        let pattern = item.banner.pattern
+        // The row spans the list like a chat row; the controls keep the usual
+        // side insets.
+        let rowLeft = params.leftInset
+        let rowWidth = params.width - params.leftInset - params.rightInset
         let left = params.leftInset + ShadowChatBannerPreviewItemNode.sideInset
-        let width = params.width - params.leftInset - params.rightInset - ShadowChatBannerPreviewItemNode.sideInset * 2.0
+        let width = rowWidth - ShadowChatBannerPreviewItemNode.sideInset * 2.0
+        self.rowSize = CGSize(width: rowWidth, height: ShadowChatBannerRows.rowHeight(fontSize: item.fontSize, compact: item.compact))
+        self.rows = pattern ? ShadowChatBannerPreviewItemNode.patternRows : 1
         var y: CGFloat = 8.0
-        self.cardSize = CGSize(width: width, height: ShadowChatBannerPreviewItemNode.rowHeight)
-        self.cardView.frame = CGRect(origin: CGPoint(x: left, y: y), size: self.cardSize)
+        let cardHeight = self.rowSize.height * CGFloat(self.rows)
+        self.cardView.frame = CGRect(origin: CGPoint(x: rowLeft, y: y), size: CGSize(width: rowWidth, height: cardHeight))
         self.cardView.backgroundColor = theme.list.plainBackgroundColor
-        y += ShadowChatBannerPreviewItemNode.rowHeight + 16.0
+        y += cardHeight + 16.0
 
         let labelColor = theme.list.itemPrimaryTextColor
         self.dimTitleLabel.textColor = labelColor
@@ -673,13 +789,16 @@ private final class ShadowChatBannerPreviewItemNode: ListViewItemNode, ItemListI
         self.offsetSlider.frame = CGRect(x: left, y: y, width: width, height: 34.0)
         y += 34.0 + 6.0
         self.hintLabel.frame = CGRect(x: left, y: y, width: width, height: 36.0)
-        // A photo wider than the row has no vertical position to choose.
-        let movable = item.image.aspect < Double(self.cardSize.width / self.cardSize.height)
+        // «Узор» starts at the top of the list, a photo wider than the row has
+        // no vertical position to choose either.
+        let movable = !pattern && item.image.aspect < Double(self.rowSize.width / self.rowSize.height)
+        self.offsetTitleLabel.isHidden = pattern
+        self.offsetSlider.isHidden = pattern
         self.offsetSlider.isEnabled = movable
         self.offsetTitleLabel.alpha = movable ? 1.0 : 0.5
         self.hintLabel.isHidden = !movable
 
-        if previous?.image !== item.image || previous?.banner.mirrored != item.banner.mirrored {
+        if previous?.image !== item.image || previous?.banner.mirrored != item.banner.mirrored || self.photoLayer.contents == nil {
             self.photoLayer.contents = item.image.image(mirrored: item.banner.mirrored).cgImage
         }
         let peerId = item.peer?.id
@@ -687,6 +806,11 @@ private final class ShadowChatBannerPreviewItemNode: ListViewItemNode, ItemListI
             self.avatarPeerId = peerId
             self.avatarNode.setPeer(context: item.context, theme: theme, peer: peer, synchronousLoad: false, displayDimensions: CGSize(width: 60.0, height: 60.0))
         }
+        let baseFontSize = item.fontSize.itemListBaseFontSize
+        self.titleLabel.font = Font.semibold(floor(baseFontSize * 16.0 / 17.0))
+        self.textLabel.font = Font.regular(floor(baseFontSize * 15.0 / 17.0))
+        self.timeLabel.font = Font.regular(floor(baseFontSize * 14.0 / 17.0))
+        self.textLabel.numberOfLines = item.compact ? 1 : 2
         let name = item.peer?.compactDisplayTitle ?? "Folzy"
         self.titleLabel.text = name
         self.textLabel.text = "Привет! Как тебе фон? 👀"
@@ -697,29 +821,83 @@ private final class ShadowChatBannerPreviewItemNode: ListViewItemNode, ItemListI
     }
 
     private func updatePreview() {
-        guard self.isNodeLoaded, let item = self.item, self.cardSize.width > 0.0 else {
+        guard self.isNodeLoaded, let item = self.item, self.rowSize.width > 0.0 else {
             return
         }
-        let size = self.cardSize
-        let rect = ShadowChatBanners.visibleRect(imageAspect: item.image.aspect, rowAspect: Double(size.width / size.height), offset: self.offset)
+        let row = self.rowSize
+        let cardSize = CGSize(width: row.width, height: row.height * CGFloat(self.rows))
+        let pattern = item.banner.pattern
+        // Same rule as the chat list (ShadowChatBannerBatch): light text on a
+        // dark result.
+        let lightText: Bool
+        if pattern {
+            lightText = item.image.prefersLightTextAsPattern(dim: self.dim)
+        } else {
+            lightText = item.image.prefersLightText(rowAspect: ShadowChatBannerRows.estimatedRowAspect(fontSize: item.fontSize, compact: item.compact), offset: self.offset, dim: self.dim)
+        }
+
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        self.photoLayer.frame = CGRect(origin: CGPoint(), size: size)
-        self.photoLayer.contentsRect = CGRect(x: rect.x, y: rect.y, width: rect.width, height: rect.height)
-        self.dimLayer.frame = CGRect(origin: CGPoint(), size: size)
+        self.photoLayer.isHidden = pattern
+        self.patternLayer.isHidden = !pattern
+        if pattern {
+            self.patternLayer.frame = CGRect(origin: CGPoint(), size: cardSize)
+            self.patternLayer.update(image: item.image.image(mirrored: item.banner.mirrored), imageAspect: item.image.aspect, size: cardSize, rowY: 0.0)
+        } else {
+            let rect = ShadowChatBanners.visibleRect(imageAspect: item.image.aspect, rowAspect: Double(row.width / row.height), offset: self.offset)
+            self.photoLayer.frame = CGRect(origin: CGPoint(), size: row)
+            self.photoLayer.contentsRect = CGRect(x: rect.x, y: rect.y, width: rect.width, height: rect.height)
+        }
+        self.dimLayer.frame = CGRect(origin: CGPoint(), size: cardSize)
         self.dimLayer.opacity = Float(self.dim)
         CATransaction.commit()
 
-        let avatarSize: CGFloat = 60.0
-        self.avatarNode.frame = CGRect(x: 10.0, y: floor((size.height - avatarSize) / 2.0), width: avatarSize, height: avatarSize)
+        let avatarSize = floor(min(60.0, floor(item.fontSize.baseDisplaySize * 60.0 / 17.0)) * (item.compact ? 0.75 : 1.0))
+        self.avatarNode.frame = CGRect(x: 10.0, y: floor((row.height - avatarSize) / 2.0), width: avatarSize, height: avatarSize)
         let textLeft: CGFloat = 10.0 + avatarSize + 10.0
         let timeWidth: CGFloat = 56.0
-        self.titleLabel.frame = CGRect(x: textLeft, y: 9.0, width: size.width - textLeft - timeWidth - 10.0, height: 22.0)
-        self.timeLabel.frame = CGRect(x: size.width - timeWidth - 10.0, y: 10.0, width: timeWidth, height: 20.0)
-        self.textLabel.frame = CGRect(x: textLeft, y: 31.0, width: size.width - textLeft - 12.0, height: 40.0)
+        let titleHeight = ceil(self.titleLabel.font.lineHeight)
+        let textHeight = ceil(self.textLabel.font.lineHeight) * CGFloat(self.textLabel.numberOfLines)
+        let titleY = max(2.0, floor((row.height - titleHeight - textHeight) / 2.0))
+        self.titleLabel.frame = CGRect(x: textLeft, y: titleY, width: row.width - textLeft - timeWidth - 10.0, height: titleHeight)
+        self.timeLabel.frame = CGRect(x: row.width - timeWidth - 10.0, y: titleY, width: timeWidth, height: titleHeight)
+        self.textLabel.frame = CGRect(x: textLeft, y: titleY + titleHeight, width: row.width - textLeft - 12.0, height: textHeight)
 
-        // Same rule as the chat list: light text on a dark result.
-        let lightText = item.image.prefersLightText(rowAspect: Double(size.width / size.height), offset: self.offset, dim: self.dim)
+        // «Узор»: separators and placeholder rows under the first one.
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        let separatorColor = UIColor(white: lightText ? 1.0 : 0.0, alpha: 0.08).cgColor
+        let placeholderColor = UIColor(white: lightText ? 1.0 : 0.0, alpha: lightText ? 0.22 : 0.16).cgColor
+        for (i, layer) in self.extraLayers.enumerated() {
+            let rowIndex = 1 + i / 4
+            let part = i % 4
+            guard pattern, rowIndex < self.rows else {
+                layer.isHidden = true
+                continue
+            }
+            layer.isHidden = false
+            let top = row.height * CGFloat(rowIndex)
+            switch part {
+            case 0:
+                layer.backgroundColor = separatorColor
+                layer.cornerRadius = 0.0
+                layer.frame = CGRect(x: textLeft, y: top - UIScreenPixel, width: row.width - textLeft, height: UIScreenPixel)
+            case 1:
+                layer.backgroundColor = placeholderColor
+                layer.cornerRadius = avatarSize / 2.0
+                layer.frame = CGRect(x: 10.0, y: top + floor((row.height - avatarSize) / 2.0), width: avatarSize, height: avatarSize)
+            case 2:
+                layer.backgroundColor = placeholderColor
+                layer.cornerRadius = 5.0
+                layer.frame = CGRect(x: textLeft, y: top + titleY + floor((titleHeight - 10.0) / 2.0), width: min(140.0, row.width - textLeft - 20.0), height: 10.0)
+            default:
+                layer.backgroundColor = placeholderColor
+                layer.cornerRadius = 5.0
+                layer.frame = CGRect(x: textLeft, y: top + titleY + titleHeight + 6.0, width: min(200.0, row.width - textLeft - 20.0), height: 10.0)
+            }
+        }
+        CATransaction.commit()
+
         self.titleLabel.textColor = lightText ? .white : .black
         self.textLabel.textColor = lightText ? UIColor(white: 1.0, alpha: 0.72) : UIColor(white: 0.0, alpha: 0.62)
         self.timeLabel.textColor = lightText ? UIColor(white: 1.0, alpha: 0.72) : UIColor(white: 0.0, alpha: 0.62)
@@ -750,13 +928,13 @@ private final class ShadowChatBannerPreviewItemNode: ListViewItemNode, ItemListI
     }
 
     @objc private func panGesture(_ recognizer: UIPanGestureRecognizer) {
-        guard let item = self.item, self.cardSize.width > 0.0 else {
+        guard let item = self.item, !item.banner.pattern, self.rowSize.width > 0.0 else {
             return
         }
         // Height of the photo scaled to the row width; the band can travel
         // (photo height − row height) points.
-        let scaledHeight = Double(self.cardSize.width) / item.image.aspect
-        let travel = scaledHeight - Double(self.cardSize.height)
+        let scaledHeight = Double(self.rowSize.width) / item.image.aspect
+        let travel = scaledHeight - Double(self.rowSize.height)
         guard travel > 1.0 else {
             return
         }

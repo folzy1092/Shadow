@@ -1388,6 +1388,11 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
     private var shadowBannerDimNode: ASDisplayNode?
     private weak var shadowBannerImage: UIImage?
     private var shadowSeparatorTinted = false
+    // «Узор»: the copies of the photo and the row's top in the list (from
+    // updateAbsoluteRect), so neighbouring rows continue the pattern.
+    private var shadowBannerPatternLayer: ShadowChatBannerPatternLayer?
+    private var shadowBannerRowY: CGFloat = 0.0
+    private var shadowBannerAppearance: ShadowChatBannerAppearance?
     
     let contextContainer: ContextControllerSourceNode
     let mainContentContainerNode: ASDisplayNode
@@ -5641,6 +5646,9 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
     }
     
     override public func updateAbsoluteRect(_ rect: CGRect, within containerSize: CGSize) {
+        // Shadow: the photo lies at the top of the node (y = 0 of its frame).
+        self.shadowBannerRowY = rect.minY
+        self.shadowUpdateChatBannerPattern()
         var rect = rect
         rect.origin.y += self.insets.top
         self.absoluteLocation = (rect, containerSize)
@@ -5733,7 +5741,9 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                 self.shadowBannerNode = nil
                 self.shadowBannerDimNode = nil
                 self.shadowBannerImage = nil
+                self.shadowBannerPatternLayer = nil
             }
+            self.shadowBannerAppearance = nil
             if self.shadowSeparatorTinted {
                 self.shadowSeparatorTinted = false
                 self.separatorNode.backgroundColor = item.presentationData.theme.chatList.itemSeparatorColor
@@ -5758,18 +5768,49 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
             self.shadowBannerNode = bannerNode
             self.shadowBannerDimNode = dimNode
         }
-        if self.shadowBannerImage !== banner.image {
-            self.shadowBannerImage = banner.image
-            bannerNode.contents = banner.image.cgImage
+        self.shadowBannerAppearance = banner
+        if banner.pattern {
+            // «Узор»: copies at the row width instead of one cut-out band.
+            let patternLayer: ShadowChatBannerPatternLayer
+            if let current = self.shadowBannerPatternLayer {
+                patternLayer = current
+            } else {
+                patternLayer = ShadowChatBannerPatternLayer()
+                bannerNode.layer.insertSublayer(patternLayer, at: 0)
+                self.shadowBannerPatternLayer = patternLayer
+                bannerNode.contents = nil
+                self.shadowBannerImage = nil
+            }
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            patternLayer.frame = CGRect(origin: CGPoint(), size: size)
+            CATransaction.commit()
+        } else {
+            if let patternLayer = self.shadowBannerPatternLayer {
+                patternLayer.removeFromSuperlayer()
+                self.shadowBannerPatternLayer = nil
+            }
+            if self.shadowBannerImage !== banner.image {
+                self.shadowBannerImage = banner.image
+                bannerNode.contents = banner.image.cgImage
+            }
+            bannerNode.layer.contentsRect = banner.contentsRect(size: size)
         }
-        bannerNode.layer.contentsRect = banner.contentsRect(size: size)
         transition.updateFrame(node: bannerNode, frame: CGRect(origin: CGPoint(x: self.revealOffset, y: 0.0), size: size))
+        self.shadowUpdateChatBannerPattern()
         dimNode.backgroundColor = UIColor(white: 0.0, alpha: banner.dim)
         transition.updateFrame(node: dimNode, frame: CGRect(origin: CGPoint(), size: size))
         transition.updateAlpha(node: bannerNode, alpha: alpha)
         // A barely visible separator between photo rows.
         self.shadowSeparatorTinted = true
         self.separatorNode.backgroundColor = UIColor(white: banner.lightText ? 1.0 : 0.0, alpha: 0.08)
+    }
+
+    private func shadowUpdateChatBannerPattern() {
+        guard let patternLayer = self.shadowBannerPatternLayer, let banner = self.shadowBannerAppearance, banner.pattern else {
+            return
+        }
+        patternLayer.update(image: banner.image, imageAspect: banner.imageAspect, size: patternLayer.bounds.size, rowY: self.shadowBannerRowY)
     }
 
     override public func revealOptionsActiveStateUpdated(isActive: Bool, transition: ContainedViewLayoutTransition) {
