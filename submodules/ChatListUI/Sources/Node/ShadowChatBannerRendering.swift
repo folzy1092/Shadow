@@ -5,6 +5,7 @@ import Display
 import ItemListUI
 import TelegramCore
 import TelegramPresentationData
+import TelegramUIPreferences
 import AccountContext
 
 // Shadow: «Фоны чатов» — what a chat-list row needs to draw its photo
