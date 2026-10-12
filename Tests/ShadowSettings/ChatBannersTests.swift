@@ -131,6 +131,24 @@ struct ChatBannersTests {
         check(near(ShadowChatBanners.patternShift(rowY: -30.0, tileHeight: 100.0), 70.0), "Row above the top")
         check(near(ShadowChatBanners.averageLuminance(profile: profile), 0.5) && ShadowChatBanners.averageLuminance(profile: []) == 0.0, "Pattern text color: brightness of the whole photo")
 
+        // «Фон из аватарки» (1.11.2): chats without a photo, while nothing is on «Все чаты».
+        check(ShadowChatBanners.decode("{\"banners\":[]}".data(using: .utf8)!).avatars == ShadowChatAvatarBackground(), "Old index.json: avatar background off")
+        var avatarsIndex = ShadowChatBannersIndex(banners: [ShadowChatBanner(id: "B", peerIds: [1])])
+        check(avatarsIndex.avatarBackground(peerId: 2) == nil && avatarsIndex.isEmpty == false, "Off by default")
+        avatarsIndex.avatars = ShadowChatAvatarBackground(enabled: true, dim: 2.0, reveal: 5.0)
+        check(avatarsIndex.avatars.dim == ShadowChatBanners.maxDim && avatarsIndex.avatars.reveal == ShadowChatAvatarBackground.maxReveal, "Avatar settings clamped")
+        check(avatarsIndex.avatarBackground(peerId: 2) != nil && avatarsIndex.avatarBackground(peerId: 1) == nil, "Own photo wins over the avatar")
+        check(ShadowChatBannerResolver(index: avatarsIndex).avatarBackground(peerId: 2) != nil && ShadowChatBannerResolver(index: avatarsIndex).avatarBackground(peerId: 1) == nil, "Resolver: same rule")
+        avatarsIndex.banners.append(ShadowChatBanner(id: "A", allChats: true, excludedPeerIds: [3]))
+        check(avatarsIndex.avatarBackground(peerId: 2) == nil && avatarsIndex.avatarBackground(peerId: 3) == nil, "«Все чаты» wins, its exclusions stay without background")
+        check(ShadowChatBannerResolver(index: avatarsIndex).avatarBackground(peerId: 2) == nil, "Resolver: «Все чаты» wins")
+        check(ShadowChatBannersIndex(avatars: ShadowChatAvatarBackground(enabled: true)).isEmpty == false && ShadowChatBannersIndex().isEmpty, "Avatars alone switch the chat list on")
+        let storedAvatars = ShadowChatBanners.decode(ShadowChatBanners.encode(avatarsIndex)!)
+        check(storedAvatars.avatars == avatarsIndex.avatars, "Avatar settings are stored")
+        let fade = ShadowChatAvatarBackground(enabled: true, reveal: 0.25).fade
+        check(near(fade.start, 0.25) && near(fade.end, 0.85), "Fade from the reveal point over 60% of the row")
+        check(near(ShadowChatAvatarBackground(enabled: true, reveal: 0.6).fade.end, 1.0), "Fade ends at the right edge at most")
+
         print("Shadow chat banners: \(count) checks passed")
     }
 }

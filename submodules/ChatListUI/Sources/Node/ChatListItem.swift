@@ -1393,6 +1393,11 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
     private var shadowBannerPatternLayer: ShadowChatBannerPatternLayer?
     private var shadowBannerRowY: CGFloat = 0.0
     private var shadowBannerAppearance: ShadowChatBannerAppearance?
+    // «Фон из аватарки»: the chat's avatar, loaded by the row itself.
+    private var shadowAvatarRepresentation: TelegramMediaImageRepresentation?
+    private var shadowAvatarImage: UIImage?
+    private let shadowAvatarDisposable = MetaDisposable()
+    private var shadowAvatarLayers: ShadowChatAvatarBackgroundLayers?
     
     let contextContainer: ContextControllerSourceNode
     let mainContentContainerNode: ASDisplayNode
@@ -1861,6 +1866,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
     func setupItem(item: ChatListItem, synchronousLoads: Bool) {
         let previousItem = self.item
         self.item = item
+        self.shadowSetupAvatarBackground(item: item)
         
         var storyState: ChatListItemContent.StoryState?
         if case let .peer(peerData) = item.content {
@@ -5734,14 +5740,78 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
     // Shadow: «Фоны чатов». The photo lies over the plain row background and
     // under the separator, highlight and content; contentsRect picks the band
     // of the photo for this row (aspect fill + the user's vertical position).
+    // «Фон из аватарки»: the chat whose avatar becomes the background — none
+    // for rows drawn with an icon instead of an avatar (Избранное, replies,
+    // deleted accounts) and for message-style rows.
+    private func shadowAvatarBackgroundPeer(item: ChatListItem) -> EnginePeer? {
+        guard case let .peer(peerData) = item.content, peerData.customMessageListData == nil, !peerData.displayAsMessage else {
+            return nil
+        }
+        guard var peer = peerData.peer.chatOrMonoforumMainPeer else {
+            return nil
+        }
+        if let avatarMainPeer = peerData.avatarPeer?.chatOrMonoforumMainPeer {
+            peer = avatarMainPeer
+        }
+        if peer.id.isReplies || peer.id.isAnonymousSavedMessages || peer.id == item.context.account.peerId || peer.isDeleted {
+            return nil
+        }
+        return peer
+    }
+
+    private func shadowSetupAvatarBackground(item: ChatListItem) {
+        guard item.presentationData.shadowChatBanner?.avatar != nil, let peer = self.shadowAvatarBackgroundPeer(item: item), let representation = peer.largeProfileImage ?? peer.smallProfileImage else {
+            if self.shadowAvatarRepresentation != nil {
+                self.shadowAvatarRepresentation = nil
+                self.shadowAvatarImage = nil
+                self.shadowAvatarDisposable.set(nil)
+            }
+            return
+        }
+        if let current = self.shadowAvatarRepresentation, current == representation {
+            return
+        }
+        self.shadowAvatarRepresentation = representation
+        self.shadowAvatarImage = nil
+        guard let signal = peerAvatarImage(account: item.context.account, peerReference: PeerReference(peer), authorOfMessage: nil, representation: representation, displayDimensions: CGSize(width: 240.0, height: 240.0), clipStyle: .none) else {
+            self.shadowAvatarDisposable.set(nil)
+            return
+        }
+        self.shadowAvatarDisposable.set((signal |> deliverOnMainQueue).start(next: { [weak self] result in
+            guard let self, let image = result?.0 else {
+                return
+            }
+            self.shadowAvatarImage = image
+            self.shadowApplyAvatarBackgroundImage()
+        }))
+    }
+
+    private func shadowApplyAvatarBackgroundImage() {
+        guard let bannerNode = self.shadowBannerNode, self.shadowBannerAppearance?.avatar != nil else {
+            return
+        }
+        let image = self.shadowAvatarImage
+        if self.shadowBannerImage !== image {
+            self.shadowBannerImage = image
+            bannerNode.contents = image?.cgImage
+        }
+        bannerNode.layer.contentsRect = ShadowChatAvatarBackgroundLayers.contentsRect(image: image, size: bannerNode.bounds.size)
+    }
+
     private func shadowUpdateChatBanner(item: ChatListItem, size: CGSize, alpha: CGFloat, transition: ContainedViewLayoutTransition) {
-        guard let banner = item.presentationData.shadowChatBanner, size.width > 0.0, size.height > 0.0 else {
+        var currentBanner = item.presentationData.shadowChatBanner
+        // «Фон из аватарки» without an avatar: no background.
+        if currentBanner?.avatar != nil && self.shadowAvatarRepresentation == nil {
+            currentBanner = nil
+        }
+        guard let banner = currentBanner, size.width > 0.0, size.height > 0.0 else {
             if let shadowBannerNode = self.shadowBannerNode {
                 shadowBannerNode.removeFromSupernode()
                 self.shadowBannerNode = nil
                 self.shadowBannerDimNode = nil
                 self.shadowBannerImage = nil
                 self.shadowBannerPatternLayer = nil
+                self.shadowAvatarLayers = nil
             }
             self.shadowBannerAppearance = nil
             if self.shadowSeparatorTinted {
@@ -5769,7 +5839,32 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
             self.shadowBannerDimNode = dimNode
         }
         self.shadowBannerAppearance = banner
-        if banner.pattern {
+        if let avatar = banner.avatar {
+            if let patternLayer = self.shadowBannerPatternLayer {
+                patternLayer.removeFromSuperlayer()
+                self.shadowBannerPatternLayer = nil
+            }
+            let avatarLayers: ShadowChatAvatarBackgroundLayers
+            if let current = self.shadowAvatarLayers {
+                avatarLayers = current
+            } else {
+                avatarLayers = ShadowChatAvatarBackgroundLayers()
+                bannerNode.layer.insertSublayer(avatarLayers.fadeLayer, at: 0)
+                self.shadowAvatarLayers = avatarLayers
+                bannerNode.contents = nil
+                self.shadowBannerImage = nil
+            }
+            avatarLayers.update(settings: avatar, size: size)
+        } else {
+            if let avatarLayers = self.shadowAvatarLayers {
+                avatarLayers.fadeLayer.removeFromSuperlayer()
+                self.shadowAvatarLayers = nil
+                self.shadowBannerImage = nil
+            }
+        }
+        if banner.avatar != nil {
+            // Contents and band: shadowApplyAvatarBackgroundImage, below.
+        } else if banner.pattern {
             // «Узор»: copies at the row width instead of one cut-out band.
             let patternLayer: ShadowChatBannerPatternLayer
             if let current = self.shadowBannerPatternLayer {
@@ -5798,6 +5893,9 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
         }
         transition.updateFrame(node: bannerNode, frame: CGRect(origin: CGPoint(x: self.revealOffset, y: 0.0), size: size))
         self.shadowUpdateChatBannerPattern()
+        if banner.avatar != nil {
+            self.shadowApplyAvatarBackgroundImage()
+        }
         dimNode.backgroundColor = UIColor(white: 0.0, alpha: banner.dim)
         transition.updateFrame(node: dimNode, frame: CGRect(origin: CGPoint(), size: size))
         transition.updateAlpha(node: bannerNode, alpha: alpha)

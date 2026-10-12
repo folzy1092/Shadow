@@ -19,6 +19,9 @@ import AccountContext
 // keeps the separator barely visible. A «Узор» photo is drawn by
 // ShadowChatBannerPatternLayer: copies of the photo at the row width, fixed to
 // the list (the row passes its position from updateAbsoluteRect).
+// «Фон из аватарки» rows get an appearance with `avatar` set: the row loads
+// the chat's avatar itself (ChatListItemNode.shadowSetupAvatarBackground) and
+// lays a black fade over it (ShadowChatAvatarBackgroundLayers).
 
 public final class ShadowChatBannerAppearance {
     public let id: String
@@ -28,8 +31,21 @@ public final class ShadowChatBannerAppearance {
     public let offset: Double
     public let lightText: Bool
     public let pattern: Bool
+    // «Фон из аватарки»: `image` is a placeholder, the row draws the avatar.
+    public let avatar: ShadowChatAvatarBackground?
 
-    init(id: String, image: UIImage, imageAspect: Double, dim: CGFloat, offset: Double, lightText: Bool, pattern: Bool) {
+    // The band of an avatar shown in a row (faces sit a bit above the middle).
+    public static let avatarOffset: Double = 0.4
+    static let placeholderImage: UIImage = {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1.0
+        return UIGraphicsImageRenderer(size: CGSize(width: 1.0, height: 1.0), format: format).image { context in
+            UIColor.black.setFill()
+            context.fill(CGRect(x: 0.0, y: 0.0, width: 1.0, height: 1.0))
+        }
+    }()
+
+    init(id: String, image: UIImage, imageAspect: Double, dim: CGFloat, offset: Double, lightText: Bool, pattern: Bool, avatar: ShadowChatAvatarBackground? = nil) {
         self.id = id
         self.image = image
         self.imageAspect = imageAspect
@@ -37,6 +53,7 @@ public final class ShadowChatBannerAppearance {
         self.offset = offset
         self.lightText = lightText
         self.pattern = pattern
+        self.avatar = avatar
     }
 
     // CALayer.contentsRect for a row of this size.
@@ -113,6 +130,39 @@ public final class ShadowChatBannerImage {
             return self.prefersLightTextAsPattern(dim: banner.dim)
         }
         return self.prefersLightText(rowAspect: rowAspect, offset: banner.offset, dim: banner.dim)
+    }
+}
+
+// «Фон из аватарки»: the avatar (aspect fill, band at avatarOffset) is the
+// layer's contents; over it a black fade, dark on the left under the text and
+// clear towards the right, and the usual dimming. Used by the chat-list rows
+// and the settings preview.
+public final class ShadowChatAvatarBackgroundLayers {
+    public let fadeLayer = CAGradientLayer()
+
+    public init() {
+        self.fadeLayer.startPoint = CGPoint(x: 0.0, y: 0.5)
+        self.fadeLayer.endPoint = CGPoint(x: 1.0, y: 0.5)
+        let dark = UIColor(white: 0.0, alpha: CGFloat(ShadowChatAvatarBackground.darkAlpha)).cgColor
+        self.fadeLayer.colors = [dark, dark, UIColor(white: 0.0, alpha: 0.0).cgColor]
+    }
+
+    public func update(settings: ShadowChatAvatarBackground, size: CGSize) {
+        let fade = settings.fade
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        self.fadeLayer.frame = CGRect(origin: CGPoint(), size: size)
+        self.fadeLayer.locations = [0.0, NSNumber(value: fade.start), NSNumber(value: fade.end)]
+        CATransaction.commit()
+    }
+
+    // contentsRect of the avatar for a row of `size`.
+    public static func contentsRect(image: UIImage?, size: CGSize) -> CGRect {
+        guard let image, image.size.width > 0.0, image.size.height > 0.0, size.width > 0.0, size.height > 0.0 else {
+            return CGRect(x: 0.0, y: 0.0, width: 1.0, height: 1.0)
+        }
+        let rect = ShadowChatBanners.visibleRect(imageAspect: Double(image.size.width / image.size.height), rowAspect: Double(size.width / size.height), offset: ShadowChatBannerAppearance.avatarOffset)
+        return CGRect(x: rect.x, y: rect.y, width: rect.width, height: rect.height)
     }
 }
 
@@ -373,6 +423,7 @@ final class ShadowChatBannerBatch {
     private let basePath: String
     private let resolver: ShadowChatBannerResolver
     private var appearances: [String: ShadowChatBannerAppearance] = [:]
+    private var avatarAppearance: ShadowChatBannerAppearance?
     private var presentationData: [String: ChatListPresentationData] = [:]
 
     init(context: AccountContext, location: ChatListControllerLocation) {
@@ -384,7 +435,7 @@ final class ShadowChatBannerBatch {
         var index = ShadowChatBannersIndex()
         if enabled {
             index = ShadowChatBannerStore.shared.index(basePath: basePath)
-            enabled = !index.banners.isEmpty
+            enabled = !index.isEmpty
         }
         self.basePath = basePath
         self.resolver = ShadowChatBannerResolver(index: index)
@@ -392,8 +443,28 @@ final class ShadowChatBannerBatch {
     }
 
     func presentationData(_ base: ChatListPresentationData, peerId: EnginePeer.Id) -> ChatListPresentationData {
-        guard self.enabled, let banner = self.resolver.banner(peerId: peerId.toInt64()) else {
+        guard self.enabled else {
             return base
+        }
+        guard let banner = self.resolver.banner(peerId: peerId.toInt64()) else {
+            // «Фон из аватарки»: dark under the text, so always light text.
+            guard let avatars = self.resolver.avatarBackground(peerId: peerId.toInt64()) else {
+                return base
+            }
+            let key = "avatar|\(ObjectIdentifier(base).hashValue)"
+            if let cached = self.presentationData[key] {
+                return cached
+            }
+            let appearance: ShadowChatBannerAppearance
+            if let current = self.avatarAppearance {
+                appearance = current
+            } else {
+                appearance = ShadowChatBannerAppearance(id: "avatar", image: ShadowChatBannerAppearance.placeholderImage, imageAspect: 1.0, dim: CGFloat(avatars.dim), offset: ShadowChatBannerAppearance.avatarOffset, lightText: true, pattern: false, avatar: avatars)
+                self.avatarAppearance = appearance
+            }
+            let result = base.withShadowChatBanner(appearance, theme: ShadowChatBannerThemes.shared.theme(base: base.theme, lightText: true))
+            self.presentationData[key] = result
+            return result
         }
         let key = "\(banner.id)|\(ObjectIdentifier(base).hashValue)"
         if let cached = self.presentationData[key] {

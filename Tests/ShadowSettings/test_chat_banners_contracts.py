@@ -94,6 +94,26 @@ class ChatBannersContracts(unittest.TestCase):
         self.assertIn("ShadowChatBannerStore.shared.replaceImage(basePath: basePath, id: bannerId, jpegData: data)", screen)
         self.assertIn("ShadowChatBannerImageCache.shared.remove(path: path)", screen)
 
+    def test_avatar_background(self):
+        # 1.11.2: «Фон из аватарки» — chats without a photo show their avatar.
+        model = read("TelegramCore/Sources/AyuGram/ShadowChatBanners.swift")
+        self.assertIn("public struct ShadowChatAvatarBackground: Codable, Equatable", model)
+        self.assertIn("self.avatars = (try? container.decodeIfPresent(ShadowChatAvatarBackground.self, forKey: .avatars)) ?? ShadowChatAvatarBackground()", model)
+        rendering = read("ChatListUI/Sources/Node/ShadowChatBannerRendering.swift")
+        self.assertIn("enabled = !index.isEmpty", rendering)
+        self.assertIn("self.resolver.avatarBackground(peerId: peerId.toInt64())", rendering)
+        self.assertIn("public final class ShadowChatAvatarBackgroundLayers", rendering)
+        item = read("ChatListUI/Sources/Node/ChatListItem.swift")
+        self.assertIn("self.shadowSetupAvatarBackground(item: item)", item)
+        self.assertIn("peerAvatarImage(account: item.context.account, peerReference: PeerReference(peer)", item)
+        # Rows with an icon instead of an avatar get no avatar background.
+        self.assertIn("peer.id.isReplies || peer.id.isAnonymousSavedMessages || peer.id == item.context.account.peerId || peer.isDeleted", item)
+        screen = read("SettingsUI/Sources/ShadowChatBannersController.swift")
+        self.assertIn('title: "Фон из аватарки"', screen)
+        self.assertIn("pushImpl?(shadowChatAvatarBackgroundController(context: context))", screen)
+        self.assertIn('self.revealTitleLabel.text = "Где проявляется"', screen)
+        self.assertIn("ShadowChatBannerStore.shared.setAvatarBackground(basePath: basePath, settings)", screen)
+
     def test_storage_is_local(self):
         store = read("TelegramCore/Sources/AyuGram/ShadowChatBannerStore.swift")
         self.assertIn("AyuSavedMedia.ensureDirectory(basePath: basePath)", store)

@@ -659,6 +659,19 @@ UI-проекция настроек выбирается в `TelegramRootContro
   переписывает `<id>.jpg`, чаты/«Все чаты»/исключения/настройки остаются;
   перед записью фото убирается из `ShadowChatBannerImageCache`, миниатюры в
   списке фото — по объекту картинки, поэтому обновляются сами.
+- 1.11.2 — «Фон из аватарки» (экран «Фоны чатов» → «Фон из аватарки»,
+  `shadowChatAvatarBackgroundController`): `ShadowChatBannersIndex.avatars`
+  (`ShadowChatAvatarBackground`: `enabled`, `dim`, `reveal` 0…0.6, в том же
+  `index.json`, `decodeIfPresent`). Правило: своё фото → «Все чаты» (его
+  исключения — без фона) → аватарка (`avatarBackground(peerId:)`, у
+  резолвера то же). Batch даёт строке appearance с `avatar` (картинка —
+  заглушка, текст всегда светлый); строка сама грузит аватарку
+  (`ChatListItemNode.shadowSetupAvatarBackground`, `peerAvatarImage`
+  `largeProfileImage`, перезагрузка при смене представления) и кладёт
+  поверх `ShadowChatAvatarBackgroundLayers` — чёрный градиент 85% → 0 от
+  `reveal` на 60% ширины, плюс обычное затемнение. Нет аватарки, «Избранное»,
+  «Ответы», удалённый аккаунт — без фона. Превью на экране — своя аватарка в
+  строке реального размера, ползунки «Затемнение» и «Где проявляется».
 
 ## 5a. Замки чатов и второе пространство
 

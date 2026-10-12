@@ -12,6 +12,10 @@ import Foundation
 // their binding in `peerIds` (unused while «Все чаты» is on) and get it back
 // when it is switched off.
 //
+// «Фон из аватарки» (`avatars`, 1.11.2): a chat without a photo of its own
+// (and while no photo is on «Все чаты») shows its own avatar as a band —
+// dark on the left under the text, the avatar shows up towards the right edge.
+//
 // «Узор» (`pattern`, 1.11.1) is for seamless pictures: the photo is scaled to
 // the row width and repeated top to bottom, fixed to the list, so rows of any
 // height continue it without seams.
@@ -72,11 +76,86 @@ public struct ShadowChatBanner: Codable, Equatable {
     }
 }
 
+// «Фон из аватарки» settings, one per account (in index.json).
+public struct ShadowChatAvatarBackground: Codable, Equatable {
+    public static let defaultDim: Double = 0.15
+    public static let defaultReveal: Double = 0.25
+    // Share of the row width the avatar takes to show up fully.
+    public static let fadeWidth: Double = 0.6
+    public static let maxReveal: Double = 0.6
+
+    public var enabled: Bool
+    // Dimming of the whole avatar, 0…0.9 (like a photo's).
+    public var dim: Double
+    // Where the avatar starts to show, as a share of the row width: 0 — at the
+    // left edge, 0.6 — far right.
+    public var reveal: Double
+
+    public init(enabled: Bool = false, dim: Double = ShadowChatAvatarBackground.defaultDim, reveal: Double = ShadowChatAvatarBackground.defaultReveal) {
+        self.enabled = enabled
+        self.dim = ShadowChatBanners.clampDim(dim)
+        self.reveal = ShadowChatAvatarBackground.clampReveal(reveal)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case enabled, dim, reveal
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.enabled = (try? container.decodeIfPresent(Bool.self, forKey: .enabled)) ?? false
+        self.dim = ShadowChatBanners.clampDim((try? container.decodeIfPresent(Double.self, forKey: .dim)) ?? ShadowChatAvatarBackground.defaultDim)
+        self.reveal = ShadowChatAvatarBackground.clampReveal((try? container.decodeIfPresent(Double.self, forKey: .reveal)) ?? ShadowChatAvatarBackground.defaultReveal)
+    }
+
+    public static func clampReveal(_ value: Double) -> Double {
+        if !value.isFinite {
+            return defaultReveal
+        }
+        return max(0.0, min(maxReveal, value))
+    }
+
+    // The black fade over the avatar: fully dark (`darkAlpha`) before
+    // `start`, clear after `end` (shares of the row width).
+    public static let darkAlpha: Double = 0.85
+
+    public var fade: (start: Double, end: Double) {
+        let start = ShadowChatAvatarBackground.clampReveal(self.reveal)
+        return (start, min(1.0, start + ShadowChatAvatarBackground.fadeWidth))
+    }
+}
+
 public struct ShadowChatBannersIndex: Codable, Equatable {
     public var banners: [ShadowChatBanner]
+    public var avatars: ShadowChatAvatarBackground
 
-    public init(banners: [ShadowChatBanner] = []) {
+    public init(banners: [ShadowChatBanner] = [], avatars: ShadowChatAvatarBackground = ShadowChatAvatarBackground()) {
         self.banners = banners
+        self.avatars = avatars
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case banners, avatars
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.banners = try container.decode([ShadowChatBanner].self, forKey: .banners)
+        self.avatars = (try? container.decodeIfPresent(ShadowChatAvatarBackground.self, forKey: .avatars)) ?? ShadowChatAvatarBackground()
+    }
+
+    // «Фон из аватарки» for a chat: only without a photo of its own and while
+    // no photo is on «Все чаты» (its exclusions mean «no background at all»).
+    public func avatarBackground(peerId: Int64) -> ShadowChatAvatarBackground? {
+        guard self.avatars.enabled, self.allChatsBanner == nil, self.banner(peerId: peerId) == nil else {
+            return nil
+        }
+        return self.avatars
+    }
+
+    // Anything for the chat list to draw at all.
+    public var isEmpty: Bool {
+        return self.banners.isEmpty && !self.avatars.enabled
     }
 
     public func banner(id: String) -> ShadowChatBanner? {
@@ -161,6 +240,7 @@ public struct ShadowChatBannerResolver {
     private let byPeer: [Int64: ShadowChatBanner]
     private let allChats: ShadowChatBanner?
     private let excluded: Set<Int64>
+    private let avatars: ShadowChatAvatarBackground
 
     public init(index: ShadowChatBannersIndex) {
         var byPeer: [Int64: ShadowChatBanner] = [:]
@@ -173,6 +253,14 @@ public struct ShadowChatBannerResolver {
         self.byPeer = byPeer
         self.allChats = allChats
         self.excluded = Set(allChats?.excludedPeerIds ?? [])
+        self.avatars = index.avatars
+    }
+
+    public func avatarBackground(peerId: Int64) -> ShadowChatAvatarBackground? {
+        guard self.avatars.enabled, self.allChats == nil, self.byPeer[peerId] == nil else {
+            return nil
+        }
+        return self.avatars
     }
 
     public func banner(peerId: Int64) -> ShadowChatBanner? {

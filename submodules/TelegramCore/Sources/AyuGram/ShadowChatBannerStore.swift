@@ -105,6 +105,12 @@ public final class ShadowChatBannerStore {
         }
     }
 
+    public func setAvatarBackground(basePath: String, _ value: ShadowChatAvatarBackground) {
+        self.modify(basePath: basePath) { index in
+            index.avatars = ShadowChatAvatarBackground(enabled: value.enabled, dim: value.dim, reveal: value.reveal)
+        }
+    }
+
     public func setAllChats(basePath: String, bannerId: String, value: Bool) {
         self.modify(basePath: basePath) { index in
             index.setAllChats(value, bannerId: bannerId)

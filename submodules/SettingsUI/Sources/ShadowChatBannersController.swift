@@ -137,10 +137,12 @@ private func shadowPresentChatBannerPicker(from controller: ViewController?, con
 private final class ShadowChatBannersArguments {
     let open: (String) -> Void
     let add: () -> Void
+    let openAvatars: () -> Void
 
-    init(open: @escaping (String) -> Void, add: @escaping () -> Void) {
+    init(open: @escaping (String) -> Void, add: @escaping () -> Void, openAvatars: @escaping () -> Void) {
         self.open = open
         self.add = add
+        self.openAvatars = openAvatars
     }
 }
 
@@ -149,6 +151,7 @@ private enum ShadowChatBannersEntry: ItemListNodeEntry {
     case photo(index: Int, id: String, thumbnail: UIImage?, label: String)
     case add
     case footer
+    case avatars(enabled: Bool)
 
     var section: ItemListSectionId {
         switch self {
@@ -156,6 +159,8 @@ private enum ShadowChatBannersEntry: ItemListNodeEntry {
             return 0
         case .photo, .add, .footer:
             return 1
+        case .avatars:
+            return 2
         }
     }
 
@@ -165,6 +170,7 @@ private enum ShadowChatBannersEntry: ItemListNodeEntry {
         case let .photo(_, id, _, _): return "photo-" + id
         case .add: return "add"
         case .footer: return "footer"
+        case .avatars: return "avatars"
         }
     }
 
@@ -174,6 +180,7 @@ private enum ShadowChatBannersEntry: ItemListNodeEntry {
         case let .photo(index, _, _, _): return 1 + index
         case .add: return 100000
         case .footer: return 100001
+        case .avatars: return 100002
         }
     }
 
@@ -191,6 +198,8 @@ private enum ShadowChatBannersEntry: ItemListNodeEntry {
             if case .add = rhs { return true } else { return false }
         case .footer:
             if case .footer = rhs { return true } else { return false }
+        case let .avatars(enabled):
+            if case let .avatars(rhsEnabled) = rhs { return enabled == rhsEnabled } else { return false }
         }
     }
 
@@ -213,6 +222,10 @@ private enum ShadowChatBannersEntry: ItemListNodeEntry {
             })
         case .footer:
             return ItemListTextItem(presentationData: presentationData, text: .plain("Чат может быть привязан только к одному фото: если выбрать его для другого фото, он переедет туда. Своё фото чата важнее фото «Все чаты»."), sectionId: self.section)
+        case let .avatars(enabled):
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Фон из аватарки", label: enabled ? "Вкл" : "Выкл", labelStyle: .detailText, sectionId: self.section, style: .blocks, action: {
+                arguments.openAvatars()
+            })
         }
     }
 }
@@ -228,6 +241,8 @@ public func shadowChatBannersController(context: AccountContext) -> ViewControll
         pushImpl?(shadowChatBannerEditorController(context: context, bannerId: id))
     }, add: {
         addImpl?()
+    }, openAvatars: {
+        pushImpl?(shadowChatAvatarBackgroundController(context: context))
     })
 
     let signal = combineLatest(queue: .mainQueue(), context.sharedContext.presentationData, shadowChatBannersIndex(context: context))
@@ -248,6 +263,7 @@ public func shadowChatBannersController(context: AccountContext) -> ViewControll
         }
         entries.append(.add)
         entries.append(.footer)
+        entries.append(.avatars(enabled: index.avatars.enabled))
         let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Фоны чатов"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
         let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, animateChanges: true)
         return (controllerState, (listState, arguments))
@@ -989,5 +1005,389 @@ private final class ShadowChatBannerPreviewItemNode: ListViewItemNode, ItemListI
         default:
             break
         }
+    }
+}
+
+// MARK: - «Фон из аватарки»
+
+private final class ShadowChatAvatarBackgroundArguments {
+    let context: AccountContext
+    let setEnabled: (Bool) -> Void
+    let commit: (Double, Double) -> Void
+
+    init(context: AccountContext, setEnabled: @escaping (Bool) -> Void, commit: @escaping (Double, Double) -> Void) {
+        self.context = context
+        self.setEnabled = setEnabled
+        self.commit = commit
+    }
+}
+
+private enum ShadowChatAvatarBackgroundEntry: ItemListNodeEntry {
+    case enabled(Bool)
+    case preview(settings: ShadowChatAvatarBackground, peer: EnginePeer?, fontSize: PresentationFontSize, compact: Bool)
+    case footer(String)
+
+    var section: ItemListSectionId {
+        switch self {
+        case .enabled: return 0
+        case .preview, .footer: return 1
+        }
+    }
+
+    var stableId: Int {
+        switch self {
+        case .enabled: return 0
+        case .preview: return 1
+        case .footer: return 2
+        }
+    }
+
+    static func ==(lhs: ShadowChatAvatarBackgroundEntry, rhs: ShadowChatAvatarBackgroundEntry) -> Bool {
+        switch lhs {
+        case let .enabled(value):
+            if case let .enabled(rhsValue) = rhs { return value == rhsValue } else { return false }
+        case let .preview(settings, peer, fontSize, compact):
+            if case let .preview(rhsSettings, rhsPeer, rhsFontSize, rhsCompact) = rhs {
+                return settings == rhsSettings && peer == rhsPeer && fontSize == rhsFontSize && compact == rhsCompact
+            } else {
+                return false
+            }
+        case let .footer(text):
+            if case let .footer(rhsText) = rhs { return text == rhsText } else { return false }
+        }
+    }
+
+    static func <(lhs: ShadowChatAvatarBackgroundEntry, rhs: ShadowChatAvatarBackgroundEntry) -> Bool {
+        return lhs.stableId < rhs.stableId
+    }
+
+    func item(presentationData: ItemListPresentationData, arguments: Any) -> ListViewItem {
+        let arguments = arguments as! ShadowChatAvatarBackgroundArguments
+        switch self {
+        case let .enabled(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Фон из аватарки", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.setEnabled(value)
+            })
+        case let .preview(settings, peer, fontSize, compact):
+            return ShadowChatAvatarBackgroundPreviewItem(presentationData: presentationData, context: arguments.context, settings: settings, peer: peer, fontSize: fontSize, compact: compact, sectionId: self.section, commit: arguments.commit)
+        case let .footer(text):
+            return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
+        }
+    }
+}
+
+func shadowChatAvatarBackgroundController(context: AccountContext) -> ViewController {
+    let basePath = context.account.postbox.mediaBox.basePath
+    let arguments = ShadowChatAvatarBackgroundArguments(context: context, setEnabled: { value in
+        var settings = ShadowChatBannerStore.shared.index(basePath: basePath).avatars
+        guard settings.enabled != value else {
+            return
+        }
+        settings.enabled = value
+        ShadowChatBannerStore.shared.setAvatarBackground(basePath: basePath, settings)
+    }, commit: { dim, reveal in
+        var settings = ShadowChatBannerStore.shared.index(basePath: basePath).avatars
+        if settings.dim == dim && settings.reveal == reveal {
+            return
+        }
+        settings.dim = dim
+        settings.reveal = reveal
+        ShadowChatBannerStore.shared.setAvatarBackground(basePath: basePath, settings)
+    })
+
+    let accountPeer: Signal<EnginePeer?, NoError> = context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: context.account.peerId))
+
+    let signal = combineLatest(queue: .mainQueue(), context.sharedContext.presentationData, shadowChatBannersIndex(context: context), accountPeer)
+    |> map { presentationData, index, accountPeer -> (ItemListControllerState, (ItemListNodeState, Any)) in
+        var entries: [ShadowChatAvatarBackgroundEntry] = [.enabled(index.avatars.enabled)]
+        let compact = currentAyuGramSettings(accountId: context.account.id).compactChatList
+        entries.append(.preview(settings: index.avatars, peer: accountPeer, fontSize: presentationData.listsFontSize, compact: compact))
+        var footer = "Под строкой чата без своего фото — его аватарка: слева под текстом темно, к правому краю она проявляется. Сменилась аватарка — сменится и фон. Свои фото чатов важнее."
+        if index.allChatsBanner != nil {
+            footer += "\n\nСейчас одно фото стоит на «Все чаты» — пока оно включено, фон из аватарки не показывается."
+        }
+        entries.append(.footer(footer))
+        let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Фон из аватарки"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
+        let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, animateChanges: false)
+        return (controllerState, (listState, arguments))
+    }
+
+    return ItemListController(context: context, state: signal)
+}
+
+// A chat row at the real row size with your own avatar as the background,
+// then «Затемнение» and «Где проявляется». Sliders update the preview at once;
+// the store is written when the finger lifts.
+private final class ShadowChatAvatarBackgroundPreviewItem: ListViewItem, ItemListItem {
+    let presentationData: ItemListPresentationData
+    let context: AccountContext
+    let settings: ShadowChatAvatarBackground
+    let peer: EnginePeer?
+    let fontSize: PresentationFontSize
+    let compact: Bool
+    let sectionId: ItemListSectionId
+    let commit: (Double, Double) -> Void
+
+    init(presentationData: ItemListPresentationData, context: AccountContext, settings: ShadowChatAvatarBackground, peer: EnginePeer?, fontSize: PresentationFontSize, compact: Bool, sectionId: ItemListSectionId, commit: @escaping (Double, Double) -> Void) {
+        self.presentationData = presentationData
+        self.context = context
+        self.settings = settings
+        self.peer = peer
+        self.fontSize = fontSize
+        self.compact = compact
+        self.sectionId = sectionId
+        self.commit = commit
+    }
+
+    let selectable = false
+
+    func nodeConfiguredForParams(async: @escaping (@escaping () -> Void) -> Void, params: ListViewItemLayoutParams, synchronousLoads: Bool, previousItem: ListViewItem?, nextItem: ListViewItem?, completion: @escaping (ListViewItemNode, @escaping () -> (Signal<Void, NoError>?, (ListViewItemApply) -> Void)) -> Void) {
+        async {
+            let node = ShadowChatAvatarBackgroundPreviewItemNode()
+            let (layout, apply) = node.asyncLayout()(self, params)
+            node.contentSize = layout.contentSize
+            node.insets = layout.insets
+            Queue.mainQueue().async {
+                completion(node, {
+                    return (nil, { _ in apply() })
+                })
+            }
+        }
+    }
+
+    func updateNode(async: @escaping (@escaping () -> Void) -> Void, node: @escaping () -> ListViewItemNode, params: ListViewItemLayoutParams, previousItem: ListViewItem?, nextItem: ListViewItem?, animation: ListViewItemUpdateAnimation, completion: @escaping (ListViewItemNodeLayout, @escaping (ListViewItemApply) -> Void) -> Void) {
+        Queue.mainQueue().async {
+            if let nodeValue = node() as? ShadowChatAvatarBackgroundPreviewItemNode {
+                let makeLayout = nodeValue.asyncLayout()
+                async {
+                    let (layout, apply) = makeLayout(self, params)
+                    Queue.mainQueue().async {
+                        completion(layout, { _ in
+                            apply()
+                        })
+                    }
+                }
+            }
+        }
+    }
+}
+
+private final class ShadowChatAvatarBackgroundPreviewItemNode: ListViewItemNode, ItemListItemNode {
+    private static let sideInset: CGFloat = 16.0
+
+    private let avatarNode = AvatarNode(font: avatarPlaceholderFont(size: 26.0))
+    private let avatarDisposable = MetaDisposable()
+    private var cardView: UIView!
+    private var photoLayer: CALayer!
+    private var layers: ShadowChatAvatarBackgroundLayers!
+    private var dimLayer: CALayer!
+    private var titleLabel: UILabel!
+    private var textLabel: UILabel!
+    private var timeLabel: UILabel!
+    private var dimTitleLabel: UILabel!
+    private var dimValueLabel: UILabel!
+    private var dimSlider: UISlider!
+    private var revealTitleLabel: UILabel!
+    private var revealSlider: UISlider!
+
+    private var item: ShadowChatAvatarBackgroundPreviewItem?
+    private var dim: Double = ShadowChatAvatarBackground.defaultDim
+    private var reveal: Double = ShadowChatAvatarBackground.defaultReveal
+    private var isEditing = false
+    private var rowSize = CGSize()
+    private var avatarPeerId: EnginePeer.Id?
+    private var avatarImage: UIImage?
+
+    var tag: ItemListItemTag? {
+        return nil
+    }
+
+    override var canBeSelected: Bool {
+        return false
+    }
+
+    init() {
+        super.init(layerBacked: false)
+    }
+
+    override func didLoad() {
+        super.didLoad()
+
+        self.cardView = UIView()
+        self.photoLayer = CALayer()
+        self.layers = ShadowChatAvatarBackgroundLayers()
+        self.dimLayer = CALayer()
+        self.titleLabel = UILabel()
+        self.textLabel = UILabel()
+        self.timeLabel = UILabel()
+        self.dimTitleLabel = UILabel()
+        self.dimValueLabel = UILabel()
+        self.dimSlider = UISlider()
+        self.revealTitleLabel = UILabel()
+        self.revealSlider = UISlider()
+
+        self.cardView.clipsToBounds = true
+        self.photoLayer.contentsGravity = .resize
+        self.photoLayer.masksToBounds = true
+        self.photoLayer.backgroundColor = UIColor.black.cgColor
+        self.dimLayer.backgroundColor = UIColor.black.cgColor
+        self.cardView.layer.addSublayer(self.photoLayer)
+        self.cardView.layer.addSublayer(self.layers.fadeLayer)
+        self.cardView.layer.addSublayer(self.dimLayer)
+        self.cardView.addSubview(self.avatarNode.view)
+        self.timeLabel.textAlignment = .right
+        self.cardView.addSubview(self.titleLabel)
+        self.cardView.addSubview(self.textLabel)
+        self.cardView.addSubview(self.timeLabel)
+        self.view.addSubview(self.cardView)
+
+        self.dimTitleLabel.text = "Затемнение"
+        self.revealTitleLabel.text = "Где проявляется"
+        let labels: [UILabel] = [self.dimTitleLabel, self.dimValueLabel, self.revealTitleLabel]
+        for label in labels {
+            label.font = Font.regular(15.0)
+        }
+        self.dimValueLabel.textAlignment = .right
+        self.dimSlider.minimumValue = 0.0
+        self.dimSlider.maximumValue = Float(ShadowChatBanners.maxDim)
+        self.revealSlider.minimumValue = 0.0
+        self.revealSlider.maximumValue = Float(ShadowChatAvatarBackground.maxReveal)
+        let sliders: [UISlider] = [self.dimSlider, self.revealSlider]
+        for slider in sliders {
+            slider.addTarget(self, action: #selector(self.sliderBegan), for: .touchDown)
+            slider.addTarget(self, action: #selector(self.sliderChanged), for: .valueChanged)
+            slider.addTarget(self, action: #selector(self.sliderEnded), for: [.touchUpInside, .touchUpOutside, .touchCancel])
+        }
+        let controls: [UIView] = [self.dimTitleLabel, self.dimValueLabel, self.dimSlider, self.revealTitleLabel, self.revealSlider]
+        for view in controls {
+            self.view.addSubview(view)
+        }
+    }
+
+    func asyncLayout() -> (_ item: ShadowChatAvatarBackgroundPreviewItem, _ params: ListViewItemLayoutParams) -> (ListViewItemNodeLayout, () -> Void) {
+        return { item, params in
+            let rowHeight = ShadowChatBannerRows.rowHeight(fontSize: item.fontSize, compact: item.compact)
+            let height: CGFloat = 8.0 + rowHeight + 16.0 + 24.0 + 34.0 + 10.0 + 24.0 + 34.0 + 8.0
+            let layout = ListViewItemNodeLayout(contentSize: CGSize(width: params.width, height: height), insets: UIEdgeInsets(top: 8.0, left: 0.0, bottom: 0.0, right: 0.0))
+            return (layout, { [weak self] in
+                self?.apply(item: item, params: params)
+            })
+        }
+    }
+
+    private func apply(item: ShadowChatAvatarBackgroundPreviewItem, params: ListViewItemLayoutParams) {
+        let _ = self.view
+        self.item = item
+        if !self.isEditing {
+            self.dim = item.settings.dim
+            self.reveal = item.settings.reveal
+        }
+        let theme = item.presentationData.theme
+        let rowLeft = params.leftInset
+        let rowWidth = params.width - params.leftInset - params.rightInset
+        let left = params.leftInset + ShadowChatAvatarBackgroundPreviewItemNode.sideInset
+        let width = rowWidth - ShadowChatAvatarBackgroundPreviewItemNode.sideInset * 2.0
+        self.rowSize = CGSize(width: rowWidth, height: ShadowChatBannerRows.rowHeight(fontSize: item.fontSize, compact: item.compact))
+        var y: CGFloat = 8.0
+        self.cardView.frame = CGRect(origin: CGPoint(x: rowLeft, y: y), size: self.rowSize)
+        self.cardView.backgroundColor = theme.list.plainBackgroundColor
+        self.cardView.alpha = item.settings.enabled ? 1.0 : 0.5
+        y += self.rowSize.height + 16.0
+
+        let labelColor = theme.list.itemPrimaryTextColor
+        self.dimTitleLabel.textColor = labelColor
+        self.dimValueLabel.textColor = theme.list.itemSecondaryTextColor
+        self.revealTitleLabel.textColor = labelColor
+        let sliders: [UISlider] = [self.dimSlider, self.revealSlider]
+        for slider in sliders {
+            slider.minimumTrackTintColor = theme.list.itemAccentColor
+        }
+        self.dimTitleLabel.frame = CGRect(x: left, y: y, width: width * 0.6, height: 24.0)
+        self.dimValueLabel.frame = CGRect(x: left + width * 0.6, y: y, width: width * 0.4, height: 24.0)
+        y += 24.0
+        self.dimSlider.frame = CGRect(x: left, y: y, width: width, height: 34.0)
+        y += 34.0 + 10.0
+        self.revealTitleLabel.frame = CGRect(x: left, y: y, width: width, height: 24.0)
+        y += 24.0
+        self.revealSlider.frame = CGRect(x: left, y: y, width: width, height: 34.0)
+
+        if let peer = item.peer, self.avatarPeerId != peer.id {
+            self.avatarPeerId = peer.id
+            self.avatarNode.setPeer(context: item.context, theme: theme, peer: peer, synchronousLoad: false, displayDimensions: CGSize(width: 60.0, height: 60.0))
+            if let representation = peer.largeProfileImage ?? peer.smallProfileImage, let signal = peerAvatarImage(account: item.context.account, peerReference: PeerReference(peer), authorOfMessage: nil, representation: representation, displayDimensions: CGSize(width: 240.0, height: 240.0), clipStyle: .none) {
+                self.avatarDisposable.set((signal |> deliverOnMainQueue).start(next: { [weak self] result in
+                    guard let self, let image = result?.0 else {
+                        return
+                    }
+                    self.avatarImage = image
+                    self.photoLayer.contents = image.cgImage
+                    self.updatePreview()
+                }))
+            }
+        }
+        let baseFontSize = item.fontSize.itemListBaseFontSize
+        self.titleLabel.font = Font.semibold(floor(baseFontSize * 16.0 / 17.0))
+        self.textLabel.font = Font.regular(floor(baseFontSize * 15.0 / 17.0))
+        self.timeLabel.font = Font.regular(floor(baseFontSize * 14.0 / 17.0))
+        self.textLabel.numberOfLines = item.compact ? 1 : 2
+        self.titleLabel.text = item.peer?.compactDisplayTitle ?? "Folzy"
+        self.textLabel.text = "Фон из твоей аватарки 👀"
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        self.timeLabel.text = formatter.string(from: Date())
+        self.titleLabel.textColor = .white
+        self.textLabel.textColor = UIColor(white: 1.0, alpha: 0.72)
+        self.timeLabel.textColor = UIColor(white: 1.0, alpha: 0.72)
+        self.updatePreview()
+    }
+
+    private func updatePreview() {
+        guard self.isNodeLoaded, let item = self.item, self.rowSize.width > 0.0 else {
+            return
+        }
+        let row = self.rowSize
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        self.photoLayer.frame = CGRect(origin: CGPoint(), size: row)
+        self.photoLayer.contentsRect = ShadowChatAvatarBackgroundLayers.contentsRect(image: self.avatarImage, size: row)
+        self.dimLayer.frame = CGRect(origin: CGPoint(), size: row)
+        self.dimLayer.opacity = Float(self.dim)
+        CATransaction.commit()
+        self.layers.update(settings: ShadowChatAvatarBackground(enabled: true, dim: self.dim, reveal: self.reveal), size: row)
+
+        let avatarSize = floor(min(60.0, floor(item.fontSize.baseDisplaySize * 60.0 / 17.0)) * (item.compact ? 0.75 : 1.0))
+        self.avatarNode.frame = CGRect(x: 10.0, y: floor((row.height - avatarSize) / 2.0), width: avatarSize, height: avatarSize)
+        let textLeft: CGFloat = 10.0 + avatarSize + 10.0
+        let timeWidth: CGFloat = 56.0
+        let titleHeight = ceil(self.titleLabel.font.lineHeight)
+        let textHeight = ceil(self.textLabel.font.lineHeight) * CGFloat(self.textLabel.numberOfLines)
+        let titleY = max(2.0, floor((row.height - titleHeight - textHeight) / 2.0))
+        self.titleLabel.frame = CGRect(x: textLeft, y: titleY, width: row.width - textLeft - timeWidth - 10.0, height: titleHeight)
+        self.timeLabel.frame = CGRect(x: row.width - timeWidth - 10.0, y: titleY, width: timeWidth, height: titleHeight)
+        self.textLabel.frame = CGRect(x: textLeft, y: titleY + titleHeight, width: row.width - textLeft - 12.0, height: textHeight)
+
+        if !self.dimSlider.isTracking {
+            self.dimSlider.value = Float(self.dim)
+        }
+        if !self.revealSlider.isTracking {
+            self.revealSlider.value = Float(self.reveal)
+        }
+        self.dimValueLabel.text = "\(Int((self.dim * 100.0).rounded()))%"
+    }
+
+    @objc private func sliderBegan() {
+        self.isEditing = true
+    }
+
+    @objc private func sliderChanged() {
+        self.dim = ShadowChatBanners.clampDim(Double(self.dimSlider.value))
+        self.reveal = ShadowChatAvatarBackground.clampReveal(Double(self.revealSlider.value))
+        self.updatePreview()
+    }
+
+    @objc private func sliderEnded() {
+        self.sliderChanged()
+        self.isEditing = false
+        self.item?.commit(self.dim, self.reveal)
     }
 }
