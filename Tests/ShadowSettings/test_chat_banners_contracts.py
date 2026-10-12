@@ -85,6 +85,15 @@ class ChatBannersContracts(unittest.TestCase):
         self.assertNotIn("allChats", transfer)
         self.assertNotIn("excludedPeerIds", transfer)
 
+    def test_replace_photo(self):
+        # 1.11.2: «Заменить фото» keeps the photo's chats and settings.
+        store = read("TelegramCore/Sources/AyuGram/ShadowChatBannerStore.swift")
+        self.assertIn("public func replaceImage(basePath: String, id: String, jpegData: Data) -> Bool", store)
+        screen = read("SettingsUI/Sources/ShadowChatBannersController.swift")
+        self.assertIn('title: "Заменить фото"', screen)
+        self.assertIn("ShadowChatBannerStore.shared.replaceImage(basePath: basePath, id: bannerId, jpegData: data)", screen)
+        self.assertIn("ShadowChatBannerImageCache.shared.remove(path: path)", screen)
+
     def test_storage_is_local(self):
         store = read("TelegramCore/Sources/AyuGram/ShadowChatBannerStore.swift")
         self.assertIn("AyuSavedMedia.ensureDirectory(basePath: basePath)", store)

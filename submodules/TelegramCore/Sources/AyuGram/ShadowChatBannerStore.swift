@@ -75,6 +75,24 @@ public final class ShadowChatBannerStore {
         return banner
     }
 
+    // «Заменить фото» (1.11.2): a new picture for the same photo — its chats,
+    // «Все чаты», exclusions and settings stay. The file is rewritten, so the
+    // image cache (keyed by size and date) decodes it again.
+    @discardableResult
+    public func replaceImage(basePath: String, id: String, jpegData: Data) -> Bool {
+        guard self.index(basePath: basePath).banner(id: id) != nil else {
+            return false
+        }
+        do {
+            try jpegData.write(to: URL(fileURLWithPath: self.imagePath(basePath: basePath, id: id)), options: .atomic)
+        } catch {
+            return false
+        }
+        self.modify(basePath: basePath) { _ in
+        }
+        return true
+    }
+
     public func update(basePath: String, banner: ShadowChatBanner) {
         self.modify(basePath: basePath) { index in
             index.update(banner)

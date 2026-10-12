@@ -105,7 +105,8 @@ private func shadowChatBannerThumbnail(_ image: UIImage) -> UIImage {
     }
 }
 
-private func shadowPresentChatBannerPicker(from controller: ViewController?, context: AccountContext, completion: @escaping (ShadowChatBanner) -> Void) {
+// A photo from the camera roll, ready to store.
+private func shadowPresentChatBannerImagePicker(from controller: ViewController?, completion: @escaping (Data) -> Void) {
     guard let controller else {
         return
     }
@@ -116,13 +117,19 @@ private func shadowPresentChatBannerPicker(from controller: ViewController?, con
         guard let image, let data = shadowChatBannerJpegData(image) else {
             return
         }
-        if let banner = ShadowChatBannerStore.shared.add(basePath: context.account.postbox.mediaBox.basePath, jpegData: data) {
-            completion(banner)
-        }
+        completion(data)
     })
     delegate.retainSelf()
     picker.delegate = delegate
     controller.view.window?.rootViewController?.present(picker, animated: true)
+}
+
+private func shadowPresentChatBannerPicker(from controller: ViewController?, context: AccountContext, completion: @escaping (ShadowChatBanner) -> Void) {
+    shadowPresentChatBannerImagePicker(from: controller, completion: { data in
+        if let banner = ShadowChatBannerStore.shared.add(basePath: context.account.postbox.mediaBox.basePath, jpegData: data) {
+            completion(banner)
+        }
+    })
 }
 
 // MARK: - List of photos
@@ -214,7 +221,7 @@ public func shadowChatBannersController(context: AccountContext) -> ViewControll
     let basePath = context.account.postbox.mediaBox.basePath
     var pushImpl: ((ViewController) -> Void)?
     var addImpl: (() -> Void)?
-    // Thumbnails by photo id (a photo's file never changes).
+    // Thumbnails by decoded picture (a new object after «Заменить фото»).
     var thumbnails: [String: UIImage] = [:]
 
     let arguments = ShadowChatBannersArguments(open: { id in
@@ -227,12 +234,15 @@ public func shadowChatBannersController(context: AccountContext) -> ViewControll
     |> map { presentationData, index -> (ItemListControllerState, (ItemListNodeState, Any)) in
         var entries: [ShadowChatBannersEntry] = [.info]
         for (i, banner) in index.banners.enumerated() {
-            let thumbnailKey = banner.id + (banner.mirrored ? "|m" : "")
-            var thumbnail = thumbnails[thumbnailKey]
-            if thumbnail == nil, let image = ShadowChatBannerImageCache.shared.image(path: ShadowChatBannerStore.shared.imagePath(basePath: basePath, id: banner.id)) {
-                let made = shadowChatBannerThumbnail(image.image(mirrored: banner.mirrored))
-                thumbnails[thumbnailKey] = made
-                thumbnail = made
+            var thumbnail: UIImage?
+            if let image = ShadowChatBannerImageCache.shared.image(path: ShadowChatBannerStore.shared.imagePath(basePath: basePath, id: banner.id)) {
+                let thumbnailKey = "\(ObjectIdentifier(image).hashValue)" + (banner.mirrored ? "|m" : "")
+                thumbnail = thumbnails[thumbnailKey]
+                if thumbnail == nil {
+                    let made = shadowChatBannerThumbnail(image.image(mirrored: banner.mirrored))
+                    thumbnails[thumbnailKey] = made
+                    thumbnail = made
+                }
             }
             entries.append(.photo(index: i, id: banner.id, thumbnail: thumbnail, label: shadowChatBannerLabel(banner)))
         }
@@ -265,6 +275,7 @@ private final class ShadowChatBannerEditorArguments {
     var setMirrored: (Bool) -> Void = { _ in }
     var setPattern: (Bool) -> Void = { _ in }
     var setAllChats: (Bool) -> Void = { _ in }
+    var replace: () -> Void = {}
 
     init(context: AccountContext, commit: @escaping (Double, Double) -> Void, chooseChats: @escaping () -> Void, delete: @escaping () -> Void) {
         self.context = context
@@ -283,13 +294,14 @@ private enum ShadowChatBannerEditorEntry: ItemListNodeEntry {
     // Chats with this photo, or — with «Все чаты» on — the chats without it.
     case chats(allChats: Bool, count: Int)
     case chatsFooter(String)
+    case replace
     case delete
 
     var section: ItemListSectionId {
         switch self {
         case .preview, .mirrored, .pattern, .patternFooter: return 0
         case .allChats, .chats, .chatsFooter: return 1
-        case .delete: return 2
+        case .replace, .delete: return 2
         }
     }
 
@@ -303,6 +315,7 @@ private enum ShadowChatBannerEditorEntry: ItemListNodeEntry {
         case .pattern: return 5
         case .patternFooter: return 6
         case .allChats: return 7
+        case .replace: return 8
         }
     }
 
@@ -315,7 +328,8 @@ private enum ShadowChatBannerEditorEntry: ItemListNodeEntry {
         case .allChats: return 4
         case .chats: return 5
         case .chatsFooter: return 6
-        case .delete: return 7
+        case .replace: return 7
+        case .delete: return 8
         }
     }
 
@@ -339,6 +353,8 @@ private enum ShadowChatBannerEditorEntry: ItemListNodeEntry {
             if case let .chats(rhsAllChats, rhsCount) = rhs { return allChats == rhsAllChats && count == rhsCount } else { return false }
         case let .chatsFooter(text):
             if case let .chatsFooter(rhsText) = rhs { return text == rhsText } else { return false }
+        case .replace:
+            if case .replace = rhs { return true } else { return false }
         case .delete:
             if case .delete = rhs { return true } else { return false }
         }
@@ -378,6 +394,10 @@ private enum ShadowChatBannerEditorEntry: ItemListNodeEntry {
             })
         case let .chatsFooter(text):
             return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
+        case .replace:
+            return ItemListActionItem(presentationData: presentationData, title: "Заменить фото", kind: .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: {
+                arguments.replace()
+            })
         case .delete:
             return ItemListActionItem(presentationData: presentationData, title: "Удалить фото", kind: .destructive, alignment: .natural, sectionId: self.section, style: .blocks, action: {
                 arguments.delete()
@@ -482,6 +502,17 @@ func shadowChatBannerEditorController(context: AccountContext, bannerId: String)
         ShadowChatBannerStore.shared.setAllChats(basePath: basePath, bannerId: bannerId, value: value)
     }
 
+    var controllerRef: (() -> ViewController?)?
+    arguments.replace = {
+        shadowPresentChatBannerImagePicker(from: controllerRef?(), completion: { data in
+            // The old picture leaves the cache first: the store's change
+            // notification makes the editor and the list decode the new one.
+            let path = ShadowChatBannerStore.shared.imagePath(basePath: basePath, id: bannerId)
+            ShadowChatBannerImageCache.shared.remove(path: path)
+            ShadowChatBannerStore.shared.replaceImage(basePath: basePath, id: bannerId, jpegData: data)
+        })
+    }
+
     let accountPeer: Signal<EnginePeer?, NoError> = context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: context.account.peerId))
 
     // Names of the chats shown under the switch: bound chats, or exclusions.
@@ -530,6 +561,7 @@ func shadowChatBannerEditorController(context: AccountContext, bannerId: String)
                 entries.append(.chats(allChats: false, count: banner.peerIds.count))
                 entries.append(.chatsFooter(names.isEmpty ? "Выберите чаты, под строкой которых будет это фото." : names.joined(separator: ", ")))
             }
+            entries.append(.replace)
             entries.append(.delete)
         }
         let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Фон"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
@@ -546,6 +578,9 @@ func shadowChatBannerEditorController(context: AccountContext, bannerId: String)
     }
     dismissImpl = { [weak controller] in
         let _ = controller?.navigationController?.popViewController(animated: true)
+    }
+    controllerRef = { [weak controller] in
+        return controller
     }
     return controller
 }
