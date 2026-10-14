@@ -752,6 +752,15 @@ UI-проекция настроек выбирается в `TelegramRootContro
   `shadowKeepsLocalExtras`) оставляет локальные лишние после серверных. Удаление
   на другом устройстве локальные лишние не убирает.
 
+- «Стикер из сообщения» (как бот Quotly): пункт меню сообщения (до 10, в т.ч.
+  альбом) → `presentShadowMessageSticker` → тот же изолированный рендер, что
+  «Скриншоты сообщений» (`ChatControllerMessageScreenshot.swift`, режим
+  `ShadowMessageRenderMode.sticker`): имена и аватарки всех, без времени и
+  реакций, прозрачный фон (`stickerOptions`, в настройки скриншотов не
+  пишется). «Отправить» обрезает прозрачные поля
+  (`shadowCroppedToVisibleContent`) и шлёт стикером через стоковый
+  `enqueueStickerImage` (WebP ≤ 512).
+
 ## 5a. Замки чатов и второе пространство
 
 - Замки: `ShadowChatLock.swift` (хранилище), `TelegramUI/Sources/ShadowChatLockUI.swift`

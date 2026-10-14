@@ -2016,6 +2016,20 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             }
         }
 
+        // Shadow: «Стикер из сообщения» (like the Quotly bot) — the message with
+        // its author's avatar and name, sent here as a sticker after a preview.
+        if !shadowDisguiseFull, case .peer = chatPresentationInterfaceState.chatLocation, !messages.isEmpty, messages.count <= 10, !messages.contains(where: { $0.media.contains(where: { $0 is TelegramMediaAction }) }), chatPresentationInterfaceState.interfaceState.editMessage == nil {
+            let stickerMessageIds = messages.map { $0.id }
+            actions.append(.action(ContextMenuActionItem(text: "Стикер из сообщения", icon: { theme in
+                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Sticker"), color: theme.actionSheet.primaryTextColor)
+            }, action: { _, f in
+                f(.dismissWithoutContent)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: {
+                    (interfaceInteraction.chatController() as? ChatControllerImpl)?.presentShadowMessageSticker(ids: stickerMessageIds)
+                })
+            })))
+        }
+
         if !shadowDisguiseFull, messages.count == 1, message.flags.contains(.Incoming), message.id.namespace == Namespaces.Message.Cloud {
             actions.append(.action(ContextMenuActionItem(text: "Прочитать", icon: { theme in
                 return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/MarkAsRead"), color: theme.actionSheet.primaryTextColor)

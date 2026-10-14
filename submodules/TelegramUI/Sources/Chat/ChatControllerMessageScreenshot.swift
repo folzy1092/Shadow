@@ -28,9 +28,21 @@ private func shadowScreenshotUIColor(argb: Int32) -> UIColor {
 
 extension ChatControllerImpl {
     func presentShadowMessageScreenshot() {
-        guard !self.shadowScreenshotPreparing,
-              let ids = self.presentationInterfaceState.interfaceState.selectionState?.selectedIds, !ids.isEmpty else { return }
-        guard ids.count <= 100 else { self.shadowScreenshotError("Выбери не больше 100 сообщений."); return }
+        guard let ids = self.presentationInterfaceState.interfaceState.selectionState?.selectedIds, !ids.isEmpty else { return }
+        self.presentShadowMessageRender(ids: ids, mode: .screenshot)
+    }
+
+    // Shadow: «Стикер из сообщения» (like the Quotly bot): the same isolated
+    // render with avatar and name on a transparent background, cropped and
+    // sent to this chat as a WebP sticker (enqueueStickerImage).
+    func presentShadowMessageSticker(ids: [EngineMessage.Id]) {
+        guard !ids.isEmpty else { return }
+        self.presentShadowMessageRender(ids: Set(ids), mode: .sticker)
+    }
+
+    private func presentShadowMessageRender(ids: Set<EngineMessage.Id>, mode: ShadowMessageRenderMode) {
+        guard !self.shadowScreenshotPreparing else { return }
+        guard ids.count <= (mode == .sticker ? 10 : 100) else { self.shadowScreenshotError(mode == .sticker ? "Для стикера выбери не больше 10 сообщений." : "Выбери не больше 100 сообщений."); return }
         self.shadowScreenshotPreparing = true
         let dataSignal: Signal<(AyuGramSettings, [EngineRawMessage], EnginePeer?), NoError> = self.context.account.postbox.transaction { transaction in
             let messages = ids.compactMap { transaction.getMessage($0) }.sorted { $0.index < $1.index }
@@ -45,7 +57,7 @@ extension ChatControllerImpl {
             let (settings, messages, accountPeer) = payload
             guard let self else { return }
             self.shadowScreenshotPreparing = false
-            guard settings.messageScreenshot.enabled, self.viewIfLoaded?.window != nil else { return }
+            guard mode == .sticker || settings.messageScreenshot.enabled, self.viewIfLoaded?.window != nil else { return }
             guard messages.count == ids.count else { self.shadowScreenshotError("Часть сообщений больше недоступна. Выдели сообщения заново."); return }
             // Render messages that are still available locally, including secret,
             // expiring and copy-protected messages. This path only builds a local
@@ -54,7 +66,13 @@ extension ChatControllerImpl {
             while let next = presenter.presentedViewController { presenter = next }
             let state = self.presentationInterfaceState
             let data = ChatPresentationData(theme: ChatPresentationThemeData(theme: state.theme, wallpaper: state.chatWallpaper), fontSize: state.fontSize, strings: state.strings, dateTimeFormat: state.dateTimeFormat, nameDisplayOrder: state.nameDisplayOrder, disableAnimations: true, largeEmoji: false, chatBubbleCorners: state.bubbleCorners, shadowScreenshot: settings.messageScreenshot)
-            let preview = ShadowMessageScreenshotPreview(context: self.context, accountPeer: accountPeer, availableReactions: availableReactions, messages: messages, data: data, options: settings.messageScreenshot)
+            var options = settings.messageScreenshot
+            if mode == .sticker {
+                options = ShadowMessageScreenshotPreview.stickerOptions(options)
+            }
+            let preview = ShadowMessageScreenshotPreview(context: self.context, accountPeer: accountPeer, availableReactions: availableReactions, messages: messages, data: data, options: options, mode: mode, sendSticker: { [weak self] image in
+                self?.enqueueStickerImage(image, isMemoji: false)
+            })
             presenter.present(UINavigationController(rootViewController: preview), animated: true)
         })
     }
@@ -64,8 +82,15 @@ extension ChatControllerImpl {
     }
 }
 
+enum ShadowMessageRenderMode {
+    case screenshot
+    case sticker
+}
+
 // Isolated native message nodes. Never extracts live chat cells or scrolls history.
 private final class ShadowMessageScreenshotPreview: UIViewController {
+    private let mode: ShadowMessageRenderMode
+    private let sendSticker: ((UIImage) -> Void)?
     private let context: AccountContext
     private let accountPeer: EnginePeer?
     private let availableReactions: AvailableReactions?
@@ -86,7 +111,9 @@ private final class ShadowMessageScreenshotPreview: UIViewController {
     private let width: CGFloat = 390.0
     private var contentHeight: CGFloat = 12.0
 
-    init(context: AccountContext, accountPeer: EnginePeer?, availableReactions: AvailableReactions?, messages: [EngineRawMessage], data: ChatPresentationData, options: ShadowMessageScreenshotSettings) {
+    init(context: AccountContext, accountPeer: EnginePeer?, availableReactions: AvailableReactions?, messages: [EngineRawMessage], data: ChatPresentationData, options: ShadowMessageScreenshotSettings, mode: ShadowMessageRenderMode = .screenshot, sendSticker: ((UIImage) -> Void)? = nil) {
+        self.mode = mode
+        self.sendSticker = sendSticker
         self.context = context
         self.accountPeer = accountPeer
         self.availableReactions = availableReactions
@@ -100,6 +127,24 @@ private final class ShadowMessageScreenshotPreview: UIViewController {
         super.init(nibName: nil, bundle: nil)
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    // Quotly look: names and avatars of everyone, no time, no reactions, no
+    // anonymizing, no background. Not saved to the screenshot settings.
+    static func stickerOptions(_ base: ShadowMessageScreenshotSettings) -> ShadowMessageScreenshotSettings {
+        var options = base
+        options.enabled = true
+        options.anonymize = false
+        options.showNames = true
+        options.showOwnName = true
+        options.showPeerNames = true
+        options.showAvatars = true
+        options.showOwnAvatar = true
+        options.showPeerAvatars = true
+        options.showTime = false
+        options.showReactions = false
+        options.background = .chat
+        return options
+    }
 
     // Desktop-style quotes keep their bubbles. Use one neutral bubble palette
     // for both directions without mutating the live chat's shared theme.
@@ -176,6 +221,10 @@ private final class ShadowMessageScreenshotPreview: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        if self.mode == .sticker {
+            self.viewDidLoadSticker()
+            return
+        }
         self.title = "Скриншот сообщений"
         self.view.backgroundColor = self.data.theme.theme.list.blocksBackgroundColor
         self.navigationItem.leftBarButtonItem = UIBarButtonItem(title: "Закрыть", style: .plain, target: self, action: #selector(self.close))
@@ -495,4 +544,91 @@ private final class ShadowMessageScreenshotPreview: UIViewController {
         share.popoverPresentationController?.barButtonItem = self.shareButton
         self.present(share, animated: true)
     }
+}
+
+// Shadow: «Стикер из сообщения» mode of the same preview.
+extension ShadowMessageScreenshotPreview {
+    fileprivate func viewDidLoadSticker() {
+        self.title = "Стикер из сообщения"
+        self.view.backgroundColor = self.data.theme.theme.list.blocksBackgroundColor
+        self.navigationItem.leftBarButtonItem = UIBarButtonItem(title: "Закрыть", style: .plain, target: self, action: #selector(self.close))
+        let sendButton = UIBarButtonItem(title: "Отправить", style: .done, target: self, action: #selector(self.sendStickerPressed))
+        sendButton.isEnabled = false
+        self.shareButton = sendButton
+        self.navigationItem.rightBarButtonItems = [sendButton]
+        self.view.addSubview(self.scrollView)
+        self.scrollView.addSubview(self.content.view)
+        self.content.isUserInteractionEnabled = false
+        self.content.clipsToBounds = true
+        self.content.backgroundColor = .clear
+    }
+
+    @objc fileprivate func sendStickerPressed() {
+        guard self.ready, ShadowMessageScreenshotSettings.renderScale(width: Double(self.width), height: Double(self.contentHeight)) != nil else { return }
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 2.0
+        format.opaque = false
+        self.content.recursivelyEnsureDisplaySynchronously(true)
+        let previewTransform = self.content.view.transform
+        self.content.view.transform = .identity
+        let image = UIGraphicsImageRenderer(size: self.content.bounds.size, format: format).image { renderer in
+            self.content.layer.render(in: renderer.cgContext)
+        }
+        self.content.view.transform = previewTransform
+        guard let sticker = shadowCroppedToVisibleContent(image, padding: 6.0) else {
+            self.fail("Не получилось нарисовать стикер.")
+            return
+        }
+        let sendSticker = self.sendSticker
+        self.dismiss(animated: true, completion: {
+            sendSticker?(sticker)
+        })
+    }
+}
+
+// The image cropped to its non-transparent pixels plus `padding` points.
+private func shadowCroppedToVisibleContent(_ image: UIImage, padding: CGFloat) -> UIImage? {
+    guard let cgImage = image.cgImage else {
+        return nil
+    }
+    let width = cgImage.width
+    let height = cgImage.height
+    guard width > 0, height > 0 else {
+        return nil
+    }
+    let bytesPerRow = width * 4
+    var pixels = [UInt8](repeating: 0, count: bytesPerRow * height)
+    var minX = width
+    var minY = height
+    var maxX = -1
+    var maxY = -1
+    let drawn: Bool = pixels.withUnsafeMutableBytes { buffer -> Bool in
+        guard let context = CGContext(data: buffer.baseAddress, width: width, height: height, bitsPerComponent: 8, bytesPerRow: bytesPerRow, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else {
+            return false
+        }
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+        return true
+    }
+    guard drawn else {
+        return nil
+    }
+    // Row 0 of the bitmap is the top row of the image.
+    for y in 0 ..< height {
+        let row = y * bytesPerRow
+        for x in 0 ..< width where pixels[row + x * 4 + 3] > 8 {
+            minX = min(minX, x)
+            maxX = max(maxX, x)
+            minY = min(minY, y)
+            maxY = max(maxY, y)
+        }
+    }
+    guard maxX >= minX, maxY >= minY else {
+        return nil
+    }
+    let inset = Int(padding * image.scale)
+    let rect = CGRect(x: max(0, minX - inset), y: max(0, minY - inset), width: min(width, maxX + inset + 1) - max(0, minX - inset), height: min(height, maxY + inset + 1) - max(0, minY - inset))
+    guard let cropped = cgImage.cropping(to: rect) else {
+        return nil
+    }
+    return UIImage(cgImage: cropped, scale: image.scale, orientation: .up)
 }
