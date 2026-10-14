@@ -189,11 +189,11 @@ func titlePanelForChatPresentationInterfaceState(_ chatPresentationInterfaceStat
             if case let .combined(layout) = shadowArrangement {
                 let style = ShadowBusinessBotPinnedTitlePanelNode.Style(layout: layout, pinnedFirst: shadowSettings.businessBotPinnedFirst, compactBot: shadowSettings.businessBotPinnedCompact)
                 if let currentPanel = currentPanel as? ShadowBusinessBotPinnedTitlePanelNode {
-                    currentPanel.style = style
+                    currentPanel.panelStyle = style
                     return currentPanel
                 } else {
                     let panel = ShadowBusinessBotPinnedTitlePanelNode(context: context, animationCache: controllerInteraction?.presentationContext.animationCache, animationRenderer: controllerInteraction?.presentationContext.animationRenderer)
-                    panel.style = style
+                    panel.panelStyle = style
                     panel.interfaceInteraction = interfaceInteraction
                     return panel
                 }

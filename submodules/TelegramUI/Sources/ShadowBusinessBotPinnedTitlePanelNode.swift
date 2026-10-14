@@ -27,7 +27,7 @@ final class ShadowBusinessBotPinnedTitlePanelNode: ChatTitleAccessoryPanelNode {
     private let pinnedPanel: ChatPinnedMessageTitlePanelNode
     private let separatorNode: ASDisplayNode
 
-    var style = Style(layout: .split, pinnedFirst: false, compactBot: false)
+    var panelStyle = Style(layout: .split, pinnedFirst: false, compactBot: false)
 
     override var interfaceInteraction: ChatPanelInterfaceInteraction? {
         didSet {
@@ -52,7 +52,7 @@ final class ShadowBusinessBotPinnedTitlePanelNode: ChatTitleAccessoryPanelNode {
     override func updateLayout(width: CGFloat, leftInset: CGFloat, rightInset: CGFloat, transition: ContainedViewLayoutTransition, interfaceState: ChatPresentationInterfaceState) -> LayoutResult {
         self.separatorNode.backgroundColor = interfaceState.theme.list.itemPlainSeparatorColor
 
-        switch self.style.layout {
+        switch self.panelStyle.layout {
         case .stacked, .pinnedOnly:
             self.botPanel.shadowStyle = .full
             let botResult = self.botPanel.updateLayout(width: width, leftInset: leftInset, rightInset: rightInset, transition: transition, interfaceState: interfaceState)
@@ -62,7 +62,7 @@ final class ShadowBusinessBotPinnedTitlePanelNode: ChatTitleAccessoryPanelNode {
 
             let botFrame: CGRect
             let pinnedFrame: CGRect
-            if self.style.pinnedFirst {
+            if self.panelStyle.pinnedFirst {
                 pinnedFrame = CGRect(origin: CGPoint(), size: CGSize(width: width, height: pinnedHeight))
                 botFrame = CGRect(origin: CGPoint(x: 0.0, y: pinnedFrame.maxY), size: CGSize(width: width, height: botHeight))
             } else {
@@ -78,29 +78,29 @@ final class ShadowBusinessBotPinnedTitlePanelNode: ChatTitleAccessoryPanelNode {
             let height = botHeight + pinnedHeight
             return LayoutResult(backgroundHeight: height, insetHeight: height, hitTestSlop: 0.0)
         case .split, .icon:
-            let isIcon = self.style.layout == .icon
+            let isIcon = self.panelStyle.layout == .icon
             let height: CGFloat = 50.0
             let contentWidth = width - leftInset - rightInset
 
-            self.botPanel.shadowStyle = isIcon ? .icon : .half(showName: !self.style.compactBot)
+            self.botPanel.shadowStyle = isIcon ? .icon : .half(showName: !self.panelStyle.compactBot)
             // The bot's content is laid out from its left edge, so its width
             // can be read off the first layout (icon / without the name).
             let botAvailableWidth = isIcon ? contentWidth : CGFloat(ShadowBusinessBotPanel.splitBotWidth(totalWidth: Double(contentWidth), compact: false, contentWidth: 0.0))
             // At the right edge of the capsule the bot keeps off the rounding.
-            let botRightInset: CGFloat = self.style.pinnedFirst ? (isIcon ? 4.0 : 8.0) : 0.0
+            let botRightInset: CGFloat = self.panelStyle.pinnedFirst ? (isIcon ? 4.0 : 8.0) : 0.0
             let _ = self.botPanel.updateLayout(width: botAvailableWidth, leftInset: 0.0, rightInset: botRightInset, transition: transition, interfaceState: interfaceState)
             let botWidth: CGFloat
             if isIcon {
                 botWidth = self.botPanel.shadowContentWidth
             } else {
-                botWidth = CGFloat(ShadowBusinessBotPanel.splitBotWidth(totalWidth: Double(contentWidth), compact: self.style.compactBot, contentWidth: Double(self.botPanel.shadowContentWidth)))
+                botWidth = CGFloat(ShadowBusinessBotPanel.splitBotWidth(totalWidth: Double(contentWidth), compact: self.panelStyle.compactBot, contentWidth: Double(self.botPanel.shadowContentWidth)))
             }
             let pinnedWidth = max(0.0, contentWidth - botWidth)
 
             let botFrame: CGRect
             let pinnedFrame: CGRect
             let separatorX: CGFloat
-            if self.style.pinnedFirst {
+            if self.panelStyle.pinnedFirst {
                 pinnedFrame = CGRect(origin: CGPoint(x: leftInset, y: 0.0), size: CGSize(width: pinnedWidth, height: height))
                 botFrame = CGRect(origin: CGPoint(x: pinnedFrame.maxX, y: 0.0), size: CGSize(width: botWidth, height: height))
                 separatorX = botFrame.minX
@@ -112,7 +112,7 @@ final class ShadowBusinessBotPinnedTitlePanelNode: ChatTitleAccessoryPanelNode {
             transition.updateFrame(node: self.botPanel, frame: botFrame)
             // After the bot the pin's stripe moves closer (the pin panel adds
             // 18 pt for the capsule edge it no longer touches).
-            let pinnedLeftInset: CGFloat = self.style.pinnedFirst ? 0.0 : -6.0
+            let pinnedLeftInset: CGFloat = self.panelStyle.pinnedFirst ? 0.0 : -6.0
             let _ = self.pinnedPanel.updateLayout(width: pinnedWidth, leftInset: pinnedLeftInset, rightInset: 0.0, transition: transition, interfaceState: interfaceState)
             transition.updateFrame(node: self.pinnedPanel, frame: pinnedFrame)
 

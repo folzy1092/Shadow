@@ -780,4 +780,8 @@ UI-проекция настроек выбирается в `TelegramRootContro
   идут в сохранённые значения (`storedAyuGramSettings`). Не записывайте
   значение, прочитанное через `currentAyuGramSettings`/`ayuGramSettingsCurrent`,
   в настройки другого аккаунта: в режиме Full это затрёт настоящие настройки.
+- У `ASDisplayNode` (и любой панели-узла) уже есть свойство `style`
+  (`ASLayoutElementStyle`) — своё свойство так не называть (сборка 34824 упала
+  на `var style` в `ShadowBusinessBotPinnedTitlePanelNode`). Сюда же `frame`,
+  `bounds`, `layer`, `view`, `supernode` и прочие имена UIView/ASDisplayNode.
 - Ответы пользователю — на русском.
