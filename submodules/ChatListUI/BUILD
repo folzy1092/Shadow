@@ -35,6 +35,7 @@ swift_library(
         "//submodules/PeerPresenceStatusManager:PeerPresenceStatusManager",
         "//submodules/PeerOnlineMarkerNode:PeerOnlineMarkerNode",
         "//submodules/LocalizedPeerData:LocalizedPeerData",
+        "//submodules/PromptUI:PromptUI",
         "//submodules/ChatTitleActivityNode:ChatTitleActivityNode",
         "//submodules/DeleteChatPeerActionSheetItem:DeleteChatPeerActionSheetItem",
         "//submodules/LanguageSuggestionUI:LanguageSuggestionUI",

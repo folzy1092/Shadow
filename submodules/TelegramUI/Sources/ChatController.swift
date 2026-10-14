@@ -7279,7 +7279,8 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             if !loadState {
                 return .single(nil)
             } else {
-                return ChatControllerImpl.topPinnedMessageSignal(context: context, chatLocation: chatLocation, referenceMessage: referenceMessage)
+                // Shadow: local pins (ShadowLocalPinStore) next to the real ones.
+                return shadowMergeLocalPins(server: ChatControllerImpl.topPinnedMessageSignal(context: context, chatLocation: chatLocation, referenceMessage: referenceMessage), context: context, chatLocation: chatLocation, referenceMessage: referenceMessage)
             }
         }
     }

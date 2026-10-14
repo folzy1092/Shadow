@@ -1329,6 +1329,7 @@ public final class ChatListNode: ListViewImpl {
     private let chatListDisposable = MetaDisposable()
     private let shadowNamesDisposable = MetaDisposable()
     private var shadowChatLockObserver: NSObjectProtocol?
+    private var shadowChatTitlesObserver: NSObjectProtocol?
     private var shadowSpaceObserver: NSObjectProtocol?
     private var shadowChatBannersObserver: NSObjectProtocol?
     private let shadowChatBannersDisposable = MetaDisposable()
@@ -3228,6 +3229,18 @@ public final class ChatListNode: ListViewImpl {
                 return state
             }
         }))
+        // Shadow: «Своё название» (ShadowChatTitleStore) re-renders the rows the
+        // same way as a lock change.
+        self.shadowChatTitlesObserver = NotificationCenter.default.addObserver(forName: ShadowChatTitleStore.didChangeNotification, object: nil, queue: .main, using: { [weak self] _ in
+            guard let self else {
+                return
+            }
+            self.updateState { state in
+                var state = state
+                state.presentationData = state.presentationData.withPreferUsernameForNonContacts(state.presentationData.preferUsernameForNonContacts, botsEnabled: state.presentationData.preferUsernameForBots)
+                return state
+            }
+        })
         // Shadow: a chat lock change re-renders the rows (new presentation data
         // instance), so the preview spoiler appears or disappears right away.
         self.shadowChatLockObserver = NotificationCenter.default.addObserver(forName: ShadowChatLockStore.didChangeNotification, object: nil, queue: .main, using: { [weak self] _ in
@@ -3296,6 +3309,9 @@ public final class ChatListNode: ListViewImpl {
     deinit {
         self.chatListDisposable.dispose()
         self.shadowNamesDisposable.dispose()
+        if let shadowChatTitlesObserver = self.shadowChatTitlesObserver {
+            NotificationCenter.default.removeObserver(shadowChatTitlesObserver)
+        }
         if let shadowChatLockObserver = self.shadowChatLockObserver {
             NotificationCenter.default.removeObserver(shadowChatLockObserver)
         }

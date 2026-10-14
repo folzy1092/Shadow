@@ -1789,6 +1789,21 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                 })))
             }
         }
+
+        // Shadow: «Закрепить у себя» (ShadowLocalPinStore) — a pin only this
+        // device sees. Without the right to pin it is plain «Закрепить».
+        if !shadowDisguiseFull, messages.count == 1, case .peer = chatPresentationInterfaceState.chatLocation, messages[0].id.namespace == Namespaces.Message.Cloud, messages[0].id.peerId.namespace != Namespaces.Peer.SecretChat, !messages[0].tags.contains(.pinned) {
+            let localPinMessageId = messages[0].id
+            let isLocallyPinned = shadowIsLocallyPinned(context: context, messageId: localPinMessageId)
+            let localPinTitle = isLocallyPinned ? "Открепить у себя" : (canPin ? "Закрепить у себя" : "Закрепить")
+            actions.append(.action(ContextMenuActionItem(text: localPinTitle, icon: { theme in
+                return generateTintedImage(image: UIImage(bundleImageName: isLocallyPinned ? "Chat/Context Menu/Unpin" : "Chat/Context Menu/Pin"), color: theme.actionSheet.primaryTextColor)
+            }, action: { _, f in
+                f(.dismissWithoutContent)
+                shadowSetLocallyPinned(context: context, messageId: localPinMessageId, pinned: !isLocallyPinned)
+                (interfaceInteraction.chatController() as? ChatControllerImpl)?.shadowLocalPinToast(isLocallyPinned ? "Откреплено у вас" : "Закреплено только у вас")
+            })))
+        }
         
         if let activePoll, messages[0].forwardInfo == nil {
             var canStopPoll = false

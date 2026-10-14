@@ -718,6 +718,26 @@ UI-проекция настроек выбирается в `TelegramRootContro
   чат», «Пространство ›». Новые действия форка над чатом добавлять туда, а не в
   стоковое меню.
 
+- «Закрепить у себя» (локальный закреп): `ShadowLocalPinStore`
+  (`ShadowLocalPins.swift`, UserDefaults устройства, «аккаунт/чат» →
+  `namespace:id`, до 100 на чат, тест `LocalPinsTests.swift`). Пункт в меню
+  сообщения (`ChatInterfaceStateContextMenus`): есть право закреплять — рядом со
+  стоковым «Закрепить у себя»; нет права — просто «Закрепить» (только у себя) +
+  тост. Панель закрепа: `ChatController.topPinnedScrollMessage` →
+  `shadowMergeLocalPins` (`TelegramUI/Chat/ShadowLocalPinsChat.swift`)
+  подмешивает локальные к настоящим (выбор как у стоковой панели —
+  `ShadowLocalPins.pickIndex`). Крестик и «Открепить» на локальном —
+  `shadowHandleLocalPinUnpin` (на сервер ничего), кнопка списка —
+  `shadowOpenLocalPinList` (шторка локальных). Зажатие панели (превью списка)
+  по-прежнему показывает только настоящие закрепы.
+- «Своё название»: `ShadowChatTitleStore` (`ShadowChatTitles.swift`,
+  UserDefaults, кэш в памяти, тест `ChatTitlesTests.swift`). Читается в
+  `EnginePeer.shadowCustomTitle`/`shadowDisplayTitle` (`LocalizedPeerData`:
+  список чатов, профиль, имена авторов) и в `ChatTitleView`/`ChatTitleComponent`
+  (шапка чата); в Full-маскировке не действует. Задаётся из «Shadow ›» в меню
+  чата (`shadowRenameChat`, PromptUI), список перерисовывается по
+  `didChangeNotification` (`ChatListNode`).
+
 ## 5a. Замки чатов и второе пространство
 
 - Замки: `ShadowChatLock.swift` (хранилище), `TelegramUI/Sources/ShadowChatLockUI.swift`

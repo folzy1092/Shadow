@@ -10,7 +10,18 @@ public extension EnginePeer {
         return ShadowPeerName.username(self.addressName, enabled: enabled, isContact: isContact, isSelf: self.id == accountPeerId, isBot: user.botInfo != nil, botsEnabled: botsEnabled)
     }
 
+    // Shadow: «Своё название» (ShadowChatTitleStore), not in the Full disguise.
+    func shadowCustomTitle(accountPeerId: EnginePeer.Id) -> String? {
+        if self.id == accountPeerId || ShadowDisguise.shared.isFull {
+            return nil
+        }
+        return ShadowChatTitleStore.shared.title(accountPeerId: accountPeerId.toInt64(), peerId: self.id.toInt64())
+    }
+
     func shadowDisplayTitle(strings: PresentationStrings, displayOrder: PresentationPersonNameOrder, accountPeerId: EnginePeer.Id, isContact: Bool?, enabled: Bool, botsEnabled: Bool = false) -> String {
+        if let customTitle = self.shadowCustomTitle(accountPeerId: accountPeerId) {
+            return customTitle
+        }
         return self.shadowUsername(accountPeerId: accountPeerId, isContact: isContact, enabled: enabled, botsEnabled: botsEnabled)
             ?? self.displayTitle(strings: strings, displayOrder: displayOrder)
     }

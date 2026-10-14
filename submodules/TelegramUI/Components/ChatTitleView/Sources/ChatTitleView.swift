@@ -302,7 +302,9 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
                                 } else if peerView.peerId.isAnonymousSavedMessages {
                                     segments = [.text(0, NSAttributedString(string: self.strings.ChatList_AuthorHidden, font: titleFont, textColor: titleTheme.rootController.navigationBar.primaryTextColor))]
                                 } else {
-                                    if let username = EnginePeer(peer).shadowUsername(accountPeerId: self.context.account.peerId, isContact: peerView.isContact, enabled: self.preferUsernameForNonContacts, botsEnabled: self.preferUsernameForBots) {
+                                    if let customTitle = EnginePeer(peer).shadowCustomTitle(accountPeerId: self.context.account.peerId) {
+                                        segments = [.text(0, NSAttributedString(string: customTitle, font: titleFont, textColor: titleTheme.rootController.navigationBar.primaryTextColor))]
+                                    } else if let username = EnginePeer(peer).shadowUsername(accountPeerId: self.context.account.peerId, isContact: peerView.isContact, enabled: self.preferUsernameForNonContacts, botsEnabled: self.preferUsernameForBots) {
                                         segments = [.text(0, NSAttributedString(string: username, font: titleFont, textColor: titleTheme.rootController.navigationBar.primaryTextColor))]
                                     } else if !peerView.isContact, let user = peer as? TelegramUser, !user.flags.contains(.isSupport), user.botInfo == nil, let phone = user.phone, !phone.isEmpty {
                                         segments = [.text(0, NSAttributedString(string: formatPhoneNumber(context: self.context, number: phone), font: titleFont, textColor: titleTheme.rootController.navigationBar.primaryTextColor))]

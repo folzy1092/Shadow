@@ -3409,6 +3409,11 @@ extension ChatControllerImpl {
                 }
             }
         }, unpinMessage: { [weak self] id, askForConfirmation, contextController in
+            // Shadow: a local pin (ShadowLocalPinStore) is unpinned here only.
+            if let strongSelf = self, strongSelf.shadowHandleLocalPinUnpin(messageId: id) {
+                contextController?.dismiss(completion: nil)
+                return
+            }
             let impl: () -> Void = {
                 guard let strongSelf = self else {
                     return
@@ -3612,6 +3617,10 @@ extension ChatControllerImpl {
             })
         }, openPinnedList: { [weak self] messageId in
             guard let strongSelf = self else {
+                return
+            }
+            // Shadow: the panel shows a local pin — its own list.
+            if strongSelf.shadowOpenLocalPinList(messageId: messageId) {
                 return
             }
             strongSelf.openPinnedMessages(at: messageId)

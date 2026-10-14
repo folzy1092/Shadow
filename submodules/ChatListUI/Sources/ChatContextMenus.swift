@@ -15,6 +15,7 @@ import TelegramPresentationData
 import TelegramStringFormatting
 import ChatTimerScreen
 import NotificationPeerExceptionController
+import PromptUI
 
 func archiveContextMenuItems(context: AccountContext, group: EngineChatList.Group, chatListController: ChatListControllerImpl?) -> Signal<[ContextMenuItem], NoError> {
     let presentationData = context.sharedContext.currentPresentationData.with({ $0 })
@@ -1143,8 +1144,30 @@ func shadowChatContextSubmenuItems(context: AccountContext, peerId: EnginePeer.I
             c?.pushItems(items: .single(ContextController.Items(content: .list(subItems))))
         }))
         items.append(spaceItem)
+
+        let customTitle = ShadowChatTitleStore.shared.title(accountPeerId: context.account.peerId.toInt64(), peerId: peerId.toInt64())
+        items.append(.action(ContextMenuActionItem(text: customTitle == nil ? "Своё название" : "Изменить название", icon: { theme in
+            return generateTintedImage(image: UIImage(systemName: "character.cursor.ibeam"), color: theme.contextMenu.primaryColor)
+        }, action: { _, f in
+            f(.default)
+            shadowRenameChat(context: context, peerId: peerId, parentController: chatListController)
+        })))
     }
     return items
+}
+
+// Shadow: «Своё название» (ShadowChatTitleStore): a name only this device shows.
+// An empty name gives the real one back.
+func shadowRenameChat(context: AccountContext, peerId: EnginePeer.Id, parentController: ViewController?) {
+    let accountPeerId = context.account.peerId.toInt64()
+    let current = ShadowChatTitleStore.shared.title(accountPeerId: accountPeerId, peerId: peerId.toInt64())
+    let controller = promptController(context: context, text: "Своё название", subtitle: "Видно только вам, на этом устройстве. Пустое — настоящее название.", value: current, placeholder: "Название", characterLimit: ShadowChatTitleStore.maxLength, apply: { value in
+        guard let value else {
+            return
+        }
+        ShadowChatTitleStore.shared.setTitle(value, accountPeerId: accountPeerId, peerId: peerId.toInt64())
+    })
+    parentController?.present(controller, in: .window(.root))
 }
 
 // Shadow: changes the space visibility of chats. Moving a chat to "only the

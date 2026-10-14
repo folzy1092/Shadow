@@ -465,7 +465,9 @@ public final class ChatTitleComponent: Component {
                                 content: .text(component.strings.ChatList_AuthorHidden)
                             )]
                         } else {
-                            if let username = EnginePeer(peer).shadowUsername(accountPeerId: component.context.account.peerId, isContact: peerView.isContact, enabled: self.preferUsernameForNonContacts, botsEnabled: self.preferUsernameForBots) {
+                            if let customTitle = EnginePeer(peer).shadowCustomTitle(accountPeerId: component.context.account.peerId) {
+                                titleSegments = [AnimatedTextComponent.Item(id: AnyHashable(0), isUnbreakable: true, content: .text(customTitle))]
+                            } else if let username = EnginePeer(peer).shadowUsername(accountPeerId: component.context.account.peerId, isContact: peerView.isContact, enabled: self.preferUsernameForNonContacts, botsEnabled: self.preferUsernameForBots) {
                                 titleSegments = [AnimatedTextComponent.Item(id: AnyHashable(0), isUnbreakable: true, content: .text(username))]
                             } else if !peerView.isContact, let user = peer as? TelegramUser, !user.flags.contains(.isSupport), user.botInfo == nil, let phone = user.phone, !phone.isEmpty {
                                 titleSegments = [AnimatedTextComponent.Item(
