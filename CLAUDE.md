@@ -21,6 +21,11 @@ This file provides guidance to AI assistants when working with code in this repo
 > for users, new features with the settings section where to find them. Rules and
 > format: SHADOW_AGENT_MAP §5d «Список изменений».
 >
+> **Time for Folzy is always Riga time** (Europe/Riga: UTC+3 in summer,
+> UTC+2 in winter; Folzy, 2026-10-14): every time you mention to Folzy —
+> CI checks, reminders, «проверю в …» — give it in Riga time, not UTC.
+> Schedulers (send_later, cron) still take UTC/CRON_TZ; convert.
+>
 > **Announce builds yourself, right away** (Folzy, 2026-10-07): every CI build
 > with user-visible changes gets patch notes and is announced
 > (`tools/shadow-announce.py`) as soon as CI is green — do not wait to be asked.
