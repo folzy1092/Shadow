@@ -39,7 +39,7 @@ public struct ShadowSettingsDocument: Codable, Equatable {
         "saveAllIncomingMedia", "mediaAutoCleanKeepPinned", "mediaAutoCleanKeepChannels",
         "mediaAutoCleanKeepBots", "showProfileId", "showProfileDC",
         "showRegistrationDate", "hideOwnPhoneNumber",
-        "hideStoriesBar", "hideGiftButton", "hideGreetingSticker", "offerGhostBeforeStories", "hidePremiumBadges", "hideSponsoredMessages", "adFilterChannels", "adFilterGroups", "adFilterForwarded", "adHideCompletely", "showChatStreak", "chatStatsCountDeleted", "feedEnabled", "feedAutoplay", "feedShowFolders", "feedIncludeMuted", "feedIncludeArchived", "feedMarkRead", "messageFilterShowPlaceholder", "updateChannelBeta", "unlimitedPinnedChats", "localVoiceTranscription", "voiceTimeRoundVideos", "voiceTimeInPlayer", "replyTimecode", "chatVoiceSpeed", "monochromeSettingsIcons", "compactChatList", "chatBannersEnabled", "onlineHistory", "saveViewedStories",
+        "hideStoriesBar", "hideGiftButton", "hideGreetingSticker", "offerGhostBeforeStories", "hidePremiumBadges", "hideSponsoredMessages", "adFilterChannels", "adFilterGroups", "adFilterForwarded", "adHideCompletely", "showChatStreak", "chatStatsCountDeleted", "feedEnabled", "feedAutoplay", "feedShowFolders", "feedIncludeMuted", "feedIncludeArchived", "feedMarkRead", "messageFilterShowPlaceholder", "updateChannelBeta", "unlimitedPinnedChats", "localVoiceTranscription", "voiceTimeRoundVideos", "voiceTimeInPlayer", "replyTimecode", "chatVoiceSpeed", "monochromeSettingsIcons", "compactChatList", "chatBannersEnabled", "businessBotPinned", "businessBotPinnedFirst", "businessBotPinnedCompact", "onlineHistory", "saveViewedStories",
         "screenshotAnonymize", "screenshotAnonymizeOwn", "screenshotAnonymizeOthers", "screenshotEnabled", "screenshotAvatars", "screenshotNames", "screenshotBadges", "screenshotTime",
         "spoofProfileIdEnabled", "spoofProfileDcEnabled", "spoofProfilePhoneEnabled", "customBannerEnabled", "customProfileBackgroundEnabled", "customProfileBackgroundForOthers", "customProfileBackgroundForSettings"
     ]
@@ -52,7 +52,7 @@ public struct ShadowSettingsDocument: Codable, Equatable {
     public static let integerKeys: Set<String> = [
         "mediaAutoCleanInterval", "attachmentSizeLimit", "bottomBarScrollMode", "ghostAccountMode",
         "screenshotBackground", "screenshotCustomColorARGB",
-        "settingsIconBackgroundColor", "settingsIconGlyphColor", "voiceTimeFormat", "replyTimecodeMode", "feedPosition"
+        "settingsIconBackgroundColor", "settingsIconGlyphColor", "voiceTimeFormat", "replyTimecodeMode", "feedPosition", "businessBotPinnedLayout"
     ]
     private static let ageIntervals: Set<Int64> = [0, 86400, 259200, 604800, 1209600, 2592000, 7776000, 15552000, 31536000]
     private static let sizeLimits: Set<Int64> = [0, 314572800, 1073741824, 2147483648, 5368709120, 6442450944, 12884901888]
@@ -123,6 +123,8 @@ public struct ShadowSettingsDocument: Codable, Equatable {
             case let .integer(number) where key == "voiceTimeFormat" && (0...5).contains(number): break
             // ShadowReplyTimecode modes: always, ask.
             case let .integer(number) where key == "replyTimecodeMode" && (0...1).contains(number): break
+            // ShadowBusinessBotPanel.Layout: split, stacked, icon, pinned only.
+            case let .integer(number) where key == "businessBotPinnedLayout" && (0...3).contains(number): break
             // ShadowFeed.Position.
             case let .integer(number) where key == "feedPosition" && (0...3).contains(number): break
             // ShadowGhostAccountMode raw values: manual, alwaysOn, alwaysOff, followPrevious.

@@ -162,6 +162,13 @@ public struct AyuGramSettings: Codable, Equatable {
     public var compactChatList: Bool = false
     // «Фоны чатов»: a photo behind chosen chats' rows (ShadowChatBanners.swift).
     public var chatBannersEnabled: Bool = false
+    // Shadow: the pinned message stays in the chat header when a business bot
+    // manages the chat (ShadowBusinessBotPanel: layout, pinned first, bot
+    // without the name in «Пополам»).
+    public var businessBotPinned: Bool = true
+    public var businessBotPinnedLayout: Int32 = 0
+    public var businessBotPinnedFirst: Bool = false
+    public var businessBotPinnedCompact: Bool = false
     // Local history of when contacts were online (ShadowOnlineHistory).
     public var onlineHistory: Bool = false
     // Keep a local copy of viewed stories (ShadowStoryArchive).
@@ -463,6 +470,7 @@ public struct AyuGramSettings: Codable, Equatable {
         settings.showChatStreak = false
         settings.feedEnabled = false
         settings.chatBannersEnabled = false
+        settings.businessBotPinned = false
         return settings
     }
 
@@ -743,6 +751,10 @@ public struct AyuGramSettings: Codable, Equatable {
         self.monochromeSettingsIcons = ((try container.decodeIfPresent(Int32.self, forKey: "monochromeSettingsIcons")) ?? 0) != 0
         self.compactChatList = ((try container.decodeIfPresent(Int32.self, forKey: "compactChatList")) ?? 0) != 0
         self.chatBannersEnabled = ((try container.decodeIfPresent(Int32.self, forKey: "chatBannersEnabled")) ?? 0) != 0
+        self.businessBotPinned = ((try container.decodeIfPresent(Int32.self, forKey: "businessBotPinned")) ?? 1) != 0
+        self.businessBotPinnedLayout = ShadowBusinessBotPanel.Layout.normalized((try container.decodeIfPresent(Int32.self, forKey: "businessBotPinnedLayout")) ?? 0).rawValue
+        self.businessBotPinnedFirst = ((try container.decodeIfPresent(Int32.self, forKey: "businessBotPinnedFirst")) ?? 0) != 0
+        self.businessBotPinnedCompact = ((try container.decodeIfPresent(Int32.self, forKey: "businessBotPinnedCompact")) ?? 0) != 0
         self.onlineHistory = ((try container.decodeIfPresent(Int32.self, forKey: "onlineHistory")) ?? 0) != 0
         self.saveViewedStories = ((try container.decodeIfPresent(Int32.self, forKey: "saveViewedStories")) ?? 0) != 0
         self.settingsIconBackgroundColor = ((try container.decodeIfPresent(Int32.self, forKey: "settingsIconBackgroundColor")) ?? 0x1C1C1E) & 0xFFFFFF
@@ -856,6 +868,10 @@ public struct AyuGramSettings: Codable, Equatable {
         try container.encode((self.monochromeSettingsIcons ? 1 : 0) as Int32, forKey: "monochromeSettingsIcons")
         try container.encode((self.compactChatList ? 1 : 0) as Int32, forKey: "compactChatList")
         try container.encode((self.chatBannersEnabled ? 1 : 0) as Int32, forKey: "chatBannersEnabled")
+        try container.encode((self.businessBotPinned ? 1 : 0) as Int32, forKey: "businessBotPinned")
+        try container.encode(self.businessBotPinnedLayout, forKey: "businessBotPinnedLayout")
+        try container.encode((self.businessBotPinnedFirst ? 1 : 0) as Int32, forKey: "businessBotPinnedFirst")
+        try container.encode((self.businessBotPinnedCompact ? 1 : 0) as Int32, forKey: "businessBotPinnedCompact")
         try container.encode((self.onlineHistory ? 1 : 0) as Int32, forKey: "onlineHistory")
         try container.encode((self.saveViewedStories ? 1 : 0) as Int32, forKey: "saveViewedStories")
         try container.encode(self.settingsIconBackgroundColor, forKey: "settingsIconBackgroundColor")

@@ -822,6 +822,7 @@ private final class AyuCustomizationArguments {
     var selectReplyTimecodeMode: () -> Void = {}
     var openChatVoiceSpeeds: () -> Void = {}
     var openChatBanners: () -> Void = {}
+    var selectBusinessBotPinnedLayout: () -> Void = {}
     var updateSetting: (@escaping (inout AyuGramSettings) -> Void) -> Void = { _ in }
     // true: background color, false: glyph color.
     var pickSettingsIconColor: (Bool) -> Void = { _ in }
@@ -942,6 +943,7 @@ private enum AyuCustomizationSection: Int32 {
     case banner
     case profileBackground
     case settingsIcons
+    case businessBot
 }
 
 private enum AyuCustomizationEntry: ItemListNodeEntry {
@@ -998,6 +1000,13 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
     case chatVoiceSpeed(Bool)
     case chatVoiceSpeedList(Int)
     case chatsFooter
+
+    case businessBotHeader
+    case businessBotPinned(Bool)
+    case businessBotPinnedLayout(Int32)
+    case businessBotPinnedFirst(Bool)
+    case businessBotPinnedCompact(Bool)
+    case businessBotFooter
 
     case bottomBarHeader
     case foldersAtBottom(Bool)
@@ -1058,6 +1067,8 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .headerButtons: return AyuCustomizationSection.chats.rawValue
         case .chatsHeader, .hideAllChatsFolder, .hideStoriesBar, .hideGiftButton, .hideGreetingSticker, .hidePremiumBadges, .hideSponsoredMessages, .unlimitedPinnedChats, .compactChatList, .chatBanners, .chatBannersList, .chatsFooter:
             return AyuCustomizationSection.chats.rawValue
+        case .businessBotHeader, .businessBotPinned, .businessBotPinnedLayout, .businessBotPinnedFirst, .businessBotPinnedCompact, .businessBotFooter:
+            return AyuCustomizationSection.businessBot.rawValue
         case .bottomBarHeader, .foldersAtBottom, .hideBottomSearch, .compactBottomBar, .bottomBarScrollMode, .bottomBarFooter:
             return AyuCustomizationSection.bottomBar.rawValue
         case .profilesHeader, .showProfileId, .showProfileDC, .showRegistrationDate, .showChatStreak, .hideOwnPhoneNumber, .profilesFooter:
@@ -1119,6 +1130,12 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .compactChatList: return 110
         case .chatBanners: return 122
         case .chatBannersList: return 123
+        case .businessBotHeader: return 124
+        case .businessBotPinned: return 125
+        case .businessBotPinnedLayout: return 126
+        case .businessBotPinnedFirst: return 127
+        case .businessBotPinnedCompact: return 128
+        case .businessBotFooter: return 129
         case .monochromeSettingsIcons: return 106
         case .settingsIconBackground: return 107
         case .settingsIconGlyph: return 108
@@ -1182,6 +1199,13 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .hideGreetingSticker: return (12, 7)
         case .chatBanners: return (12, 8)
         case .chatBannersList: return (12, 9)
+        // Right after the chats section (chatsFooter = 13).
+        case .businessBotHeader: return (13, 1)
+        case .businessBotPinned: return (13, 2)
+        case .businessBotPinnedLayout: return (13, 3)
+        case .businessBotPinnedFirst: return (13, 4)
+        case .businessBotPinnedCompact: return (13, 5)
+        case .businessBotFooter: return (13, 6)
         case .cameraTileCompact: return (28, 1)
         case .localVoiceTranscription: return (28, 2)
         case .voiceTimeFormat: return (28, 3)
@@ -1376,6 +1400,24 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
             return ItemListDisclosureItem(presentationData: presentationData, title: "Чаты со своей скоростью", label: count == 0 ? "Нет" : "\(count)", labelStyle: .detailText, sectionId: self.section, style: .blocks, action: arguments.openChatVoiceSpeeds)
         case .chatsFooter:
             return ItemListTextItem(presentationData: presentationData, text: .plain("«Скрыть папку «Все чаты»» убирает эту вкладку, остальные папки работают. «Скрыть истории» убирает ленту историй над списком чатов. «Скрыть кнопку подарка» убирает подарок из поля ввода. «Скрыть приветственный стикер» убирает карточку со стикером в пустом чате с незнакомым. «Скрыть значки Premium» убирает звёздочку и эмодзи-статус рядом с именами (галочки верификации остаются). «Скрыть рекламу в каналах» — спонсорские сообщения не загружаются; применяется при следующем открытии канала. «Безлимитные закрепы» снимают ограничение на закрепы в списке чатов, архиве, папках, «Избранном» и темах форумов; всё сверх лимита Telegram хранится только на этом устройстве. «Фоны чатов» ставят своё фото под строку выбранных чатов в списке (все папки и архив); фото хранятся только на этом устройстве."), sectionId: self.section)
+        case .businessBotHeader:
+            return ItemListSectionHeaderItem(presentationData: presentationData, text: "БИЗНЕС-БОТ И ЗАКРЕП", sectionId: self.section)
+        case let .businessBotPinned(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Закреп при бизнес-боте", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.updateSetting { $0.businessBotPinned = value }
+            })
+        case let .businessBotPinnedLayout(layout):
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Вид", label: ShadowBusinessBotPanel.Layout.normalized(layout).title, labelStyle: .detailText, sectionId: self.section, style: .blocks, action: arguments.selectBusinessBotPinnedLayout)
+        case let .businessBotPinnedFirst(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Закреп первым", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.updateSetting { $0.businessBotPinnedFirst = value }
+            })
+        case let .businessBotPinnedCompact(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Бот без имени", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.updateSetting { $0.businessBotPinnedCompact = value }
+            })
+        case .businessBotFooter:
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Когда чатом управляет бизнес-бот, Telegram прячет закреплённое сообщение. Здесь оба видны сразу: у бота остаются «Стоп»/«Старт» и меню настроек, закреп по нажатию листает закрепы, по зажатию открывает их список. «Закреп первым» ставит закреп слева или сверху. «Бот без имени» в режиме «Пополам» оставляет боту только аватарку и кнопки. Выключено — как в Telegram: панель бота вместо закрепа."), sectionId: self.section)
         case .bottomBarHeader:
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "НИЖНИЙ ИНТЕРФЕЙС", sectionId: self.section)
         case let .foldersAtBottom(value):
@@ -1545,6 +1587,20 @@ private func ayuCustomizationEntries(settings: AyuGramSettings, chatVoiceSpeedCo
     }
     entries.append(.chatsFooter)
 
+    entries.append(.businessBotHeader)
+    entries.append(.businessBotPinned(settings.businessBotPinned))
+    if settings.businessBotPinned {
+        let layout = ShadowBusinessBotPanel.Layout.normalized(settings.businessBotPinnedLayout)
+        entries.append(.businessBotPinnedLayout(layout.rawValue))
+        if layout != .pinnedOnly {
+            entries.append(.businessBotPinnedFirst(settings.businessBotPinnedFirst))
+        }
+        if layout == .split {
+            entries.append(.businessBotPinnedCompact(settings.businessBotPinnedCompact))
+        }
+    }
+    entries.append(.businessBotFooter)
+
     entries.append(.bottomBarHeader)
     entries.append(.foldersAtBottom(settings.foldersAtBottom))
     entries.append(.hideBottomSearch(settings.hideBottomSearch))
@@ -1614,7 +1670,7 @@ private extension ShadowCustomizationPart {
     var sections: [AyuCustomizationSection] {
         switch self {
         case .messages: return [.appearance]
-        case .chats: return [.chats, .bottomBar, .calls]
+        case .chats: return [.chats, .businessBot, .bottomBar, .calls]
         case .profiles: return [.profiles, .banner, .profileBackground]
         case .media: return [.media, .customRoundVideos]
         case .icons: return [.settingsIcons]
@@ -1886,6 +1942,22 @@ func ayuCustomizationController(context: AccountContext, focus: ShadowSettingsSe
     }
     arguments.openChatBanners = { [weak controller] in
         controller?.push(shadowChatBannersController(context: context))
+    }
+    arguments.selectBusinessBotPinnedLayout = {
+        let data = context.sharedContext.currentPresentationData.with { $0 }
+        let sheet = ActionSheetController(presentationData: data)
+        var items: [ActionSheetItem] = [ActionSheetTextItem(title: "Как показывать бизнес-бота и закреп", parseMarkdown: false)]
+        for layout in ShadowBusinessBotPanel.Layout.allCases {
+            items.append(ActionSheetButtonItem(title: "\(layout.title) — \(layout.details)", action: { [weak sheet] in
+                sheet?.dismissAnimated()
+                ayuUpdateSettings(context: context) { var settings = $0; settings.businessBotPinnedLayout = layout.rawValue; return settings }
+            }))
+        }
+        sheet.setItemGroups([
+            ActionSheetItemGroup(items: items),
+            ActionSheetItemGroup(items: [ActionSheetButtonItem(title: data.strings.Common_Cancel, action: { [weak sheet] in sheet?.dismissAnimated() })])
+        ])
+        presentControllerImpl?(sheet, nil)
     }
     arguments.selectReplyTimecodeMode = {
         let data = context.sharedContext.currentPresentationData.with { $0 }

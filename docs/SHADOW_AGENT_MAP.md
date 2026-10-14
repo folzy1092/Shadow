@@ -673,6 +673,33 @@ UI-проекция настроек выбирается в `TelegramRootContro
   «Ответы», удалённый аккаунт — без фона. Превью на экране — своя аватарка в
   строке реального размера, ползунки «Затемнение» и «Где проявляется».
 
+## 5m. Закреп при бизнес-боте (1.12.0)
+
+- Стоковый Telegram при подключённом бизнес-боте показывает только панель бота
+  (`ChatManagingBotTitlePanelNode`), закреп пропадает: ветка `managingBot` в
+  `titlePanelForChatPresentationInterfaceState` (`ChatInterfaceTitlePanelNodes.swift`)
+  выигрывает у `.pinnedMessage`. Shadow там же спрашивает
+  `ShadowBusinessBotPanel.arrangement` (Foundation, тест `BusinessBotPanelTests.swift`):
+  выкл — бот; «Только закреп» — проваливается в обычный закреп; иначе —
+  `ShadowBusinessBotPinnedTitlePanelNode`.
+- Составная панель держит **стоковые** узлы бота и закрепа (оба получают
+  `interfaceInteraction`), поэтому всё их поведение остаётся: «Стоп/Старт»,
+  меню шестерёнки (удалить бота, управлять), нажатие по закрепу (следующий),
+  зажатие (список закрепов), кнопки списка/крестик. Виды
+  (`businessBotPinnedLayout`): 0 «Пополам» (одна строка 50 pt, бот —
+  `ShadowManagingBotPanelStyle.half`), 1 «Друг под другом» (две полные
+  панели), 2 «Значок бота» (`.icon`: аватарка с точкой активен/пауза, нажатие
+  — меню со «Стоп/Старт» сверху), 3 «Только закреп». `businessBotPinnedFirst` —
+  закреп слева/сверху, `businessBotPinnedCompact` — в «Пополам» бот без имени
+  (ширина по содержимому, `splitBotWidth`, закрепу минимум 120 pt).
+- Настройки: «Кастомизация → Чаты и звонки → Бизнес-бот и закреп»
+  (`AyuCustomizationSection.businessBot`, строки 124–129), ссылки
+  `shadow://customization/business-bot-*`. Стиль читается
+  `currentAyuGramSettings(accountId:)` при каждом пересчёте панели — после
+  смены настройки панель обновится при следующем обновлении чата.
+- Не проверено на устройстве (собрано только CI): вид обеих половинок в
+  капсуле, превью списка закрепов из составной панели.
+
 ## 5a. Замки чатов и второе пространство
 
 - Замки: `ShadowChatLock.swift` (хранилище), `TelegramUI/Sources/ShadowChatLockUI.swift`

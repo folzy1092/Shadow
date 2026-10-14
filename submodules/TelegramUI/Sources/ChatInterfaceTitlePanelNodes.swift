@@ -182,7 +182,24 @@ func titlePanelForChatPresentationInterfaceState(_ chatPresentationInterfaceStat
                 return panel
             }
         } else if !chatPresentationInterfaceState.peerIsBlocked && !inhibitTitlePanelDisplay, let contactStatus = chatPresentationInterfaceState.contactStatus, contactStatus.managingBot != nil {
-            if let currentPanel = currentPanel as? ChatManagingBotTitlePanelNode {
+            // Shadow: with a pinned message the bot no longer hides it
+            // (ShadowBusinessBotPanel): both in one panel, or just the pin.
+            let shadowSettings = currentAyuGramSettings(accountId: context.account.id)
+            let shadowArrangement = ShadowBusinessBotPanel.arrangement(enabled: shadowSettings.businessBotPinned, layout: shadowSettings.businessBotPinnedLayout, hasBot: true, hasPinned: selectedContext == .pinnedMessage)
+            if case let .combined(layout) = shadowArrangement {
+                let style = ShadowBusinessBotPinnedTitlePanelNode.Style(layout: layout, pinnedFirst: shadowSettings.businessBotPinnedFirst, compactBot: shadowSettings.businessBotPinnedCompact)
+                if let currentPanel = currentPanel as? ShadowBusinessBotPinnedTitlePanelNode {
+                    currentPanel.style = style
+                    return currentPanel
+                } else {
+                    let panel = ShadowBusinessBotPinnedTitlePanelNode(context: context, animationCache: controllerInteraction?.presentationContext.animationCache, animationRenderer: controllerInteraction?.presentationContext.animationRenderer)
+                    panel.style = style
+                    panel.interfaceInteraction = interfaceInteraction
+                    return panel
+                }
+            } else if shadowArrangement == .pinned {
+                // «Только закреп»: fall through to the pinned panel below.
+            } else if let currentPanel = currentPanel as? ChatManagingBotTitlePanelNode {
                 return currentPanel
             } else {
                 let panel = ChatManagingBotTitlePanelNode(context: context)

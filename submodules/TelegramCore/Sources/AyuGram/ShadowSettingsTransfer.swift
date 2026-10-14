@@ -98,6 +98,9 @@ public enum ShadowSettingsTransfer {
         "monochromeSettingsIcons": \.monochromeSettingsIcons,
         "compactChatList": \.compactChatList,
         "chatBannersEnabled": \.chatBannersEnabled,
+        "businessBotPinned": \.businessBotPinned,
+        "businessBotPinnedFirst": \.businessBotPinnedFirst,
+        "businessBotPinnedCompact": \.businessBotPinnedCompact,
         "onlineHistory": \.onlineHistory,
         "saveViewedStories": \.saveViewedStories,
         "screenshotAnonymize": \.messageScreenshot.anonymize,
@@ -159,6 +162,7 @@ public enum ShadowSettingsTransfer {
         values["voiceTimeFormat"] = .integer(Int64(settings.voiceTimeFormat))
         values["replyTimecodeMode"] = .integer(Int64(settings.replyTimecodeMode))
         values["feedPosition"] = .integer(Int64(settings.feedPosition))
+        values["businessBotPinnedLayout"] = .integer(Int64(settings.businessBotPinnedLayout))
         values["ghostAccountMode"] = .integer(Int64(settings.ghostAccountMode.rawValue))
         values["screenshotBackground"] = .integer(Int64(settings.messageScreenshot.background.rawValue))
         values["screenshotCustomColorARGB"] = .integer(Int64(settings.messageScreenshot.customColorARGB))
@@ -220,6 +224,7 @@ public enum ShadowSettingsTransfer {
                 case "voiceTimeFormat": updated.voiceTimeFormat = ShadowVoiceTime.normalized(Int32(number))
                 case "replyTimecodeMode": updated.replyTimecodeMode = ShadowReplyTimecode.normalizedMode(Int32(number))
                 case "feedPosition": updated.feedPosition = ShadowFeed.Position.normalized(Int32(clamping: number)).rawValue
+                case "businessBotPinnedLayout": updated.businessBotPinnedLayout = ShadowBusinessBotPanel.Layout.normalized(Int32(clamping: number)).rawValue
                 case "settingsIconBackgroundColor": updated.settingsIconBackgroundColor = Int32(number)
                 case "settingsIconGlyphColor": updated.settingsIconGlyphColor = Int32(number)
                 case "ghostAccountMode":

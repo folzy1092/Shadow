@@ -125,6 +125,10 @@
 | `shadow://customization/compact-chats` | Компактный список чатов |
 | `shadow://customization/chat-banners` | Фоны чатов |
 | `shadow://customization/chat-banners-photos` | Фоны чатов: фото и чаты (только открыть) |
+| `shadow://customization/business-bot-pinned` | Закреп при бизнес-боте |
+| `shadow://customization/business-bot-layout` | Закреп при бизнес-боте: вид, `?value=0…3`: пополам, друг под другом, значок бота, только закреп |
+| `shadow://customization/business-bot-pinned-first` | Закреп при бизнес-боте: закреп первым |
+| `shadow://customization/business-bot-compact` | Закреп при бизнес-боте: бот без имени |
 | `shadow://customization/voice-transcription` | Расшифровка голосовых на устройстве |
 | `shadow://customization/voice-time` | Время на голосовых, `?value=0…5`: по умолчанию, текущий таймкод, прошло / всего, осталось / всего, прошло и процент, процент |
 | `shadow://customization/voice-time-round` | Время на голосовых: также на кружках |

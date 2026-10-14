@@ -79,6 +79,10 @@ struct DocumentTests {
         check(streak.settings["showChatStreak"] == .bool(false), "Chat streak toggle is portable")
         let banners = try ShadowSettingsDocument.decode(ShadowSettingsDocument(settings: ["chatBannersEnabled": .bool(true)]).encoded())
         check(banners.settings["chatBannersEnabled"] == .bool(true), "Chat banners toggle is portable")
+        let businessBot = try ShadowSettingsDocument.decode(ShadowSettingsDocument(settings: ["businessBotPinned": .bool(false), "businessBotPinnedLayout": .integer(2), "businessBotPinnedFirst": .bool(true), "businessBotPinnedCompact": .bool(true)]).encoded())
+        check(businessBot.settings["businessBotPinned"] == .bool(false) && businessBot.settings["businessBotPinnedLayout"] == .integer(2), "Business bot pin settings are portable")
+        check(businessBot.settings["businessBotPinnedFirst"] == .bool(true) && businessBot.settings["businessBotPinnedCompact"] == .bool(true), "Business bot pin order and compact bot are portable")
+        expectFailure("Unsupported business bot pin layout") { _ = try ShadowSettingsDocument(settings: ["businessBotPinnedLayout": .integer(4)]) }
         let feed = try ShadowSettingsDocument.decode(ShadowSettingsDocument(settings: ["feedEnabled": .bool(true), "feedPosition": .integer(2), "feedAutoplay": .bool(false)]).encoded())
         check(feed.settings["feedEnabled"] == .bool(true) && feed.settings["feedPosition"] == .integer(2) && feed.settings["feedAutoplay"] == .bool(false), "Feed settings are portable")
         expectFailure("Unsupported feed position") { _ = try ShadowSettingsDocument(settings: ["feedPosition": .integer(4)]) }

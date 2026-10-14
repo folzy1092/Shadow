@@ -28,7 +28,8 @@ extension ShadowSettingsTransfer {
         "voiceTimeFormat": \.voiceTimeFormat,
         "replyTimecodeMode": \.replyTimecodeMode,
         "bottomBarScrollMode": \.bottomBarScrollMode,
-        "feedPosition": \.feedPosition
+        "feedPosition": \.feedPosition,
+        "businessBotPinnedLayout": \.businessBotPinnedLayout
     ]
 
     public static func intValue(_ key: String, in settings: AyuGramSettings) -> Int32? {
