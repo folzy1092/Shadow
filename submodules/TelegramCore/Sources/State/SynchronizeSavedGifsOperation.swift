@@ -32,6 +32,8 @@ public func getIsGifSaved(transaction: Transaction, mediaId: MediaId) -> Bool {
 
 public func addSavedGif(postbox: Postbox, fileReference: FileMediaReference, limit: Int = 200) -> Signal<Void, NoError> {
     return postbox.transaction { transaction -> Void in
+        // Shadow: «Безлимитное избранное» never cuts the list.
+        let limit = currentAyuGramSettings(transaction: transaction).unlimitedFavorites ? max(limit, ShadowUnlimitedFavorites.localLimit) : limit
         if let resource = fileReference.media.resource as? CloudDocumentMediaResource {
             if let entry = CodableEntry(RecentMediaItem(fileReference.media)) {
                 transaction.addOrMoveToFirstPositionOrderedItemListItem(collectionId: Namespaces.OrderedItemList.CloudRecentGifs, item: OrderedItemListEntry(id: RecentMediaItemId(fileReference.media.fileId).rawValue, contents: entry), removeTailIfCountExceeds: limit)
@@ -69,8 +71,12 @@ public func toggleGifSaved(account: Account, fileReference: FileMediaReference, 
             let limitsConfiguration = UserLimitsConfiguration(appConfiguration: appConfiguration, isPremium: false)
             let premiumLimitsConfiguration = UserLimitsConfiguration(appConfiguration: appConfiguration, isPremium: true)
             
+            // Shadow: «Безлимитное избранное» (see _internal_toggleStickerSaved).
+            let shadowUnlimited = currentAyuGramSettings(transaction: transaction).unlimitedFavorites
             let result: SavedGifResult
-            if isPremium && items.count >= premiumLimitsConfiguration.maxSavedGifCount {
+            if shadowUnlimited {
+                result = .generic
+            } else if isPremium && items.count >= premiumLimitsConfiguration.maxSavedGifCount {
                 result = .limitExceeded(premiumLimitsConfiguration.maxSavedGifCount, premiumLimitsConfiguration.maxSavedGifCount)
             } else if !isPremium && items.count >= limitsConfiguration.maxSavedGifCount {
                 result = .limitExceeded(limitsConfiguration.maxSavedGifCount, premiumLimitsConfiguration.maxSavedGifCount)
@@ -78,7 +84,7 @@ public func toggleGifSaved(account: Account, fileReference: FileMediaReference, 
                 result = .generic
             }
             
-            return addSavedGif(postbox: account.postbox, fileReference: fileReference, limit: Int(isPremium ? premiumLimitsConfiguration.maxSavedGifCount : limitsConfiguration.maxSavedGifCount))
+            return addSavedGif(postbox: account.postbox, fileReference: fileReference, limit: shadowUnlimited ? ShadowUnlimitedFavorites.localLimit : Int(isPremium ? premiumLimitsConfiguration.maxSavedGifCount : limitsConfiguration.maxSavedGifCount))
             |> map { _ -> SavedGifResult in
                 return .generic
             }

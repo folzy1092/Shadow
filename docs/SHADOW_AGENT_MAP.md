@@ -744,6 +744,14 @@ UI-проекция настроек выбирается в `TelegramRootContro
   шлёт файлами через `shadowSendsAsFileByDefault` (не со спойлером/ценой, не в
   секретных чатах, только обычная галерея). Строка 130 в «Медиа и камера».
 
+- «Безлимитное избранное» (`unlimitedFavorites`, вкл по умолчанию, строка 131
+  рядом с «Безлимитными закрепами»; `ShadowUnlimitedFavorites`): стикеры и GIF
+  сверх лимита Telegram не вытесняются — `_internal_toggleStickerSaved` /
+  `toggleGifSaved` без тоста лимита и обрезки, `addSavedSticker`/`addSavedGif`
+  с лимитом 1000, синхронизация (`managedRecentMedia`,
+  `shadowKeepsLocalExtras`) оставляет локальные лишние после серверных. Удаление
+  на другом устройстве локальные лишние не убирает.
+
 ## 5a. Замки чатов и второе пространство
 
 - Замки: `ShadowChatLock.swift` (хранилище), `TelegramUI/Sources/ShadowChatLockUI.swift`

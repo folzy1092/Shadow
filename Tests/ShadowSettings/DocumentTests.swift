@@ -86,6 +86,8 @@ struct DocumentTests {
         let silent = try ShadowSettingsDocument.decode(ShadowSettingsDocument(settings: ["silentSend": .bool(true), "silentSendMode": .integer(1), "silentSendFrom": .integer(1380), "silentSendTo": .integer(480)]).encoded())
         check(silent.settings["silentSend"] == .bool(true) && silent.settings["silentSendMode"] == .integer(1), "Silent send is portable")
         check(silent.settings["silentSendFrom"] == .integer(1380) && silent.settings["silentSendTo"] == .integer(480), "Silent send schedule is portable")
+        let favorites = try ShadowSettingsDocument.decode(ShadowSettingsDocument(settings: ["unlimitedFavorites": .bool(false)]).encoded())
+        check(favorites.settings["unlimitedFavorites"] == .bool(false), "Unlimited favourites toggle is portable")
         let quality = try ShadowSettingsDocument.decode(ShadowSettingsDocument(settings: ["mediaSendQuality": .integer(2)]).encoded())
         check(quality.settings["mediaSendQuality"] == .integer(2), "Media send quality is portable")
         expectFailure("Unsupported media send quality") { _ = try ShadowSettingsDocument(settings: ["mediaSendQuality": .integer(3)]) }

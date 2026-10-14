@@ -116,6 +116,8 @@ public func addSavedSticker(postbox: Postbox, network: Network, file: TelegramMe
 }
 
 public func addSavedSticker(transaction: Transaction, file: TelegramMediaFile, stringRepresentations: [String], limit: Int = 5) {
+    // Shadow: «Безлимитное избранное» never cuts the list.
+    let limit = currentAyuGramSettings(transaction: transaction).unlimitedFavorites ? max(limit, ShadowUnlimitedFavorites.localLimit) : limit
     if let resource = file.resource as? CloudDocumentMediaResource {
         if let entry = CodableEntry(SavedStickerItem(file: file, stringRepresentations: stringRepresentations)) {
             transaction.addOrMoveToFirstPositionOrderedItemListItem(collectionId: Namespaces.OrderedItemList.CloudSavedStickers, item: OrderedItemListEntry(id: RecentMediaItemId(file.fileId).rawValue, contents: entry), removeTailIfCountExceeds: limit)

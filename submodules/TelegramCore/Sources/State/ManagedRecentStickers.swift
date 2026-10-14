@@ -13,7 +13,7 @@ private func hashForIds(_ ids: [Int64]) -> Int64 {
     return finalizeInt64Hash(acc)
 }
 
-private func managedRecentMedia(postbox: Postbox, network: Network, collectionId: Int32, extractItemId: @escaping (MemoryBuffer) -> Int64?, reverseHashOrder: Bool, forceFetch: Bool, fetch: @escaping (Int64) -> Signal<[OrderedItemListEntry]?, NoError>) -> Signal<Void, NoError> {
+private func managedRecentMedia(postbox: Postbox, network: Network, collectionId: Int32, extractItemId: @escaping (MemoryBuffer) -> Int64?, reverseHashOrder: Bool, forceFetch: Bool, shadowKeepsLocalExtras: Bool = false, fetch: @escaping (Int64) -> Signal<[OrderedItemListEntry]?, NoError>) -> Signal<Void, NoError> {
     return postbox.transaction { transaction -> Signal<Void, NoError> in
         var itemIds = transaction.getOrderedListItemIds(collectionId: collectionId).compactMap(extractItemId)
         if reverseHashOrder {
@@ -33,6 +33,19 @@ private func managedRecentMedia(postbox: Postbox, network: Network, collectionId
                     }
 
                     return postbox.transaction { transaction -> Void in
+                        var items = items
+                        // Shadow: «Безлимитное избранное» — favourites the server
+                        // dropped over its limit stay after its own, in order.
+                        if shadowKeepsLocalExtras && currentAyuGramSettings(transaction: transaction).unlimitedFavorites {
+                            var knownIds = Set(items.map { $0.id.makeData() })
+                            for item in transaction.getOrderedListItems(collectionId: collectionId) {
+                                let id = item.id.makeData()
+                                if !knownIds.contains(id) && items.count < ShadowUnlimitedFavorites.localLimit {
+                                    knownIds.insert(id)
+                                    items.append(item)
+                                }
+                            }
+                        }
                         transaction.replaceOrderedItemListItems(collectionId: collectionId, items: items)
                     }
                 } else {
@@ -70,7 +83,7 @@ func managedRecentStickers(postbox: Postbox, network: Network, forceFetch: Bool 
 }
 
 func managedRecentGifs(postbox: Postbox, network: Network, forceFetch: Bool = false) -> Signal<Void, NoError> {
-    return managedRecentMedia(postbox: postbox, network: network, collectionId: Namespaces.OrderedItemList.CloudRecentGifs, extractItemId: { RecentMediaItemId($0).mediaId.id }, reverseHashOrder: false, forceFetch: forceFetch, fetch: { hash in
+    return managedRecentMedia(postbox: postbox, network: network, collectionId: Namespaces.OrderedItemList.CloudRecentGifs, extractItemId: { RecentMediaItemId($0).mediaId.id }, reverseHashOrder: false, forceFetch: forceFetch, shadowKeepsLocalExtras: true, fetch: { hash in
         return network.request(Api.functions.messages.getSavedGifs(hash: hash))
             |> retryRequestIfNotFrozen
             |> mapToSignal { result -> Signal<[OrderedItemListEntry]?, NoError> in
@@ -97,7 +110,7 @@ func managedRecentGifs(postbox: Postbox, network: Network, forceFetch: Bool = fa
 }
 
 func managedSavedStickers(postbox: Postbox, network: Network, forceFetch: Bool = false) -> Signal<Void, NoError> {
-    return managedRecentMedia(postbox: postbox, network: network, collectionId: Namespaces.OrderedItemList.CloudSavedStickers, extractItemId: { RecentMediaItemId($0).mediaId.id }, reverseHashOrder: true, forceFetch: forceFetch, fetch: { hash in
+    return managedRecentMedia(postbox: postbox, network: network, collectionId: Namespaces.OrderedItemList.CloudSavedStickers, extractItemId: { RecentMediaItemId($0).mediaId.id }, reverseHashOrder: true, forceFetch: forceFetch, shadowKeepsLocalExtras: true, fetch: { hash in
         return network.request(Api.functions.messages.getFavedStickers(hash: hash))
             |> retryRequestIfNotFrozen
             |> mapToSignal { result -> Signal<[OrderedItemListEntry]?, NoError> in

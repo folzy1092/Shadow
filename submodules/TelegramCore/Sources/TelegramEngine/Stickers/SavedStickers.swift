@@ -18,8 +18,13 @@ func _internal_toggleStickerSaved(postbox: Postbox, network: Network, accountPee
             let limitsConfiguration = UserLimitsConfiguration(appConfiguration: appConfiguration, isPremium: false)
             let premiumLimitsConfiguration = UserLimitsConfiguration(appConfiguration: appConfiguration, isPremium: true)
             
+            // Shadow: «Безлимитное избранное» — nothing is cut off; what the
+            // server no longer keeps stays on this device (managedSavedStickers).
+            let shadowUnlimited = currentAyuGramSettings(transaction: transaction).unlimitedFavorites
             let result: SavedStickerResult
-            if isPremium && items.count >= premiumLimitsConfiguration.maxFavedStickerCount {
+            if shadowUnlimited {
+                result = .generic
+            } else if isPremium && items.count >= premiumLimitsConfiguration.maxFavedStickerCount {
                 result = .limitExceeded(premiumLimitsConfiguration.maxFavedStickerCount, premiumLimitsConfiguration.maxFavedStickerCount)
             } else if !isPremium && items.count >= limitsConfiguration.maxFavedStickerCount {
                 result = .limitExceeded(limitsConfiguration.maxFavedStickerCount, premiumLimitsConfiguration.maxFavedStickerCount)
@@ -27,7 +32,7 @@ func _internal_toggleStickerSaved(postbox: Postbox, network: Network, accountPee
                 result = .generic
             }
             
-            return addSavedSticker(postbox: postbox, network: network, file: file, limit: Int(isPremium ? premiumLimitsConfiguration.maxFavedStickerCount : limitsConfiguration.maxFavedStickerCount))
+            return addSavedSticker(postbox: postbox, network: network, file: file, limit: shadowUnlimited ? ShadowUnlimitedFavorites.localLimit : Int(isPremium ? premiumLimitsConfiguration.maxFavedStickerCount : limitsConfiguration.maxFavedStickerCount))
             |> map { _ -> SavedStickerResult in
                 return .generic
             }
