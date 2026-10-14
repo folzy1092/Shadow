@@ -2469,6 +2469,9 @@ private final class AyuGhostArguments {
     let updateOfferGhostBeforeStories: (Bool) -> Void
     let updateSendViaScheduled: (Bool) -> Void
     let updateSendWithoutOnline: (Bool) -> Void
+    var updateSilentSend: (Bool) -> Void = { _ in }
+    var selectSilentSendMode: () -> Void = {}
+    var pickSilentSendTime: (Bool) -> Void = { _ in }
 
     init(
         updateGhostMode: @escaping (Bool) -> Void,
@@ -2496,6 +2499,7 @@ private final class AyuGhostArguments {
 private enum AyuGhostSection: Int32 {
     case ghost
     case sending
+    case silent
 }
 
 private enum AyuGhostEntry: ItemListNodeEntry {
@@ -2514,12 +2518,21 @@ private enum AyuGhostEntry: ItemListNodeEntry {
     case sendWithoutOnline(Bool)
     case sendingFooter
 
+    case silentHeader
+    case silentSend(Bool)
+    case silentSendMode(Int32)
+    case silentSendFrom(Int32)
+    case silentSendTo(Int32)
+    case silentFooter
+
     var section: ItemListSectionId {
         switch self {
         case .ghostHeader, .ghostMode, .accountMode, .hideOnline, .hideTyping, .hideReadReceipts, .hideStoryViews, .offerGhostBeforeStories, .ghostFooter:
             return AyuGhostSection.ghost.rawValue
         case .sendingHeader, .sendViaScheduled, .sendWithoutOnline, .sendingFooter:
             return AyuGhostSection.sending.rawValue
+        case .silentHeader, .silentSend, .silentSendMode, .silentSendFrom, .silentSendTo, .silentFooter:
+            return AyuGhostSection.silent.rawValue
         }
     }
 
@@ -2538,6 +2551,12 @@ private enum AyuGhostEntry: ItemListNodeEntry {
         case .sendWithoutOnline: return 9
         case .sendingFooter: return 10
         case .offerGhostBeforeStories: return 12
+        case .silentHeader: return 13
+        case .silentSend: return 14
+        case .silentSendMode: return 15
+        case .silentSendFrom: return 16
+        case .silentSendTo: return 17
+        case .silentFooter: return 18
         }
     }
 
@@ -2608,12 +2627,32 @@ private enum AyuGhostEntry: ItemListNodeEntry {
             })
         case .sendingFooter:
             return ItemListTextItem(presentationData: presentationData, text: .plain("Помогает отправлять сообщения, не появляясь онлайн.\n\nРаботает только при включённом режиме призрака. «Отправлять через отложенные сообщения» отправляет сообщения как запланированные (schedule_date): текст — с задержкой 12 секунд, медиа (фото, видео, документы, голосовые, видеосообщения) — с динамической задержкой. Сервер публикует их позже и не отмечает вас онлайн в момент отправки. «Отправлять без появления онлайн» дополнительно сразу переустанавливает статус «офлайн» после отправки."), sectionId: self.section)
+        case .silentHeader:
+            return ItemListSectionHeaderItem(presentationData: presentationData, text: "ТИХАЯ ОТПРАВКА", sectionId: self.section)
+        case let .silentSend(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Тихая отправка по умолчанию", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.updateSilentSend(value)
+            })
+        case let .silentSendMode(mode):
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Когда", label: ShadowSilentSend.modeTitle(mode), labelStyle: .detailText, sectionId: self.section, style: .blocks, action: {
+                arguments.selectSilentSendMode()
+            })
+        case let .silentSendFrom(minute):
+            return ItemListDisclosureItem(presentationData: presentationData, title: "С", label: ShadowSilentSend.clock(minute), labelStyle: .detailText, sectionId: self.section, style: .blocks, action: {
+                arguments.pickSilentSendTime(true)
+            })
+        case let .silentSendTo(minute):
+            return ItemListDisclosureItem(presentationData: presentationData, title: "До", label: ShadowSilentSend.clock(minute), labelStyle: .detailText, sectionId: self.section, style: .blocks, action: {
+                arguments.pickSilentSendTime(false)
+            })
+        case .silentFooter:
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Сообщения уходят без звука у получателя, как «Отправить без звука» при зажатии кнопки, только сами. «По расписанию» — лишь в выбранные часы (время этого телефона), например с 0:00 до 7:00 или с 23:00 до 8:00. Работает и при выключенном режиме призрака."), sectionId: self.section)
         }
     }
 }
 
 private func ayuGhostEntries(settings: AyuGramSettings) -> [AyuGhostEntry] {
-    return [
+    var entries: [AyuGhostEntry] = [
         .ghostHeader,
         .ghostMode(settings.ghostMode),
         .accountMode(settings.ghostAccountMode),
@@ -2628,6 +2667,21 @@ private func ayuGhostEntries(settings: AyuGramSettings) -> [AyuGhostEntry] {
         .sendWithoutOnline(settings.sendWithoutOnline),
         .sendingFooter
     ]
+    entries.append(contentsOf: shadowSilentSendEntries(settings: settings))
+    return entries
+}
+
+private func shadowSilentSendEntries(settings: AyuGramSettings) -> [AyuGhostEntry] {
+    var entries: [AyuGhostEntry] = [.silentHeader, .silentSend(settings.silentSend)]
+    if settings.silentSend {
+        entries.append(.silentSendMode(settings.silentSendMode))
+        if settings.silentSendMode == ShadowSilentSend.modeSchedule {
+            entries.append(.silentSendFrom(settings.silentSendFrom))
+            entries.append(.silentSendTo(settings.silentSendTo))
+        }
+    }
+    entries.append(.silentFooter)
+    return entries
 }
 
 public func ayuGhostController(context: AccountContext) -> ViewController {
@@ -2701,6 +2755,33 @@ private func ayuGhostController(context: AccountContext, focus: ShadowSettingsSe
     shadowSettingsInstallLinkMenu(controller: controller, context: context, screen: "ghost", rows: linkRows)
     presentControllerImpl = { [weak controller] c, a in
         controller?.present(c, in: .window(.root), with: a)
+    }
+    arguments.updateSilentSend = { value in
+        ayuUpdateSettings(context: context) { var s = $0; s.silentSend = value; return s }
+    }
+    arguments.selectSilentSendMode = {
+        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+        let actionSheet = ActionSheetController(presentationData: presentationData)
+        var items: [ActionSheetItem] = [ActionSheetTextItem(title: "Когда отправлять без звука", parseMarkdown: false)]
+        for mode in ShadowSilentSend.modes {
+            items.append(ActionSheetButtonItem(title: ShadowSilentSend.modeTitle(mode), action: { [weak actionSheet] in
+                actionSheet?.dismissAnimated()
+                ayuUpdateSettings(context: context) { var s = $0; s.silentSendMode = mode; return s }
+            }))
+        }
+        actionSheet.setItemGroups([
+            ActionSheetItemGroup(items: items),
+            ActionSheetItemGroup(items: [ActionSheetButtonItem(title: presentationData.strings.Common_Cancel, action: { [weak actionSheet] in actionSheet?.dismissAnimated() })])
+        ])
+        presentControllerImpl?(actionSheet, nil)
+    }
+    arguments.pickSilentSendTime = { [weak controller] isFrom in
+        let current = ayuGramSettingsCurrent
+        let minute = isFrom ? current.silentSendFrom : current.silentSendTo
+        let picker = ShadowTimePickerController(title: isFrom ? "Тихо с" : "Тихо до", minute: minute, completion: { minute in
+            ayuUpdateSettings(context: context) { var s = $0; if isFrom { s.silentSendFrom = minute } else { s.silentSendTo = minute }; return s }
+        })
+        controller?.view.window?.rootViewController?.present(picker, animated: true)
     }
     if focus != nil {
         shadowSettingsInstallFocus(controller: controller, index: { focusedIndex }, color: shadowSettingsPulseColor(context.sharedContext.currentPresentationData.with { $0 }.theme))

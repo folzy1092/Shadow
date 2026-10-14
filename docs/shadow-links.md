@@ -79,6 +79,10 @@
 | `shadow://ghost/offer-stories` | Предлагать призрак перед историями |
 | `shadow://ghost/scheduled` | Отправлять через отложенные |
 | `shadow://ghost/send-offline` | Отправлять без появления онлайн |
+| `shadow://ghost/silent-send` | Тихая отправка по умолчанию |
+| `shadow://ghost/silent-send-mode` | Тихая отправка: когда, `?value=0…1`: всегда, по расписанию |
+| `shadow://ghost/silent-send-from` | Тихая отправка: с (только открыть) |
+| `shadow://ghost/silent-send-to` | Тихая отправка: до (только открыть) |
 
 **Сохранение**
 

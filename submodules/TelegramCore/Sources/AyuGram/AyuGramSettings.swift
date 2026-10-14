@@ -169,6 +169,13 @@ public struct AyuGramSettings: Codable, Equatable {
     public var businessBotPinnedLayout: Int32 = 0
     public var businessBotPinnedFirst: Bool = false
     public var businessBotPinnedCompact: Bool = false
+    // Shadow: «Тихая отправка» — messages go without a sound by default,
+    // always or between silentSendFrom and silentSendTo (minutes after local
+    // midnight, ShadowSilentSend).
+    public var silentSend: Bool = false
+    public var silentSendMode: Int32 = 0
+    public var silentSendFrom: Int32 = 0
+    public var silentSendTo: Int32 = 420
     // Local history of when contacts were online (ShadowOnlineHistory).
     public var onlineHistory: Bool = false
     // Keep a local copy of viewed stories (ShadowStoryArchive).
@@ -471,6 +478,7 @@ public struct AyuGramSettings: Codable, Equatable {
         settings.feedEnabled = false
         settings.chatBannersEnabled = false
         settings.businessBotPinned = false
+        settings.silentSend = false
         return settings
     }
 
@@ -755,6 +763,10 @@ public struct AyuGramSettings: Codable, Equatable {
         self.businessBotPinnedLayout = ShadowBusinessBotPanel.Layout.normalized((try container.decodeIfPresent(Int32.self, forKey: "businessBotPinnedLayout")) ?? 0).rawValue
         self.businessBotPinnedFirst = ((try container.decodeIfPresent(Int32.self, forKey: "businessBotPinnedFirst")) ?? 0) != 0
         self.businessBotPinnedCompact = ((try container.decodeIfPresent(Int32.self, forKey: "businessBotPinnedCompact")) ?? 0) != 0
+        self.silentSend = ((try container.decodeIfPresent(Int32.self, forKey: "silentSend")) ?? 0) != 0
+        self.silentSendMode = ShadowSilentSend.normalizedMode((try container.decodeIfPresent(Int32.self, forKey: "silentSendMode")) ?? ShadowSilentSend.modeAlways)
+        self.silentSendFrom = ShadowSilentSend.normalizedMinute((try container.decodeIfPresent(Int32.self, forKey: "silentSendFrom")) ?? ShadowSilentSend.defaultFrom)
+        self.silentSendTo = ShadowSilentSend.normalizedMinute((try container.decodeIfPresent(Int32.self, forKey: "silentSendTo")) ?? ShadowSilentSend.defaultTo)
         self.onlineHistory = ((try container.decodeIfPresent(Int32.self, forKey: "onlineHistory")) ?? 0) != 0
         self.saveViewedStories = ((try container.decodeIfPresent(Int32.self, forKey: "saveViewedStories")) ?? 0) != 0
         self.settingsIconBackgroundColor = ((try container.decodeIfPresent(Int32.self, forKey: "settingsIconBackgroundColor")) ?? 0x1C1C1E) & 0xFFFFFF
@@ -872,6 +884,10 @@ public struct AyuGramSettings: Codable, Equatable {
         try container.encode(self.businessBotPinnedLayout, forKey: "businessBotPinnedLayout")
         try container.encode((self.businessBotPinnedFirst ? 1 : 0) as Int32, forKey: "businessBotPinnedFirst")
         try container.encode((self.businessBotPinnedCompact ? 1 : 0) as Int32, forKey: "businessBotPinnedCompact")
+        try container.encode((self.silentSend ? 1 : 0) as Int32, forKey: "silentSend")
+        try container.encode(self.silentSendMode, forKey: "silentSendMode")
+        try container.encode(self.silentSendFrom, forKey: "silentSendFrom")
+        try container.encode(self.silentSendTo, forKey: "silentSendTo")
         try container.encode((self.onlineHistory ? 1 : 0) as Int32, forKey: "onlineHistory")
         try container.encode((self.saveViewedStories ? 1 : 0) as Int32, forKey: "saveViewedStories")
         try container.encode(self.settingsIconBackgroundColor, forKey: "settingsIconBackgroundColor")

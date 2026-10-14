@@ -59,7 +59,8 @@ class SecondSpaceContracts(unittest.TestCase):
 
     def test_entry_points(self):
         menus = read("ChatListUI/Sources/ChatContextMenus.swift")
-        self.assertIn("items.insert(spaceItem, at: pinIndex + 2)", menus)
+        self.assertIn("func shadowChatContextSubmenuItems(", menus)
+        self.assertIn("items.append(spaceItem)", menus)
         self.assertIn("func shadowSetSpaceVisibility(", menus)
         self.assertIn("visibility == .secondOnly && !ShadowSpaceStore.shared.hasCode", menus)
         controller = read("ChatListUI/Sources/ChatListController.swift")

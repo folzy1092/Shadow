@@ -83,6 +83,10 @@ struct DocumentTests {
         check(businessBot.settings["businessBotPinned"] == .bool(false) && businessBot.settings["businessBotPinnedLayout"] == .integer(2), "Business bot pin settings are portable")
         check(businessBot.settings["businessBotPinnedFirst"] == .bool(true) && businessBot.settings["businessBotPinnedCompact"] == .bool(true), "Business bot pin order and compact bot are portable")
         expectFailure("Unsupported business bot pin layout") { _ = try ShadowSettingsDocument(settings: ["businessBotPinnedLayout": .integer(4)]) }
+        let silent = try ShadowSettingsDocument.decode(ShadowSettingsDocument(settings: ["silentSend": .bool(true), "silentSendMode": .integer(1), "silentSendFrom": .integer(1380), "silentSendTo": .integer(480)]).encoded())
+        check(silent.settings["silentSend"] == .bool(true) && silent.settings["silentSendMode"] == .integer(1), "Silent send is portable")
+        check(silent.settings["silentSendFrom"] == .integer(1380) && silent.settings["silentSendTo"] == .integer(480), "Silent send schedule is portable")
+        expectFailure("Unsupported silent send minute") { _ = try ShadowSettingsDocument(settings: ["silentSendTo": .integer(1440)]) }
         let feed = try ShadowSettingsDocument.decode(ShadowSettingsDocument(settings: ["feedEnabled": .bool(true), "feedPosition": .integer(2), "feedAutoplay": .bool(false)]).encoded())
         check(feed.settings["feedEnabled"] == .bool(true) && feed.settings["feedPosition"] == .integer(2) && feed.settings["feedAutoplay"] == .bool(false), "Feed settings are portable")
         expectFailure("Unsupported feed position") { _ = try ShadowSettingsDocument(settings: ["feedPosition": .integer(4)]) }

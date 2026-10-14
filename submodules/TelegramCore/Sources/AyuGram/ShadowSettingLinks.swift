@@ -231,6 +231,10 @@ public enum ShadowSettingLinks {
         ShadowSettingLink(screen: "ghost", slug: "offer-stories", entryId: 12, key: "offerGhostBeforeStories", title: "Предлагать призрак перед историями", icon: "questionmark.circle"),
         ShadowSettingLink(screen: "ghost", slug: "scheduled", entryId: 8, key: "sendViaScheduled", title: "Отправлять через отложенные", icon: "clock"),
         ShadowSettingLink(screen: "ghost", slug: "send-offline", entryId: 9, key: "sendWithoutOnline", title: "Отправлять без появления онлайн", icon: "paperplane"),
+        ShadowSettingLink(screen: "ghost", slug: "silent-send", entryId: 14, key: "silentSend", title: "Тихая отправка по умолчанию", icon: "bell.slash", since: "1.13.0"),
+        ShadowSettingLink(screen: "ghost", slug: "silent-send-mode", entryId: 15, key: "silentSendMode", title: "Тихая отправка: когда", parentEntryId: 14, choices: ShadowSilentSend.modes.map { ShadowSilentSend.modeTitle($0) }, since: "1.13.0"),
+        ShadowSettingLink(screen: "ghost", slug: "silent-send-from", entryId: 16, key: nil, title: "Тихая отправка: с", parentEntryId: 14, since: "1.13.0"),
+        ShadowSettingLink(screen: "ghost", slug: "silent-send-to", entryId: 17, key: nil, title: "Тихая отправка: до", parentEntryId: 14, since: "1.13.0"),
 
         // Шпион (AyuSpyEntry)
         ShadowSettingLink(screen: "spy", slug: "deleted", entryId: 1, key: "keepDeletedMessages", title: "Сохранять удалённые", icon: "trash"),

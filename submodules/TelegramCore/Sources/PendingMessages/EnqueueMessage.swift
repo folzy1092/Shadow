@@ -576,6 +576,24 @@ public func enqueueMessages(account: Account, peerId: PeerId, messages: [Enqueue
     }
 }
 
+// Shadow: «Тихая отправка» (ShadowSilentSend) — the stock «Отправить без звука»
+// by default. Not for Saved Messages, where nobody is notified.
+private func shadowSilentSendTransform(messages: [EnqueueMessage], peerId: PeerId, accountPeerId: PeerId, settings: AyuGramSettings) -> [EnqueueMessage] {
+    guard peerId != accountPeerId, ShadowSilentSend.isActive(enabled: settings.silentSend, mode: settings.silentSendMode, from: settings.silentSendFrom, to: settings.silentSendTo, minute: ShadowSilentSend.minuteOfDay(Date())) else {
+        return messages
+    }
+    return messages.map { message in
+        return message.withUpdatedAttributes { attributes in
+            if attributes.contains(where: { $0 is NotificationInfoMessageAttribute }) {
+                return attributes
+            }
+            var attributes = attributes
+            attributes.append(NotificationInfoMessageAttribute(flags: .muted))
+            return attributes
+        }
+    }
+}
+
 private func ayuEnqueueMessages(account: Account, peerId: PeerId, messages: [EnqueueMessage], settings: AyuGramSettings) -> Signal<[MessageId?], NoError> {
     // Shadow fork: delayed send. When the full Ghost Mode + "send via
     // scheduled" is on, re-route eligible outgoing messages through Telegram's
@@ -585,7 +603,8 @@ private func ayuEnqueueMessages(account: Account, peerId: PeerId, messages: [Enq
     // behind by more than the delay, "now + 12 s" was already in the past: the
     // server published the message at once, as a plain send that marks the
     // account online. The MTProto-synced server time keeps the delay real.
-    let messages = AyuDelayedSend.transform(messages: messages, peerId: peerId, settings: settings, now: account.network.getApproximateRemoteTimestamp())
+    // Shadow: «Тихая отправка» first (ShadowSilentSend), then delayed send.
+    let messages = AyuDelayedSend.transform(messages: shadowSilentSendTransform(messages: messages, peerId: peerId, accountPeerId: account.peerId, settings: settings), peerId: peerId, settings: settings, now: account.network.getApproximateRemoteTimestamp())
     // Shadow fork: the "offline" re-assert after a send now fires from
     // PendingMessageManager once the real send RPC's round trip actually
     // completes (see `ayuReassertOfflineAfterSendIfNeeded`), not from here —

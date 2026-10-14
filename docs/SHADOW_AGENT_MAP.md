@@ -700,6 +700,24 @@ UI-проекция настроек выбирается в `TelegramRootContro
 - Не проверено на устройстве (собрано только CI): вид обеих половинок в
   капсуле, превью списка закрепов из составной панели.
 
+## 5n. Тихая отправка, подменю «Shadow ›» (1.13.0)
+
+- «Тихая отправка» (экран «Призрак», секция «ТИХАЯ ОТПРАВКА», строки 13–18):
+  `silentSend`, `silentSendMode` (0 всегда, 1 по расписанию),
+  `silentSendFrom`/`silentSendTo` — минуты от полуночи по часам телефона,
+  окно может переходить через полночь (`ShadowSilentSend`, Foundation, тест
+  `SilentSendTests.swift`). Применяется в `EnqueueMessage.swift`
+  (`shadowSilentSendTransform`, до `AyuDelayedSend.transform`): добавляет
+  `NotificationInfoMessageAttribute(.muted)`, как стоковое «Отправить без
+  звука»; «Избранное» не трогает. От мастер-тумблера призрака **не** зависит.
+  Время выбирается `SettingsUI/ShadowTimePickerController.swift` (UIKit-шторка,
+  минимальная iOS проекта 13 — новые API под `#available`).
+- Меню чата в списке (долгое нажатие): все пункты форка — в подменю
+  «Shadow ›» сразу после «Закрепить» (`shadowChatContextSubmenuItems` в
+  `ChatListUI/ChatContextMenus.swift`, `pushItems` с «Назад»): «Защитить
+  чат», «Пространство ›». Новые действия форка над чатом добавлять туда, а не в
+  стоковое меню.
+
 ## 5a. Замки чатов и второе пространство
 
 - Замки: `ShadowChatLock.swift` (хранилище), `TelegramUI/Sources/ShadowChatLockUI.swift`

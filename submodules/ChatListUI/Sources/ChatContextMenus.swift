@@ -1060,9 +1060,11 @@ private func openCustomMute(context: AccountContext, peerId: EnginePeer.Id, thre
     baseController.present(controller, in: .window(.root))
 }
 
-// Shadow: adds "Защитить чат" / "Снять защиту" (ShadowChatLockStore) right after
-// "Закрепить" in the stock chat context menu. Removing a lock asks for Face ID
-// or the password.
+// Shadow: the chat list context menu gets one "Shadow ›" row right after
+// "Закрепить"; it slides to a submenu with the fork's chat actions so the stock
+// menu stays short: "Защитить чат" / "Снять защиту" (ShadowChatLockStore;
+// removing a lock asks for Face ID or the password) and "Пространство ›"
+// (Везде / Только основное / Только второе, spec section 6).
 func chatContextMenuItems(context: AccountContext, peerId: EnginePeer.Id, promoInfo: ChatListNodeEntryPromoInfo?, source: ChatContextMenuSource, chatListController: ChatListControllerImpl?, joined: Bool) -> Signal<[ContextMenuItem], NoError> {
     return shadowStockChatContextMenuItems(context: context, peerId: peerId, promoInfo: promoInfo, source: source, chatListController: chatListController, joined: joined)
     |> map { items -> [ContextMenuItem] in
@@ -1073,16 +1075,10 @@ func chatContextMenuItems(context: AccountContext, peerId: EnginePeer.Id, promoI
         }
         let isSavedMessages = peerId == context.account.peerId
         let strings = context.sharedContext.currentPresentationData.with { $0 }.strings
-        let isLocked = ShadowChatLockStore.shared.isLocked(accountPeerId: context.account.peerId.toInt64(), peerId: peerId.toInt64())
-        let lockItem: ContextMenuItem = .action(ContextMenuActionItem(text: isLocked ? "Снять защиту" : "Защитить чат", icon: { theme in
-            return generateTintedImage(image: UIImage(systemName: isLocked ? "lock.open" : "lock"), color: theme.contextMenu.primaryColor)
-        }, action: { _, f in
-            f(.default)
-            if isLocked {
-                context.sharedContext.shadowChatLockUnlockChat(context: context, peerId: peerId, completion: { _ in })
-            } else {
-                context.sharedContext.shadowChatLockLockChat(context: context, peerId: peerId, completion: { _ in })
-            }
+        let shadowItem: ContextMenuItem = .action(ContextMenuActionItem(text: "Shadow", icon: { theme in
+            return generateTintedImage(image: UIImage(systemName: "chevron.right"), color: theme.contextMenu.primaryColor)
+        }, action: { c, _ in
+            c?.pushItems(items: .single(ContextController.Items(content: .list(shadowChatContextSubmenuItems(context: context, peerId: peerId, isSavedMessages: isSavedMessages, chatListController: chatListController)))))
         }))
         var items = items
         let pinIndex = items.firstIndex(where: { item in
@@ -1091,12 +1087,48 @@ func chatContextMenuItems(context: AccountContext, peerId: EnginePeer.Id, promoI
             }
             return false
         })
-        // Shadow: "Пространство" → Везде / Только основное / Только второе (spec section 6).
+        if let pinIndex {
+            items.insert(shadowItem, at: pinIndex + 1)
+        } else {
+            items.append(shadowItem)
+        }
+        return items
+    }
+}
+
+private func shadowContextBackItem(strings: PresentationStrings) -> ContextMenuItem {
+    return .action(ContextMenuActionItem(text: strings.Common_Back, textColor: .primary, icon: { theme in
+        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Back"), color: theme.contextMenu.primaryColor)
+    }, iconSource: nil, iconPosition: .left, action: { c, _ in
+        c?.popItems()
+    }))
+}
+
+// The "Shadow ›" submenu of a chat in the list. New per-chat fork actions go here,
+// not into the stock menu.
+func shadowChatContextSubmenuItems(context: AccountContext, peerId: EnginePeer.Id, isSavedMessages: Bool, chatListController: ChatListControllerImpl?) -> [ContextMenuItem] {
+    let strings = context.sharedContext.currentPresentationData.with { $0 }.strings
+    var items: [ContextMenuItem] = [shadowContextBackItem(strings: strings), .separator]
+
+    let isLocked = ShadowChatLockStore.shared.isLocked(accountPeerId: context.account.peerId.toInt64(), peerId: peerId.toInt64())
+    let lockItem: ContextMenuItem = .action(ContextMenuActionItem(text: isLocked ? "Снять защиту" : "Защитить чат", icon: { theme in
+        return generateTintedImage(image: UIImage(systemName: isLocked ? "lock.open" : "lock"), color: theme.contextMenu.primaryColor)
+    }, action: { _, f in
+        f(.default)
+        if isLocked {
+            context.sharedContext.shadowChatLockUnlockChat(context: context, peerId: peerId, completion: { _ in })
+        } else {
+            context.sharedContext.shadowChatLockLockChat(context: context, peerId: peerId, completion: { _ in })
+        }
+    }))
+    items.append(lockItem)
+
+    if !isSavedMessages {
         let currentVisibility = ShadowSpaceStore.shared.visibility(accountPeerId: context.account.peerId.toInt64(), peerId: peerId.toInt64())
         let spaceItem: ContextMenuItem = .action(ContextMenuActionItem(text: "Пространство: \(currentVisibility.title.lowercased())", icon: { theme in
             return generateTintedImage(image: UIImage(systemName: "eye.slash"), color: theme.contextMenu.primaryColor)
         }, action: { c, _ in
-            var subItems: [ContextMenuItem] = []
+            var subItems: [ContextMenuItem] = [shadowContextBackItem(strings: strings), .separator]
             for visibility in ShadowSpaceStore.Visibility.allCases {
                 subItems.append(.action(ContextMenuActionItem(text: visibility.title, icon: { theme in
                     if visibility == currentVisibility {
@@ -1108,21 +1140,11 @@ func chatContextMenuItems(context: AccountContext, peerId: EnginePeer.Id, promoI
                     shadowSetSpaceVisibility(context: context, peerIds: [peerId], visibility: visibility, parentController: chatListController)
                 })))
             }
-            c?.setItems(.single(ContextController.Items(content: .list(subItems))), minHeight: nil, animated: true)
+            c?.pushItems(items: .single(ContextController.Items(content: .list(subItems))))
         }))
-        if let pinIndex {
-            items.insert(lockItem, at: pinIndex + 1)
-            if !isSavedMessages {
-                items.insert(spaceItem, at: pinIndex + 2)
-            }
-        } else {
-            items.append(lockItem)
-            if !isSavedMessages {
-                items.append(spaceItem)
-            }
-        }
-        return items
+        items.append(spaceItem)
     }
+    return items
 }
 
 // Shadow: changes the space visibility of chats. Moving a chat to "only the

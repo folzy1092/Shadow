@@ -101,6 +101,7 @@ public enum ShadowSettingsTransfer {
         "businessBotPinned": \.businessBotPinned,
         "businessBotPinnedFirst": \.businessBotPinnedFirst,
         "businessBotPinnedCompact": \.businessBotPinnedCompact,
+        "silentSend": \.silentSend,
         "onlineHistory": \.onlineHistory,
         "saveViewedStories": \.saveViewedStories,
         "screenshotAnonymize": \.messageScreenshot.anonymize,
@@ -163,6 +164,9 @@ public enum ShadowSettingsTransfer {
         values["replyTimecodeMode"] = .integer(Int64(settings.replyTimecodeMode))
         values["feedPosition"] = .integer(Int64(settings.feedPosition))
         values["businessBotPinnedLayout"] = .integer(Int64(settings.businessBotPinnedLayout))
+        values["silentSendMode"] = .integer(Int64(settings.silentSendMode))
+        values["silentSendFrom"] = .integer(Int64(settings.silentSendFrom))
+        values["silentSendTo"] = .integer(Int64(settings.silentSendTo))
         values["ghostAccountMode"] = .integer(Int64(settings.ghostAccountMode.rawValue))
         values["screenshotBackground"] = .integer(Int64(settings.messageScreenshot.background.rawValue))
         values["screenshotCustomColorARGB"] = .integer(Int64(settings.messageScreenshot.customColorARGB))
@@ -225,6 +229,9 @@ public enum ShadowSettingsTransfer {
                 case "replyTimecodeMode": updated.replyTimecodeMode = ShadowReplyTimecode.normalizedMode(Int32(number))
                 case "feedPosition": updated.feedPosition = ShadowFeed.Position.normalized(Int32(clamping: number)).rawValue
                 case "businessBotPinnedLayout": updated.businessBotPinnedLayout = ShadowBusinessBotPanel.Layout.normalized(Int32(clamping: number)).rawValue
+                case "silentSendMode": updated.silentSendMode = ShadowSilentSend.normalizedMode(Int32(clamping: number))
+                case "silentSendFrom": updated.silentSendFrom = ShadowSilentSend.normalizedMinute(Int32(clamping: number))
+                case "silentSendTo": updated.silentSendTo = ShadowSilentSend.normalizedMinute(Int32(clamping: number))
                 case "settingsIconBackgroundColor": updated.settingsIconBackgroundColor = Int32(number)
                 case "settingsIconGlyphColor": updated.settingsIconGlyphColor = Int32(number)
                 case "ghostAccountMode":
