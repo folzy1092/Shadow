@@ -185,7 +185,10 @@ func titlePanelForChatPresentationInterfaceState(_ chatPresentationInterfaceStat
             // Shadow: with a pinned message the bot no longer hides it
             // (ShadowBusinessBotPanel): both in one panel, or just the pin.
             let shadowSettings = currentAyuGramSettings(accountId: context.account.id)
-            let shadowArrangement = ShadowBusinessBotPanel.arrangement(enabled: shadowSettings.businessBotPinned, layout: shadowSettings.businessBotPinnedLayout, hasBot: true, hasPinned: selectedContext == .pinnedMessage)
+            // A chat can have its own layout (Shadow › «Бот и закреп» in the list).
+            let shadowChatLayout = chatPresentationInterfaceState.chatLocation.peerId.flatMap { ShadowBusinessBotChatLayoutStore.shared.layout(accountPeerId: context.account.peerId.toInt64(), peerId: $0.toInt64()) }
+            let shadowEffective = ShadowBusinessBotPanel.effective(enabled: shadowSettings.businessBotPinned, layout: shadowSettings.businessBotPinnedLayout, chatLayout: shadowChatLayout)
+            let shadowArrangement = ShadowBusinessBotPanel.arrangement(enabled: shadowEffective.enabled, layout: shadowEffective.layout, hasBot: true, hasPinned: selectedContext == .pinnedMessage)
             if case let .combined(layout) = shadowArrangement {
                 let style = ShadowBusinessBotPinnedTitlePanelNode.Style(layout: layout, pinnedFirst: shadowSettings.businessBotPinnedFirst, compactBot: shadowSettings.businessBotPinnedCompact)
                 if let currentPanel = currentPanel as? ShadowBusinessBotPinnedTitlePanelNode {

@@ -1145,6 +1145,35 @@ func shadowChatContextSubmenuItems(context: AccountContext, peerId: EnginePeer.I
         }))
         items.append(spaceItem)
 
+        // Per-chat «Бот и закреп» (ShadowBusinessBotChatLayoutStore), for
+        // private chats where a business bot can work.
+        if peerId.namespace == Namespaces.Peer.CloudUser {
+            let accountPeerId = context.account.peerId.toInt64()
+            let currentLayout = ShadowBusinessBotChatLayoutStore.shared.layout(accountPeerId: accountPeerId, peerId: peerId.toInt64())
+            let currentTitle = currentLayout.map { ShadowBusinessBotPanel.Layout.normalized($0).title.lowercased() } ?? "как везде"
+            items.append(.action(ContextMenuActionItem(text: "Бот и закреп: \(currentTitle)", icon: { theme in
+                return generateTintedImage(image: UIImage(systemName: "pin"), color: theme.contextMenu.primaryColor)
+            }, action: { c, _ in
+                var subItems: [ContextMenuItem] = [shadowContextBackItem(strings: strings), .separator]
+                var choices: [(String, Int32?)] = [("Как везде", nil)]
+                for layout in ShadowBusinessBotPanel.Layout.allCases {
+                    choices.append((layout.title, layout.rawValue))
+                }
+                for (title, value) in choices {
+                    subItems.append(.action(ContextMenuActionItem(text: title, icon: { theme in
+                        if value == currentLayout {
+                            return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor)
+                        }
+                        return nil
+                    }, action: { _, f in
+                        f(.default)
+                        ShadowBusinessBotChatLayoutStore.shared.setLayout(value, accountPeerId: accountPeerId, peerId: peerId.toInt64())
+                    })))
+                }
+                c?.pushItems(items: .single(ContextController.Items(content: .list(subItems))))
+            })))
+        }
+
         let customTitle = ShadowChatTitleStore.shared.title(accountPeerId: context.account.peerId.toInt64(), peerId: peerId.toInt64())
         items.append(.action(ContextMenuActionItem(text: customTitle == nil ? "Своё название" : "Изменить название", icon: { theme in
             return generateTintedImage(image: UIImage(systemName: "character.cursor.ibeam"), color: theme.contextMenu.primaryColor)

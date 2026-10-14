@@ -48,7 +48,7 @@ class BusinessBotPinnedContracts(unittest.TestCase):
 
     def test_title_panel_keeps_both(self):
         panels = read("TelegramUI/Sources/ChatInterfaceTitlePanelNodes.swift")
-        self.assertIn("ShadowBusinessBotPanel.arrangement(enabled: shadowSettings.businessBotPinned", panels)
+        self.assertIn("ShadowBusinessBotPanel.arrangement(enabled: shadowEffective.enabled", panels)
         self.assertIn("hasPinned: selectedContext == .pinnedMessage", panels)
         self.assertIn("currentAyuGramSettings(accountId: context.account.id)", panels)
         node = read("TelegramUI/Sources/ShadowBusinessBotPinnedTitlePanelNode.swift")
@@ -61,6 +61,14 @@ class BusinessBotPinnedContracts(unittest.TestCase):
         # The icon style keeps Стоп/Старт in its menu.
         self.assertIn("self.openSettingsMenu(sourceView: sourceView, includePauseToggle: true)", bot)
         self.assertIn("if includePauseToggle && (managingBot.canReply || managingBot.isPaused)", bot)
+
+    def test_per_chat_layout(self):
+        panels = read("TelegramUI/Sources/ChatInterfaceTitlePanelNodes.swift")
+        self.assertIn("ShadowBusinessBotChatLayoutStore.shared.layout(accountPeerId: context.account.peerId.toInt64()", panels)
+        self.assertIn("ShadowBusinessBotPanel.effective(enabled: shadowSettings.businessBotPinned", panels)
+        menus = read("ChatListUI/Sources/ChatContextMenus.swift")
+        self.assertIn('"Бот и закреп: \\(currentTitle)"', menus)
+        self.assertIn("ShadowBusinessBotChatLayoutStore.shared.setLayout(value,", menus)
 
     def test_foundation_suite_runs_the_model(self):
         runner = (ROOT / "build-system/ci/test_shadow_foundation.py").read_text(encoding="utf-8")

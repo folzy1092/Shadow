@@ -79,6 +79,15 @@ public enum ShadowBusinessBotPanel {
         }
     }
 
+    // The layout a chat uses: its own (ShadowBusinessBotChatLayoutStore), which
+    // works even with the global toggle off, else the global settings.
+    public static func effective(enabled: Bool, layout: Int32, chatLayout: Int32?) -> (enabled: Bool, layout: Int32) {
+        if let chatLayout, Layout(rawValue: chatLayout) != nil {
+            return (true, chatLayout)
+        }
+        return (enabled, layout)
+    }
+
     // The bot's share of a «Пополам» row. Without the name the bot takes what
     // its avatar and buttons need (contentWidth); either way the pinned
     // message keeps at least minimumPinnedWidth.
@@ -86,5 +95,49 @@ public enum ShadowBusinessBotPanel {
         let maximum = max(0.0, totalWidth - minimumPinnedWidth)
         let wanted = compact ? contentWidth : (totalWidth * 0.5).rounded(.down)
         return min(max(0.0, wanted), maximum)
+    }
+}
+
+// Shadow: «Бот и закреп» for one chat (the chat's «Shadow ›» menu in the list):
+// its own layout instead of the one in Кастомизация. Per account and chat, in
+// UserDefaults of this device; nil — like everywhere.
+public final class ShadowBusinessBotChatLayoutStore {
+    public static let shared = ShadowBusinessBotChatLayoutStore(defaults: .standard)
+    public static let didChangeNotification = Notification.Name("ShadowBusinessBotChatLayoutStore.didChange")
+
+    private let defaults: UserDefaults
+    private let key = "shadow.businessBotChatLayouts.v1"
+    private let lock = NSLock()
+
+    public init(defaults: UserDefaults) {
+        self.defaults = defaults
+    }
+
+    private func chatKey(accountPeerId: Int64, peerId: Int64) -> String {
+        return "\(accountPeerId)/\(peerId)"
+    }
+
+    public func layout(accountPeerId: Int64, peerId: Int64) -> Int32? {
+        self.lock.lock()
+        defer { self.lock.unlock() }
+        let all = (self.defaults.dictionary(forKey: self.key) as? [String: Int]) ?? [:]
+        guard let value = all[self.chatKey(accountPeerId: accountPeerId, peerId: peerId)], ShadowBusinessBotPanel.Layout(rawValue: Int32(value)) != nil else {
+            return nil
+        }
+        return Int32(value)
+    }
+
+    public func setLayout(_ layout: Int32?, accountPeerId: Int64, peerId: Int64) {
+        self.lock.lock()
+        var all = (self.defaults.dictionary(forKey: self.key) as? [String: Int]) ?? [:]
+        let chatKey = self.chatKey(accountPeerId: accountPeerId, peerId: peerId)
+        if let layout, ShadowBusinessBotPanel.Layout(rawValue: layout) != nil {
+            all[chatKey] = Int(layout)
+        } else {
+            all.removeValue(forKey: chatKey)
+        }
+        self.defaults.set(all, forKey: self.key)
+        self.lock.unlock()
+        NotificationCenter.default.post(name: ShadowBusinessBotChatLayoutStore.didChangeNotification, object: nil)
     }
 }
