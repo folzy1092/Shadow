@@ -52,7 +52,7 @@ public struct ShadowSettingsDocument: Codable, Equatable {
     public static let integerKeys: Set<String> = [
         "mediaAutoCleanInterval", "attachmentSizeLimit", "bottomBarScrollMode", "ghostAccountMode",
         "screenshotBackground", "screenshotCustomColorARGB",
-        "settingsIconBackgroundColor", "settingsIconGlyphColor", "voiceTimeFormat", "replyTimecodeMode", "feedPosition", "businessBotPinnedLayout", "silentSendMode", "silentSendFrom", "silentSendTo"
+        "settingsIconBackgroundColor", "settingsIconGlyphColor", "voiceTimeFormat", "replyTimecodeMode", "feedPosition", "businessBotPinnedLayout", "silentSendMode", "silentSendFrom", "silentSendTo", "mediaSendQuality"
     ]
     private static let ageIntervals: Set<Int64> = [0, 86400, 259200, 604800, 1209600, 2592000, 7776000, 15552000, 31536000]
     private static let sizeLimits: Set<Int64> = [0, 314572800, 1073741824, 2147483648, 5368709120, 6442450944, 12884901888]
@@ -128,6 +128,8 @@ public struct ShadowSettingsDocument: Codable, Equatable {
             // ShadowSilentSend: modes always, schedule; minutes after midnight.
             case let .integer(number) where key == "silentSendMode" && (0...1).contains(number): break
             case let .integer(number) where (key == "silentSendFrom" || key == "silentSendTo") && (0...1439).contains(number): break
+            // ShadowMediaSendQuality: stock, always HD, as files.
+            case let .integer(number) where key == "mediaSendQuality" && (0...2).contains(number): break
             // ShadowFeed.Position.
             case let .integer(number) where key == "feedPosition" && (0...3).contains(number): break
             // ShadowGhostAccountMode raw values: manual, alwaysOn, alwaysOff, followPrevious.

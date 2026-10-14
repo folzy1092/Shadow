@@ -738,6 +738,12 @@ UI-проекция настроек выбирается в `TelegramRootContro
   чата (`shadowRenameChat`, PromptUI), список перерисовывается по
   `didChangeNotification` (`ChatListNode`).
 
+- «Качество фото» (`mediaSendQuality`, `ShadowMediaSendQuality`: 0 как в
+  Telegram — стоковый `TG_photoHighQuality_v0` помнит последний выбор, 1 всегда
+  HD, 2 без сжатия): `MediaPickerScreen` — HD при открытии, кнопка отправки
+  шлёт файлами через `shadowSendsAsFileByDefault` (не со спойлером/ценой, не в
+  секретных чатах, только обычная галерея). Строка 130 в «Медиа и камера».
+
 ## 5a. Замки чатов и второе пространство
 
 - Замки: `ShadowChatLock.swift` (хранилище), `TelegramUI/Sources/ShadowChatLockUI.swift`

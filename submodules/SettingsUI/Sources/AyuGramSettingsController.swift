@@ -823,6 +823,7 @@ private final class AyuCustomizationArguments {
     var openChatVoiceSpeeds: () -> Void = {}
     var openChatBanners: () -> Void = {}
     var selectBusinessBotPinnedLayout: () -> Void = {}
+    var selectMediaSendQuality: () -> Void = {}
     var updateSetting: (@escaping (inout AyuGramSettings) -> Void) -> Void = { _ in }
     // true: background color, false: glyph color.
     var pickSettingsIconColor: (Bool) -> Void = { _ in }
@@ -999,6 +1000,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
     case replyTimecodeMode(Int32)
     case chatVoiceSpeed(Bool)
     case chatVoiceSpeedList(Int)
+    case mediaSendQuality(Int32)
     case chatsFooter
 
     case businessBotHeader
@@ -1073,7 +1075,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
             return AyuCustomizationSection.bottomBar.rawValue
         case .profilesHeader, .showProfileId, .showProfileDC, .showRegistrationDate, .showChatStreak, .hideOwnPhoneNumber, .profilesFooter:
             return AyuCustomizationSection.profiles.rawValue
-        case .mediaHeader, .roundVideoBackCamera, .showCameraTile, .cameraTileLivePreview, .cameraTileCompact, .localVoiceTranscription, .voiceTimeFormat, .voiceTimeRoundVideos, .voiceTimeInPlayer, .replyTimecode, .replyTimecodeMode, .chatVoiceSpeed, .chatVoiceSpeedList, .mediaFooter:
+        case .mediaHeader, .roundVideoBackCamera, .showCameraTile, .cameraTileLivePreview, .cameraTileCompact, .localVoiceTranscription, .voiceTimeFormat, .voiceTimeRoundVideos, .voiceTimeInPlayer, .replyTimecode, .replyTimecodeMode, .chatVoiceSpeed, .chatVoiceSpeedList, .mediaSendQuality, .mediaFooter:
             return AyuCustomizationSection.media.rawValue
         case .customRoundVideosHeader, .customVideoMessageSpeed, .customRoundVideosFooter:
             return AyuCustomizationSection.customRoundVideos.rawValue
@@ -1136,6 +1138,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .businessBotPinnedFirst: return 127
         case .businessBotPinnedCompact: return 128
         case .businessBotFooter: return 129
+        case .mediaSendQuality: return 130
         case .monochromeSettingsIcons: return 106
         case .settingsIconBackground: return 107
         case .settingsIconGlyph: return 108
@@ -1215,6 +1218,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .replyTimecodeMode: return (28, 7)
         case .chatVoiceSpeed: return (28, 8)
         case .chatVoiceSpeedList: return (28, 9)
+        case .mediaSendQuality: return (28, 10)
         // After the media section (mediaFooter = 29), in display order.
         case .customRoundVideosHeader: return (29, 1)
         case .customVideoMessageSpeed: return (29, 2)
@@ -1376,6 +1380,8 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
             return ItemListSwitchItem(presentationData: presentationData, title: "Расшифровка голосовых на устройстве", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 arguments.updateSetting { $0.localVoiceTranscription = value }
             })
+        case let .mediaSendQuality(value):
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Качество фото", label: ShadowMediaSendQuality.title(value), labelStyle: .detailText, sectionId: self.section, style: .blocks, action: arguments.selectMediaSendQuality)
         case let .voiceTimeFormat(format):
             return ItemListDisclosureItem(presentationData: presentationData, title: "Время на голосовых", label: ShadowVoiceTime.title(format), labelStyle: .detailText, sectionId: self.section, style: .blocks, action: arguments.selectVoiceTimeFormat)
         case let .voiceTimeRoundVideos(value):
@@ -1477,7 +1483,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
                 arguments.updateSetting { $0.cameraTileCompact = value }
             })
         case .mediaFooter:
-            return ItemListTextItem(presentationData: presentationData, text: .plain("Начинать запись видеосообщений («кружков») с задней камеры. Во время записи можно переключиться на фронтальную. «Камера в галерее» показывает плитку камеры первой ячейкой в галерее вложений. «Живой предпросмотр камеры» запускает в этой плитке видео с камеры вживую вместо статичной иконки. «Компактная плитка камеры» занимает одну ячейку вместо двух — в первом ряду видно больше медиа. «Расшифровка голосовых на устройстве» без Premium распознаёт речь прямо на телефоне — аудио никуда не отправляется. «Время на голосовых» меняет время под голосовым во время прослушивания: сколько осталось (как в Telegram), сколько прошло, «прошло / всего», «-осталось / всего» или процент; пока голосовое не играет, видна его длина. «Также на кружках» применяет тот же формат к видеосообщениям, «Время в верхнем плеере» добавляет его в полоску плеера над чатом. «Тайм-код в ответах»: ответ текстом на недослушанное голосовое или кружок начинается с момента, где вы остановились, например «0:53 текст»; собеседник нажимает на 0:53 и слушает с этого места. Режим «Спрашивать» показывает окно при отправке, ответ в нём можно запомнить для чата на 30 минут. «Своя скорость для чатов»: кнопка скорости в полоске плеера меняет скорость голосовых только того чата, откуда играет голосовое, общая скорость остаётся прежней."), sectionId: self.section)
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Начинать запись видеосообщений («кружков») с задней камеры. Во время записи можно переключиться на фронтальную. «Камера в галерее» показывает плитку камеры первой ячейкой в галерее вложений. «Живой предпросмотр камеры» запускает в этой плитке видео с камеры вживую вместо статичной иконки. «Компактная плитка камеры» занимает одну ячейку вместо двух — в первом ряду видно больше медиа. «Расшифровка голосовых на устройстве» без Premium распознаёт речь прямо на телефоне — аудио никуда не отправляется. «Время на голосовых» меняет время под голосовым во время прослушивания: сколько осталось (как в Telegram), сколько прошло, «прошло / всего», «-осталось / всего» или процент; пока голосовое не играет, видна его длина. «Также на кружках» применяет тот же формат к видеосообщениям, «Время в верхнем плеере» добавляет его в полоску плеера над чатом. «Тайм-код в ответах»: ответ текстом на недослушанное голосовое или кружок начинается с момента, где вы остановились, например «0:53 текст»; собеседник нажимает на 0:53 и слушает с этого места. Режим «Спрашивать» показывает окно при отправке, ответ в нём можно запомнить для чата на 30 минут. «Своя скорость для чатов»: кнопка скорости в полоске плеера меняет скорость голосовых только того чата, откуда играет голосовое, общая скорость остаётся прежней. «Качество фото»: «Всегда HD» открывает галерею сразу в HD, «Без сжатия» отправляет фото и видео файлом (кроме спойлеров, платных и секретных чатов)."), sectionId: self.section)
         case .customRoundVideosHeader:
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "КАСТОМНЫЕ КРУЖКИ", sectionId: self.section)
         case let .customVideoMessageSpeed(value):
@@ -1633,6 +1639,7 @@ private func ayuCustomizationEntries(settings: AyuGramSettings, chatVoiceSpeedCo
     if settings.chatVoiceSpeed {
         entries.append(.chatVoiceSpeedList(chatVoiceSpeedCount))
     }
+    entries.append(.mediaSendQuality(settings.mediaSendQuality))
     entries.append(.mediaFooter)
 
     entries.append(.customRoundVideosHeader)
@@ -1942,6 +1949,23 @@ func ayuCustomizationController(context: AccountContext, focus: ShadowSettingsSe
     }
     arguments.openChatBanners = { [weak controller] in
         controller?.push(shadowChatBannersController(context: context))
+    }
+    arguments.selectMediaSendQuality = {
+        let data = context.sharedContext.currentPresentationData.with { $0 }
+        let sheet = ActionSheetController(presentationData: data)
+        var items: [ActionSheetItem] = [ActionSheetTextItem(title: "Как отправлять фото и видео из галереи", parseMarkdown: false)]
+        let details: [Int32: String] = [ShadowMediaSendQuality.stock: "запоминает выбор HD", ShadowMediaSendQuality.alwaysHD: "каждый раз в HD", ShadowMediaSendQuality.file: "файлом, в исходном качестве"]
+        for value in ShadowMediaSendQuality.values {
+            items.append(ActionSheetButtonItem(title: "\(ShadowMediaSendQuality.title(value)) — \(details[value] ?? "")", action: { [weak sheet] in
+                sheet?.dismissAnimated()
+                ayuUpdateSettings(context: context) { var settings = $0; settings.mediaSendQuality = value; return settings }
+            }))
+        }
+        sheet.setItemGroups([
+            ActionSheetItemGroup(items: items),
+            ActionSheetItemGroup(items: [ActionSheetButtonItem(title: data.strings.Common_Cancel, action: { [weak sheet] in sheet?.dismissAnimated() })])
+        ])
+        presentControllerImpl?(sheet, nil)
     }
     arguments.selectBusinessBotPinnedLayout = {
         let data = context.sharedContext.currentPresentationData.with { $0 }

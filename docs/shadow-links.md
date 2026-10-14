@@ -140,6 +140,7 @@
 | `shadow://customization/reply-timecode` | Тайм-код в ответах |
 | `shadow://customization/reply-timecode-mode` | Тайм-код в ответах: режим, `?value=0…1`: всегда, спрашивать |
 | `shadow://customization/chat-voice-speed` | Своя скорость для чатов |
+| `shadow://customization/media-quality` | Качество фото, `?value=0…2`: как в Telegram, всегда HD, без сжатия |
 | `shadow://customization/chat-voice-speeds` | Чаты со своей скоростью (только открыть) |
 | `shadow://customization/folders-bottom` | Папки снизу |
 | `shadow://customization/hide-bottom-search` | Убрать поиск снизу |

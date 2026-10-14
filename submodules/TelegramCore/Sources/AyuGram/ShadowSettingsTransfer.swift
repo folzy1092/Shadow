@@ -167,6 +167,7 @@ public enum ShadowSettingsTransfer {
         values["silentSendMode"] = .integer(Int64(settings.silentSendMode))
         values["silentSendFrom"] = .integer(Int64(settings.silentSendFrom))
         values["silentSendTo"] = .integer(Int64(settings.silentSendTo))
+        values["mediaSendQuality"] = .integer(Int64(settings.mediaSendQuality))
         values["ghostAccountMode"] = .integer(Int64(settings.ghostAccountMode.rawValue))
         values["screenshotBackground"] = .integer(Int64(settings.messageScreenshot.background.rawValue))
         values["screenshotCustomColorARGB"] = .integer(Int64(settings.messageScreenshot.customColorARGB))
@@ -232,6 +233,7 @@ public enum ShadowSettingsTransfer {
                 case "silentSendMode": updated.silentSendMode = ShadowSilentSend.normalizedMode(Int32(clamping: number))
                 case "silentSendFrom": updated.silentSendFrom = ShadowSilentSend.normalizedMinute(Int32(clamping: number))
                 case "silentSendTo": updated.silentSendTo = ShadowSilentSend.normalizedMinute(Int32(clamping: number))
+                case "mediaSendQuality": updated.mediaSendQuality = ShadowMediaSendQuality.normalized(Int32(clamping: number))
                 case "settingsIconBackgroundColor": updated.settingsIconBackgroundColor = Int32(number)
                 case "settingsIconGlyphColor": updated.settingsIconGlyphColor = Int32(number)
                 case "ghostAccountMode":

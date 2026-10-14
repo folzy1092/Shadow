@@ -86,6 +86,9 @@ struct DocumentTests {
         let silent = try ShadowSettingsDocument.decode(ShadowSettingsDocument(settings: ["silentSend": .bool(true), "silentSendMode": .integer(1), "silentSendFrom": .integer(1380), "silentSendTo": .integer(480)]).encoded())
         check(silent.settings["silentSend"] == .bool(true) && silent.settings["silentSendMode"] == .integer(1), "Silent send is portable")
         check(silent.settings["silentSendFrom"] == .integer(1380) && silent.settings["silentSendTo"] == .integer(480), "Silent send schedule is portable")
+        let quality = try ShadowSettingsDocument.decode(ShadowSettingsDocument(settings: ["mediaSendQuality": .integer(2)]).encoded())
+        check(quality.settings["mediaSendQuality"] == .integer(2), "Media send quality is portable")
+        expectFailure("Unsupported media send quality") { _ = try ShadowSettingsDocument(settings: ["mediaSendQuality": .integer(3)]) }
         expectFailure("Unsupported silent send minute") { _ = try ShadowSettingsDocument(settings: ["silentSendTo": .integer(1440)]) }
         let feed = try ShadowSettingsDocument.decode(ShadowSettingsDocument(settings: ["feedEnabled": .bool(true), "feedPosition": .integer(2), "feedAutoplay": .bool(false)]).encoded())
         check(feed.settings["feedEnabled"] == .bool(true) && feed.settings["feedPosition"] == .integer(2) && feed.settings["feedAutoplay"] == .bool(false), "Feed settings are portable")

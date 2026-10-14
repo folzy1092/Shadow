@@ -2325,7 +2325,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                 if let currentItem = currentItem {
                     selectionState.setItem(currentItem, selected: true)
                 }
-                strongSelf.controllerNode.send(fromGallery: currentItem != nil, asFile: strongSelf.subject.asFile, silently: silently, scheduleTime: scheduleTime, animated: animated, parameters: parameters, completion: completion)
+                strongSelf.controllerNode.send(fromGallery: currentItem != nil, asFile: strongSelf.subject.asFile || strongSelf.shadowSendsAsFileByDefault(), silently: silently, scheduleTime: scheduleTime, animated: animated, parameters: parameters, completion: completion)
             }
         }, schedule: { [weak self] parameters in
             if let strongSelf = self {
@@ -2348,7 +2348,9 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
         }
         self.interaction?.displayLivePhotoIcon = displayLivePhotoIcon
         
-        let highQualityPhoto = UserDefaults.standard.bool(forKey: "TG_photoHighQuality_v0")
+        // Shadow: «Качество фото» (AyuGramSettings.mediaSendQuality): «Всегда HD»
+        // starts every picker in HD; stock remembers the last choice.
+        let highQualityPhoto = UserDefaults.standard.bool(forKey: "TG_photoHighQuality_v0") || ayuGramSettingsCurrent.mediaSendQuality == ShadowMediaSendQuality.alwaysHD
         if highQualityPhoto {
             self.interaction?.editingState.setHighQualityPhoto(highQualityPhoto)
         }
@@ -4299,5 +4301,30 @@ private class SelectedButtonNode: ASDisplayNode {
         self.button.frame = CGRect(origin: .zero, size: size)
 
         return size
+    }
+}
+
+// Shadow: «Качество фото → Без сжатия» (ShadowMediaSendQuality.file): the send
+// button sends photos and videos as files. Not with spoilers or a price (files
+// can have neither), not in secret chats, only in the plain media picker.
+extension MediaPickerScreenImpl {
+    func shadowSendsAsFileByDefault() -> Bool {
+        guard ayuGramSettingsCurrent.mediaSendQuality == ShadowMediaSendQuality.file else {
+            return false
+        }
+        guard case let .assets(_, mode) = self.subject, case .default = mode else {
+            return false
+        }
+        if let peer = self.peer, case .secretChat = peer {
+            return false
+        }
+        if let selectionContext = self.interaction?.selectionState, let editingContext = self.interaction?.editingState {
+            for case let item as TGMediaEditableItem in selectionContext.selectedItems() {
+                if editingContext.price(for: item) != nil || editingContext.spoiler(for: item) {
+                    return false
+                }
+            }
+        }
+        return true
     }
 }
