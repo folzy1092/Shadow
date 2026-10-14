@@ -29,9 +29,15 @@ This file provides guidance to AI assistants when working with code in this repo
 > **Announce builds yourself, right away** (Folzy, 2026-10-07): every CI build
 > with user-visible changes gets patch notes and is announced
 > (`tools/shadow-announce.py`) as soon as CI is green — do not wait to be asked.
-> A real new feature or an important bug fix is announced immediately, in its
-> own build. Only purely internal builds (CI, tests, docs) are skipped.
+> Only purely internal builds (CI, tests, docs) are skipped.
 > Procedure: SHADOW_AGENT_MAP §5d «Когда объявлять».
+>
+> **One update = one build with several features** (Folzy, 2026-10-14): do
+> NOT push every feature separately (each push to `master` starts its own
+> ~40-min IPA build and its own build number). Collect everything asked for in
+> the session locally (commits are fine), run the tests, and push **once** —
+> one CI build, one announcement listing all the features. Push mid-session
+> only for a fix of a red build or when Folzy asks for a build now.
 
 ## Build
 
