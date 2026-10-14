@@ -126,6 +126,7 @@
 | `shadow://customization/hide-premium` | Скрыть значки Premium у имён |
 | `shadow://customization/hide-ads` | Скрыть рекламу в каналах |
 | `shadow://customization/unlimited-pins` | Безлимитные закрепы |
+| `shadow://customization/local-translation` | Перевод чатов на устройстве |
 | `shadow://customization/unlimited-favorites` | Безлимитное избранное (стикеры и GIF) |
 | `shadow://customization/compact-chats` | Компактный список чатов |
 | `shadow://customization/chat-banners` | Фоны чатов |

@@ -280,6 +280,7 @@ public enum ShadowSettingLinks {
         ShadowSettingLink(screen: "customization", slug: "hide-premium", entryId: 101, key: "hidePremiumBadges", title: "Скрыть значки Premium у имён", icon: "star"),
         ShadowSettingLink(screen: "customization", slug: "hide-ads", entryId: 102, key: "hideSponsoredMessages", title: "Скрыть рекламу в каналах"),
         ShadowSettingLink(screen: "customization", slug: "unlimited-pins", entryId: 104, key: "unlimitedPinnedChats", title: "Безлимитные закрепы", icon: "pin"),
+        ShadowSettingLink(screen: "customization", slug: "local-translation", entryId: 132, key: "localChatTranslation", title: "Перевод чатов на устройстве", icon: "character.bubble", since: "1.13.0"),
         ShadowSettingLink(screen: "customization", slug: "unlimited-favorites", entryId: 131, key: "unlimitedFavorites", title: "Безлимитное избранное", icon: "star", since: "1.13.0"),
         ShadowSettingLink(screen: "customization", slug: "compact-chats", entryId: 110, key: "compactChatList", title: "Компактный список чатов"),
         ShadowSettingLink(screen: "customization", slug: "chat-banners", entryId: 122, key: "chatBannersEnabled", title: "Фоны чатов", icon: "photo", since: "1.10.0"),

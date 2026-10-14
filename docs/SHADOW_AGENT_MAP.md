@@ -761,6 +761,15 @@ UI-проекция настроек выбирается в `TelegramRootContro
   (`shadowCroppedToVisibleContent`) и шлёт стикером через стоковый
   `enqueueStickerImage` (WebP ≤ 512).
 
+- «Перевод чатов на устройстве» (`localChatTranslation`, вкл, строка 132):
+  в Telegram уже есть локальный переводчик (`ExperimentalInternalTranslationServiceImpl`
+  в TranslateUI, Apple Translation, iOS 18+), но включает его сервер
+  (`TranslationConfiguration.auto == .system`), а панель — Premium. Тумблер
+  (`shadowLocalChatTranslation`) открывает `canTranslateChats`, панель в
+  `ChatControllerContentData` без Premium и `enableLocalIfPossible` в
+  `translateMessageIds`. Обычный текст переводит телефон; опросы, расшифровки
+  и rich-сообщения по-прежнему идут на сервер (без Premium не переведутся).
+
 ## 5a. Замки чатов и второе пространство
 
 - Замки: `ShadowChatLock.swift` (хранилище), `TelegramUI/Sources/ShadowChatLockUI.swift`

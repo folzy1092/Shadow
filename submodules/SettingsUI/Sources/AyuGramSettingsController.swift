@@ -990,6 +990,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
     case hideSponsoredMessages(Bool)
     case unlimitedPinnedChats(Bool)
     case unlimitedFavorites(Bool)
+    case localChatTranslation(Bool)
     case compactChatList(Bool)
     case chatBanners(Bool)
     case chatBannersList(Int)
@@ -1068,7 +1069,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .appearanceHeader, .showMessageSeconds, .editedIndicatorAsPencil, .editedIndicatorText, .deletedIndicatorText, .regularEmojiFirst, .doubleTapToEdit, .showExactLastSeen, .showExactLastSeenSeconds, .wideChannelPosts, .showExactViewCounts, .showForwardCount, .appearanceFooter:
             return AyuCustomizationSection.appearance.rawValue
         case .headerButtons: return AyuCustomizationSection.chats.rawValue
-        case .chatsHeader, .hideAllChatsFolder, .hideStoriesBar, .hideGiftButton, .hideGreetingSticker, .hidePremiumBadges, .hideSponsoredMessages, .unlimitedPinnedChats, .unlimitedFavorites, .compactChatList, .chatBanners, .chatBannersList, .chatsFooter:
+        case .chatsHeader, .hideAllChatsFolder, .hideStoriesBar, .hideGiftButton, .hideGreetingSticker, .hidePremiumBadges, .hideSponsoredMessages, .unlimitedPinnedChats, .unlimitedFavorites, .localChatTranslation, .compactChatList, .chatBanners, .chatBannersList, .chatsFooter:
             return AyuCustomizationSection.chats.rawValue
         case .businessBotHeader, .businessBotPinned, .businessBotPinnedLayout, .businessBotPinnedFirst, .businessBotPinnedCompact, .businessBotFooter:
             return AyuCustomizationSection.businessBot.rawValue
@@ -1141,6 +1142,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .businessBotFooter: return 129
         case .mediaSendQuality: return 130
         case .unlimitedFavorites: return 131
+        case .localChatTranslation: return 132
         case .monochromeSettingsIcons: return 106
         case .settingsIconBackground: return 107
         case .settingsIconGlyph: return 108
@@ -1205,6 +1207,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .hideGreetingSticker: return (12, 8)
         case .chatBanners: return (12, 9)
         case .chatBannersList: return (12, 10)
+        case .localChatTranslation: return (12, 11)
         // Right after the chats section (chatsFooter = 13).
         case .businessBotHeader: return (13, 1)
         case .businessBotPinned: return (13, 2)
@@ -1369,6 +1372,10 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
             return ItemListSwitchItem(presentationData: presentationData, title: "Безлимитные закрепы", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 arguments.updateSetting { $0.unlimitedPinnedChats = value }
             })
+        case let .localChatTranslation(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Перевод чатов на устройстве", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.updateSetting { $0.localChatTranslation = value }
+            })
         case let .unlimitedFavorites(value):
             return ItemListSwitchItem(presentationData: presentationData, title: "Безлимитное избранное", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 arguments.updateSetting { $0.unlimitedFavorites = value }
@@ -1412,7 +1419,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case let .chatVoiceSpeedList(count):
             return ItemListDisclosureItem(presentationData: presentationData, title: "Чаты со своей скоростью", label: count == 0 ? "Нет" : "\(count)", labelStyle: .detailText, sectionId: self.section, style: .blocks, action: arguments.openChatVoiceSpeeds)
         case .chatsFooter:
-            return ItemListTextItem(presentationData: presentationData, text: .plain("«Скрыть папку «Все чаты»» убирает эту вкладку, остальные папки работают. «Скрыть истории» убирает ленту историй над списком чатов. «Скрыть кнопку подарка» убирает подарок из поля ввода. «Скрыть приветственный стикер» убирает карточку со стикером в пустом чате с незнакомым. «Скрыть значки Premium» убирает звёздочку и эмодзи-статус рядом с именами (галочки верификации остаются). «Скрыть рекламу в каналах» — спонсорские сообщения не загружаются; применяется при следующем открытии канала. «Безлимитные закрепы» снимают ограничение на закрепы в списке чатов, архиве, папках, «Избранном» и темах форумов; всё сверх лимита Telegram хранится только на этом устройстве. «Безлимитное избранное»: стикеры и GIF сверх лимита Telegram (5 стикеров, с Premium 10; 200 GIF) не вытесняются, лишние хранятся только на этом устройстве. «Фоны чатов» ставят своё фото под строку выбранных чатов в списке (все папки и архив); фото хранятся только на этом устройстве."), sectionId: self.section)
+            return ItemListTextItem(presentationData: presentationData, text: .plain("«Скрыть папку «Все чаты»» убирает эту вкладку, остальные папки работают. «Скрыть истории» убирает ленту историй над списком чатов. «Скрыть кнопку подарка» убирает подарок из поля ввода. «Скрыть приветственный стикер» убирает карточку со стикером в пустом чате с незнакомым. «Скрыть значки Premium» убирает звёздочку и эмодзи-статус рядом с именами (галочки верификации остаются). «Скрыть рекламу в каналах» — спонсорские сообщения не загружаются; применяется при следующем открытии канала. «Безлимитные закрепы» снимают ограничение на закрепы в списке чатов, архиве, папках, «Избранном» и темах форумов; всё сверх лимита Telegram хранится только на этом устройстве. «Перевод чатов на устройстве»: панель «Перевести» в чатах на другом языке без Premium, перевод делает iPhone (Apple, iOS 18+; язык при первом использовании скачивается в настройках iOS), Telegram текст не получает. «Безлимитное избранное»: стикеры и GIF сверх лимита Telegram (5 стикеров, с Premium 10; 200 GIF) не вытесняются, лишние хранятся только на этом устройстве. «Фоны чатов» ставят своё фото под строку выбранных чатов в списке (все папки и архив); фото хранятся только на этом устройстве."), sectionId: self.section)
         case .businessBotHeader:
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "БИЗНЕС-БОТ И ЗАКРЕП", sectionId: self.section)
         case let .businessBotPinned(value):
@@ -1599,6 +1606,7 @@ private func ayuCustomizationEntries(settings: AyuGramSettings, chatVoiceSpeedCo
     if settings.chatBannersEnabled {
         entries.append(.chatBannersList(chatBannersCount))
     }
+    entries.append(.localChatTranslation(settings.localChatTranslation))
     entries.append(.chatsFooter)
 
     entries.append(.businessBotHeader)

@@ -181,6 +181,10 @@ public struct AyuGramSettings: Codable, Equatable {
     // Shadow: «Безлимитное избранное» — favourite stickers and saved GIFs over
     // Telegram's limit stay on this device (ShadowUnlimitedFavorites).
     public var unlimitedFavorites: Bool = true
+    // Shadow: chats are translated on the device (Apple Translation, iOS 18+)
+    // without Premium and without Telegram's server (shadowLocalChatTranslation
+    // in TranslateUI).
+    public var localChatTranslation: Bool = true
     // Local history of when contacts were online (ShadowOnlineHistory).
     public var onlineHistory: Bool = false
     // Keep a local copy of viewed stories (ShadowStoryArchive).
@@ -486,6 +490,7 @@ public struct AyuGramSettings: Codable, Equatable {
         settings.silentSend = false
         settings.mediaSendQuality = ShadowMediaSendQuality.stock
         settings.unlimitedFavorites = false
+        settings.localChatTranslation = false
         return settings
     }
 
@@ -776,6 +781,7 @@ public struct AyuGramSettings: Codable, Equatable {
         self.silentSendTo = ShadowSilentSend.normalizedMinute((try container.decodeIfPresent(Int32.self, forKey: "silentSendTo")) ?? ShadowSilentSend.defaultTo)
         self.mediaSendQuality = ShadowMediaSendQuality.normalized((try container.decodeIfPresent(Int32.self, forKey: "mediaSendQuality")) ?? ShadowMediaSendQuality.stock)
         self.unlimitedFavorites = ((try container.decodeIfPresent(Int32.self, forKey: "unlimitedFavorites")) ?? 1) != 0
+        self.localChatTranslation = ((try container.decodeIfPresent(Int32.self, forKey: "localChatTranslation")) ?? 1) != 0
         self.onlineHistory = ((try container.decodeIfPresent(Int32.self, forKey: "onlineHistory")) ?? 0) != 0
         self.saveViewedStories = ((try container.decodeIfPresent(Int32.self, forKey: "saveViewedStories")) ?? 0) != 0
         self.settingsIconBackgroundColor = ((try container.decodeIfPresent(Int32.self, forKey: "settingsIconBackgroundColor")) ?? 0x1C1C1E) & 0xFFFFFF
@@ -899,6 +905,7 @@ public struct AyuGramSettings: Codable, Equatable {
         try container.encode(self.silentSendTo, forKey: "silentSendTo")
         try container.encode(self.mediaSendQuality, forKey: "mediaSendQuality")
         try container.encode((self.unlimitedFavorites ? 1 : 0) as Int32, forKey: "unlimitedFavorites")
+        try container.encode((self.localChatTranslation ? 1 : 0) as Int32, forKey: "localChatTranslation")
         try container.encode((self.onlineHistory ? 1 : 0) as Int32, forKey: "onlineHistory")
         try container.encode((self.saveViewedStories ? 1 : 0) as Int32, forKey: "saveViewedStories")
         try container.encode(self.settingsIconBackgroundColor, forKey: "settingsIconBackgroundColor")

@@ -103,6 +103,7 @@ public enum ShadowSettingsTransfer {
         "businessBotPinnedCompact": \.businessBotPinnedCompact,
         "silentSend": \.silentSend,
         "unlimitedFavorites": \.unlimitedFavorites,
+        "localChatTranslation": \.localChatTranslation,
         "onlineHistory": \.onlineHistory,
         "saveViewedStories": \.saveViewedStories,
         "screenshotAnonymize": \.messageScreenshot.anonymize,

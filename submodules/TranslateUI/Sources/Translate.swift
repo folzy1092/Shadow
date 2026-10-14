@@ -172,7 +172,21 @@ public func normalizeTranslationLanguage(_ code: String) -> String {
     return code
 }
 
+// Shadow: «Перевод чатов на устройстве» (AyuGramSettings.localChatTranslation):
+// the chat translation bar for everyone, translated by Apple Translation on the
+// device (ExperimentalInternalTranslationServiceImpl, iOS 18+), whatever
+// Telegram's server-side translation config and Premium say.
+public func shadowLocalChatTranslation(context: AccountContext) -> Bool {
+    if #available(iOS 18.0, *) {
+        return currentAyuGramSettings(accountId: context.account.id).localChatTranslation
+    }
+    return false
+}
+
 public func canTranslateChats(context: AccountContext) -> Bool {
+    if shadowLocalChatTranslation(context: context) {
+        return true
+    }
     let translationConfiguration = TranslationConfiguration.with(appConfiguration: context.currentAppConfiguration.with { $0 })
     var chatTranslationAvailable = true
     switch translationConfiguration.auto {

@@ -201,6 +201,10 @@ public func translateMessageIds(context: AccountContext, messageIds: [EngineMess
         default:
             break
         }
+        // Shadow: on-device translation (shadowLocalChatTranslation).
+        if shadowLocalChatTranslation(context: context) {
+            enableLocalIfPossible = true
+        }
         return context.engine.messages.translateMessages(messageIds: messageIdsToTranslate, fromLang: fromLang, toLang: toLang, enableLocalIfPossible: enableLocalIfPossible)
         |> `catch` { _ -> Signal<Never, NoError> in
             return .complete()

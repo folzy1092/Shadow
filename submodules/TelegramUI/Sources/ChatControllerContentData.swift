@@ -2205,7 +2205,8 @@ extension ChatControllerImpl {
                         if counterAndTimestamp.0 >= 3 {
                             maybeSuggestPremium = true
                         }
-                        if (isPremium || maybeSuggestPremium || hasAutoTranslate) && !isHidden {
+                        // Shadow: on-device translation needs no Premium.
+                        if (isPremium || maybeSuggestPremium || hasAutoTranslate || shadowLocalChatTranslation(context: context)) && !isHidden {
                             return chatTranslationState(context: context, peerId: peerId, threadId: chatLocation.threadId)
                             |> map { translationState -> ChatPresentationTranslationState? in
                                 if let translationState, !translationState.fromLang.isEmpty && (translationState.fromLang != baseLanguageCode || translationState.isEnabled) {
