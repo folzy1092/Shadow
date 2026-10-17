@@ -567,6 +567,7 @@ private final class StarsContextImpl {
     
     private let disposable = MetaDisposable()
     private var updateDisposable: Disposable?
+    private var shadowBalanceObserver: NSObjectProtocol?
     
     init(account: Account, ton: Bool) {
         assert(Queue.mainQueue().isCurrent())
@@ -577,6 +578,22 @@ private final class StarsContextImpl {
         
         self._state = nil
         self._statePromise.set(.single(nil))
+        
+        // Shadow: re-show the balance when the hidden override changes.
+        if !ton {
+            let accountPeerId = account.peerId.toInt64()
+            self.shadowBalanceObserver = NotificationCenter.default.addObserver(forName: ShadowStarsBalance.didChangeNotification, object: nil, queue: nil, using: { [weak self] notification in
+                guard (notification.userInfo?["accountPeerId"] as? Int64) == accountPeerId else {
+                    return
+                }
+                Queue.mainQueue().async {
+                    guard let strongSelf = self, let state = strongSelf._state else {
+                        return
+                    }
+                    strongSelf.updateState(state)
+                }
+            })
+        }
         
         self.load(force: true)
         
@@ -594,6 +611,9 @@ private final class StarsContextImpl {
         assert(Queue.mainQueue().isCurrent())
         self.disposable.dispose()
         self.updateDisposable?.dispose()
+        if let shadowBalanceObserver = self.shadowBalanceObserver {
+            NotificationCenter.default.removeObserver(shadowBalanceObserver)
+        }
     }
     
     private var previousLoadTimestamp: Double?
@@ -643,7 +663,23 @@ private final class StarsContextImpl {
     
     private func updateState(_ state: StarsContext.State) {
         self._state = state
-        self._statePromise.set(.single(state))
+        self._statePromise.set(.single(self.shadowDisplayedState(state)))
+    }
+    
+    // Shadow: `_state` keeps the real balance; everything public shows the
+    // hidden override (ShadowStarsBalance), stars only.
+    fileprivate func shadowDisplayedState(_ state: StarsContext.State) -> StarsContext.State {
+        if self.ton {
+            return state
+        }
+        guard let offset = ShadowStarsBalance.offset(accountPeerId: self.peerId.toInt64()) else {
+            return state
+        }
+        let real = ShadowStarsBalance.nanos(value: state.balance.value, nanos: state.balance.nanos)
+        let parts = ShadowStarsBalance.parts(ShadowStarsBalance.displayed(real: real, offset: offset))
+        var state = state
+        state.balance = StarsAmount(value: parts.value, nanos: parts.nanos)
+        return state
     }
     
     var onUpdate: Signal<Void, NoError> {
@@ -1127,9 +1163,30 @@ public final class StarsContext {
     public var currentState: StarsContext.State? {
         var state: StarsContext.State?
         self.impl.syncWith { impl in
-            state = impl._state
+            state = impl._state.flatMap { impl.shadowDisplayedState($0) }
         }
         return state
+    }
+    
+    // Shadow: the balance without the hidden override (ShadowStarsBalance).
+    public var shadowRealBalance: StarsAmount? {
+        var balance: StarsAmount?
+        self.impl.syncWith { impl in
+            balance = impl._state?.balance
+        }
+        return balance
+    }
+    
+    // Shadow: show `displayed` instead of the real balance (nil — real again).
+    public func shadowSetDisplayedBalance(_ displayed: StarsAmount?) {
+        guard !self.ton, let real = self.shadowRealBalance else {
+            return
+        }
+        ShadowStarsBalance.set(
+            displayed: displayed.flatMap { ShadowStarsBalance.nanos(value: $0.value, nanos: $0.nanos) },
+            real: ShadowStarsBalance.nanos(value: real.value, nanos: real.nanos),
+            accountPeerId: self.peerId.toInt64()
+        )
     }
     
     public func add(balance: StarsAmount, addTransaction: Bool = true) {

@@ -25,6 +25,8 @@ import ItemListUI
 import StarsWithdrawalScreen
 import PremiumDiamondComponent
 import StatisticsUI
+import PresentationDataUtils
+import PromptUI
 
 private let initialSubscriptionsDisplayedLimit: Int32 = 3
 
@@ -154,6 +156,36 @@ final class StarsTransactionsScreenComponent: Component {
         
         private var cachedChevronImage: (UIImage, PresentationTheme)?
                 
+        // Shadow: скрытое меню подмены баланса звёзд (ShadowStarsBalance).
+        @objc private func shadowBalanceDoubleTapped() {
+            guard let component = self.component, let controller = self.controller?() else {
+                return
+            }
+            let context = component.context
+            let starsContext = component.starsContext
+            let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+            let real = starsContext.shadowRealBalance ?? StarsAmount.zero
+            let realText = formatStarsAmountText(real, dateTimeFormat: presentationData.dateTimeFormat)
+            let alert = textAlertController(context: context, title: nil, text: "Настоящий баланс: \(realText)", actions: [
+                TextAlertAction(type: .genericAction, title: "Настоящий баланс", action: {
+                    starsContext.shadowSetDisplayedBalance(nil)
+                }),
+                TextAlertAction(type: .genericAction, title: "Своё число", action: { [weak controller] in
+                    let current = starsContext.currentState?.balance ?? real
+                    let prompt = promptController(context: context, text: "Своё число", subtitle: "Например 1337 или 228.55. Видно только вам.", value: current.stringValue, placeholder: "Баланс", characterLimit: 16, apply: { value in
+                        guard let value, let nanos = ShadowStarsBalance.parse(value) else {
+                            return
+                        }
+                        let parts = ShadowStarsBalance.parts(nanos)
+                        starsContext.shadowSetDisplayedBalance(StarsAmount(value: parts.value, nanos: parts.nanos))
+                    })
+                    controller?.present(prompt, in: .window(.root))
+                }),
+                TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_Cancel, action: {})
+            ], actionLayout: .vertical)
+            controller.present(alert, in: .window(.root))
+        }
+        
         override init(frame: CGRect) {
             self.scrollContainerView = UIView()
             self.scrollView = ScrollViewImpl()
@@ -809,6 +841,13 @@ final class StarsTransactionsScreenComponent: Component {
             if let balanceView = self.balanceView.view {
                 if balanceView.superview == nil {
                     self.scrollView.addSubview(balanceView)
+                    // Shadow: hidden balance override, double tap on the card.
+                    if !component.starsContext.ton {
+                        let recognizer = UITapGestureRecognizer(target: self, action: #selector(self.shadowBalanceDoubleTapped))
+                        recognizer.numberOfTapsRequired = 2
+                        recognizer.delaysTouchesEnded = false
+                        balanceView.addGestureRecognizer(recognizer)
+                    }
                 }
                 starTransition.setFrame(view: balanceView, frame: balanceFrame)
             }

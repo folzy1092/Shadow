@@ -25,6 +25,7 @@ swift_library(
         "//submodules/ItemListUI",
         "//submodules/TelegramStringFormatting",
         "//submodules/PresentationDataUtils",
+        "//submodules/PromptUI",
         "//submodules/Components/SheetComponent",
         "//submodules/UndoUI",
         "//submodules/TextFormat",
