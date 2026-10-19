@@ -1207,10 +1207,18 @@ func shadowAddFakeGiftPrompt(context: AccountContext, peerId: EnginePeer.Id, par
             parentController?.present(textAlertController(context: context, title: nil, text: "Это не ссылка на коллекционный подарок. Нужна ссылка вида t.me/nft/PlushPepe-123.", actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]), in: .window(.root))
             return
         }
-        let _ = (shadowAddFakeGift(account: context.account, peerId: peerId, slug: slug)
-        |> deliverOnMainQueue).start(error: { [weak parentController] _ in
-            parentController?.present(textAlertController(context: context, title: nil, text: "Подарок не найден. Проверьте ссылку.", actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+        // Then the price for «Вы отправили подарок за N звёзд».
+        let priceController = promptController(context: context, text: "Цена подарка", subtitle: "Сколько звёзд написать в строке «Вы отправили подарок за … звёзд».", value: "25000", placeholder: "Звёзды", characterLimit: 9, apply: { [weak parentController] value in
+            guard let value else {
+                return
+            }
+            let stars = max(1, Int64(value.filter { $0.isNumber }) ?? 25000)
+            let _ = (shadowAddFakeGift(account: context.account, peerId: peerId, slug: slug, stars: stars)
+            |> deliverOnMainQueue).start(error: { [weak parentController] _ in
+                parentController?.present(textAlertController(context: context, title: nil, text: "Подарок не найден. Проверьте ссылку.", actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+            })
         })
+        parentController?.present(priceController, in: .window(.root))
     })
     parentController?.present(controller, in: .window(.root))
 }

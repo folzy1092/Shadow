@@ -874,5 +874,8 @@ UI-проекция настроек выбирается в `TelegramRootContro
 - «Подарок для розыгрыша»: список чатов → долгое нажатие → Shadow (только
   личные чаты). Ссылка t.me/nft/… → `shadowAddFakeGift` кладёт служебное
   сообщение `.starGiftUnique` в namespace Local без `.Unsent` (никогда не
-  отправляется), владелец подарка подменён на собеседника (`withOwner`).
+  отправляется), владелец подарка подменён на собеседника (`withOwner`). Выглядит как
+  отправленный подарок: «Подарок для <имя>» (`ChatMessageGiftBubbleContentNode`) и
+  «Вы отправили подарок за N звёзд» (`ServiceMessageStrings`, N в `transferStars`) —
+  обе подмены только для namespace Local и автора-себя.
 

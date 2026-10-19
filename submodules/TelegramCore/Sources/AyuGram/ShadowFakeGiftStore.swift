@@ -10,7 +10,8 @@ public enum ShadowFakeGiftError {
     case notPrivateChat
 }
 
-public func shadowAddFakeGift(account: Account, peerId: EnginePeer.Id, slug: String) -> Signal<Never, ShadowFakeGiftError> {
+// `stars` — the price in «Вы отправили подарок за N звёзд».
+public func shadowAddFakeGift(account: Account, peerId: EnginePeer.Id, slug: String, stars: Int64) -> Signal<Never, ShadowFakeGiftError> {
     guard peerId.namespace == Namespaces.Peer.CloudUser, peerId != account.peerId else {
         return .fail(.notPrivateChat)
     }
@@ -27,7 +28,7 @@ public func shadowAddFakeGift(account: Account, peerId: EnginePeer.Id, slug: Str
                 isTransferred: true,
                 savedToProfile: false,
                 canExportDate: nil,
-                transferStars: nil,
+                transferStars: stars,
                 isRefunded: false,
                 isPrepaidUpgrade: false,
                 peerId: peerId,

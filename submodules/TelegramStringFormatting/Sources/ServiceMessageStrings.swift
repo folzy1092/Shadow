@@ -1298,7 +1298,7 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                         attributedString = addAttributesToStringWithRanges(strings.Notification_StarsGift_Sent(authorName, starsPrice)._tuple, body: bodyAttributes, argumentAttributes: attributes)
                     }
                 }
-            case let .starGiftUnique(gift, isUpgrade, _, _, _, _, _, isPrepaidUpgrade, peerId, senderId, _, resaleStars, _, _, _, assigned, fromOffer, _, isCrafted):
+            case let .starGiftUnique(gift, isUpgrade, _, _, _, transferStars, _, isPrepaidUpgrade, peerId, senderId, _, resaleStars, _, _, _, assigned, fromOffer, _, isCrafted):
                 if case let .unique(gift) = gift {
                     if !forAdditionalServiceMessage && !"".isEmpty {
                         attributedString = NSAttributedString(string: "\(gift.title) #\(formatCollectibleNumber(gift.number, dateTimeFormat: dateTimeFormat))", font: titleFont, textColor: primaryTextColor)
@@ -1358,6 +1358,10 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                                 attributedString = addAttributesToStringWithRanges(strings.Notification_StarsGift_Assigned(giftTitle)._tuple, body: bodyAttributes, argumentAttributes: attributes)
                             } else if message.id.peerId.isTelegramNotifications && senderId == nil {
                                 attributedString = NSAttributedString(string: strings.Notification_StarsGift_SentSomeone, font: titleFont, textColor: primaryTextColor)
+                            } else if message.id.namespace == Namespaces.Message.Local, message.author?.id == accountPeerId, let transferStars {
+                                // Shadow: «Подарок для розыгрыша» (ShadowFakeGift), like a sent gift.
+                                let starsPrice = strings.Notification_StarsGift_Stars(Int32(clamping: transferStars))
+                                attributedString = addAttributesToStringWithRanges(strings.Notification_StarsGift_SentYou(starsPrice)._tuple, body: bodyAttributes, argumentAttributes: [0: boldAttributes])
                             } else if message.author?.id == accountPeerId {
                                 if let resaleStars {
                                     let starsString: String

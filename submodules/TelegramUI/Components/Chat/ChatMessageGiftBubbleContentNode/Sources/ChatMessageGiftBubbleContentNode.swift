@@ -721,6 +721,9 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                                     }
                                 } else if item.message.id.peerId.isTelegramNotifications {
                                     title = item.presentationData.strings.Notification_StarGift_TitleShort
+                                } else if item.message.id.namespace == Namespaces.Message.Local, item.message.author?.id == item.context.account.peerId, let recipient = item.message.peers[item.message.id.peerId].flatMap(EnginePeer.init) {
+                                    // Shadow: «Подарок для розыгрыша» (ShadowFakeGift) reads like a sent gift.
+                                    title = item.presentationData.strings.Notification_StarGift_TitleTo(recipient.compactDisplayTitle).string
                                 } else {
                                     title = item.presentationData.strings.Notification_StarGift_Title(authorName).string
                                 }    
