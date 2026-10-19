@@ -300,7 +300,7 @@ if (CONFIG.theme) document.documentElement.dataset.theme = CONFIG.theme;
 const MONTHS_GEN = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
 const DAY_LABELS = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
 const DAY_FULL = ['понедельник','вторник','среда','четверг','пятница','суббота','воскресенье'];
-const PERIOD_FOR = ['за неделю','за месяц','за год','за 5 лет'];
+const PERIOD_FOR = ['за неделю','за месяц','за год','за всё время'];
 const fmt = n => Number(n || 0).toLocaleString('ru-RU');
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 function plural(n, one, few, many) {
@@ -729,7 +729,7 @@ const SLIDE_BG = [
 function slides() {
   const list = [];
   const who = R.isGroup ? '«' + esc(R.title) + '»' : 'Я и ' + esc(displayName(other));
-  const yours = ['Ваша неделя', 'Ваш месяц', 'Ваш год', 'Ваши 5 лет'][R.period] || 'Ваши итоги';
+  const yours = ['Ваша неделя', 'Ваш месяц', 'Ваш год', 'Вся ваша переписка'][R.period] || 'Ваши итоги';
   list.push(`<div class="brand">Shadow · итоги</div><div class="sbig" style="margin-top:auto">${yours} в чате</div><div class="ttl">${who}</div><div class="pp">${tsDate(R.from, true)} — ${tsDate(R.to, true)}</div><div class="stap">нажимайте, чтобы листать →</div>`);
   const total = Math.max(1, R.total);
   list.push(`<div class="slbl">Вместе написали</div><div class="bign">${fmt(R.total)}</div><div class="bigc">${plural(R.total, 'сообщение', 'сообщения', 'сообщений')}</div>

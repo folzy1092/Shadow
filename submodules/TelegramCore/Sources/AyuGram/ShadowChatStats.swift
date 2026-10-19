@@ -10,14 +10,15 @@ public enum ShadowChatStats {
         case week = 0
         case month = 1
         case year = 2
-        case fiveYears = 3
+        // Was «5 лет» before 1.13.2 (same raw value, old reports read as «всё время»).
+        case allTime = 3
 
         public var title: String {
             switch self {
             case .week: return "Неделя"
             case .month: return "Месяц"
             case .year: return "Год"
-            case .fiveYears: return "5 лет"
+            case .allTime: return "Всё время"
             }
         }
 
@@ -27,7 +28,7 @@ public enum ShadowChatStats {
             case .week: return "за неделю"
             case .month: return "за месяц"
             case .year: return "за год"
-            case .fiveYears: return "за 5 лет"
+            case .allTime: return "за всё время"
             }
         }
 
@@ -36,21 +37,26 @@ public enum ShadowChatStats {
             case .week: return 7
             case .month: return 30
             case .year: return 365
-            case .fiveYears: return 365 * 5 + 1
+            case .allTime: return max(1, (Int32(Date().timeIntervalSince1970) - ShadowChatStats.telegramLaunch) / 86400)
             }
         }
 
+        // «Всё время» scans from Telegram's launch; the report itself starts
+        // at the chat's first message (ShadowChatStatsCollect.report).
         public func start(now: Int32) -> Int32 {
+            if self == .allTime {
+                return ShadowChatStats.telegramLaunch
+            }
             return now - self.days * 86400
         }
 
         // The previous period of the same length, for «По сравнению с прошлым»
-        // (1.11.0). None for 5 years: that would be ten years of history.
+        // (1.11.0). None for all time: there is nothing before it.
         public func previousStart(now: Int32) -> Int32? {
             switch self {
             case .week, .month, .year:
                 return now - self.days * 2 * 86400
-            case .fiveYears:
+            case .allTime:
                 return nil
             }
         }
@@ -59,6 +65,23 @@ public enum ShadowChatStats {
         // and always at least two weeks («Две недели на одном графике»).
         public func scanStart(now: Int32) -> Int32 {
             return min(self.previousStart(now: now) ?? self.start(now: now), now - 14 * 86400)
+        }
+    }
+
+    // 2013-08-14, the first Telegram release: no chat is older.
+    public static let telegramLaunch: Int32 = 1_376_438_400
+
+    // Months per bar of «По месяцам» for a span of `months`: one bar per
+    // month for a year, then a quarter, half a year, a year.
+    public static func monthsPerBucket(months: Int32) -> Int32 {
+        if months <= 13 {
+            return 1
+        } else if months <= 60 {
+            return 3
+        } else if months <= 120 {
+            return 6
+        } else {
+            return 12
         }
     }
 
@@ -746,17 +769,17 @@ public enum ShadowChatStats {
                     let index = Int(day - fromDay)
                     return index >= 0 && index < count ? index : nil
                 })
-            case .year, .fiveYears:
+            case .year, .allTime:
                 let (fromYear, fromMonth) = self.clock.yearMonth(day: fromDay)
                 let (toYear, toMonth) = self.clock.yearMonth(day: toDay)
-                let monthsPerBucket = self.period == .year ? 1 : 3
                 let first = fromYear * 12 + fromMonth - 1
                 let last = toYear * 12 + toMonth - 1
+                let monthsPerBucket = self.period == .year ? 1 : Int(ShadowChatStats.monthsPerBucket(months: Int32(last - first + 1)))
                 let count = (last - first) / monthsPerBucket + 1
                 let labels = (0 ..< count).map { index -> String in
                     let month = first + index * monthsPerBucket
                     let name = ShadowChatStats.monthNames[month % 12]
-                    if self.period == .fiveYears || month % 12 == 0 || index == 0 {
+                    if self.period == .allTime || month % 12 == 0 || index == 0 {
                         return "\(name) \(String(month / 12).suffix(2))"
                     }
                     return name

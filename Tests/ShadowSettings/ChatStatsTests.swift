@@ -190,7 +190,9 @@ struct ChatStatsTests {
         ], now: now, clock: utc)
         check(two.firstDay == utc.day(now) - 6 && two.current == [0, 0, 0, 0, 0, 0, 1] && two.previous == [1, 0, 0, 0, 0, 0, 1], "Two weeks, calls and older days left out")
         check(S.Period.week.scanStart(now: now) == now - 14 * 86400 && S.Period.month.scanStart(now: now) == now - 60 * 86400, "Scan covers the previous period")
-        check(S.Period.year.previousStart(now: now) == now - 730 * 86400 && S.Period.fiveYears.previousStart(now: now) == nil && S.Period.fiveYears.scanStart(now: now) == S.Period.fiveYears.start(now: now), "No previous period for 5 years")
+        check(S.Period.year.previousStart(now: now) == now - 730 * 86400 && S.Period.allTime.previousStart(now: now) == nil && S.Period.allTime.scanStart(now: now) == S.telegramLaunch, "All time: no previous period, scan from Telegram's launch")
+        check(S.monthsPerBucket(months: 12) == 1 && S.monthsPerBucket(months: 40) == 3 && S.monthsPerBucket(months: 100) == 6 && S.monthsPerBucket(months: 150) == 12, "Bars per month span")
+        check(S.Period.allTime.title == "Всё время" && S.Period(rawValue: 3) == .allTime, "All time replaces 5 years")
 
         // A report saved by 1.10 (no new fields) still opens.
         var old = report

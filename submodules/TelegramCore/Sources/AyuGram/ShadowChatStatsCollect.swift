@@ -274,7 +274,12 @@ public enum ShadowChatStatsCollect {
 
             let countDeleted = currentAyuGramSettings(transaction: transaction).chatStatsCountDeleted
             let counted = items.filter { countDeleted || !$0.isDeleted }
-            let builder = ShadowChatStats.Builder(accountPeerId: accountPeerId.toInt64(), peerId: peerId.toInt64(), title: title, isGroup: isGroup, period: period, from: periodStart, to: now, names: names)
+            // «Всё время»: from the first message of the chat.
+            var reportStart = periodStart
+            if period == .allTime, let first = counted.map({ $0.timestamp }).min() {
+                reportStart = first
+            }
+            let builder = ShadowChatStats.Builder(accountPeerId: accountPeerId.toInt64(), peerId: peerId.toInt64(), title: title, isGroup: isGroup, period: period, from: reportStart, to: now, names: names)
             for item in counted {
                 builder.add(item)
             }

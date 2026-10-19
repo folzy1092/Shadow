@@ -123,7 +123,7 @@ public func shadowPresentChatStatsPeriod(context: AccountContext, peerId: Engine
     let presentationData = context.sharedContext.currentPresentationData.with { $0 }
     let actionSheet = ActionSheetController(presentationData: presentationData)
     var items: [ActionSheetItem] = [
-        ActionSheetTextItem(title: "Итоги с «\(title)». Чем длиннее период, тем дольше загрузка истории: она идёт так же, как при прокрутке чата вверх. Для сравнения грузится и прошлый период такой же длины (кроме 5 лет).", parseMarkdown: false)
+        ActionSheetTextItem(title: "Итоги с «\(title)». Чем длиннее период, тем дольше загрузка истории: она идёт так же, как при прокрутке чата вверх. Для сравнения грузится и прошлый период такой же длины (кроме «Всё время»). «Всё время» — с первого сообщения чата, на длинной переписке грузится долго.", parseMarkdown: false)
     ]
     for period in ShadowChatStats.Period.allCases {
         items.append(ActionSheetButtonItem(title: period.title, color: .accent, action: { [weak actionSheet, weak controller] in
