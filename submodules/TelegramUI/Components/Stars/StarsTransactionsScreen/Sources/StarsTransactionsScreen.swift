@@ -169,6 +169,7 @@ final class StarsTransactionsScreenComponent: Component {
             let alert = textAlertController(context: context, title: nil, text: "Настоящий баланс: \(realText)", actions: [
                 TextAlertAction(type: .genericAction, title: "Настоящий баланс", action: {
                     starsContext.shadowSetDisplayedBalance(nil)
+                    ShadowFakeStars.shared.clear(account: context.account)
                 }),
                 TextAlertAction(type: .genericAction, title: "Своё число", action: { [weak controller] in
                     let current = starsContext.currentState?.balance ?? real
@@ -180,6 +181,9 @@ final class StarsTransactionsScreenComponent: Component {
                         starsContext.shadowSetDisplayedBalance(StarsAmount(value: parts.value, nanos: parts.nanos))
                     })
                     controller?.present(prompt, in: .window(.root))
+                }),
+                TextAlertAction(type: .genericAction, title: "Фейковое зачисление", action: { [weak controller] in
+                    shadowPresentFakeGiftSale(context: context, controller: controller)
                 }),
                 TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_Cancel, action: {})
             ], actionLayout: .vertical)
@@ -1568,4 +1572,69 @@ public final class StarsTransactionsScreen: ViewControllerComponentContainer {
     public func update() {
         self.subscriptionsContext?.loadMore()
     }
+}
+
+// Shadow: «Фейковое зачисление» (ShadowFakeStars): продажа коллекционного
+// подарка — ссылка, цена, покупатель. Только на этом устройстве.
+private func shadowPresentFakeGiftSale(context: AccountContext, controller: ViewController?) {
+    let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+    let showError: (ViewController?, String) -> Void = { controller, text in
+        controller?.present(textAlertController(context: context, title: nil, text: text, actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+    }
+    let linkPrompt = promptController(context: context, text: "Продажа подарка", subtitle: "Ссылка на коллекционный подарок, например t.me/nft/InputKey-111881.", value: nil, placeholder: "t.me/nft/…", characterLimit: 200, apply: { [weak controller] value in
+        guard let value else {
+            return
+        }
+        guard let slug = ShadowFakeGift.slug(from: value) else {
+            showError(controller, "Это не ссылка на коллекционный подарок. Нужна ссылка вида t.me/nft/InputKey-111881.")
+            return
+        }
+        let pricePrompt = promptController(context: context, text: "Цена продажи", subtitle: "Сколько звёзд зачислить.", value: "1000", placeholder: "Звёзды", characterLimit: 9, apply: { [weak controller] value in
+            guard let value else {
+                return
+            }
+            guard let stars = Int64(value.filter { $0.isNumber }), stars > 0 else {
+                showError(controller, "Нужно число звёзд, например 1000.")
+                return
+            }
+            let buyerPrompt = promptController(context: context, text: "Покупатель", subtitle: "@username покупателя. Пусто — нынешний владелец подарка.", value: nil, placeholder: "@username", characterLimit: 64, apply: { [weak controller] value in
+                guard let value else {
+                    return
+                }
+                let username = value.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "@", with: "")
+                let buyer: Signal<EnginePeer.Id?, NoError>
+                if username.isEmpty {
+                    buyer = .single(nil)
+                } else {
+                    buyer = context.engine.peers.resolvePeerByName(name: username, referrer: nil)
+                    |> mapToSignal { result -> Signal<EnginePeer.Id?, NoError> in
+                        guard case let .result(peer) = result else {
+                            return .complete()
+                        }
+                        return .single(peer?.id)
+                    }
+                    |> take(1)
+                }
+                let _ = (buyer
+                |> deliverOnMainQueue).start(next: { [weak controller] buyerPeerId in
+                    if !username.isEmpty && buyerPeerId == nil {
+                        showError(controller, "Пользователь @\(username) не найден.")
+                        return
+                    }
+                    let _ = (shadowAddFakeGiftSale(account: context.account, slug: slug, stars: stars, buyerPeerId: buyerPeerId)
+                    |> deliverOnMainQueue).start(error: { [weak controller] error in
+                        switch error {
+                        case .notFound:
+                            showError(controller, "Подарок не найден. Проверьте ссылку.")
+                        case .noBuyer:
+                            showError(controller, "Владелец подарка скрыт — укажите покупателя.")
+                        }
+                    })
+                })
+            })
+            controller?.present(buyerPrompt, in: .window(.root))
+        })
+        controller?.present(pricePrompt, in: .window(.root))
+    })
+    controller?.present(linkPrompt, in: .window(.root))
 }

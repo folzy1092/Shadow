@@ -80,6 +80,18 @@ public enum ShadowStarsBalance {
         return (defaults.object(forKey: key(accountPeerId: accountPeerId)) as? NSNumber)?.int64Value
     }
 
+    // Сдвигает показанный баланс на `nanos` (фейковое зачисление — плюс,
+    // фейковая отправка подарка — минус).
+    public static func adjust(by nanos: Int64, accountPeerId: Int64, defaults: UserDefaults = .standard) {
+        let current = offset(accountPeerId: accountPeerId, defaults: defaults) ?? 0
+        defaults.set(NSNumber(value: current + nanos), forKey: key(accountPeerId: accountPeerId))
+        NotificationCenter.default.post(name: didChangeNotification, object: nil, userInfo: ["accountPeerId": accountPeerId])
+    }
+
+    public static func isActive(accountPeerId: Int64, defaults: UserDefaults = .standard) -> Bool {
+        return offset(accountPeerId: accountPeerId, defaults: defaults) != nil
+    }
+
     // `displayed` nil — снова настоящий баланс.
     public static func set(displayed: Int64?, real: Int64, accountPeerId: Int64, defaults: UserDefaults = .standard) {
         if let displayed {

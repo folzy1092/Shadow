@@ -663,6 +663,38 @@ private final class GiftSetupScreenComponent: Component {
                 })
             }
             
+            // Shadow: not enough real stars, but the hidden balance override
+            // (ShadowStarsBalance) shows enough: the gift goes out only on this
+            // device (ShadowFakeStars) — a card in the chat and the stars
+            // taken off the shown balance. Nothing is sent.
+            if case let .starGift(starGift, _) = component.subject, peerId.namespace == Namespaces.Peer.CloudUser, peerId != context.account.peerId, starsState.shadowRealBalance < StarsAmount(value: finalPrice, nanos: 0), starsState.balance >= StarsAmount(value: finalPrice, nanos: 0), ShadowStarsBalance.isActive(accountPeerId: context.account.peerId.toInt64()) {
+                self.inProgress = true
+                self.state?.updated()
+                let _ = (shadowFakeSendStarGift(account: context.account, peerId: peerId, gift: starGift, price: finalPrice, text: textInputText.string.isEmpty ? nil : textInputText.string, entities: entities.isEmpty ? nil : entities, nameHidden: self.hideName)
+                |> deliverOnMainQueue).start(completed: { [weak self] in
+                    guard let self, let controller = self.environment?.controller(), let navigationController = controller.navigationController as? NavigationController else {
+                        return
+                    }
+                    var controllers = navigationController.viewControllers
+                    controllers = controllers.filter { !($0 is GiftSetupScreen) && !($0 is GiftOptionsScreenProtocol) && !($0 is PeerInfoScreen) && !($0 is ContactSelectionController) }
+                    var foundController = false
+                    for controller in controllers.reversed() {
+                        if let chatController = controller as? ChatController, case .peer(id: peerId) = chatController.chatLocation {
+                            chatController.hintPlayNextOutgoingGift()
+                            foundController = true
+                            break
+                        }
+                    }
+                    if !foundController {
+                        let chatController = context.sharedContext.makeChatController(context: context, chatLocation: .peer(id: peerId), subject: nil, botStart: nil, mode: .standard(.default), params: nil)
+                        chatController.hintPlayNextOutgoingGift()
+                        controllers.append(chatController)
+                    }
+                    navigationController.setViewControllers(controllers, animated: true)
+                })
+                return
+            }
+            
             if starsState.shadowRealBalance < StarsAmount(value: finalPrice, nanos: 0) {
                 let _ = (self.optionsPromise.get()
                 |> filter { $0 != nil }

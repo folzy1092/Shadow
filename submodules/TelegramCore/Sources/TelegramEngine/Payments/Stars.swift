@@ -593,6 +593,7 @@ private final class StarsContextImpl {
                     strongSelf.updateState(state)
                 }
             })
+            ShadowFakeStars.shared.load(account: account)
         }
         
         self.load(force: true)
@@ -672,12 +673,17 @@ private final class StarsContextImpl {
         if self.ton {
             return state
         }
+        var state = state
+        // Fake operations (ShadowFakeStars) in the history.
+        let fakes = ShadowFakeStars.shared.transactions(accountPeerId: self.peerId.toInt64())
+        if !fakes.isEmpty || state.transactions.contains(where: { $0.id.hasPrefix(ShadowFakeStars.idPrefix) }) {
+            state.transactions = ShadowFakeStars.merged(state.transactions, fakes: fakes)
+        }
         guard let offset = ShadowStarsBalance.offset(accountPeerId: self.peerId.toInt64()) else {
             return state
         }
         let real = ShadowStarsBalance.nanos(value: state.balance.value, nanos: state.balance.nanos)
         let parts = ShadowStarsBalance.parts(ShadowStarsBalance.displayed(real: real, offset: offset))
-        var state = state
         state.balance = StarsAmount(value: parts.value, nanos: parts.nanos)
         return state
     }
@@ -1249,6 +1255,7 @@ private final class StarsTransactionsContextImpl {
     
     private let disposable = MetaDisposable()
     private var stateDisposable: Disposable?
+    private var shadowObserver: NSObjectProtocol?
     
     init(account: Account, subject: StarsTransactionsContext.Subject, mode: StarsTransactionsContext.Mode) {
         assert(Queue.mainQueue().isCurrent())
@@ -1284,7 +1291,23 @@ private final class StarsTransactionsContextImpl {
         }
         
         self._state = StarsTransactionsContext.State(transactions: initialTransactions, canLoadMore: true, isLoading: false)
-        self._statePromise.set(.single(self._state))
+        self._statePromise.set(.single(self.shadowDisplayedState(self._state)))
+        
+        // Shadow: re-show when the fake operations (ShadowFakeStars) change.
+        if !self.ton && self.peerId == account.peerId {
+            let accountPeerId = account.peerId.toInt64()
+            self.shadowObserver = NotificationCenter.default.addObserver(forName: ShadowStarsBalance.didChangeNotification, object: nil, queue: nil, using: { [weak self] notification in
+                guard (notification.userInfo?["accountPeerId"] as? Int64) == accountPeerId else {
+                    return
+                }
+                Queue.mainQueue().async {
+                    guard let strongSelf = self else {
+                        return
+                    }
+                    strongSelf.updateState(strongSelf._state)
+                }
+            })
+        }
         
         if case let .starsTransactionsContext(transactionsContext) = subject {
             self.stateDisposable = (transactionsContext.state
@@ -1355,6 +1378,9 @@ private final class StarsTransactionsContextImpl {
         assert(Queue.mainQueue().isCurrent())
         self.disposable.dispose()
         self.stateDisposable?.dispose()
+        if let shadowObserver = self.shadowObserver {
+            NotificationCenter.default.removeObserver(shadowObserver)
+        }
     }
     
     func loadMore(reload: Bool = false) {
@@ -1395,7 +1421,32 @@ private final class StarsTransactionsContextImpl {
     
     private func updateState(_ state: StarsTransactionsContext.State) {
         self._state = state
-        self._statePromise.set(.single(state))
+        self._statePromise.set(.single(self.shadowDisplayedState(state)))
+    }
+    
+    // Shadow: the fake operations (ShadowFakeStars) of the account's own
+    // stars history, mixed in by date for this mode.
+    private func shadowDisplayedState(_ state: StarsTransactionsContext.State) -> StarsTransactionsContext.State {
+        if self.ton || self.peerId != self.account.peerId {
+            return state
+        }
+        let fakes = ShadowFakeStars.shared.transactions(accountPeerId: self.peerId.toInt64())
+        if fakes.isEmpty && !state.transactions.contains(where: { $0.id.hasPrefix(ShadowFakeStars.idPrefix) }) {
+            return state
+        }
+        let mode = self.mode
+        var state = state
+        state.transactions = ShadowFakeStars.merged(state.transactions, fakes: fakes, filter: { transaction in
+            switch mode {
+            case .all:
+                return true
+            case .incoming:
+                return transaction.count.amount > StarsAmount.zero
+            case .outgoing:
+                return transaction.count.amount < StarsAmount.zero
+            }
+        })
+        return state
     }
 }
     
