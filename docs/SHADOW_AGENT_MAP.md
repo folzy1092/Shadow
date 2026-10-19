@@ -864,3 +864,15 @@ UI-проекция настроек выбирается в `TelegramRootContro
   на `var style` в `ShadowBusinessBotPinnedTitlePanelNode`). Сюда же `frame`,
   `bounds`, `layer`, `view`, `supernode` и прочие имена UIView/ASDisplayNode.
 - Ответы пользователю — на русском.
+
+## Розыгрыши (локально, на сервер ничего не уходит)
+
+- Подмена баланса звёзд: двойной тап по балансу на экране «Звёзды Telegram»
+  (`ShadowStarsBalance.swift`, сдвиг на аккаунт в UserDefaults, применяется в
+  `StarsContext.state/currentState`). Скрытая функция — в настройках и списке
+  изменений не упоминать.
+- «Подарок для розыгрыша»: список чатов → долгое нажатие → Shadow (только
+  личные чаты). Ссылка t.me/nft/… → `shadowAddFakeGift` кладёт служебное
+  сообщение `.starGiftUnique` в namespace Local без `.Unsent` (никогда не
+  отправляется), владелец подарка подменён на собеседника (`withOwner`).
+

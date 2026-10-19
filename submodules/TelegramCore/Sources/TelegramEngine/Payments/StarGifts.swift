@@ -1095,6 +1095,33 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
             )
         }
         
+        // Shadow: the shown owner of a local fake gift (ShadowFakeGift).
+        public func withOwner(_ owner: Owner?) -> UniqueGift {
+            return UniqueGift(
+                id: self.id,
+                giftId: self.giftId,
+                title: self.title,
+                number: self.number,
+                slug: self.slug,
+                owner: owner,
+                attributes: self.attributes,
+                availability: self.availability,
+                giftAddress: self.giftAddress,
+                resellAmounts: self.resellAmounts,
+                resellForTonOnly: self.resellForTonOnly,
+                releasedBy: self.releasedBy,
+                valueAmount: self.valueAmount,
+                valueCurrency: self.valueCurrency,
+                valueUsdAmount: self.valueUsdAmount,
+                flags: self.flags,
+                themePeerId: self.themePeerId,
+                peerColor: self.peerColor,
+                hostPeerId: self.hostPeerId,
+                minOfferStars: self.minOfferStars,
+                craftChancePermille: self.craftChancePermille
+            )
+        }
+        
         public func withAttributes(_ attributes: [Attribute]) -> UniqueGift {
             return UniqueGift(
                 id: self.id,

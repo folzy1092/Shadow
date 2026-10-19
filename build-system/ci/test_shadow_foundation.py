@@ -38,6 +38,7 @@ def main():
         ('chat-banners', 'submodules/TelegramCore/Sources/AyuGram/ShadowChatBanners.swift', 'Tests/ShadowSettings/ChatBannersTests.swift'),
         ('business-bot-panel', 'submodules/TelegramCore/Sources/AyuGram/ShadowBusinessBotPanel.swift', 'Tests/ShadowSettings/BusinessBotPanelTests.swift'),
         ('stars-balance', 'submodules/TelegramCore/Sources/AyuGram/ShadowStarsBalance.swift', 'Tests/ShadowSettings/StarsBalanceTests.swift'),
+        ('fake-gift', 'submodules/TelegramCore/Sources/AyuGram/ShadowFakeGift.swift', 'Tests/ShadowSettings/FakeGiftTests.swift'),
         ('silent-send', 'submodules/TelegramCore/Sources/AyuGram/ShadowSilentSend.swift', 'Tests/ShadowSettings/SilentSendTests.swift'),
         ('local-pins', 'submodules/TelegramCore/Sources/AyuGram/ShadowLocalPins.swift', 'Tests/ShadowSettings/LocalPinsTests.swift'),
         ('chat-titles', 'submodules/TelegramCore/Sources/AyuGram/ShadowChatTitles.swift', 'Tests/ShadowSettings/ChatTitlesTests.swift'),

@@ -1181,8 +1181,38 @@ func shadowChatContextSubmenuItems(context: AccountContext, peerId: EnginePeer.I
             f(.default)
             shadowRenameChat(context: context, peerId: peerId, parentController: chatListController)
         })))
+
+        // «Подарок для розыгрыша» (ShadowFakeGift): only on this device.
+        if peerId.namespace == Namespaces.Peer.CloudUser {
+            items.append(.action(ContextMenuActionItem(text: "Подарок для розыгрыша", icon: { theme in
+                return generateTintedImage(image: UIImage(systemName: "gift"), color: theme.contextMenu.primaryColor)
+            }, action: { _, f in
+                f(.default)
+                shadowAddFakeGiftPrompt(context: context, peerId: peerId, parentController: chatListController)
+            })))
+        }
     }
     return items
+}
+
+// Shadow: «Подарок для розыгрыша» (ShadowFakeGift): a gift card «from you» in
+// the chat, only on this device. Nothing is sent.
+func shadowAddFakeGiftPrompt(context: AccountContext, peerId: EnginePeer.Id, parentController: ViewController?) {
+    let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+    let controller = promptController(context: context, text: "Подарок для розыгрыша", subtitle: "Ссылка на коллекционный подарок, например t.me/nft/PlushPepe-123. В чате появится подарок от вас — только на этом устройстве, другу ничего не отправится.", value: nil, placeholder: "t.me/nft/…", characterLimit: 200, apply: { [weak parentController] value in
+        guard let value else {
+            return
+        }
+        guard let slug = ShadowFakeGift.slug(from: value) else {
+            parentController?.present(textAlertController(context: context, title: nil, text: "Это не ссылка на коллекционный подарок. Нужна ссылка вида t.me/nft/PlushPepe-123.", actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+            return
+        }
+        let _ = (shadowAddFakeGift(account: context.account, peerId: peerId, slug: slug)
+        |> deliverOnMainQueue).start(error: { [weak parentController] _ in
+            parentController?.present(textAlertController(context: context, title: nil, text: "Подарок не найден. Проверьте ссылку.", actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+        })
+    })
+    parentController?.present(controller, in: .window(.root))
 }
 
 // Shadow: «Своё название» (ShadowChatTitleStore): a name only this device shows.
