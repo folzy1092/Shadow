@@ -885,7 +885,8 @@ private final class StarsPurchaseScreenComponent: CombinedComponent {
                         context: context.component.context,
                         externalState: contentExternalState,
                         containerSize: context.availableSize,
-                        balance: state.starsState?.balance,
+                        // Shadow: packages are picked by the real balance, not the hidden override (ShadowStarsBalance).
+                        balance: state.starsState?.shadowRealBalance,
                         options: context.component.options,
                         purpose: context.component.purpose,
                         selectedProductId: state.progressProduct?.storeProduct.id,
