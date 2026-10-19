@@ -1080,7 +1080,7 @@ func openResolvedUrlImpl(
                         navigationController.pushViewController(controller, animated: true)
                     }
                 }
-                if let amount, let currentState = starsContext.currentState, currentState.balance >= StarsAmount(value: amount, nanos: 0) {
+                if let amount, let currentState = starsContext.currentState, currentState.shadowRealBalance >= StarsAmount(value: amount, nanos: 0) {
                     let presentationData = context.sharedContext.currentPresentationData.with { $0 }
                     let controller = UndoOverlayController(
                         presentationData: presentationData,

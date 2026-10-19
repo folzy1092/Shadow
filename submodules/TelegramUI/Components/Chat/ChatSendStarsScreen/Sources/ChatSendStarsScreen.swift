@@ -2557,7 +2557,8 @@ private final class ChatSendStarsScreenComponent: Component {
                             return
                         }
                         
-                        if balance < StarsAmount(value: Int64(self.amount.realValue), nanos: 0) {
+                        // Shadow: the real balance, not the hidden override (ShadowStarsBalance).
+                        if (component.context.starsContext?.currentState?.shadowRealBalance ?? balance) < StarsAmount(value: Int64(self.amount.realValue), nanos: 0) {
                             let _ = (component.context.engine.payments.starsTopUpOptions()
                             |> take(1)
                             |> deliverOnMainQueue).startStandalone(next: { [weak self] options in

@@ -140,7 +140,7 @@ public func buyStarGiftImpl(
             })
         }
         
-        if resellAmount.currency == .stars, let starsContext = context.starsContext, let starsState = context.starsContext?.currentState, starsState.balance < resellAmount.amount {
+        if resellAmount.currency == .stars, let starsContext = context.starsContext, let starsState = context.starsContext?.currentState, starsState.shadowRealBalance < resellAmount.amount {
             let _ = (starsTopUpOptions
              |> filter { $0 != nil }
              |> take(1)
@@ -168,7 +168,7 @@ public func buyStarGiftImpl(
                                 guard let starsContext = context.starsContext, let starsState = starsContext.currentState else {
                                     return
                                 }
-                                if starsState.balance < resellAmount.amount {
+                                if starsState.shadowRealBalance < resellAmount.amount {
                                     updateProgress(false)
                                     
                                     buyStarGiftImpl(

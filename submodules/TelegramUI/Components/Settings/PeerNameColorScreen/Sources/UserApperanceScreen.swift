@@ -618,7 +618,7 @@ final class UserAppearanceScreenComponent: Component {
                     })
                 }
                 
-                if resellAmount.currency == .stars, let starsContext = component.context.starsContext, let starsState = starsContext.currentState, starsState.balance < resellAmount.amount {
+                if resellAmount.currency == .stars, let starsContext = component.context.starsContext, let starsState = starsContext.currentState, starsState.shadowRealBalance < resellAmount.amount {
                     if self.starsTopUpOptions.isEmpty {
                         self.isApplyingSettings = true
                         self.state?.updated()
@@ -654,7 +654,7 @@ final class UserAppearanceScreenComponent: Component {
                                         guard let self, let starsContext, let starsState = starsContext.currentState else {
                                             return
                                         }
-                                        if starsState.balance < resellAmount.amount {
+                                        if starsState.shadowRealBalance < resellAmount.amount {
                                             self.isApplyingSettings = false
                                             self.state?.updated()
                                             

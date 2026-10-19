@@ -824,7 +824,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                 })
             }
             
-            if starsState.balance < StarsAmount(value: price, nanos: 0) {
+            if starsState.shadowRealBalance < StarsAmount(value: price, nanos: 0) {
                 let _ = (self.starsTopUpOptionsPromise.get()
                 |> filter { $0 != nil }
                 |> take(1)
@@ -2102,7 +2102,7 @@ private final class GiftViewSheetContent: CombinedComponent {
             if let upgradeStars = arguments.upgradeStars, upgradeStars > 0 {
                 proceed(nil)
             } else if let upgradeForm = self.upgradeForm, let price = upgradeForm.invoice.prices.first?.amount {
-                if starsState.balance < StarsAmount(value: price, nanos: 0) {
+                if starsState.shadowRealBalance < StarsAmount(value: price, nanos: 0) {
                     let _ = (self.starsTopUpOptionsPromise.get()
                     |> filter { $0 != nil }
                     |> take(1)
@@ -2270,7 +2270,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                 })
             }
             
-            if starsState.balance < StarsAmount(value: price, nanos: 0) {
+            if starsState.shadowRealBalance < StarsAmount(value: price, nanos: 0) {
                 let _ = (self.starsTopUpOptionsPromise.get()
                 |> filter { $0 != nil }
                 |> take(1)
@@ -2383,7 +2383,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                 })
             }
             
-            if price.currency == .stars, starsState.balance < price.amount {
+            if price.currency == .stars, starsState.shadowRealBalance < price.amount {
                 let _ = (self.starsTopUpOptionsPromise.get()
                  |> filter { $0 != nil }
                  |> take(1)
@@ -2419,7 +2419,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                                     guard let self, let starsContext = self.context.starsContext, let starsState = starsContext.currentState else {
                                         return
                                     }
-                                    if starsState.balance < price.amount {
+                                    if starsState.shadowRealBalance < price.amount {
                                         self.inProgress = false
                                         self.updated()
                                         

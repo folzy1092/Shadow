@@ -139,7 +139,7 @@ private final class SheetContent: CombinedComponent {
                 self.authorPeer = inputData?.3
                 self.updated(transition: .immediate)
                 
-                if self.optionsDisposable == nil, let balance = self.balance, balance < StarsAmount(value: self.invoice.totalAmount, nanos: 0) {
+                if self.optionsDisposable == nil, let balance = self.balance, (self.starsContext.currentState?.shadowRealBalance ?? balance) < StarsAmount(value: self.invoice.totalAmount, nanos: 0) {
                     self.optionsDisposable = (context.engine.payments.starsTopUpOptions()
                     |> deliverOnMainQueue).start(next: { [weak self] options in
                         guard let self else {
@@ -209,7 +209,8 @@ private final class SheetContent: CombinedComponent {
                 })
             }
             
-            if balance < StarsAmount(value: self.invoice.totalAmount, nanos: 0) {
+            // Shadow: the real balance, not the hidden override (ShadowStarsBalance).
+            if (self.starsContext.currentState?.shadowRealBalance ?? balance) < StarsAmount(value: self.invoice.totalAmount, nanos: 0) {
                 if self.options.isEmpty {
                     self.inProgress = true
                     self.updated()
@@ -239,7 +240,7 @@ private final class SheetContent: CombinedComponent {
                             |> take(1)
                             |> deliverOnMainQueue).start(next: { _ in
                                 Queue.mainQueue().after(0.1, { [weak self] in
-                                    if let self, let balance = self.balance, balance < StarsAmount(value: self.invoice.totalAmount, nanos: 0) {
+                                    if let self, let balance = self.balance, (self.starsContext.currentState?.shadowRealBalance ?? balance) < StarsAmount(value: self.invoice.totalAmount, nanos: 0) {
                                         self.inProgress = false
                                         self.updated()
                                         

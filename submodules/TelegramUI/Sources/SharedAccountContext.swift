@@ -3544,7 +3544,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         }
         
         let optionsPromise = Promise<[StarsTopUpOption]?>(nil)
-        if let state = context.starsContext?.currentState, state.balance < StarsAmount(value: 100, nanos: 0) {
+        if let state = context.starsContext?.currentState, state.shadowRealBalance < StarsAmount(value: 100, nanos: 0) {
             optionsPromise.set(context.engine.payments.starsTopUpOptions()
             |> map(Optional.init))
         }
@@ -3651,7 +3651,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
                     }
                     
                     if transferStars > 0, let starsContext = context.starsContext, let starsState = starsContext.currentState {
-                        if starsState.balance < StarsAmount(value: transferStars, nanos: 0) {
+                        if starsState.shadowRealBalance < StarsAmount(value: transferStars, nanos: 0) {
                             let _ = (optionsPromise.get()
                             |> filter { $0 != nil }
                             |> take(1)

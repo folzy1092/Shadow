@@ -444,7 +444,7 @@ extension ChatControllerImpl {
                         )
                         |> take(1)
                         |> deliverOnMainQueue).start(next: { [weak self] state, reactionSettings in
-                            guard let strongSelf = self, let balance = state?.balance else {
+                            guard let strongSelf = self, let balance = state?.shadowRealBalance else {
                                 return
                             }
                             

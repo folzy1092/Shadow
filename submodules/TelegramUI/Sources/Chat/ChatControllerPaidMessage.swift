@@ -68,7 +68,7 @@ extension ChatControllerImpl {
                                 let _ = ApplicationSpecificNotice.setDismissedPaidMessageWarningNamespace(accountManager: self.context.sharedContext.accountManager, peerId: peer.id, amount: sendPaidMessageStars.value).start()
                             }
                             
-                            if let currentState = starsContext.currentState, currentState.balance.value < totalAmount {
+                            if let currentState = starsContext.currentState, currentState.shadowRealBalance.value < totalAmount {
                                 let _ = (self.context.engine.payments.starsTopUpOptions()
                                 |> take(1)
                                 |> deliverOnMainQueue).startStandalone(next: { [weak self] options in

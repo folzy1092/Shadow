@@ -1518,7 +1518,8 @@ private final class GiftAuctionBidScreenComponent: Component {
                 }
             }
             
-            if balance < StarsAmount(value: requiredStars, nanos: 0) {
+            // Shadow: the real balance, not the hidden override (ShadowStarsBalance).
+            if (component.context.starsContext?.currentState?.shadowRealBalance ?? balance) < StarsAmount(value: requiredStars, nanos: 0) {
                 let _ = (component.context.engine.payments.starsTopUpOptions()
                 |> take(1)
                 |> deliverOnMainQueue).startStandalone(next: { [weak self] options in

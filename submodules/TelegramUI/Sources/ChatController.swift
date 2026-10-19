@@ -1940,7 +1940,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                         )
                         |> take(1)
                         |> deliverOnMainQueue).start(next: { [weak strongSelf] state, reactionSettings in
-                            guard let strongSelf, let balance = state?.balance else {
+                            guard let strongSelf, let balance = state?.shadowRealBalance else {
                                 return
                             }
                             

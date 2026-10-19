@@ -336,7 +336,7 @@ private final class GiftSetupScreenComponent: Component {
             switch component.subject {
             case let .premium(product):
                 if self.payWithStars, let starsPrice = product.starsPrice, let peer = self.peerMap[component.peerId] {
-                    if let balance = component.context.starsContext?.currentState?.balance, balance.value < starsPrice {
+                    if let balance = component.context.starsContext?.currentState?.shadowRealBalance, balance.value < starsPrice {
                         self.proceedWithStarGift()
                     } else {
                         let controller = textAlertController(
@@ -663,7 +663,7 @@ private final class GiftSetupScreenComponent: Component {
                 })
             }
             
-            if starsState.balance < StarsAmount(value: finalPrice, nanos: 0) {
+            if starsState.shadowRealBalance < StarsAmount(value: finalPrice, nanos: 0) {
                 let _ = (self.optionsPromise.get()
                 |> filter { $0 != nil }
                 |> take(1)

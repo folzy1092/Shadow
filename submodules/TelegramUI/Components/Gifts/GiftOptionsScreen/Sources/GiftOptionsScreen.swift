@@ -961,7 +961,7 @@ final class GiftOptionsScreenComponent: Component {
                     }
                     
                     if let self, let transferStars = gift.transferStars, transferStars > 0, let starsContext = context.starsContext, let starsState = self.starsState {
-                        if starsState.balance < StarsAmount(value: transferStars, nanos: 0) {
+                        if starsState.shadowRealBalance < StarsAmount(value: transferStars, nanos: 0) {
                             let _ = (self.optionsPromise.get()
                             |> filter { $0 != nil }
                             |> take(1)
@@ -1022,7 +1022,7 @@ final class GiftOptionsScreenComponent: Component {
                     }
                 })
                 
-                if let state = component.starsContext.currentState, state.balance < StarsAmount(value: 100, nanos: 0) {
+                if let state = component.starsContext.currentState, state.shadowRealBalance < StarsAmount(value: 100, nanos: 0) {
                     self.optionsPromise.set(component.context.engine.payments.starsTopUpOptions()
                     |> map(Optional.init))
                 }

@@ -1097,6 +1097,10 @@ public final class StarsContext {
         
         public var flags: Flags
         public var balance: StarsAmount
+        // Shadow: the real balance when `balance` shows the hidden override
+        // (ShadowStarsBalance). «Хватает ли звёзд» checks compare against
+        // this, so a payment is never sent with stars the account lacks.
+        public var shadowRealBalance: StarsAmount
         public var subscriptions: [Subscription]
         public var canLoadMoreSubscriptions: Bool
         public var transactions: [Transaction]
@@ -1106,6 +1110,7 @@ public final class StarsContext {
         init(flags: Flags, balance: StarsAmount, subscriptions: [Subscription], canLoadMoreSubscriptions: Bool, transactions: [Transaction], canLoadMoreTransactions: Bool, isLoading: Bool) {
             self.flags = flags
             self.balance = balance
+            self.shadowRealBalance = balance
             self.subscriptions = subscriptions
             self.canLoadMoreSubscriptions = canLoadMoreSubscriptions
             self.transactions = transactions

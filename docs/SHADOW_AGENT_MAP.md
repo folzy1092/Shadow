@@ -869,7 +869,8 @@ UI-проекция настроек выбирается в `TelegramRootContro
 
 - Подмена баланса звёзд: двойной тап по балансу на экране «Звёзды Telegram»
   (`ShadowStarsBalance.swift`, сдвиг на аккаунт в UserDefaults, применяется в
-  `StarsContext.state/currentState`). Скрытая функция — в настройках и списке
+  `StarsContext.state/currentState`; проверки «хватает ли звёзд» перед оплатой
+  смотрят `State.shadowRealBalance` — настоящий баланс). Скрытая функция — в настройках и списке
   изменений не упоминать.
 - «Подарок для розыгрыша»: список чатов → долгое нажатие → Shadow (только
   личные чаты). Ссылка t.me/nft/… → `shadowAddFakeGift` кладёт служебное
