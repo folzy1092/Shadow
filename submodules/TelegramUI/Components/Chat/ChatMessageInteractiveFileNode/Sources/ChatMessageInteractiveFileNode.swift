@@ -2009,6 +2009,19 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
         self.fetchingTextNode.frame = CGRect(origin: self.descriptionNode.frame.origin, size: fetchingInfo.size)
         self.fetchingCompactTextNode.frame = CGRect(origin: self.descriptionNode.frame.origin, size: fetchingCompactSize)
         self.countNode.frame = CGRect(origin: self.descriptionNode.frame.origin, size: countSize)
+        
+        // Shadow: the unread dot follows the time that is actually shown. With
+        // «Время на голосовых» the playing time («0:07 / 0:35») is wider than
+        // the duration the dot was placed after, and the dot sat on the text.
+        if self.consumableContentNode.supernode != nil, let consumableImage = self.consumableContentNode.image {
+            var textMaxX = self.descriptionNode.frame.maxX
+            if !self.fetchingTextNode.isHidden {
+                textMaxX = max(textMaxX, self.fetchingTextNode.frame.maxX)
+            } else if !self.fetchingCompactTextNode.isHidden {
+                textMaxX = max(textMaxX, self.fetchingCompactTextNode.frame.maxX)
+            }
+            self.consumableContentNode.frame = CGRect(origin: CGPoint(x: textMaxX + 5.0, y: self.descriptionNode.frame.minY + 5.0), size: consumableImage.size)
+        }
     }
     
     public typealias Apply = (Bool, ListViewItemUpdateAnimation, ListViewItemApply?) -> ChatMessageInteractiveFileNode
