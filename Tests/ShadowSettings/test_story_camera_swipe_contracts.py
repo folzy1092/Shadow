@@ -35,7 +35,7 @@ class StoryCameraSwipeContracts(unittest.TestCase):
         node = (CHAT_LIST_UI / "ChatListControllerNode.swift").read_text()
 
         self.assertIn("disableStoryCameraSwipe: ayuGramSettingsValue.disableStoryCameraSwipe", controller)
-        self.assertIn("!self.disableStoryCameraSwipe, self.controller?.isStoryPostingAvailable", node)
+        self.assertIn("&& !self.disableStoryCameraSwipe\n", node)
 
 
 if __name__ == "__main__":
