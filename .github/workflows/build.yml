@@ -11,6 +11,11 @@ on:
       - 'shadow-whitelist.json'
 
   workflow_dispatch:
+    inputs:
+      keep_going:
+        description: 'Collect every compiler error in one run (Bazel --keep_going)'
+        type: boolean
+        default: false
 
 permissions:
   # write: the successful master build is published as a GitHub Release,
@@ -33,8 +38,9 @@ jobs:
   build:
     runs-on: macos-26
     # A cold-cache build alone takes ~40 min; 45 cut runs off right before
-    # the IPA upload and release steps.
-    timeout-minutes: 90
+    # the IPA upload and release steps. A Telegram base update (new Bazel,
+    # nothing cached) takes longer still.
+    timeout-minutes: 150
 
     steps:
       - uses: actions/checkout@v4
@@ -82,6 +88,7 @@ jobs:
           TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
           TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          KEEP_GOING: ${{ github.event.inputs.keep_going == 'true' && '1' || '' }}
         run: |
           set -x
           # Keep Make.py's exit status through the tee below.
@@ -150,6 +157,7 @@ jobs:
           python3 -u build-system/Make/Make.py \
             --bazelUserRoot="$BAZEL_USER_ROOT" \
             build \
+            ${KEEP_GOING:+--continueOnError} \
             --configurationPath="build-system/shadow-configuration.json" \
             --codesigningInformationPath=build-system/fake-codesigning \
             --configuration=release_arm64 \

@@ -478,6 +478,22 @@ public final class PasscodeCredentialStore: @unchecked Sendable {
         return value
     }
 
+    // Shadow: whether `code` is the current Telegram passcode, without touching
+    // the attempt counter or creating a session. Only for Shadow's settings
+    // screens, where a second-space or duress code must differ from it (Telegram
+    // 13 keeps only a wrapped key, not the code). The lock screen always goes
+    // through verify().
+    public func shadowMatchesPasscode(_ code: String) -> Bool {
+        let result: Bool? = try? self.serialized {
+            guard let record = try self.load(), let kind = record.kind, let salt = record.salt,
+                  let iterations = record.iterations, let wrapped = record.wrappedKey else { return false }
+            var kek = try PasscodeCrypto.derive(code: kind.normalize(code), deviceSecret: self.deviceSecret(), salt: salt, iterations: iterations)
+            defer { kek.resetBytes(in: 0 ..< kek.count) }
+            return (try? PasscodeCrypto.open(wrapped, key: kek, context: "credential.v1:\(record.id):\(kind.rawValue)")) != nil
+        }
+        return result ?? false
+    }
+
     public func cooldownRemaining() throws -> Int {
         try self.serialized { Int(max(0, min(60, ceil(try self.attempts().deadline - self.clock().uptime)))) }
     }
