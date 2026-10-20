@@ -189,6 +189,17 @@ extension ChatControllerImpl {
                         guard var message else {
                             self.recorderFeedback?.error()
                             self.recorderFeedback = nil
+                            // Shadow: a round that failed after pause already showed
+                            // its draft preview; without the recorder it is dead.
+                            self.recorderDataDisposable.set(nil)
+                            self.updateChatPresentationInterfaceState(animated: true, interactive: true, {
+                                $0.updatedInterfaceState { interfaceState in
+                                    if case .some(.video) = interfaceState.mediaDraftState {
+                                        return interfaceState.withUpdatedMediaDraftState(nil)
+                                    }
+                                    return interfaceState
+                                }
+                            })
                             self.videoRecorder.set(.single(nil))
                             return
                         }
@@ -456,8 +467,15 @@ extension ChatControllerImpl {
                                 if data.duration < 1.0 {
                                     strongSelf.recorderFeedback?.error()
                                     strongSelf.recorderFeedback = nil
+                                    // Shadow: also drop the draft the first (approximate)
+                                    // data put up — a failed recording reports 0 here.
                                     strongSelf.updateChatPresentationInterfaceState(animated: true, interactive: true, {
-                                        $0.updatedInputTextPanelState { panelState in
+                                        $0.updatedInterfaceState { interfaceState in
+                                            if case .some(.video) = interfaceState.mediaDraftState {
+                                                return interfaceState.withUpdatedMediaDraftState(nil)
+                                            }
+                                            return interfaceState
+                                        }.updatedInputTextPanelState { panelState in
                                             return panelState.withUpdatedMediaRecordingState(nil)
                                         }
                                     })

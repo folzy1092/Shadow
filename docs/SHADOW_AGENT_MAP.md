@@ -899,8 +899,21 @@ UI-проекция настроек выбирается в `TelegramRootContro
   панель бота тогда (и при «Только закреп») не показывается.
 - Списки: `ListViewItem` получает `neighbors: ListViewItemNeighbors` вместо
   `previousItem`/`nextItem`; отступы ItemList — `itemListNeighbors(item:topFacet:bottomFacet:)`.
-- Камера разделена на `CameraLegacy` и `CameraNeo`; правка стартовой камеры
-  кружков — в `CameraLegacy/Sources/LegacyCamera.swift`.
+- Камера разделена на `CameraLegacy` и `CameraNeo`; кружки по умолчанию пишет
+  CameraNeo (выключает её только серверный `ios_killswitch_disable_neo_round_camera_v2`
+  или Debug-переключатель). «Кружки на заднюю камеру»: сторона выбирается один раз
+  в `VideoMessageCameraScreen` (`cameraState.position` → `Camera.Configuration.position`);
+  CameraNeo пишет с неё с первого кадра (`VideoRecorder(initialPosition:)`), в
+  CameraLegacy для этого нужна правка `markPositionChange` в `LegacyCamera.swift`
+  (тест `test_round_video_camera_contracts.py`).
+- Зависание кружка (1.13.8): CameraNeo может закончить запись `.failed` или не
+  ответить, а стоковый экран это игнорировал — пауза не доходила до превью, «Отправить»
+  грузилось вечно. Теперь `Node.shadowRecordingFailed` (ответ `.failed`, пустое
+  завершение или 10 с тишины) закрывает запись или возвращает к прошлым кускам,
+  `resultsPipe` несёт `nil` для ждущих, чат убирает мёртвый черновик кружка. После
+  такого сбоя `ShadowRoundVideoCameraFallback` (UserDefaults, номер сборки) включает
+  старую камеру до следующей сборки. Остановка внутри 0,5 с антидребезга
+  откладывается, а не теряется. Причина сбоя CameraNeo на устройстве не найдена.
 - CI: у `workflow_dispatch` есть флаг `keep_going` (все ошибки компиляции за
   один прогон, `--continueOnError`); тестовая сборка ветки не публикует релиз и
   не шлёт уведомления (эти шаги только для `master`).

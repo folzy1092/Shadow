@@ -468,6 +468,7 @@ private final class VideoMessageCameraScreenComponent: CombinedComponent {
                         }
                     }, error: { [weak self] _ in
                         if let self, let controller = self.getController() {
+                            controller.node.shadowNoteCameraFailure()
                             controller.completion(nil, nil, nil, nil)
                         }
                     }))
@@ -489,13 +490,35 @@ private final class VideoMessageCameraScreenComponent: CombinedComponent {
             }
             let currentTimestamp = CACurrentMediaTime()
             if let lastActionTimestamp = controller.lastActionTimestamp, currentTimestamp - lastActionTimestamp < 0.5 {
+                // Shadow: the caller has already switched to "waiting for the
+                // result" (pause, Send), so a dropped stop left the screen
+                // waiting forever. Stop once the debounce has passed instead.
+                Queue.mainQueue().after(0.5 - (currentTimestamp - lastActionTimestamp)) { [weak self] in
+                    guard let self, let controller = self.getController() else {
+                        return
+                    }
+                    if case .none = controller.cameraState.recording {
+                        return
+                    }
+                    self.stopVideoRecording()
+                }
                 return
             }
             controller.lastActionTimestamp = currentTimestamp
-            
+
+            // Shadow: CameraNeo (Telegram 13) can end a recording with `.failed`
+            // or never answer; both used to be ignored, so pause never reached
+            // the preview and Send kept "loading". A stop that brings nothing
+            // within 10 s (the recorder's own deadline is 2.5 s) counts as failed.
+            let receivedResult = Atomic<Bool>(value: false)
             self.resultDisposable.set((camera.stopRecording()
+            |> timeout(10.0, queue: Queue.mainQueue(), alternate: .single(.failed))
             |> deliverOnMainQueue).startStrict(next: { [weak self] result in
-                if let self, let controller = self.getController(), case let .finished(mainResult, _, duration, _, _) = result {
+                let _ = receivedResult.swap(true)
+                guard let self, let controller = self.getController() else {
+                    return
+                }
+                if case let .finished(mainResult, _, duration, _, _) = result {
                     self.completion.invoke(
                         .video(VideoMessageCameraScreen.CaptureResult.Video(
                             videoPath: mainResult.path,
@@ -505,7 +528,14 @@ private final class VideoMessageCameraScreenComponent: CombinedComponent {
                         ))
                     )
                     controller.updateCameraState({ $0.updatedRecording(.none) }, transition: .spring(duration: 0.4))
+                } else {
+                    controller.node.shadowRecordingFailed()
                 }
+            }, completed: { [weak self] in
+                guard !receivedResult.with({ $0 }), let self, let controller = self.getController() else {
+                    return
+                }
+                controller.node.shadowRecordingFailed()
             }))
             
             if let initialBrightness = self.initialBrightness {
@@ -1010,7 +1040,10 @@ public class VideoMessageCameraScreen: ViewController {
             self.controller = controller
             self.context = controller.context
             
-            let useModernVideoMessagePipeline = self.context.sharedContext.immediateExperimentalUISettings.useModernVideoMessagePipeline ?? (self.context.getAppConfigValue("ios_killswitch_disable_neo_round_camera_v2") == nil)
+            // Shadow: after CameraNeo has failed a recording on this build, the
+            // default pipeline falls back to the old camera (an explicit Debug
+            // switch still wins).
+            let useModernVideoMessagePipeline = self.context.sharedContext.immediateExperimentalUISettings.useModernVideoMessagePipeline ?? (self.context.getAppConfigValue("ios_killswitch_disable_neo_round_camera_v2") == nil && !ShadowRoundVideoCameraFallback.prefersLegacyCamera)
             if useModernVideoMessagePipeline {
                 self.cameraImpl = NeoCameraImpl.shared
             } else {
@@ -1332,8 +1365,45 @@ public class VideoMessageCameraScreen: ViewController {
         }
         
         fileprivate var results: [VideoMessageCameraScreen.CaptureResult] = []
-        fileprivate var resultsPipe = ValuePipe<VideoMessageCameraScreen.CaptureResult>()
-        
+        // nil = the awaited recording failed (see `shadowRecordingFailed`).
+        fileprivate var resultsPipe = ValuePipe<VideoMessageCameraScreen.CaptureResult?>()
+
+        fileprivate func shadowNoteCameraFailure() {
+            if self.cameraImpl is NeoCameraImpl {
+                ShadowRoundVideoCameraFallback.noteModernCameraFailure()
+            }
+        }
+
+        // Shadow: the recording that was being stopped produced no video.
+        // Without earlier segments the recorder closes (as a too-short round
+        // does); with them it goes back to their preview, and a pending Send
+        // sends them.
+        fileprivate func shadowRecordingFailed() {
+            guard let controller = self.controller else {
+                return
+            }
+            self.shadowNoteCameraFailure()
+            self.transitioningToPreview = false
+            controller.updateCameraState({ $0.updatedRecording(.none) }, transition: .spring(duration: 0.4))
+
+            // Release whoever waits for this result (`currentResults`).
+            self.resultsPipe.putNext(nil)
+
+            if self.results.isEmpty {
+                controller.completion(nil, nil, nil, nil)
+                return
+            }
+
+            self.pauseCameraCapture()
+
+            if !controller.isSendingImmediately {
+                let composition = composition(with: self.results)
+                controller.updatePreviewState({ _ in
+                    return PreviewState(composition: composition, trimRange: nil, isMuted: true)
+                }, transition: .spring(duration: 0.4))
+            }
+        }
+
         func addCaptureResult(_ result: VideoMessageCameraScreen.CaptureResult) {
             guard let controller = self.controller else {
                 return
@@ -1843,7 +1913,9 @@ public class VideoMessageCameraScreen: ViewController {
                 |> take(1)
                 |> map { next in
                     var updatedResults = initial
-                    updatedResults.append(next)
+                    if let next {
+                        updatedResults.append(next)
+                    }
                     return updatedResults
                 }
             }
