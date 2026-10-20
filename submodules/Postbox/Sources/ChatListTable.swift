@@ -319,16 +319,18 @@ final class ChatListTable: Table {
         return result
     }
     
-    func getUnreadChatListPeerIds(postbox: PostboxImpl, currentTransaction: Transaction, groupId: PeerGroupId, filterPredicate: ChatListFilterPredicate?, additionalFilter: ((Peer) -> Bool)?, stopOnFirstMatch: Bool) -> [PeerId] {
+    // Shadow: `requireUnread: false` also visits read chats (passed to the
+    // filter as unread) — for chats whose only unread thing is a mention.
+    func getUnreadChatListPeerIds(postbox: PostboxImpl, currentTransaction: Transaction, groupId: PeerGroupId, filterPredicate: ChatListFilterPredicate?, additionalFilter: ((Peer) -> Bool)?, stopOnFirstMatch: Bool, requireUnread: Bool = true) -> [PeerId] {
         let globalNotificationSettings = postbox.getGlobalNotificationSettings(transaction: currentTransaction)
         
         var result: [PeerId] = []
         self.valueBox.range(self.table, start: self.upperBound(groupId: groupId), end: self.lowerBound(groupId: groupId), keys: { key in
             let (_, _, messageIndex, _) = extractKey(key)
-            if let state = postbox.readStateTable.getCombinedState(messageIndex.id.peerId), state.isUnread, let peer = postbox.peerTable.get(messageIndex.id.peerId) {
+            if (!requireUnread || (postbox.readStateTable.getCombinedState(messageIndex.id.peerId)?.isUnread ?? false)), let peer = postbox.peerTable.get(messageIndex.id.peerId) {
                 var passFilter: Bool
                 if let filterPredicate = filterPredicate {
-                    let isUnread = postbox.readStateTable.getCombinedState(messageIndex.id.peerId)?.isUnread ?? false
+                    let isUnread = !requireUnread || (postbox.readStateTable.getCombinedState(messageIndex.id.peerId)?.isUnread ?? false)
                     let isContact = postbox.contactsTable.isContact(peerId: messageIndex.id.peerId)
                     
                     let isRemovedFromTotalUnreadCount = resolvedIsRemovedFromTotalUnreadCount(globalSettings: globalNotificationSettings, peer: peer, peerSettings: postbox.peerNotificationSettingsTable.getEffective(messageIndex.id.peerId))

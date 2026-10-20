@@ -364,6 +364,18 @@ func _internal_markAllChatsAsReadInteractively(transaction: Transaction, network
     for peerId in transaction.getUnreadChatListPeerIds(groupId: groupId, filterPredicate: filterPredicate, additionalFilter: nil, stopOnFirstMatch: false) {
         _internal_togglePeerUnreadMarkInteractively(transaction: transaction, network: network, viewTracker: viewTracker, peerId: peerId, setToValue: false)
     }
+    // Shadow: «Прочитать все» of a folder also clears the «@» of its chats
+    // that have nothing else unread (a mention read under Ghost Mode stays
+    // unread on the server). Ghost Mode still keeps it off the server.
+    let mentionPeerIds = transaction.getUnreadChatListPeerIds(groupId: groupId, filterPredicate: filterPredicate, additionalFilter: { peer in
+        guard peer.id.namespace != Namespaces.Peer.SecretChat else {
+            return false
+        }
+        return (transaction.getMessageTagSummary(peerId: peer.id, threadId: nil, tagMask: .unseenPersonalMessage, namespace: Namespaces.Message.Cloud, customTag: nil)?.count ?? 0) > 0
+    }, stopOnFirstMatch: false, requireUnread: false)
+    for peerId in mentionPeerIds {
+        viewTracker.updateMarkAllMentionsSeen(peerId: peerId, threadId: nil)
+    }
 }
 
 // Shadow: clear unread counters in Postbox without installing any network read
