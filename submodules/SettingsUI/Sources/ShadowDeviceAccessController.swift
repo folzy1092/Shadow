@@ -48,7 +48,7 @@ private struct ShadowDeviceAccessState: Equatable {
     }
 
     var whitelist: ShadowDeviceAccess.Whitelist {
-        return ShadowDeviceAccess.Whitelist(enabled: self.isEnabled, devices: self.devices, requestURL: self.remote?.requestURL, adminURL: self.remote?.adminURL, easterEggChannels: self.remote?.easterEggChannels ?? ShadowDeviceAccess.defaultEasterEggChannels)
+        return ShadowDeviceAccess.Whitelist(enabled: self.isEnabled, devices: self.devices, requestURL: self.remote?.requestURL, adminURL: self.remote?.adminURL, easterEggChannels: self.remote?.easterEggChannels ?? ShadowDeviceAccess.defaultEasterEggChannels, paperclipPranks: self.remote?.paperclipPranks ?? [])
     }
 }
 
@@ -69,6 +69,8 @@ private final class ShadowDeviceAccessArguments {
     let setAnnounceBeta: (Bool) -> Void
     let announce: () -> Void
     var editEasterEggs: () -> Void = {}
+    var addPrank: () -> Void = {}
+    var openPrank: (Int) -> Void = { _ in }
 
     init(copyDeviceId: @escaping () -> Void, setEnabled: @escaping (Bool) -> Void, openDevice: @escaping (ShadowDeviceAccess.Device) -> Void, updateNewId: @escaping (String) -> Void, updateNewNote: @escaping (String) -> Void, add: @escaping () -> Void, save: @escaping () -> Void, copyJSON: @escaping () -> Void, openGitHub: @escaping () -> Void, updateSecretDraft: @escaping (String) -> Void, saveSecret: @escaping () -> Void, clearSecret: @escaping () -> Void, updateAnnounce: @escaping (String, String) -> Void, setAnnounceBeta: @escaping (Bool) -> Void, announce: @escaping () -> Void) {
         self.copyDeviceId = copyDeviceId
@@ -97,6 +99,7 @@ private enum ShadowDeviceAccessSection: Int32 {
     case secret
     case announce
     case easterEggs
+    case pranks
 }
 
 private enum ShadowDeviceAccessEntry: ItemListNodeEntry {
@@ -126,6 +129,10 @@ private enum ShadowDeviceAccessEntry: ItemListNodeEntry {
     case easterEggsHeader
     case easterEggsChannels(String)
     case easterEggsInfo
+    case pranksHeader
+    case prank(Int32, ShadowPaperclip.Prank)
+    case addPrank
+    case pranksInfo
 
     var section: ItemListSectionId {
         switch self {
@@ -143,6 +150,8 @@ private enum ShadowDeviceAccessEntry: ItemListNodeEntry {
             return ShadowDeviceAccessSection.announce.rawValue
         case .easterEggsHeader, .easterEggsChannels, .easterEggsInfo:
             return ShadowDeviceAccessSection.easterEggs.rawValue
+        case .pranksHeader, .prank, .addPrank, .pranksInfo:
+            return ShadowDeviceAccessSection.pranks.rawValue
         }
     }
 
@@ -174,6 +183,10 @@ private enum ShadowDeviceAccessEntry: ItemListNodeEntry {
         case .easterEggsHeader: return 10018
         case .easterEggsChannels: return 10019
         case .easterEggsInfo: return 10020
+        case .pranksHeader: return 10021
+        case let .prank(index, _): return 10100 + index
+        case .addPrank: return 10200
+        case .pranksInfo: return 10201
         }
     }
 
@@ -278,6 +291,18 @@ private enum ShadowDeviceAccessEntry: ItemListNodeEntry {
             return ItemListDisclosureItem(presentationData: presentationData, title: "Каналы", label: value, sectionId: self.section, style: .blocks, action: {
                 arguments.editEasterEggs()
             })
+        case .pranksHeader:
+            return ItemListSectionHeaderItem(presentationData: presentationData, text: "ПРИКОЛЫ СКРЕПКИ", sectionId: self.section)
+        case let .prank(index, prank):
+            return ItemListDisclosureItem(presentationData: presentationData, title: prank.title, label: "t.me/\(prank.channel)/\(prank.messageId)", sectionId: self.section, style: .blocks, action: {
+                arguments.openPrank(Int(index))
+            })
+        case .addPrank:
+            return ItemListActionItem(presentationData: presentationData, title: "Добавить прикол", kind: .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: {
+                arguments.addPrank()
+            })
+        case .pranksInfo:
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Пост публичного канала (ссылка вида t.me/kartinki5222/93) и подпись. У всех, у кого включено «Меню скрепки», прикол появится в «Действиях скрепки»: выбранный уйдёт в чат без автора, голосовое и кружок — после «записывает…». Сохраняется в tgfork через бота."), sectionId: self.section)
         case .easterEggsInfo:
             return ItemListTextItem(presentationData: presentationData, text: .plain("shadow://<имя> ищет пост с видео или гифкой, в подписи которого есть shadow://<имя> или tg://ayu/<имя>, — по каналам по порядку. Каналы должны быть публичными. Изменение сохраняется в tgfork через бота."), sectionId: self.section)
         case .announceInfo:
@@ -562,6 +587,14 @@ public func shadowDeviceAccessController(context: AccountContext, prefillDeviceI
                 entries.append(.easterEggsHeader)
                 entries.append(.easterEggsChannels(channels.isEmpty ? "нет" : channels.map { "@" + $0 }.joined(separator: ", ")))
                 entries.append(.easterEggsInfo)
+                entries.append(.pranksHeader)
+                for (index, prank) in (state.remote?.paperclipPranks ?? []).enumerated() {
+                    entries.append(.prank(Int32(index), prank))
+                }
+                if (state.remote?.paperclipPranks.count ?? 0) < ShadowPaperclip.maxPranks {
+                    entries.append(.addPrank)
+                }
+                entries.append(.pranksInfo)
             }
         }
 
@@ -589,13 +622,86 @@ public func shadowDeviceAccessController(context: AccountContext, prefillDeviceI
                     updateState { state in
                         var state = state
                         if let remote = state.remote {
-                            state.remote = ShadowDeviceAccess.Whitelist(enabled: remote.enabled, devices: remote.devices, requestURL: remote.requestURL, adminURL: remote.adminURL, easterEggChannels: channels)
+                            state.remote = remote.withEasterEggChannels(channels)
                         }
                         return state
                     }
                 }
             }
         }))
+    }
+
+    let savePranks: ([ShadowPaperclip.Prank], String) -> Void = { pranks, successText in
+        let snapshot = stateValue.with { $0 }
+        ShadowDeviceAccess.savePaperclipPranks(adminURL: snapshot.adminURL, pranks: pranks) { result in
+            if handleAdminResult(result, successText) {
+                updateState { state in
+                    var state = state
+                    if let remote = state.remote {
+                        state.remote = remote.withPaperclipPranks(pranks)
+                    }
+                    return state
+                }
+            }
+        }
+    }
+
+    arguments.addPrank = {
+        presentControllerImpl?(promptController(context: context, text: "Ссылка на пост", subtitle: "Публичный канал, например t.me/kartinki5222/93", value: "", placeholder: "https://t.me/канал/номер", characterLimit: 200, apply: { value in
+            guard let value else {
+                return
+            }
+            guard let link = ShadowPaperclip.parsePrankLink(value) else {
+                showToast("Нужна ссылка на пост публичного канала: t.me/канал/номер")
+                return
+            }
+            let current = stateValue.with { $0 }.remote?.paperclipPranks ?? []
+            let candidate = ShadowPaperclip.Prank(title: "", channel: link.channel, messageId: link.messageId)
+            if current.contains(where: { $0.id == candidate.id }) {
+                showToast("Этот пост уже есть в приколах")
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: {
+                presentControllerImpl?(promptController(context: context, text: "Название", subtitle: "Так прикол будет подписан в меню скрепки", value: "", placeholder: "Самое долгое голосовое", characterLimit: ShadowPaperclip.maxTitleLength, apply: { title in
+                    guard let title else {
+                        return
+                    }
+                    let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let prank = ShadowPaperclip.Prank(title: trimmed.isEmpty ? "Прикол" : trimmed, channel: link.channel, messageId: link.messageId)
+                    savePranks(current + [prank], "Прикол добавлен")
+                }))
+            })
+        }))
+    }
+
+    arguments.openPrank = { index in
+        let current = stateValue.with { $0 }.remote?.paperclipPranks ?? []
+        guard index >= 0, index < current.count else {
+            return
+        }
+        let prank = current[index]
+        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+        presentControllerImpl?(textAlertController(context: context, title: prank.title, text: prank.url, actions: [
+            TextAlertAction(type: .genericAction, title: "Переименовать", action: {
+                presentControllerImpl?(promptController(context: context, text: "Название", subtitle: nil, value: prank.title, placeholder: "Название", characterLimit: ShadowPaperclip.maxTitleLength, apply: { title in
+                    guard let title else {
+                        return
+                    }
+                    let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+                    var updated = stateValue.with { $0 }.remote?.paperclipPranks ?? []
+                    guard let position = updated.firstIndex(where: { $0.id == prank.id }) else {
+                        return
+                    }
+                    updated[position] = ShadowPaperclip.Prank(title: trimmed.isEmpty ? "Прикол" : trimmed, channel: prank.channel, messageId: prank.messageId)
+                    savePranks(updated, "Прикол переименован")
+                }))
+            }),
+            TextAlertAction(type: .destructiveAction, title: "Удалить", action: {
+                let updated = (stateValue.with { $0 }.remote?.paperclipPranks ?? []).filter { $0.id != prank.id }
+                savePranks(updated, "Прикол удалён")
+            }),
+            TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_Cancel, action: {})
+        ], actionLayout: .vertical))
     }
 
     let controller = ItemListController(context: context, state: signal)

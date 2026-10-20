@@ -10,6 +10,7 @@ import PresentationDataUtils
 import AccountContext
 import AlertUI
 import ShadowSelfUpdate
+import PromptUI
 
 // Shadow fork settings.
 //
@@ -823,6 +824,8 @@ private final class AyuCustomizationArguments {
     var openChatVoiceSpeeds: () -> Void = {}
     var openChatBanners: () -> Void = {}
     var selectBusinessBotPinnedLayout: () -> Void = {}
+    var openPaperclipActions: () -> Void = {}
+    var editPaperclipPrankSeconds: () -> Void = {}
     var selectMediaSendQuality: () -> Void = {}
     var updateSetting: (@escaping (inout AyuGramSettings) -> Void) -> Void = { _ in }
     // true: background color, false: glyph color.
@@ -991,6 +994,10 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
     case unlimitedPinnedChats(Bool)
     case unlimitedFavorites(Bool)
     case localChatTranslation(Bool)
+    case paperclipMenu(Bool)
+    case paperclipActions(Int)
+    case paperclipPrankImitation(Bool)
+    case paperclipPrankSeconds(Int32)
     case compactChatList(Bool)
     case chatBanners(Bool)
     case chatBannersList(Int)
@@ -1069,7 +1076,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .appearanceHeader, .showMessageSeconds, .editedIndicatorAsPencil, .editedIndicatorText, .deletedIndicatorText, .regularEmojiFirst, .doubleTapToEdit, .showExactLastSeen, .showExactLastSeenSeconds, .wideChannelPosts, .showExactViewCounts, .showForwardCount, .appearanceFooter:
             return AyuCustomizationSection.appearance.rawValue
         case .headerButtons: return AyuCustomizationSection.chats.rawValue
-        case .chatsHeader, .hideAllChatsFolder, .hideStoriesBar, .hideGiftButton, .hideGreetingSticker, .hidePremiumBadges, .hideSponsoredMessages, .unlimitedPinnedChats, .unlimitedFavorites, .localChatTranslation, .compactChatList, .chatBanners, .chatBannersList, .chatsFooter:
+        case .chatsHeader, .hideAllChatsFolder, .hideStoriesBar, .hideGiftButton, .hideGreetingSticker, .hidePremiumBadges, .hideSponsoredMessages, .unlimitedPinnedChats, .unlimitedFavorites, .localChatTranslation, .paperclipMenu, .paperclipActions, .paperclipPrankImitation, .paperclipPrankSeconds, .compactChatList, .chatBanners, .chatBannersList, .chatsFooter:
             return AyuCustomizationSection.chats.rawValue
         case .businessBotHeader, .businessBotPinned, .businessBotPinnedLayout, .businessBotPinnedFirst, .businessBotPinnedCompact, .businessBotFooter:
             return AyuCustomizationSection.businessBot.rawValue
@@ -1143,6 +1150,10 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .mediaSendQuality: return 130
         case .unlimitedFavorites: return 131
         case .localChatTranslation: return 132
+        case .paperclipMenu: return 133
+        case .paperclipActions: return 134
+        case .paperclipPrankImitation: return 135
+        case .paperclipPrankSeconds: return 136
         case .monochromeSettingsIcons: return 106
         case .settingsIconBackground: return 107
         case .settingsIconGlyph: return 108
@@ -1208,6 +1219,10 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .chatBanners: return (12, 9)
         case .chatBannersList: return (12, 10)
         case .localChatTranslation: return (12, 11)
+        case .paperclipMenu: return (12, 12)
+        case .paperclipActions: return (12, 13)
+        case .paperclipPrankImitation: return (12, 14)
+        case .paperclipPrankSeconds: return (12, 15)
         // Right after the chats section (chatsFooter = 13).
         case .businessBotHeader: return (13, 1)
         case .businessBotPinned: return (13, 2)
@@ -1376,6 +1391,18 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
             return ItemListSwitchItem(presentationData: presentationData, title: "Перевод чатов на устройстве", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 arguments.updateSetting { $0.localChatTranslation = value }
             })
+        case let .paperclipMenu(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Меню скрепки", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.updateSetting { $0.paperclipMenu = value }
+            })
+        case let .paperclipActions(count):
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Действия скрепки", label: "\(count) из \(ShadowPaperclip.maxActions)", labelStyle: .detailText, sectionId: self.section, style: .blocks, action: arguments.openPaperclipActions)
+        case let .paperclipPrankImitation(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Приколы: имитировать запись", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.updateSetting { $0.paperclipPrankImitation = value }
+            })
+        case let .paperclipPrankSeconds(seconds):
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Секунд записи", label: "\(seconds) с", labelStyle: .detailText, sectionId: self.section, style: .blocks, action: arguments.editPaperclipPrankSeconds)
         case let .unlimitedFavorites(value):
             return ItemListSwitchItem(presentationData: presentationData, title: "Безлимитное избранное", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 arguments.updateSetting { $0.unlimitedFavorites = value }
@@ -1419,7 +1446,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case let .chatVoiceSpeedList(count):
             return ItemListDisclosureItem(presentationData: presentationData, title: "Чаты со своей скоростью", label: count == 0 ? "Нет" : "\(count)", labelStyle: .detailText, sectionId: self.section, style: .blocks, action: arguments.openChatVoiceSpeeds)
         case .chatsFooter:
-            return ItemListTextItem(presentationData: presentationData, text: .plain("«Скрыть папку «Все чаты»» убирает эту вкладку, остальные папки работают. «Скрыть истории» убирает ленту историй над списком чатов. «Скрыть кнопку подарка» убирает подарок из поля ввода. «Скрыть приветственный стикер» убирает карточку со стикером в пустом чате с незнакомым. «Скрыть значки Premium» убирает звёздочку и эмодзи-статус рядом с именами (галочки верификации остаются). «Скрыть рекламу в каналах» — спонсорские сообщения не загружаются; применяется при следующем открытии канала. «Безлимитные закрепы» снимают ограничение на закрепы в списке чатов, архиве, папках, «Избранном» и темах форумов; всё сверх лимита Telegram хранится только на этом устройстве. «Перевод чатов на устройстве»: панель «Перевести» в чатах на другом языке без Premium, перевод делает iPhone (Apple, iOS 18+; язык при первом использовании скачивается в настройках iOS), Telegram текст не получает. «Безлимитное избранное»: стикеры и GIF сверх лимита Telegram (5 стикеров, с Premium 10; 200 GIF) не вытесняются, лишние хранятся только на этом устройстве. «Фоны чатов» ставят своё фото под строку выбранных чатов в списке (все папки и архив); фото хранятся только на этом устройстве."), sectionId: self.section)
+            return ItemListTextItem(presentationData: presentationData, text: .plain("«Скрыть папку «Все чаты»» убирает эту вкладку, остальные папки работают. «Скрыть истории» убирает ленту историй над списком чатов. «Скрыть кнопку подарка» убирает подарок из поля ввода. «Скрыть приветственный стикер» убирает карточку со стикером в пустом чате с незнакомым. «Скрыть значки Premium» убирает звёздочку и эмодзи-статус рядом с именами (галочки верификации остаются). «Скрыть рекламу в каналах» — спонсорские сообщения не загружаются; применяется при следующем открытии канала. «Безлимитные закрепы» снимают ограничение на закрепы в списке чатов, архиве, папках, «Избранном» и темах форумов; всё сверх лимита Telegram хранится только на этом устройстве. «Перевод чатов на устройстве»: панель «Перевести» в чатах на другом языке без Premium, перевод делает iPhone (Apple, iOS 18+; язык при первом использовании скачивается в настройках iOS), Telegram текст не получает. «Безлимитное избранное»: стикеры и GIF сверх лимита Telegram (5 стикеров, с Premium 10; 200 GIF) не вытесняются, лишние хранятся только на этом устройстве. «Фоны чатов» ставят своё фото под строку выбранных чатов в списке (все папки и архив); фото хранятся только на этом устройстве. «Меню скрепки»: зажми скрепку в чате — откроются быстрые действия, выбранные в «Действиях скрепки» (до 20): имитация («печатает», «записывает голосовое», «записывает кружок»…, пока не остановишь в том же меню) и приколы, которые уходят в чат без автора. С «Имитировать запись» перед голосовым или кружком собеседник сначала видит «записывает…». Выключено — скрепка как в Telegram."), sectionId: self.section)
         case .businessBotHeader:
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "БИЗНЕС-БОТ И ЗАКРЕП", sectionId: self.section)
         case let .businessBotPinned(value):
@@ -1607,6 +1634,14 @@ private func ayuCustomizationEntries(settings: AyuGramSettings, chatVoiceSpeedCo
         entries.append(.chatBannersList(chatBannersCount))
     }
     entries.append(.localChatTranslation(settings.localChatTranslation))
+    entries.append(.paperclipMenu(settings.paperclipMenu))
+    if settings.paperclipMenu {
+        entries.append(.paperclipActions(ShadowPaperclip.parseActions(settings.paperclipActions).count))
+        entries.append(.paperclipPrankImitation(settings.paperclipPrankImitation))
+        if settings.paperclipPrankImitation {
+            entries.append(.paperclipPrankSeconds(settings.paperclipPrankSeconds))
+        }
+    }
     entries.append(.chatsFooter)
 
     entries.append(.businessBotHeader)
@@ -1965,6 +2000,22 @@ func ayuCustomizationController(context: AccountContext, focus: ShadowSettingsSe
     }
     arguments.openChatBanners = { [weak controller] in
         controller?.push(shadowChatBannersController(context: context))
+    }
+    arguments.openPaperclipActions = { [weak controller] in
+        controller?.push(shadowPaperclipActionsController(context: context))
+    }
+    arguments.editPaperclipPrankSeconds = {
+        let current = currentAyuGramSettings(accountId: context.account.id).paperclipPrankSeconds
+        let range = ShadowPaperclip.prankSecondsRange
+        presentControllerImpl?(promptController(context: context, text: "Секунд записи", subtitle: "Сколько собеседник видит «записывает…» перед приколом: от \(range.lowerBound) до \(range.upperBound)", value: "\(current)", placeholder: "\(ShadowPaperclip.defaultPrankSeconds)", characterLimit: 2, apply: { value in
+            guard let value else {
+                return
+            }
+            guard let number = Int32(value.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+                return
+            }
+            ayuUpdateSettings(context: context) { var settings = $0; settings.paperclipPrankSeconds = ShadowPaperclip.normalizedPrankSeconds(number); return settings }
+        }), nil)
     }
     arguments.selectMediaSendQuality = {
         let data = context.sharedContext.currentPresentationData.with { $0 }

@@ -90,6 +90,10 @@ public final class ChatPanelInterfaceInteraction {
     // content protection / noforwards). Used by the multi-select forward button in
     // copy-protected chats where a native forward is rejected.
     public let forwardSelectedMessagesAsCopy: () -> Void
+    // Shadow: «Меню скрепки» (ShadowPaperclip) — the attachment button was held;
+    // the view is the button. Set by ChatControllerImpl after creation, nil
+    // elsewhere (the button then works as in Telegram).
+    public var shadowPaperclipLongPress: ((UIView) -> Void)?
     public let forwardCurrentForwardMessages: () -> Void
     public let forwardMessages: ([EngineRawMessage]) -> Void
     // AyuGram: forward messages with sender names pre-hidden (hideNames = true),

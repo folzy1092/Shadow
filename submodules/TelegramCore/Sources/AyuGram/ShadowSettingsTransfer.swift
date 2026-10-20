@@ -104,6 +104,8 @@ public enum ShadowSettingsTransfer {
         "silentSend": \.silentSend,
         "unlimitedFavorites": \.unlimitedFavorites,
         "localChatTranslation": \.localChatTranslation,
+        "paperclipMenu": \.paperclipMenu,
+        "paperclipPrankImitation": \.paperclipPrankImitation,
         "onlineHistory": \.onlineHistory,
         "saveViewedStories": \.saveViewedStories,
         "screenshotAnonymize": \.messageScreenshot.anonymize,
@@ -143,6 +145,7 @@ public enum ShadowSettingsTransfer {
             values[key] = .bool(settings[keyPath: path])
         }
         values["editedIndicatorText"] = .text(settings.editedIndicatorText)
+        values["paperclipActions"] = .text(settings.paperclipActions)
         values["deletedIndicatorText"] = .text(settings.deletedIndicatorText)
         values["spoofProfileIdValue"] = .text(String(settings.spoofProfileIdValue.prefix(64)))
         values["spoofProfileDcValue"] = .text(String(settings.spoofProfileDcValue.prefix(64)))
@@ -166,6 +169,7 @@ public enum ShadowSettingsTransfer {
         values["replyTimecodeMode"] = .integer(Int64(settings.replyTimecodeMode))
         values["feedPosition"] = .integer(Int64(settings.feedPosition))
         values["businessBotPinnedLayout"] = .integer(Int64(settings.businessBotPinnedLayout))
+        values["paperclipPrankSeconds"] = .integer(Int64(settings.paperclipPrankSeconds))
         values["silentSendMode"] = .integer(Int64(settings.silentSendMode))
         values["silentSendFrom"] = .integer(Int64(settings.silentSendFrom))
         values["silentSendTo"] = .integer(Int64(settings.silentSendTo))
@@ -196,6 +200,7 @@ public enum ShadowSettingsTransfer {
             case let .text(text):
                 switch key {
                 case "editedIndicatorText": updated.editedIndicatorText = text
+                case "paperclipActions": updated.paperclipActions = ShadowPaperclip.normalizedActions(text)
                 case "deletedIndicatorText": updated.deletedIndicatorText = text
                 case "spoofProfileIdValue": updated.spoofProfileIdValue = text
                 case "spoofProfileDcValue": updated.spoofProfileDcValue = text
@@ -232,6 +237,7 @@ public enum ShadowSettingsTransfer {
                 case "replyTimecodeMode": updated.replyTimecodeMode = ShadowReplyTimecode.normalizedMode(Int32(number))
                 case "feedPosition": updated.feedPosition = ShadowFeed.Position.normalized(Int32(clamping: number)).rawValue
                 case "businessBotPinnedLayout": updated.businessBotPinnedLayout = ShadowBusinessBotPanel.Layout.normalized(Int32(clamping: number)).rawValue
+                case "paperclipPrankSeconds": updated.paperclipPrankSeconds = ShadowPaperclip.normalizedPrankSeconds(Int32(clamping: number))
                 case "silentSendMode": updated.silentSendMode = ShadowSilentSend.normalizedMode(Int32(clamping: number))
                 case "silentSendFrom": updated.silentSendFrom = ShadowSilentSend.normalizedMinute(Int32(clamping: number))
                 case "silentSendTo": updated.silentSendTo = ShadowSilentSend.normalizedMinute(Int32(clamping: number))

@@ -243,7 +243,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     private var commentsButtonDotLayer: RasterizedCompositionImageLayer?
     private var attachmentButtonUnseenIcon: UIImageView?
     public let attachmentButtonDisabledNode: HighlightableButtonNode
-    
+    // Shadow: holding the attachment button opens the paperclip menu.
+    private let shadowPaperclipGestureDelegate = ShadowPaperclipGestureDelegate()
+
     public var attachmentImageNode: TransformImageNode?
     
     public let searchLayoutClearButton: HighlightTrackingButton
@@ -880,7 +882,23 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             }
         }
         self.attachmentButtonDisabledNode.addTarget(self, action: #selector(self.attachmentButtonPressed), forControlEvents: .touchUpInside)
-  
+        // Shadow: «Меню скрепки» (ShadowPaperclip). The hold only begins while
+        // the setting is on and the button is the attachment button (not the
+        // delete button of a recorded draft); a hold that began cancels the tap.
+        self.shadowPaperclipGestureDelegate.shouldBegin = { [weak self] in
+            guard let self, self.interfaceInteraction?.shadowPaperclipLongPress != nil else {
+                return false
+            }
+            if self.presentationInterfaceState?.interfaceState.mediaDraftState != nil {
+                return false
+            }
+            return ayuGramSettingsCurrent.paperclipMenu
+        }
+        let shadowPaperclipLongPress = UILongPressGestureRecognizer(target: self, action: #selector(self.shadowPaperclipLongPressed(_:)))
+        shadowPaperclipLongPress.minimumPressDuration = 0.35
+        shadowPaperclipLongPress.delegate = self.shadowPaperclipGestureDelegate
+        self.attachmentButton.addGestureRecognizer(shadowPaperclipLongPress)
+
         self.sendActionButtons.sendButtonLongPressed = { [weak self] node, gesture in
             self?.interfaceInteraction?.displaySendMessageOptions(node, gesture)
         }
@@ -5675,6 +5693,14 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         }
     }
 
+    @objc private func shadowPaperclipLongPressed(_ recognizer: UILongPressGestureRecognizer) {
+        guard case .began = recognizer.state else {
+            return
+        }
+        HapticFeedback().impact(.medium)
+        self.interfaceInteraction?.shadowPaperclipLongPress?(self.attachmentButton)
+    }
+
     @objc func attachmentButtonPressed() {
         if let presentationInterfaceState = self.presentationInterfaceState, presentationInterfaceState.interfaceState.mediaDraftState != nil {
             self.viewOnce = false
@@ -5978,5 +6004,14 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     
     public func makeAttachmentMenuTransition(accessoryPanelNode: ASDisplayNode?) -> AttachmentInputPanelTransition {
         return AttachmentInputPanelTransition(inputNode: self, accessoryPanelNode: accessoryPanelNode, menuButtonNode: self.menuButton, menuButtonBackgroundView: self.menuButtonBackgroundView, menuIconNode: self.menuButtonIconNode, menuTextNode: self.menuButtonTextNode, prepareForDismiss: { self.menuButtonIconNode.enqueueState(.app, animated: false) })
+    }
+}
+
+// Shadow: lets the paperclip hold begin only when the paperclip menu is on.
+private final class ShadowPaperclipGestureDelegate: NSObject, UIGestureRecognizerDelegate {
+    var shouldBegin: () -> Bool = { false }
+
+    func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        return self.shouldBegin()
     }
 }

@@ -127,6 +127,10 @@
 | `shadow://customization/hide-ads` | Скрыть рекламу в каналах |
 | `shadow://customization/unlimited-pins` | Безлимитные закрепы |
 | `shadow://customization/local-translation` | Перевод чатов на устройстве |
+| `shadow://customization/paperclip-menu` | Меню скрепки (зажать скрепку в чате) |
+| `shadow://customization/paperclip-actions` | Действия скрепки (открыть) |
+| `shadow://customization/paperclip-prank-recording` | Приколы: имитировать запись |
+| `shadow://customization/paperclip-prank-seconds` | Секунд записи (открыть) |
 | `shadow://customization/unlimited-favorites` | Безлимитное избранное (стикеры и GIF) |
 | `shadow://customization/compact-chats` | Компактный список чатов |
 | `shadow://customization/chat-banners` | Фоны чатов |

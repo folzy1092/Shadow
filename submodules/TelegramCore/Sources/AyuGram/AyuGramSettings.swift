@@ -185,6 +185,17 @@ public struct AyuGramSettings: Codable, Equatable {
     // without Premium and without Telegram's server (shadowLocalChatTranslation
     // in TranslateUI).
     public var localChatTranslation: Bool = true
+    // Shadow: «Меню скрепки» — holding the attachment button in a chat opens a
+    // menu of quick actions (ShadowPaperclip): activity imitation
+    // (ShadowActivityImitation) and pranks from the admin catalog. Off: the
+    // button works as in Telegram.
+    public var paperclipMenu: Bool = false
+    // The actions in that menu, in order (ShadowPaperclip.parseActions).
+    public var paperclipActions: String = ShadowPaperclip.defaultActions
+    // A prank voice or round video is preceded by «записывает…» for
+    // paperclipPrankSeconds; off: it is just forwarded without the author.
+    public var paperclipPrankImitation: Bool = true
+    public var paperclipPrankSeconds: Int32 = ShadowPaperclip.defaultPrankSeconds
     // Local history of when contacts were online (ShadowOnlineHistory).
     public var onlineHistory: Bool = false
     // Keep a local copy of viewed stories (ShadowStoryArchive).
@@ -491,6 +502,7 @@ public struct AyuGramSettings: Codable, Equatable {
         settings.mediaSendQuality = ShadowMediaSendQuality.stock
         settings.unlimitedFavorites = false
         settings.localChatTranslation = false
+        settings.paperclipMenu = false
         return settings
     }
 
@@ -782,6 +794,10 @@ public struct AyuGramSettings: Codable, Equatable {
         self.mediaSendQuality = ShadowMediaSendQuality.normalized((try container.decodeIfPresent(Int32.self, forKey: "mediaSendQuality")) ?? ShadowMediaSendQuality.stock)
         self.unlimitedFavorites = ((try container.decodeIfPresent(Int32.self, forKey: "unlimitedFavorites")) ?? 1) != 0
         self.localChatTranslation = ((try container.decodeIfPresent(Int32.self, forKey: "localChatTranslation")) ?? 1) != 0
+        self.paperclipMenu = ((try container.decodeIfPresent(Int32.self, forKey: "paperclipMenu")) ?? 0) != 0
+        self.paperclipActions = ShadowPaperclip.normalizedActions((try container.decodeIfPresent(String.self, forKey: "paperclipActions")) ?? ShadowPaperclip.defaultActions)
+        self.paperclipPrankImitation = ((try container.decodeIfPresent(Int32.self, forKey: "paperclipPrankImitation")) ?? 1) != 0
+        self.paperclipPrankSeconds = ShadowPaperclip.normalizedPrankSeconds((try container.decodeIfPresent(Int32.self, forKey: "paperclipPrankSeconds")) ?? ShadowPaperclip.defaultPrankSeconds)
         self.onlineHistory = ((try container.decodeIfPresent(Int32.self, forKey: "onlineHistory")) ?? 0) != 0
         self.saveViewedStories = ((try container.decodeIfPresent(Int32.self, forKey: "saveViewedStories")) ?? 0) != 0
         self.settingsIconBackgroundColor = ((try container.decodeIfPresent(Int32.self, forKey: "settingsIconBackgroundColor")) ?? 0x1C1C1E) & 0xFFFFFF
@@ -906,6 +922,10 @@ public struct AyuGramSettings: Codable, Equatable {
         try container.encode(self.mediaSendQuality, forKey: "mediaSendQuality")
         try container.encode((self.unlimitedFavorites ? 1 : 0) as Int32, forKey: "unlimitedFavorites")
         try container.encode((self.localChatTranslation ? 1 : 0) as Int32, forKey: "localChatTranslation")
+        try container.encode((self.paperclipMenu ? 1 : 0) as Int32, forKey: "paperclipMenu")
+        try container.encode(self.paperclipActions, forKey: "paperclipActions")
+        try container.encode((self.paperclipPrankImitation ? 1 : 0) as Int32, forKey: "paperclipPrankImitation")
+        try container.encode(self.paperclipPrankSeconds, forKey: "paperclipPrankSeconds")
         try container.encode((self.onlineHistory ? 1 : 0) as Int32, forKey: "onlineHistory")
         try container.encode((self.saveViewedStories ? 1 : 0) as Int32, forKey: "saveViewedStories")
         try container.encode(self.settingsIconBackgroundColor, forKey: "settingsIconBackgroundColor")

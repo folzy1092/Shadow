@@ -847,6 +847,38 @@ UI-проекция настроек выбирается в `TelegramRootContro
   берётся из метаданных, **не из mtime** (mtime у hard-link общий с кэшем).
 - История правок: `AyuEditHistory.swift` + `SavedMessageEditsAttribute`.
 
+## 5p. Меню скрепки, имитация активности, приколы (1.13.7)
+
+- «Меню скрепки» (`paperclipMenu`, **выкл** по умолчанию — скрепка как в
+  Telegram): зажатие кнопки вложений в чате (`ChatTextInputPanelNode`,
+  `UILongPressGestureRecognizer` с делегатом `ShadowPaperclipGestureDelegate`,
+  начинается только при включённой настройке и не на кнопке «удалить черновик»)
+  → `ChatPanelInterfaceInteraction.shadowPaperclipLongPress` (свойство, ставит
+  `ChatControllerLoadDisplayNode`) → `shadowPresentPaperclipMenu`
+  (`TelegramUI/Chat/ShadowPaperclipMenu.swift`, контекстное меню над кнопкой).
+- Действия (до 20, `paperclipActions` — строка `"a1,a2,pкартинки/93"`,
+  `ShadowPaperclip`, Foundation, тест `ActivityImitationTests.swift`) выбираются
+  галочками на экране «Действия скрепки» (`ShadowPaperclipActionsController`),
+  порядок = порядок отметки. Строки 133–136 в «Кастомизация → Чаты и звонки».
+- Имитация (`ShadowActivityImitationMode`, 15 режимов: всё, что Telegram 13
+  показывает в шапке, + «Случайно»; запись и отправка кружка/голосового/видео —
+  разные действия): `ShadowActivityImitation` шлёт `messages.setTyping` раз в 4 с
+  **напрямую в сеть**, не через `ManagedLocalInputActivities`, поэтому призрак
+  («не показывать "печатает"») её не глушит. Остановка — в том же меню
+  (`stop` шлёт cancel), «Остановить везде». В секретном чате — только
+  «печатает» (`setEncryptedTyping`). В памяти, до перезапуска приложения.
+  Не проверено: обновляет ли `setTyping` «был(а) в сети» у призрака.
+- Приколы: каталог — `paperclip_pranks` в `shadow-whitelist.json`
+  (`[{"title","url"}]`, пост публичного канала), правится в «Доступ устройств →
+  Приколы скрепки» (действие воркера `save_pranks`, **воркер передеплоить**:
+  `npx wrangler deploy` в `tools/shadow-bot`). В чате прикол грузится
+  (`resolvePeerByName` + `getMessagesLoadIfNecessary`) и пересылается без
+  автора (`ForwardOptionsMessageAttribute(hideNames: true)`). С
+  `paperclipPrankImitation` перед этим `paperclipPrankSeconds` (1–60, 5) идёт
+  имитация по типу медиа (`ShadowPaperclip.imitationMode(for:)`: голосовое —
+  «записывает голосовое», кружок — «записывает кружок»). Пост с запретом
+  пересылки не уйдёт (сервер отклонит).
+
 ## 5o. База Telegram 13.0.0 (2026-10-20)
 
 - Форк переехал с Telegram 12.9.2 на 13.0.0 (мерж тега `release-13.0.0`, ветка

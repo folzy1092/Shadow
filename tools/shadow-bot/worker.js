@@ -276,6 +276,25 @@ async function handleAdmin(request, env) {
     return put.ok ? json({ ok: true }) : json({ ok: false, error: "github", status: put.status, detail: put.detail }, 502);
   }
 
+  if (body.action === "save_pranks") {
+    // Pranks of the paperclip menu (ShadowPaperclip): posts of public channels.
+    const pranks = [];
+    for (const entry of Array.isArray(body.pranks) ? body.pranks : []) {
+      const url = clean(entry && entry.url, 200);
+      const match = /^(?:https?:\/\/)?(?:www\.)?(?:t\.me|telegram\.me|telegram\.dog)\/@?([A-Za-z0-9_]{4,32})\/(\d{1,10})\/?(?:[?#].*)?$/.exec(url);
+      if (!match || match[1].toLowerCase() === "c") continue;
+      const normalized = `https://t.me/${match[1]}/${Number(match[2])}`;
+      if (pranks.some((prank) => prank.url.toLowerCase() === normalized.toLowerCase())) continue;
+      const title = clean(entry.title, 48) || "Прикол";
+      pranks.push({ title, url: normalized });
+    }
+    const current = await ghGetJSON(env, "shadow-whitelist.json");
+    const next = current.json && typeof current.json === "object" ? current.json : {};
+    next.paperclip_pranks = pranks.slice(0, 50);
+    const put = await ghPutJSON(env, "shadow-whitelist.json", next, "Shadow: update paperclip pranks [skip ci]", current.sha);
+    return put.ok ? json({ ok: true }) : json({ ok: false, error: "github", status: put.status, detail: put.detail }, 502);
+  }
+
   if (body.action === "announce") {
     const build = Number(body.build) | 0;
     if (build <= 0) return json({ ok: false, error: "bad_build" }, 400);

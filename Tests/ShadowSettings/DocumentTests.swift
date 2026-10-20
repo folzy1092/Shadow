@@ -88,6 +88,8 @@ struct DocumentTests {
         check(silent.settings["silentSendFrom"] == .integer(1380) && silent.settings["silentSendTo"] == .integer(480), "Silent send schedule is portable")
         let translation = try ShadowSettingsDocument.decode(ShadowSettingsDocument(settings: ["localChatTranslation": .bool(false)]).encoded())
         check(translation.settings["localChatTranslation"] == .bool(false), "Local chat translation toggle is portable")
+        let imitation = try ShadowSettingsDocument.decode(ShadowSettingsDocument(settings: ["paperclipMenu": .bool(false)]).encoded())
+        check(imitation.settings["paperclipMenu"] == .bool(false), "Activity imitation toggle is portable")
         let favorites = try ShadowSettingsDocument.decode(ShadowSettingsDocument(settings: ["unlimitedFavorites": .bool(false)]).encoded())
         check(favorites.settings["unlimitedFavorites"] == .bool(false), "Unlimited favourites toggle is portable")
         let quality = try ShadowSettingsDocument.decode(ShadowSettingsDocument(settings: ["mediaSendQuality": .integer(2)]).encoded())

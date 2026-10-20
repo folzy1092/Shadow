@@ -17,6 +17,13 @@ struct DeviceAccessTests {
         check(list?.devices.map { $0.id } == ["AB12-CD34-EF56-7890"], "Blank and missing ids dropped")
         check(list?.devices.first?.note == "мой", "Note kept")
         check(ShadowDeviceAccess.parse(Data("nope".utf8)) == nil, "Malformed JSON")
+        let withPranks = ShadowDeviceAccess.parse(Data("{\"devices\":[],\"paperclip_pranks\":[{\"title\":\"Голосовое\",\"url\":\"https://t.me/kartinki5222/93\"}]}".utf8))
+        check(withPranks?.paperclipPranks.map { $0.id } == ["kartinki5222/93"], "Paperclip pranks parsed")
+        check(list?.paperclipPranks.isEmpty == true, "No pranks by default")
+        if let withPranks {
+            check(ShadowDeviceAccess.parse(Data(ShadowDeviceAccess.encode(withPranks).utf8))?.paperclipPranks == withPranks.paperclipPranks, "Pranks survive encode")
+            check(withPranks.withEasterEggChannels(["abcd"]).paperclipPranks == withPranks.paperclipPranks, "Editing egg channels keeps pranks")
+        }
         check(ShadowDeviceAccess.parse(Data("{\"devices\":[]}".utf8))?.enabled == true, "Enabled by default")
 
         check(ShadowDeviceAccess.decide(deviceId: "ab12-cd34-ef56-7890", whitelist: list) == .allowed, "Listed device allowed, case-insensitive")

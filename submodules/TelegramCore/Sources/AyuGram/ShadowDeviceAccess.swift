@@ -47,12 +47,24 @@ public enum ShadowDeviceAccess {
         // Shadow: public channels (usernames) searched for easter eggs
         // (shadow://<name>), in order. Edited from the admin menu.
         public let easterEggChannels: [String]
-        public init(enabled: Bool, devices: [Device], requestURL: URL? = nil, adminURL: URL? = nil, easterEggChannels: [String] = ShadowDeviceAccess.defaultEasterEggChannels) {
+        // Shadow: pranks of the paperclip menu (ShadowPaperclip), edited from the
+        // admin menu: paperclip_pranks.
+        public let paperclipPranks: [ShadowPaperclip.Prank]
+        public init(enabled: Bool, devices: [Device], requestURL: URL? = nil, adminURL: URL? = nil, easterEggChannels: [String] = ShadowDeviceAccess.defaultEasterEggChannels, paperclipPranks: [ShadowPaperclip.Prank] = []) {
             self.enabled = enabled
             self.devices = devices
             self.requestURL = requestURL
             self.adminURL = adminURL
             self.easterEggChannels = easterEggChannels
+            self.paperclipPranks = paperclipPranks
+        }
+
+        public func withPaperclipPranks(_ paperclipPranks: [ShadowPaperclip.Prank]) -> Whitelist {
+            return Whitelist(enabled: self.enabled, devices: self.devices, requestURL: self.requestURL, adminURL: self.adminURL, easterEggChannels: self.easterEggChannels, paperclipPranks: paperclipPranks)
+        }
+
+        public func withEasterEggChannels(_ easterEggChannels: [String]) -> Whitelist {
+            return Whitelist(enabled: self.enabled, devices: self.devices, requestURL: self.requestURL, adminURL: self.adminURL, easterEggChannels: easterEggChannels, paperclipPranks: self.paperclipPranks)
         }
     }
 
@@ -120,7 +132,8 @@ public enum ShadowDeviceAccess {
         if let channels = object["easter_egg_channels"] as? [String] {
             easterEggChannels = channels.compactMap { normalizeChannelUsername($0) }
         }
-        return Whitelist(enabled: enabled, devices: devices, requestURL: requestURL, adminURL: adminURL, easterEggChannels: easterEggChannels)
+        let paperclipPranks = ShadowPaperclip.parsePranks(object["paperclip_pranks"])
+        return Whitelist(enabled: enabled, devices: devices, requestURL: requestURL, adminURL: adminURL, easterEggChannels: easterEggChannels, paperclipPranks: paperclipPranks)
     }
 
     // Body of an access request: the device id plus what helps the owner tell
@@ -167,6 +180,7 @@ public enum ShadowDeviceAccess {
             object["admin_url"] = adminURL.absoluteString
         }
         object["easter_egg_channels"] = whitelist.easterEggChannels
+        object["paperclip_pranks"] = ShadowPaperclip.encodePranks(whitelist.paperclipPranks)
         guard let data = try? JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys]) else {
             return "{}"
         }
@@ -450,6 +464,14 @@ public enum ShadowDeviceAccess {
         postAdmin(adminURL: adminURL, body: [
             "action": "save_easter_eggs",
             "channels": channels
+        ], completion: completion)
+    }
+
+    // Pranks of the paperclip menu → shadow-whitelist.json paperclip_pranks.
+    public static func savePaperclipPranks(adminURL: URL?, pranks: [ShadowPaperclip.Prank], completion: @escaping (AdminResult) -> Void) {
+        postAdmin(adminURL: adminURL, body: [
+            "action": "save_pranks",
+            "pranks": ShadowPaperclip.encodePranks(pranks)
         ], completion: completion)
     }
 

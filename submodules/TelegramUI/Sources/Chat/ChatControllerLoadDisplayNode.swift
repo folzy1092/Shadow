@@ -4929,6 +4929,10 @@ extension ChatControllerImpl {
         }, statuses: ChatPanelInterfaceInteractionStatuses(editingMessage: self.editingMessage.get(), startingBot: self.startingBot.get(), unblockingPeer: self.unblockingPeer.get(), searching: self.searching.get(), loadingMessage: self.loadingMessage.get(), inlineSearch: self.performingInlineSearch.get()))
         
         self.interfaceInteraction = interfaceInteraction
+        // Shadow: «Меню скрепки» (ShadowPaperclipMenu.swift).
+        interfaceInteraction.shadowPaperclipLongPress = { [weak self] sourceView in
+            self?.shadowPresentPaperclipMenu(sourceView: sourceView)
+        }
 
         // AyuGram: double-tap on an own, editable message opens the edit interface.
         // The bubble node only does a lightweight own-message check; the real

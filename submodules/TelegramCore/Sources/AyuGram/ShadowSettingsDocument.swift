@@ -39,11 +39,11 @@ public struct ShadowSettingsDocument: Codable, Equatable {
         "saveAllIncomingMedia", "mediaAutoCleanKeepPinned", "mediaAutoCleanKeepChannels",
         "mediaAutoCleanKeepBots", "showProfileId", "showProfileDC",
         "showRegistrationDate", "hideOwnPhoneNumber",
-        "hideStoriesBar", "hideGiftButton", "hideGreetingSticker", "offerGhostBeforeStories", "hidePremiumBadges", "hideSponsoredMessages", "adFilterChannels", "adFilterGroups", "adFilterForwarded", "adHideCompletely", "showChatStreak", "chatStatsCountDeleted", "feedEnabled", "feedAutoplay", "feedShowFolders", "feedIncludeMuted", "feedIncludeArchived", "feedMarkRead", "messageFilterShowPlaceholder", "updateChannelBeta", "unlimitedPinnedChats", "localVoiceTranscription", "voiceTimeRoundVideos", "voiceTimeInPlayer", "replyTimecode", "chatVoiceSpeed", "monochromeSettingsIcons", "compactChatList", "chatBannersEnabled", "businessBotPinned", "businessBotPinnedFirst", "businessBotPinnedCompact", "silentSend", "unlimitedFavorites", "localChatTranslation", "onlineHistory", "saveViewedStories",
+        "hideStoriesBar", "hideGiftButton", "hideGreetingSticker", "offerGhostBeforeStories", "hidePremiumBadges", "hideSponsoredMessages", "adFilterChannels", "adFilterGroups", "adFilterForwarded", "adHideCompletely", "showChatStreak", "chatStatsCountDeleted", "feedEnabled", "feedAutoplay", "feedShowFolders", "feedIncludeMuted", "feedIncludeArchived", "feedMarkRead", "messageFilterShowPlaceholder", "updateChannelBeta", "unlimitedPinnedChats", "localVoiceTranscription", "voiceTimeRoundVideos", "voiceTimeInPlayer", "replyTimecode", "chatVoiceSpeed", "monochromeSettingsIcons", "compactChatList", "chatBannersEnabled", "businessBotPinned", "businessBotPinnedFirst", "businessBotPinnedCompact", "silentSend", "unlimitedFavorites", "localChatTranslation", "paperclipMenu", "paperclipPrankImitation", "onlineHistory", "saveViewedStories",
         "screenshotAnonymize", "screenshotAnonymizeOwn", "screenshotAnonymizeOthers", "screenshotEnabled", "screenshotAvatars", "screenshotNames", "screenshotBadges", "screenshotTime",
         "spoofProfileIdEnabled", "spoofProfileDcEnabled", "spoofProfilePhoneEnabled", "customBannerEnabled", "customProfileBackgroundEnabled", "customProfileBackgroundForOthers", "customProfileBackgroundForSettings"
     ]
-    public static let textKeys: Set<String> = ["editedIndicatorText", "deletedIndicatorText", "spoofProfileIdValue", "spoofProfileDcValue", "spoofProfilePhoneValue"]
+    public static let textKeys: Set<String> = ["paperclipActions", "editedIndicatorText", "deletedIndicatorText", "spoofProfileIdValue", "spoofProfileDcValue", "spoofProfilePhoneValue"]
     // Lists and tables, as JSON text (ShadowSettingsTransfer encodes and checks
     // them): message filters, shadow ban, quick reply templates, header
     // buttons, per-chat Ghost Mode rules (1.9.1: the file carries everything).
@@ -52,7 +52,7 @@ public struct ShadowSettingsDocument: Codable, Equatable {
     public static let integerKeys: Set<String> = [
         "mediaAutoCleanInterval", "attachmentSizeLimit", "bottomBarScrollMode", "ghostAccountMode",
         "screenshotBackground", "screenshotCustomColorARGB",
-        "settingsIconBackgroundColor", "settingsIconGlyphColor", "voiceTimeFormat", "replyTimecodeMode", "feedPosition", "businessBotPinnedLayout", "silentSendMode", "silentSendFrom", "silentSendTo", "mediaSendQuality"
+        "settingsIconBackgroundColor", "settingsIconGlyphColor", "voiceTimeFormat", "replyTimecodeMode", "feedPosition", "businessBotPinnedLayout", "paperclipPrankSeconds", "silentSendMode", "silentSendFrom", "silentSendTo", "mediaSendQuality"
     ]
     private static let ageIntervals: Set<Int64> = [0, 86400, 259200, 604800, 1209600, 2592000, 7776000, 15552000, 31536000]
     private static let sizeLimits: Set<Int64> = [0, 314572800, 1073741824, 2147483648, 5368709120, 6442450944, 12884901888]
@@ -114,6 +114,7 @@ public struct ShadowSettingsDocument: Codable, Equatable {
         for (key, value) in settings {
             switch value {
             case .bool where booleanKeys.contains(key): break
+            case let .text(text) where key == "paperclipActions" && text.count <= 600: break
             case let .text(text) where textKeys.contains(key) && text.count <= 64: break
             case let .text(text) where jsonKeys.contains(key) && text.utf8.count <= maximumJSONBytes: break
             case let .integer(number) where key == "mediaAutoCleanInterval" && ageIntervals.contains(number): break
@@ -125,6 +126,7 @@ public struct ShadowSettingsDocument: Codable, Equatable {
             case let .integer(number) where key == "replyTimecodeMode" && (0...1).contains(number): break
             // ShadowBusinessBotPanel.Layout: split, stacked, icon, pinned only.
             case let .integer(number) where key == "businessBotPinnedLayout" && (0...3).contains(number): break
+            case let .integer(number) where key == "paperclipPrankSeconds" && (1...60).contains(number): break
             // ShadowSilentSend: modes always, schedule; minutes after midnight.
             case let .integer(number) where key == "silentSendMode" && (0...1).contains(number): break
             case let .integer(number) where (key == "silentSendFrom" || key == "silentSendTo") && (0...1439).contains(number): break
