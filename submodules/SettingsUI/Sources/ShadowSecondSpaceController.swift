@@ -6,6 +6,7 @@ import TelegramCore
 import TelegramPresentationData
 import ItemListUI
 import AccountContext
+import PasscodeCore
 
 // Shadow: "Второе пространство" (spec docs/specs/2026-10-01-shadow-batch.md, section 6).
 // The second code is entered on the Telegram passcode screen; this screen sets
@@ -156,6 +157,9 @@ private final class ShadowSecondSpaceArguments {
 }
 
 // Telegram passcode -> the format the second code must follow and the main code.
+// The passcode's format and, for passcodes from before Telegram 13, its text.
+// Telegram 13 stores only a wrapped key (`.secured`): the code comes back empty
+// and shadowIsTelegramPasscode compares through PasscodeCredentialStore.
 func shadowSecondSpacePasscodeInfo(_ data: PostboxAccessChallengeData) -> (ShadowSpaceStore.CodeFormat, String)? {
     switch data {
     case .none:
@@ -164,7 +168,25 @@ func shadowSecondSpacePasscodeInfo(_ data: PostboxAccessChallengeData) -> (Shado
         return (.digits(code.count == 6 ? 6 : 4), code)
     case let .plaintextPassword(code):
         return (.text, code)
+    case let .secured(_, kind):
+        switch kind {
+        case .digits4:
+            return (.digits(4), "")
+        case .digits6:
+            return (.digits(6), "")
+        case .alphanumeric:
+            return (.text, "")
+        }
     }
+}
+
+// Shadow: true when `code` is the Telegram passcode itself (only needed for a
+// `.secured` passcode, whose text shadowSecondSpacePasscodeInfo cannot return).
+func shadowIsTelegramPasscode(_ code: String, mainCode: String) -> Bool {
+    if !mainCode.isEmpty {
+        return false
+    }
+    return PasscodeCredentialStore.shared.shadowMatchesPasscode(code)
 }
 
 enum ShadowSecondSpaceCodePrompt {
@@ -260,6 +282,10 @@ func shadowSecondSpaceController(context: AccountContext, focus: ShadowSettingsS
                     }
                     if let error = ShadowSpaceStore.validationError(code: first, format: format, mainCode: mainCode) {
                         ShadowSecondSpaceCodePrompt.showMessage(context: context, title: error)
+                        return
+                    }
+                    if shadowIsTelegramPasscode(first, mainCode: mainCode) {
+                        ShadowSecondSpaceCodePrompt.showMessage(context: context, title: "Код совпадает с код-паролем Telegram")
                         return
                     }
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: {

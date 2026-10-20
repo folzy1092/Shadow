@@ -24,9 +24,12 @@ class MessageScreenshotContracts(unittest.TestCase):
         source = (ROOT / 'submodules/TelegramUI/Sources/Chat/ChatControllerMessageScreenshot.swift').read_text()
         self.assertIn('private var preparedItems: [ChatMessageItemImpl] = []', source)
         self.assertIn('private func prepareItems() -> Bool', source)
-        self.assertNotIn('previousItem: nil, nextItem: nil', source)
-        self.assertIn('previousItem: previousItem', source)
-        self.assertIn('nextItem: nextItem', source)
+        # Telegram 13: neighbors are ListViewItemNeighbors built from the real
+        # previous/next prepared items, never empty.
+        self.assertNotIn('ListViewItemNeighbors(previous: nil, next: nil)', source)
+        self.assertIn('previous: index > 0 ? self.preparedItems[index - 1].neighborDescriptor : nil', source)
+        self.assertIn('next: index + 1 < self.preparedItems.count ? self.preparedItems[index + 1].neighborDescriptor : nil', source)
+        self.assertIn('synchronousLoads: true, neighbors: neighbors', source)
         self.assertIn('message.effectivelyIncoming(', source)
 
     def test_options_live_in_customization(self):

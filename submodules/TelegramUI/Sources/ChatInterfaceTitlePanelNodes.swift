@@ -61,6 +61,8 @@ func titlePanelForChatPresentationInterfaceState(_ chatPresentationInterfaceStat
             break
         case .quickReplyMessageInput:
             break
+        case .welcomeMessages:
+            break
         case .businessLinkSetup:
             if let currentPanel = currentPanel as? ChatBusinessLinkTitlePanelNode {
                 return currentPanel
@@ -181,40 +183,36 @@ func titlePanelForChatPresentationInterfaceState(_ chatPresentationInterfaceStat
                 panel.interfaceInteraction = interfaceInteraction
                 return panel
             }
-        } else if !chatPresentationInterfaceState.peerIsBlocked && !inhibitTitlePanelDisplay, let contactStatus = chatPresentationInterfaceState.contactStatus, contactStatus.managingBot != nil {
-            // Shadow: with a pinned message the bot no longer hides it
-            // (ShadowBusinessBotPanel): both in one panel, or just the pin.
-            let shadowSettings = currentAyuGramSettings(accountId: context.account.id)
-            // A chat can have its own layout (Shadow › «Бот и закреп» in the list).
-            let shadowChatLayout = chatPresentationInterfaceState.chatLocation.peerId.flatMap { ShadowBusinessBotChatLayoutStore.shared.layout(accountPeerId: context.account.peerId.toInt64(), peerId: $0.toInt64()) }
-            let shadowEffective = ShadowBusinessBotPanel.effective(enabled: shadowSettings.businessBotPinned, layout: shadowSettings.businessBotPinnedLayout, chatLayout: shadowChatLayout)
-            let shadowArrangement = ShadowBusinessBotPanel.arrangement(enabled: shadowEffective.enabled, layout: shadowEffective.layout, hasBot: true, hasPinned: selectedContext == .pinnedMessage)
-            if case let .combined(layout) = shadowArrangement {
-                let style = ShadowBusinessBotPinnedTitlePanelNode.Style(layout: layout, pinnedFirst: shadowSettings.businessBotPinnedFirst, compactBot: shadowSettings.businessBotPinnedCompact)
-                if let currentPanel = currentPanel as? ShadowBusinessBotPinnedTitlePanelNode {
-                    currentPanel.panelStyle = style
-                    return currentPanel
-                } else {
-                    let panel = ShadowBusinessBotPinnedTitlePanelNode(context: context, animationCache: controllerInteraction?.presentationContext.animationCache, animationRenderer: controllerInteraction?.presentationContext.animationRenderer)
-                    panel.panelStyle = style
-                    panel.interfaceInteraction = interfaceInteraction
-                    return panel
-                }
-            } else if shadowArrangement == .pinned {
-                // «Только закреп»: fall through to the pinned panel below.
-            } else if let currentPanel = currentPanel as? ChatManagingBotTitlePanelNode {
-                return currentPanel
-            } else {
-                let panel = ChatManagingBotTitlePanelNode(context: context)
-                panel.interfaceInteraction = interfaceInteraction
-                return panel
-            }
         }
     }
     
     if let selectedContext = selectedContext {
         switch selectedContext {
             case .pinnedMessage:
+                // Shadow: with a business bot the pinned message and the bot can
+                // share one panel (ShadowBusinessBotPanel). Telegram 13 stacks the
+                // stock bot bar above the pinned bar on its own
+                // (managingBotTitlePanelForChatPresentationInterfaceState below);
+                // the combined panel replaces both, «Только закреп» hides the bot.
+                if !chatPresentationInterfaceState.peerIsBlocked, let contactStatus = chatPresentationInterfaceState.contactStatus, contactStatus.managingBot != nil {
+                    let shadowSettings = currentAyuGramSettings(accountId: context.account.id)
+                    // A chat can have its own layout (Shadow › «Бот и закреп» in the list).
+                    let shadowChatLayout = chatPresentationInterfaceState.chatLocation.peerId.flatMap { ShadowBusinessBotChatLayoutStore.shared.layout(accountPeerId: context.account.peerId.toInt64(), peerId: $0.toInt64()) }
+                    let shadowEffective = ShadowBusinessBotPanel.effective(enabled: shadowSettings.businessBotPinned, layout: shadowSettings.businessBotPinnedLayout, chatLayout: shadowChatLayout)
+                    let shadowArrangement = ShadowBusinessBotPanel.arrangement(enabled: shadowEffective.enabled, layout: shadowEffective.layout, hasBot: true, hasPinned: selectedContext == .pinnedMessage)
+                    if case let .combined(layout) = shadowArrangement {
+                        let style = ShadowBusinessBotPinnedTitlePanelNode.Style(layout: layout, pinnedFirst: shadowSettings.businessBotPinnedFirst, compactBot: shadowSettings.businessBotPinnedCompact)
+                        if let currentPanel = currentPanel as? ShadowBusinessBotPinnedTitlePanelNode {
+                            currentPanel.panelStyle = style
+                            return currentPanel
+                        } else {
+                            let panel = ShadowBusinessBotPinnedTitlePanelNode(context: context, animationCache: controllerInteraction?.presentationContext.animationCache, animationRenderer: controllerInteraction?.presentationContext.animationRenderer)
+                            panel.panelStyle = style
+                            panel.interfaceInteraction = interfaceInteraction
+                            return panel
+                        }
+                    }
+                }
                 if let currentPanel = currentPanel as? ChatPinnedMessageTitlePanelNode {
                     return currentPanel
                 } else {
@@ -256,6 +254,78 @@ func titlePanelForChatPresentationInterfaceState(_ chatPresentationInterfaceStat
     }
     
     return nil
+}
+
+/// The "bot manages this chat" bar of a business chat.
+///
+/// It is deliberately NOT one of the mutually exclusive panels returned by
+/// `titlePanelForChatPresentationInterfaceState`: it used to be, ranked above the pinned-message
+/// context, so for as long as a business bot managed a chat the pinned-message bar was replaced by
+/// the bot bar and the pinned messages were unreachable from the chat (bugs.telegram.org/c/45791).
+/// The chat node gives this panel its own slot in the header-panel stack, above the pinned bar,
+/// so both are visible.
+///
+/// `displayedTitlePanel` is the panel `titlePanelForChatPresentationInterfaceState` chose for the
+/// same state. The bot bar still yields to the two dismissable notices that outranked it before,
+/// the peer-actions (report / add contact) bar and the peer-verification bar, but only while one
+/// of them is actually on screen: deciding from the bar's *eligibility* instead would blank the
+/// bot bar for the lifetime of every transient context (an in-progress request, a toast) that
+/// displaces the report bar without showing it.
+func managingBotTitlePanelForChatPresentationInterfaceState(_ chatPresentationInterfaceState: ChatPresentationInterfaceState, context: AccountContext, displayedTitlePanel: ChatTitleAccessoryPanelNode?, currentPanel: ChatManagingBotTitlePanelNode?, interfaceInteraction: ChatPanelInterfaceInteraction?) -> ChatManagingBotTitlePanelNode? {
+    guard let contactStatus = chatPresentationInterfaceState.contactStatus, contactStatus.managingBot != nil else {
+        return nil
+    }
+    if chatPresentationInterfaceState.peerIsBlocked {
+        return nil
+    }
+    switch chatPresentationInterfaceState.mode {
+    case .standard(.embedded), .overlay:
+        return nil
+    default:
+        break
+    }
+    if chatPresentationInterfaceState.renderedPeer?.peer?.restrictionText(platform: "ios", contentSettings: context.currentContentSettings.with { $0 }) != nil {
+        return nil
+    }
+    if chatPresentationInterfaceState.search != nil {
+        return nil
+    }
+    switch chatPresentationInterfaceState.subject {
+    case .messageOptions, .scheduledMessages, .pinnedMessages:
+        return nil
+    case let .customChatContents(customChatContents):
+        if case .businessLinkSetup = customChatContents.kind {
+            return nil
+        }
+    default:
+        break
+    }
+    guard case .peer = chatPresentationInterfaceState.chatLocation else {
+        return nil
+    }
+    if displayedTitlePanel is ChatReportPeerTitlePanelNode || displayedTitlePanel is ChatVerifiedPeerTitlePanelNode {
+        return nil
+    }
+    // Shadow: the combined bot + pinned panel already holds the bot.
+    if displayedTitlePanel is ShadowBusinessBotPinnedTitlePanelNode {
+        return nil
+    }
+    // Shadow: «Только закреп» — the bot bar comes back when nothing is pinned.
+    if displayedTitlePanel is ChatPinnedMessageTitlePanelNode {
+        let shadowSettings = currentAyuGramSettings(accountId: context.account.id)
+        let shadowChatLayout = chatPresentationInterfaceState.chatLocation.peerId.flatMap { ShadowBusinessBotChatLayoutStore.shared.layout(accountPeerId: context.account.peerId.toInt64(), peerId: $0.toInt64()) }
+        let shadowEffective = ShadowBusinessBotPanel.effective(enabled: shadowSettings.businessBotPinned, layout: shadowSettings.businessBotPinnedLayout, chatLayout: shadowChatLayout)
+        if ShadowBusinessBotPanel.arrangement(enabled: shadowEffective.enabled, layout: shadowEffective.layout, hasBot: true, hasPinned: true) == .pinned {
+            return nil
+        }
+    }
+    
+    if let currentPanel {
+        return currentPanel
+    }
+    let panel = ChatManagingBotTitlePanelNode(context: context)
+    panel.interfaceInteraction = interfaceInteraction
+    return panel
 }
 
 func headerTopicsPanelForChatPresentationInterfaceState(_ chatPresentationInterfaceState: ChatPresentationInterfaceState, context: AccountContext, controllerInteraction: ChatControllerInteraction?, interfaceInteraction: ChatPanelInterfaceInteraction?, force: Bool) -> AnyComponent<Empty>? {

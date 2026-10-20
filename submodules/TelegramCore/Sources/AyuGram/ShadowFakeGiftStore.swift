@@ -41,7 +41,10 @@ public func shadowAddFakeGift(account: Account, peerId: EnginePeer.Id, slug: Str
                 assigned: false,
                 fromOffer: false,
                 canCraftAt: nil,
-                isCrafted: false
+                isCrafted: false,
+                text: nil,
+                entities: nil,
+                nameHidden: false
             ))
             let timestamp = Int32(Date().timeIntervalSince1970)
             let message = StoreMessage(peerId: peerId, namespace: Namespaces.Message.Local, customStableId: nil, globallyUniqueId: nil, groupingKey: nil, threadId: nil, timestamp: timestamp, flags: [], tags: [], globalTags: [], localTags: [], forwardInfo: nil, authorId: account.peerId, text: "", attributes: [], media: [action])

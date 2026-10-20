@@ -203,6 +203,10 @@ func shadowEmergencyController(context: AccountContext, focus: ShadowSettingsSea
                         ShadowSecondSpaceCodePrompt.showMessage(context: context, title: error)
                         return
                     }
+                    if shadowIsTelegramPasscode(first, mainCode: mainCode) {
+                        ShadowSecondSpaceCodePrompt.showMessage(context: context, title: "Код совпадает с код-паролем Telegram")
+                        return
+                    }
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: {
                         ShadowSecondSpaceCodePrompt.present(context: context, title: "Повторите код", message: nil, format: format, completion: { second in
                             guard let second else {

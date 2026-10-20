@@ -20,11 +20,17 @@ class SecondSpaceContracts(unittest.TestCase):
 
     def test_passcode_screen_picks_the_space(self):
         entry = read("PasscodeUI/Sources/PasscodeEntryController.swift")
-        check = entry.split("self.controllerNode.checkPasscode = {", 1)[1].split("self.controllerNode.requestBiometrics", 1)[0]
-        # Only the app lock screen (no `completed` handler) accepts the second code.
-        self.assertIn("if strongSelf.completed == nil && strongSelf.applicationBindings.isMainApp {", check)
+        # Telegram 13 checks the code asynchronously in verifyCode(_:) against its
+        # credential store; Shadow codes are matched before that, on the lock
+        # screen only (no `completed` handler, no `authenticated` session).
+        check = entry.split("private func verifyCode(_ code: String) {", 1)[1].split("func requestBiometricsBeforePresentation", 1)[0]
+        self.assertIn("let shadowLockScreen = self.authenticated == nil && self.completed == nil && self.applicationBindings.isMainApp", check)
         self.assertIn("ShadowSpaceStore.shared.setActiveSpace(.second)", check)
-        self.assertLess(check.index("setActiveSpace(.second)"), check.index("if succeed {\n                if let completed"))
+        self.assertIn("ShadowDuress.shared.trigger()", check)
+        # A Shadow code still waits out the store's cooldown and never counts as a failed attempt.
+        self.assertIn("PasscodeCredentialStore.shared.cooldownRemaining()", check)
+        self.assertLess(check.index("setActiveSpace(.second)"), check.index("PasscodeCredentialStore.shared.verify("))
+        self.assertIn("ShadowSpaceStore.shared.setActiveSpace(.main)", check)
         biometrics = entry.split("public func requestBiometrics(", 1)[1]
         self.assertIn("ShadowSpaceStore.shared.setActiveSpace(.main)", biometrics)
         applock = read("AppLock/Sources/AppLock.swift")
@@ -46,8 +52,8 @@ class SecondSpaceContracts(unittest.TestCase):
 
     def test_folder_badges_skip_hidden_chats(self):
         tabs = read("ChatListUI/Sources/TabBarChatListFilterController.swift")
-        self.assertIn("for peerId in shadowIncludePeers {", tabs)
-        self.assertIn("for peerId in shadowExcludePeers {", tabs)
+        self.assertIn("for peerId in expand(shadowIncludePeers + data.includePeers.pinnedPeers.filter { !shadowHidden.contains($0) }) {", tabs)
+        self.assertIn("for peerId in expand(shadowExcludePeers) {", tabs)
         self.assertIn("var additionalPeerIds = shadowHidden", tabs)
 
     def test_second_only_chats_are_muted(self):

@@ -313,7 +313,7 @@ private final class ShadowMessageScreenshotPreview: UIViewController {
                 }
                 return result
             }
-            guard let template = self.context.sharedContext.makeChatMessagePreviewItem(context: self.context, messages: renderMessages, theme: self.messageTheme, strings: self.data.strings, wallpaper: wallpaper, fontSize: self.data.fontSize, chatBubbleCorners: self.data.chatBubbleCorners, dateTimeFormat: self.data.dateTimeFormat, nameOrder: self.data.nameDisplayOrder, forcedResourceStatus: nil, tapMessage: nil, clickThroughMessage: nil, backgroundNode: self.background, availableReactions: self.availableReactions, accountPeer: self.accountPeer.map { self.options.anonymize ? self.anonymizer.anonymousPeer($0._asPeer()) : $0._asPeer() }, isCentered: false, isPreview: false, isStandalone: true, rank: nil, rankRole: nil) as? ChatMessageItemImpl else {
+            guard let template = self.context.sharedContext.makeChatMessagePreviewItem(context: self.context, messages: renderMessages, theme: self.messageTheme, strings: self.data.strings, wallpaper: wallpaper, fontSize: self.data.fontSize, chatBubbleCorners: self.data.chatBubbleCorners, dateTimeFormat: self.data.dateTimeFormat, nameOrder: self.data.nameDisplayOrder, forcedResourceStatus: nil, tapMessage: nil, clickThroughMessage: nil, backgroundNode: self.background, availableReactions: self.availableReactions, accountPeer: self.accountPeer.map { self.options.anonymize ? self.anonymizer.anonymousPeer($0._asPeer()) : $0._asPeer() }, isCentered: false, isPreview: false, isStandalone: true, rank: nil, rankRole: nil, isGiftMessageComposerPreview: false) as? ChatMessageItemImpl else {
                 self.fail("Не удалось подготовить сообщение.")
                 return false
             }
@@ -365,13 +365,12 @@ private final class ShadowMessageScreenshotPreview: UIViewController {
         let showAvatar = !self.anonymizer.hides(author?._asPeer()) && self.options.showAvatars && (incoming ? self.options.showPeerAvatars : self.options.showOwnAvatar)
         let avatarWidth: CGFloat = showAvatar ? 42.0 : 0.0
         let item = self.preparedItems[index]
-        let previousItem: ListViewItem? = index > 0 ? self.preparedItems[index - 1] : nil
-        let nextItem: ListViewItem? = index + 1 < self.preparedItems.count ? self.preparedItems[index + 1] : nil
+        let neighbors = ListViewItemNeighbors(previous: index > 0 ? self.preparedItems[index - 1].neighborDescriptor : nil, next: index + 1 < self.preparedItems.count ? self.preparedItems[index + 1].neighborDescriptor : nil)
         let params = ListViewItemLayoutParams(width: self.width - avatarWidth - 8.0, leftInset: 0.0, rightInset: 0.0, availableHeight: 1000.0)
 
-        item.nodeConfiguredForParams(async: { $0() }, params: params, synchronousLoads: true, previousItem: previousItem, nextItem: nextItem, completion: { [weak self] node, apply in
+        item.nodeConfiguredForParams(async: { $0() }, params: params, synchronousLoads: true, neighbors: neighbors, completion: { [weak self] node, apply in
             guard let self, generation == self.renderGeneration, self.viewIfLoaded?.window != nil else { return }
-            apply().1(ListViewItemApply(isOnScreen: true))
+            apply().1(ListViewItemApply())
             let rowTop = self.contentHeight
 
             // Stickers use a separate native node without the bubble's author

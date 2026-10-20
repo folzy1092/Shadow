@@ -283,6 +283,9 @@ public struct PresentationResourcesSettings {
     })
     
     public static var ton: UIImage? { return renderSettingsIcon(name: "Item List/Icons/Gram", backgroundColors: [colorBlue]) }
+    public static var gramEarnings: UIImage? { return renderSettingsIcon(name: "Item List/Icons/Earnings", backgroundColors: [colorBlue]) }
+
+    public static let money = UIImage(bundleImageName: "Settings/Gram")
  
     public static var stars: UIImage? {
         if shadowMonochromeSettingsIconColors != nil {
@@ -429,4 +432,6 @@ public struct PresentationResourcesSettings {
     public static var voices: UIImage? { return renderSettingsIcon(name: "Item List/Icons/Microphone", backgroundColors: [colorPurple]) }
     public static var upload: UIImage? { return renderSettingsIcon(name: "Item List/Icons/Upload", backgroundColors: [colorBlue]) }
     public static var download: UIImage? { return renderSettingsIcon(name: "Item List/Icons/Download", backgroundColors: [colorGreen]) }
+
+    public static var welcome: UIImage? { return renderSettingsIcon(name: "Item List/Icons/Hand", backgroundColors: [colorViolet]) }
 }

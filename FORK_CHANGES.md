@@ -2,8 +2,8 @@
 
 Файл собран автоматически: `bash tools/shadow-update.sh --inventory`
 
-База сравнения: **release-12.9.2**
-Дата: 2026-08-23 00:06
+База сравнения: **release-13.0.0**
+Дата: 2026-10-20 20:09
 
 ## Как это читать
 
@@ -16,13 +16,29 @@
   надёжный источник правды — сам diff:
 
   ```bash
-  git diff release-12.9.2 HEAD -- <путь-к-файлу>
+  git diff release-13.0.0 HEAD -- <путь-к-файлу>
   ```
 
-## Свои файлы форка (45)
+## Свои файлы форка (210)
 
+- `Telegram/Telegram-iOS/CalculatorIcon.alticon/CalculatorIcon@2x.png`
+- `Telegram/Telegram-iOS/CalculatorIcon.alticon/CalculatorIcon@3x.png`
+- `Telegram/Telegram-iOS/CalculatorIcon.alticon/CalculatorIconIpad.png`
+- `Telegram/Telegram-iOS/CalculatorIcon.alticon/CalculatorIconIpad@2x.png`
+- `Telegram/Telegram-iOS/CalculatorIcon.alticon/CalculatorIconLargeIpad@2x.png`
+- `Telegram/Telegram-iOS/CalculatorIcon.alticon/CalculatorNotificationIcon.png`
+- `Telegram/Telegram-iOS/CalculatorIcon.alticon/CalculatorNotificationIcon@2x.png`
+- `Telegram/Telegram-iOS/CalculatorIcon.alticon/CalculatorNotificationIcon@3x.png`
 - `Telegram/Telegram-iOS/Icons.xcassets/Shortcuts/Ghost.imageset/Contents.json`
 - `Telegram/Telegram-iOS/Icons.xcassets/Shortcuts/Ghost.imageset/ghost.pdf`
+- `Telegram/Telegram-iOS/NotesIcon.alticon/NotesIcon@2x.png`
+- `Telegram/Telegram-iOS/NotesIcon.alticon/NotesIcon@3x.png`
+- `Telegram/Telegram-iOS/NotesIcon.alticon/NotesIconIpad.png`
+- `Telegram/Telegram-iOS/NotesIcon.alticon/NotesIconIpad@2x.png`
+- `Telegram/Telegram-iOS/NotesIcon.alticon/NotesIconLargeIpad@2x.png`
+- `Telegram/Telegram-iOS/NotesIcon.alticon/NotesNotificationIcon.png`
+- `Telegram/Telegram-iOS/NotesIcon.alticon/NotesNotificationIcon@2x.png`
+- `Telegram/Telegram-iOS/NotesIcon.alticon/NotesNotificationIcon@3x.png`
 - `Telegram/Telegram-iOS/ShadowAppIcon.xcassets/AppIcon.appiconset/Contents.json`
 - `Telegram/Telegram-iOS/ShadowAppIcon.xcassets/AppIcon.appiconset/Icon-1024.png`
 - `Telegram/Telegram-iOS/ShadowAppIcon.xcassets/AppIcon.appiconset/Icon-20.png`
@@ -43,11 +59,74 @@
 - `Telegram/Telegram-iOS/ShadowAppIcon.xcassets/AppIcon.appiconset/Icon-76@2x.png`
 - `Telegram/Telegram-iOS/ShadowAppIcon.xcassets/AppIcon.appiconset/Icon-83.5@2x.png`
 - `Telegram/Telegram-iOS/ShadowAppIcon.xcassets/Contents.json`
+- `Telegram/Telegram-iOS/ShadowIcon.alticon/ShadowIcon@2x.png`
+- `Telegram/Telegram-iOS/ShadowIcon.alticon/ShadowIcon@3x.png`
+- `Telegram/Telegram-iOS/ShadowIcon.alticon/ShadowIconIpad.png`
+- `Telegram/Telegram-iOS/ShadowIcon.alticon/ShadowIconIpad@2x.png`
+- `Telegram/Telegram-iOS/ShadowIcon.alticon/ShadowIconLargeIpad@2x.png`
+- `Telegram/Telegram-iOS/ShadowIcon.alticon/ShadowNotificationIcon.png`
+- `Telegram/Telegram-iOS/ShadowIcon.alticon/ShadowNotificationIcon@2x.png`
+- `Telegram/Telegram-iOS/ShadowIcon.alticon/ShadowNotificationIcon@3x.png`
+- `Telegram/Telegram-iOS/Telegram.icon/Assets/PlaneShadow.svg`
+- `Telegram/Telegram-iOS/WeatherIcon.alticon/WeatherIcon@2x.png`
+- `Telegram/Telegram-iOS/WeatherIcon.alticon/WeatherIcon@3x.png`
+- `Telegram/Telegram-iOS/WeatherIcon.alticon/WeatherIconIpad.png`
+- `Telegram/Telegram-iOS/WeatherIcon.alticon/WeatherIconIpad@2x.png`
+- `Telegram/Telegram-iOS/WeatherIcon.alticon/WeatherIconLargeIpad@2x.png`
+- `Telegram/Telegram-iOS/WeatherIcon.alticon/WeatherNotificationIcon.png`
+- `Telegram/Telegram-iOS/WeatherIcon.alticon/WeatherNotificationIcon@2x.png`
+- `Telegram/Telegram-iOS/WeatherIcon.alticon/WeatherNotificationIcon@3x.png`
+- `submodules/ChatListUI/Sources/Node/ShadowChatBannerRendering.swift`
+- `submodules/ChatListUI/Sources/ShadowHeaderAvatars.swift`
+- `submodules/Display/Source/TabBarScrollState.swift`
+- `submodules/PasscodeUI/Sources/ShadowIntruderCamera.swift`
+- `submodules/SettingsUI/Sources/AyuArchiveChatContents.swift`
 - `submodules/SettingsUI/Sources/AyuForkStorageController.swift`
 - `submodules/SettingsUI/Sources/AyuGramSettingsController.swift`
+- `submodules/SettingsUI/Sources/ShadowAutoUpdateController.swift`
+- `submodules/SettingsUI/Sources/ShadowBigButtonItem.swift`
+- `submodules/SettingsUI/Sources/ShadowChatBannersController.swift`
+- `submodules/SettingsUI/Sources/ShadowChatExportUI.swift`
+- `submodules/SettingsUI/Sources/ShadowChatLocksController.swift`
+- `submodules/SettingsUI/Sources/ShadowChatPrivacyController.swift`
+- `submodules/SettingsUI/Sources/ShadowChatStatsReminder.swift`
+- `submodules/SettingsUI/Sources/ShadowChatStatsUI.swift`
+- `submodules/SettingsUI/Sources/ShadowChatVoiceSpeedController.swift`
+- `submodules/SettingsUI/Sources/ShadowDeviceAccessController.swift`
+- `submodules/SettingsUI/Sources/ShadowEmergencyController.swift`
+- `submodules/SettingsUI/Sources/ShadowFeedSettingsController.swift`
+- `submodules/SettingsUI/Sources/ShadowHeaderButtonsController.swift`
+- `submodules/SettingsUI/Sources/ShadowLinkRouter.swift`
+- `submodules/SettingsUI/Sources/ShadowMessageFilterEditController.swift`
+- `submodules/SettingsUI/Sources/ShadowMessageFiltersController.swift`
+- `submodules/SettingsUI/Sources/ShadowMessageScreenshotSettingsController.swift`
+- `submodules/SettingsUI/Sources/ShadowOnlineHistoryController.swift`
+- `submodules/SettingsUI/Sources/ShadowProgressItem.swift`
+- `submodules/SettingsUI/Sources/ShadowPushDiagnosticsController.swift`
+- `submodules/SettingsUI/Sources/ShadowQuickRepliesController.swift`
+- `submodules/SettingsUI/Sources/ShadowSavedStoriesController.swift`
+- `submodules/SettingsUI/Sources/ShadowSecondSpaceController.swift`
+- `submodules/SettingsUI/Sources/ShadowSettingLinkUI.swift`
+- `submodules/SettingsUI/Sources/ShadowSettingsBackupController.swift`
+- `submodules/SettingsUI/Sources/ShadowSettingsIcons.swift`
+- `submodules/SettingsUI/Sources/ShadowSettingsSearchIndex.swift`
+- `submodules/SettingsUI/Sources/ShadowSettingsSearchNavigation.swift`
+- `submodules/SettingsUI/Sources/ShadowTimePickerController.swift`
+- `submodules/SettingsUI/Sources/ShadowUpdateController.swift`
+- `submodules/SettingsUI/Sources/ShadowVersionArchiveController.swift`
+- `submodules/ShadowSelfUpdate/BUILD`
+- `submodules/ShadowSelfUpdate/Sources/ShadowBundlePreparer.swift`
+- `submodules/ShadowSelfUpdate/Sources/ShadowInstallDiagnostics.swift`
+- `submodules/ShadowSelfUpdate/Sources/ShadowInstallLinks.swift`
+- `submodules/ShadowSelfUpdate/Sources/ShadowInstallServer.swift`
+- `submodules/ShadowSelfUpdate/Sources/ShadowLocalTLSIdentity.swift`
+- `submodules/ShadowSelfUpdate/Sources/ShadowProvisioningProfile.swift`
+- `submodules/ShadowSelfUpdate/Sources/ShadowSelfUpdater.swift`
+- `submodules/ShadowSelfUpdate/Sources/ShadowSigningStore.swift`
 - `submodules/TelegramCore/Sources/AyuGram/AyuBurnViewOnceMedia.swift`
 - `submodules/TelegramCore/Sources/AyuGram/AyuDelayedSend.swift`
 - `submodules/TelegramCore/Sources/AyuGram/AyuEditHistory.swift`
+- `submodules/TelegramCore/Sources/AyuGram/AyuExteraConfig.swift`
 - `submodules/TelegramCore/Sources/AyuGram/AyuForkStore.swift`
 - `submodules/TelegramCore/Sources/AyuGram/AyuGramAntiDelete.swift`
 - `submodules/TelegramCore/Sources/AyuGram/AyuGramClientProfile.swift`
@@ -57,91 +136,299 @@
 - `submodules/TelegramCore/Sources/AyuGram/DeletedMessageAttribute.swift`
 - `submodules/TelegramCore/Sources/AyuGram/GitConfig.swift`
 - `submodules/TelegramCore/Sources/AyuGram/SavedMessageEditsAttribute.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowAdFilter.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowBuildStatus.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowBusinessBotPanel.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowChatBannerStore.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowChatBanners.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowChatExport.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowChatExportCollect.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowChatLock.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowChatLockPreviews.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowChatStats.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowChatStatsCollect.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowChatStatsPage.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowChatStreak.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowChatTitles.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowChatVoiceSpeed.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowCodeSignature.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowCrashReports.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowDeviceAccess.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowDisguise.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowDuress.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowFakeGift.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowFakeGiftStore.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowFakeStars.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowFeed.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowFeedCollect.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowFeedPage.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowHeaderButtons.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowHiddenAccounts.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowIntruderLog.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowLinks.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowLinksEntities.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowLocalHide.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowLocalPins.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowMediaSendQuality.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowMessageFilters.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowMessageScreenshotSettings.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowOnlineHistory.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowOwnServerPresence.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowPeerName.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowPushDiagnostics.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowRegistrationDate.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowRegistrationDateFetch.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowReplyTimecode.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowSavedMediaFiles.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowScreenshotAnonymizer.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowScreenshotNotices.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowSettingLinks.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowSettingLinksApply.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowSettingsDocument.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowSettingsSync.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowSettingsTransfer.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowSilentSend.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowSpaces.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowSpacesSync.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowStarsBalance.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowStoryArchive.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowUnlimitedFavorites.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowUpdateCheck.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowVersion.swift`
+- `submodules/TelegramCore/Sources/AyuGram/ShadowVoiceTime.swift`
+- `submodules/TelegramUI/Components/Chat/ChatTextInputPanelNode/Sources/ChatTextInputPanelNodeShadowTemplates.swift`
 - `submodules/TelegramUI/Components/EntityKeyboard/Sources/AyuEmojiKeyboardOrder.swift`
+- `submodules/TelegramUI/Components/Stories/StoryContainerScreen/Sources/ShadowStoryGhostSession.swift`
 - `submodules/TelegramUI/Images.xcassets/Chat List/GhostActiveIcon.imageset/Contents.json`
 - `submodules/TelegramUI/Images.xcassets/Chat List/GhostActiveIcon.imageset/ghost_active.pdf`
 - `submodules/TelegramUI/Images.xcassets/Chat List/GhostIcon.imageset/Contents.json`
 - `submodules/TelegramUI/Images.xcassets/Chat List/GhostIcon.imageset/ghost.pdf`
+- `submodules/TelegramUI/Images.xcassets/Chat/AyuGram/Contents.json`
+- `submodules/TelegramUI/Images.xcassets/Chat/AyuGram/Deleted.imageset/Contents.json`
+- `submodules/TelegramUI/Images.xcassets/Chat/AyuGram/Deleted.imageset/Deleted.png`
+- `submodules/TelegramUI/Images.xcassets/Chat/AyuGram/Deleted.imageset/Deleted@2x.png`
+- `submodules/TelegramUI/Images.xcassets/Chat/AyuGram/Deleted.imageset/Deleted@3x.png`
+- `submodules/TelegramUI/Images.xcassets/Chat/AyuGram/Edited.imageset/Contents.json`
+- `submodules/TelegramUI/Images.xcassets/Chat/AyuGram/Edited.imageset/Edited.png`
+- `submodules/TelegramUI/Images.xcassets/Chat/AyuGram/Edited.imageset/Edited@2x.png`
+- `submodules/TelegramUI/Images.xcassets/Chat/AyuGram/Edited.imageset/Edited@3x.png`
 - `submodules/TelegramUI/Images.xcassets/Chat/Input/Accessory Panels/MessageSelectionIncognito.imageset/Contents.json`
 - `submodules/TelegramUI/Images.xcassets/Chat/Input/Accessory Panels/MessageSelectionIncognito.imageset/ic_incognito.pdf`
 - `submodules/TelegramUI/Images.xcassets/Item List/Icons/Shadow.imageset/Contents.json`
 - `submodules/TelegramUI/Images.xcassets/Item List/Icons/Shadow.imageset/shadow.pdf`
+- `submodules/TelegramUI/Sources/Chat/ChatControllerMessageScreenshot.swift`
+- `submodules/TelegramUI/Sources/Chat/ShadowLocalPinsChat.swift`
+- `submodules/TelegramUI/Sources/Chat/ShadowMessageScreenshotGrouping.swift`
+- `submodules/TelegramUI/Sources/Chat/ShadowReplyTimecodeSend.swift`
+- `submodules/TelegramUI/Sources/Chat/ShadowScreenshotMessageAnonymizer.swift`
+- `submodules/TelegramUI/Sources/Chat/ShadowTimecodeReplyContextItem.swift`
+- `submodules/TelegramUI/Sources/ShadowBusinessBotPinnedTitlePanelNode.swift`
+- `submodules/TelegramUI/Sources/ShadowChatLockUI.swift`
+- `submodules/TelegramUI/Sources/ShadowCrashReporter.swift`
+- `submodules/TelegramUI/Sources/ShadowDeviceAccessUI.swift`
+- `submodules/TelegramUI/Sources/ShadowDuressUI.swift`
+- `submodules/TelegramUI/Sources/ShadowEasterEggs.swift`
+- `submodules/TelegramUI/Sources/ShadowFeedController.swift`
+- `submodules/TelegramUI/Sources/ShadowIntruderDelivery.swift`
+- `submodules/TelegramUI/Sources/ShadowSettingsSyncManager.swift`
 
-## Правки в файлах апстрима (88)
+## Правки в файлах апстрима (210)
 
 Отсортировано по объёму правок — сверху те, где форк влез сильнее всего.
 
-- `submodules/TelegramUI/Sources/ChatControllerForwardMessages.swift` — строк изменено: 213
-- `submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoProfileItems.swift` — строк изменено: 210
-- `submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoHeaderNode.swift` — строк изменено: 190
-- `submodules/TelegramUI/Components/Chat/ChatMessageDateAndStatusNode/Sources/ChatMessageDateAndStatusNode.swift` — строк изменено: 127
-- `submodules/TelegramUI/Components/Chat/ChatMessageSelectionInputPanelNode/Sources/ChatMessageSelectionInputPanelNode.swift` — строк изменено: 125
-- `submodules/TelegramUI/Sources/ChatInterfaceStateContextMenus.swift` — строк изменено: 108
-- `submodules/TelegramUI/Components/ChatListHeaderComponent/Sources/ChatListNavigationBar.swift` — строк изменено: 99
-- `submodules/ChatListUI/Sources/ChatListControllerNode.swift` — строк изменено: 94
+- `submodules/ChatListUI/Sources/ChatListController.swift` — строк изменено: 836
+- `submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoHeaderNode.swift` — строк изменено: 409
+- `submodules/ChatListUI/Sources/Node/ChatListItem.swift` — строк изменено: 363
+- `submodules/TelegramUI/Sources/ChatControllerForwardMessages.swift` — строк изменено: 316
+- `submodules/TelegramUI/Components/Chat/ChatMessageDateAndStatusNode/Sources/ChatMessageDateAndStatusNode.swift` — строк изменено: 294
+- `submodules/TelegramUI/Sources/ChatManagingBotTitlePanelNode.swift` — строк изменено: 280
+- `submodules/TelegramPresentationData/Sources/Resources/PresentationResourcesSettings.swift` — строк изменено: 268
+- `submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoProfileItems.swift` — строк изменено: 239
+- `submodules/TelegramUI/Components/VideoMessageCameraScreen/Sources/VideoMessageCameraScreen.swift` — строк изменено: 208
+- `submodules/ChatListUI/Sources/ChatContextMenus.swift` — строк изменено: 207
+- `submodules/TelegramUI/Sources/ChatInterfaceStateContextMenus.swift` — строк изменено: 197
+- `submodules/TelegramUI/Components/TabBarComponent/Sources/TabBarComponent.swift` — строк изменено: 180
+- `submodules/TelegramUI/Components/Chat/ChatMessageSelectionInputPanelNode/Sources/ChatMessageSelectionInputPanelNode.swift` — строк изменено: 176
+- `submodules/ChatListUI/Sources/ChatListControllerNode.swift` — строк изменено: 162
+- `Telegram/Telegram-iOS/Telegram.icon/icon.json` — строк изменено: 151
+- `submodules/TelegramUI/Components/Stories/StoryContainerScreen/Sources/OpenStories.swift` — строк изменено: 150
+- `submodules/TelegramUI/Sources/SharedAccountContext.swift` — строк изменено: 146
+- `submodules/ChatListUI/Sources/Node/ChatListNode.swift` — строк изменено: 138
+- `submodules/TelegramUI/Sources/ChatHistoryEntriesForView.swift` — строк изменено: 134
+- `submodules/TelegramUI/Sources/AppDelegate.swift` — строк изменено: 134
+- `submodules/TelegramUI/Sources/Chat/ChatControllerMediaRecording.swift` — строк изменено: 129
+- `submodules/TelegramUI/Sources/ChatController.swift` — строк изменено: 127
+- `submodules/TelegramUI/Components/Chat/ChatMessageBubbleItemNode/Sources/ChatMessageBubbleItemNode.swift` — строк изменено: 123
+- `submodules/TelegramCore/Sources/TelegramEngine/Payments/Stars.swift` — строк изменено: 121
+- `submodules/TelegramCore/Sources/TelegramEngine/Messages/TelegramEngineMessages.swift` — строк изменено: 121
+- `submodules/TelegramUI/Components/ChatTitleView/Sources/ChatTitleComponent.swift` — строк изменено: 115
+- `submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoData.swift` — строк изменено: 113
+- `submodules/TelegramUI/Sources/TelegramRootController.swift` — строк изменено: 112
+- `submodules/TelegramUI/Components/Stars/StarsTransactionsScreen/Sources/StarsTransactionsScreen.swift` — строк изменено: 112
+- `submodules/TelegramUI/Components/ChatTitleView/Sources/ChatTitleView.swift` — строк изменено: 106
+- `submodules/TabBarUI/Sources/TabBarController.swift` — строк изменено: 105
+- `submodules/TelegramCore/Sources/State/AccountStateManagementUtils.swift` — строк изменено: 99
+- `submodules/TelegramCore/Sources/TelegramEngine/Messages/ApplyMaxReadIndexInteractively.swift` — строк изменено: 97
 - `submodules/TelegramUI/Components/Chat/ChatMessageActionButtonsNode/Sources/ChatMessageActionButtonsNode.swift` — строк изменено: 93
-- `submodules/ChatListUI/Sources/ChatListController.swift` — строк изменено: 84
-- `submodules/TelegramUI/Components/Stories/StoryContainerScreen/Sources/OpenStories.swift` — строк изменено: 82
-- `submodules/TelegramCore/Sources/State/AccountStateManagementUtils.swift` — строк изменено: 77
-- `submodules/TelegramUI/Sources/TelegramRootController.swift` — строк изменено: 72
-- `submodules/ItemListPeerItem/Sources/ItemListPeerItem.swift` — строк изменено: 68
-- `submodules/TelegramUI/Sources/Chat/ChatControllerLoadDisplayNode.swift` — строк изменено: 66
-- `submodules/ContactsPeerItem/Sources/ContactsPeerItem.swift` — строк изменено: 60
-- `submodules/TelegramUI/Components/Chat/ChatMessageItemView/Sources/ChatMessageItemView.swift` — строк изменено: 59
-- `submodules/TelegramCore/Sources/State/ManagedAccountPresence.swift` — строк изменено: 57
-- `submodules/TelegramUI/Components/ChatTitleView/Sources/ChatTitleComponent.swift` — строк изменено: 55
-- `submodules/TelegramCore/Sources/State/SynchronizePeerReadState.swift` — строк изменено: 54
-- `submodules/TelegramUI/Sources/AppDelegate.swift` — строк изменено: 44
-- `submodules/TelegramCore/Sources/TelegramEngine/Messages/MarkMessageContentAsConsumedInteractively.swift` — строк изменено: 43
+- `submodules/TelegramUI/Sources/ChatControllerNode.swift` — строк изменено: 90
+- `submodules/LegacyComponents/Sources/TGMediaPickerGalleryInterfaceView.m` — строк изменено: 89
+- `submodules/TelegramUI/Components/ChatListHeaderComponent/Sources/ChatListNavigationBar.swift` — строк изменено: 87
+- `submodules/ItemListPeerItem/Sources/ItemListPeerItem.swift` — строк изменено: 87
+- `submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoScreenSettingsActions.swift` — строк изменено: 86
+- `submodules/TelegramCore/Sources/State/SynchronizePeerReadState.swift` — строк изменено: 86
+- `submodules/LegacyComponents/Sources/TGMediaPickerGalleryVideoItemView.m` — строк изменено: 83
+- `submodules/DebugSettingsUI/Sources/DebugController.swift` — строк изменено: 83
+- `submodules/TelegramUI/Components/MediaPlaybackHeaderPanelComponent/Sources/MediaNavigationAccessoryHeaderNode.swift` — строк изменено: 79
+- `submodules/TelegramStringFormatting/Sources/PresenceStrings.swift` — строк изменено: 79
+- `submodules/TelegramBaseController/Sources/MediaNavigationAccessoryHeaderNode.swift` — строк изменено: 79
+- `submodules/TelegramUI/Sources/Chat/ChatControllerLoadDisplayNode.swift` — строк изменено: 77
+- `submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoScreenPerformButtonAction.swift` — строк изменено: 75
+- `submodules/TelegramCore/Sources/State/ManagedAccountPresence.swift` — строк изменено: 74
+- `submodules/MediaPickerUI/Sources/MediaPickerScreen.swift` — строк изменено: 72
+- `submodules/TelegramUI/Components/Chat/ChatMessageInteractiveFileNode/Sources/ChatMessageInteractiveFileNode.swift` — строк изменено: 71
+- `submodules/TelegramCore/Sources/TelegramEngine/Messages/MarkMessageContentAsConsumedInteractively.swift` — строк изменено: 71
+- `submodules/ContactsPeerItem/Sources/ContactsPeerItem.swift` — строк изменено: 69
+- `submodules/TelegramUI/Components/Chat/ChatMessageItemView/Sources/ChatMessageItemView.swift` — строк изменено: 66
+- `Telegram/BUILD` — строк изменено: 66
+- `submodules/TelegramUI/Sources/OpenChatMessage.swift` — строк изменено: 63
+- `submodules/PasscodeUI/Sources/PasscodeEntryController.swift` — строк изменено: 59
+- `submodules/TelegramUI/Components/Chat/ChatInstantVideoMessageDurationNode/Sources/ChatInstantVideoMessageDurationNode.swift` — строк изменено: 50
+- `submodules/LegacyMediaPickerUI/Sources/LegacyMediaPickers.swift` — строк изменено: 50
+- `submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoScreen.swift` — строк изменено: 48
+- `submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoSettingsItems.swift` — строк изменено: 47
+- `submodules/TabBarUI/Sources/TabBarContollerNode.swift` — строк изменено: 47
+- `submodules/SettingsUI/Sources/DeleteAccountOptionsController.swift` — строк изменено: 47
+- `Telegram/Telegram-iOS/InfoBazel.plist` — строк изменено: 42
+- `Telegram/Telegram-iOS/Info.plist` — строк изменено: 42
+- `submodules/TelegramCore/Sources/PendingMessages/EnqueueMessage.swift` — строк изменено: 41
+- `submodules/LegacyComponents/Sources/TGVideoEditAdjustments.m` — строк изменено: 41
+- `submodules/TelegramUI/Sources/MediaManager.swift` — строк изменено: 40
+- `submodules/TelegramUI/Sources/ChatHistoryListNode.swift` — строк изменено: 40
 - `submodules/MtProtoKit/Sources/MTApiEnvironment.m` — строк изменено: 40
-- `submodules/TelegramUI/Components/TabBarComponent/Sources/TabBarComponent.swift` — строк изменено: 39
-- `submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoScreen.swift` — строк изменено: 37
-- `submodules/TelegramUI/Components/Chat/ChatMessageBubbleItemNode/Sources/ChatMessageBubbleItemNode.swift` — строк изменено: 37
-- `submodules/MediaPickerUI/Sources/MediaPickerScreen.swift` — строк изменено: 37
-- `submodules/TelegramUI/Components/ChatTitleView/Sources/ChatTitleView.swift` — строк изменено: 36
-- `submodules/TelegramStringFormatting/Sources/PresenceStrings.swift` — строк изменено: 35
+- `submodules/ChatListUI/Sources/TabBarChatListFilterController.swift` — строк изменено: 39
+- `submodules/TelegramUI/Sources/ChatInterfaceTitlePanelNodes.swift` — строк изменено: 37
+- `submodules/SettingsUI/Sources/LogoutOptionsController.swift` — строк изменено: 37
+- `submodules/TelegramUI/Components/Gifts/GiftSetupScreen/Sources/GiftSetupScreen.swift` — строк изменено: 36
+- `submodules/TelegramUI/Components/ChatListHeaderComponent/Sources/NavigationButtonComponent.swift` — строк изменено: 36
+- `submodules/TelegramCore/Sources/TelegramEngine/AccountData/RegisterNotificationToken.swift` — строк изменено: 35
+- `submodules/TelegramUI/Sources/ApplicationShortcutItem.swift` — строк изменено: 34
+- `submodules/TelegramUI/Sources/ApplicationContext.swift` — строк изменено: 34
+- `Telegram/NotificationService/Sources/NotificationService.swift` — строк изменено: 33
+- `submodules/ChatPresentationInterfaceState/Sources/ChatPanelInterfaceInteraction.swift` — строк изменено: 32
 - `submodules/ICloudResources/Sources/ICloudResources.swift` — строк изменено: 31
-- `submodules/ChatListUI/Sources/Node/ChatListItem.swift` — строк изменено: 31
 - `submodules/TelegramCore/Sources/Network/FetchedMediaResource.swift` — строк изменено: 29
-- `submodules/ChatPresentationInterfaceState/Sources/ChatPanelInterfaceInteraction.swift` — строк изменено: 29
+- `submodules/TelegramUI/Components/Chat/ChatMessageDateAndStatusNode/Sources/StringForMessageTimestampStatus.swift` — строк изменено: 27
+- `submodules/TelegramCore/Sources/TelegramEngine/Payments/StarGifts.swift` — строк изменено: 27
+- `submodules/TelegramCore/Sources/TelegramEngine/Messages/Stories.swift` — строк изменено: 26
+- `submodules/ChatListUI/Sources/Node/ChatListNodeEntries.swift` — строк изменено: 26
 - `submodules/TelegramUI/Sources/AccountContext.swift` — строк изменено: 25
-- `submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoSettingsItems.swift` — строк изменено: 24
-- `submodules/TelegramUI/Components/Chat/ChatMessageDateAndStatusNode/Sources/StringForMessageTimestampStatus.swift` — строк изменено: 24
-- `submodules/TelegramCore/Sources/TelegramEngine/Messages/Stories.swift` — строк изменено: 24
+- `submodules/ChatListUI/Sources/Node/ChatListPresentationData.swift` — строк изменено: 25
+- `submodules/TelegramCore/Sources/TelegramEngine/Peers/TelegramEnginePeers.swift` — строк изменено: 24
 - `submodules/TelegramCore/Sources/State/ManagedLocalInputActivities.swift` — строк изменено: 23
-- `submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoData.swift` — строк изменено: 21
-- `Telegram/NotificationService/Sources/NotificationService.swift` — строк изменено: 20
-- `Telegram/BUILD` — строк изменено: 18
-- `submodules/TelegramUI/Sources/ApplicationShortcutItem.swift` — строк изменено: 16
+- `submodules/LocalAuth/Sources/LocalAuth.swift` — строк изменено: 23
+- `submodules/TelegramCore/Sources/State/ManagedSecretChatOutgoingOperations.swift` — строк изменено: 21
+- `submodules/SettingsUI/Sources/Search/SettingsSearchableItems.swift` — строк изменено: 21
+- `submodules/LocalizedPeerData/Sources/PeerTitle.swift` — строк изменено: 21
+- `submodules/TelegramCore/Sources/State/ManagedAutoremoveMessageOperations.swift` — строк изменено: 20
+- `submodules/ChatListUI/Sources/ChatListSearchListPaneNode.swift` — строк изменено: 20
+- `submodules/TelegramCore/Sources/UpdatePeers.swift` — строк изменено: 19
+- `submodules/TelegramCore/Sources/TelegramEngine/Peers/ChatListFiltering.swift` — строк изменено: 19
+- `submodules/TelegramCore/Sources/State/ManagedRecentStickers.swift` — строк изменено: 19
+- `submodules/TelegramUI/Components/VideoMessageCameraScreen/Sources/ResultPreviewView.swift` — строк изменено: 18
+- `submodules/TelegramUI/Components/Chat/ChatMessageInteractiveInstantVideoNode/Sources/ChatMessageInteractiveInstantVideoNode.swift` — строк изменено: 18
+- `submodules/TelegramCore/Sources/State/ProcessSecretChatIncomingDecryptedOperations.swift` — строк изменено: 17
+- `submodules/TelegramUI/Components/Stories/StoryContainerScreen/Sources/StoryItemContentComponent.swift` — строк изменено: 16
+- `submodules/TelegramUI/Components/Chat/ChatMessageTextBubbleContentNode/Sources/ChatMessageTextBubbleContentNode.swift` — строк изменено: 16
+- `submodules/TelegramPresentationData/Sources/ChatPresentationData.swift` — строк изменено: 16
+- `submodules/TelegramCore/Sources/Account/Account.swift` — строк изменено: 16
+- `submodules/PasscodeCore/Sources/Passcode.swift` — строк изменено: 16
 - `submodules/TelegramUI/Sources/ChatControllerOpenMessageShareMenu.swift` — строк изменено: 15
 - `submodules/TelegramCore/Sources/Utils/MessageUtils.swift` — строк изменено: 15
+- `submodules/TranslateUI/Sources/Translate.swift` — строк изменено: 14
+- `submodules/SettingsUI/Sources/Themes/ThemeSettingsAppIconItem.swift` — строк изменено: 14
+- `submodules/TelegramUI/Components/ChatListHeaderComponent/Sources/ChatListHeaderComponent.swift` — строк изменено: 13
 - `submodules/TelegramCore/Sources/Network/Network.swift` — строк изменено: 13
-- `submodules/Camera/Sources/Camera.swift` — строк изменено: 13
-- `submodules/TelegramCore/Sources/PendingMessages/EnqueueMessage.swift` — строк изменено: 11
-- `submodules/TelegramCore/Sources/Account/Account.swift` — строк изменено: 11
+- `submodules/GalleryUI/Sources/GalleryController.swift` — строк изменено: 13
+- `submodules/TelegramUI/Components/MediaPlaybackHeaderPanelComponent/Sources/MediaPlaybackHeaderPanelComponent.swift` — строк изменено: 12
+- `submodules/Display/Source/TabBarController.swift` — строк изменено: 12
+- `submodules/Camera/CameraLegacy/Sources/LegacyCamera.swift` — строк изменено: 12
+- `submodules/TelegramUI/Sources/ChatControllerContentData.swift` — строк изменено: 11
+- `submodules/TelegramUI/Sources/Chat/ChatControllerOpenUsernameContextMenu.swift` — строк изменено: 11
 - `submodules/TelegramUI/Sources/SharedWakeupManager.swift` — строк изменено: 10
-- `submodules/TelegramUI/Sources/ChatController.swift` — строк изменено: 10
-- `submodules/TelegramCore/Sources/State/PendingMessageManager.swift` — строк изменено: 10
-- `submodules/TelegramPresentationData/Sources/Resources/PresentationResourcesSettings.swift` — строк изменено: 9
-- `submodules/TelegramUI/Sources/ChatControllerContentData.swift` — строк изменено: 8
-- `submodules/TelegramCore/Sources/State/ManagedAutoremoveMessageOperations.swift` — строк изменено: 8
+- `submodules/TelegramUI/Components/Stories/StoryContainerScreen/Sources/StoryItemSetContainerComponent.swift` — строк изменено: 10
+- `submodules/TelegramUI/Components/Gifts/GiftViewScreen/Sources/GiftViewScreen.swift` — строк изменено: 10
+- `submodules/TelegramUI/Components/Chat/ChatMessageMediaBubbleContentNode/Sources/ChatMessageMediaBubbleContentNode.swift` — строк изменено: 10
+- `submodules/TelegramCore/Sources/TelegramEngine/Peers/UpdateCachedPeerData.swift` — строк изменено: 10
+- `submodules/TelegramCore/Sources/TelegramEngine/Peers/TogglePeerChatPinned.swift` — строк изменено: 10
+- `submodules/TelegramCore/Sources/State/SynchronizeSavedGifsOperation.swift` — строк изменено: 10
+- `submodules/Postbox/Sources/Postbox.swift` — строк изменено: 10
+- `submodules/LegacyComponents/PublicHeaders/LegacyComponents/TGVideoEditAdjustments.h` — строк изменено: 10
+- `submodules/AccountContext/Sources/AccountContext.swift` — строк изменено: 10
+- `submodules/TextSelectionNode/Sources/TextSelectionNode.swift` — строк изменено: 9
+- `submodules/TelegramUI/Sources/OpenUrl.swift` — строк изменено: 9
+- `submodules/TelegramUI/Sources/ChatInterfaceInputContexts.swift` — строк изменено: 9
+- `submodules/TelegramCore/Sources/TelegramEngine/Stickers/SavedStickers.swift` — строк изменено: 9
+- `submodules/TelegramCore/Sources/State/AccountViewTracker.swift` — строк изменено: 9
+- `submodules/TelegramUI/Components/Chat/ChatMessageInteractiveMediaNode/Sources/ChatMessageInteractiveMediaNode.swift` — строк изменено: 8
+- `submodules/TelegramCore/Sources/ChatInputContent/ChatInputContentModel.swift` — строк изменено: 8
+- `submodules/Postbox/Sources/ChatListTable.swift` — строк изменено: 8
+- `submodules/TelegramUI/Components/Stars/StarsTransferScreen/Sources/StarsTransferScreen.swift` — строк изменено: 7
 - `submodules/TelegramUI/Components/EntityKeyboard/Sources/EmojiPagerContentComponent.swift` — строк изменено: 7
-- `submodules/TelegramCore/Sources/TelegramEngine/Messages/TelegramEngineMessages.swift` — строк изменено: 7
-- `submodules/TelegramCore/Sources/State/AccountViewTracker.swift` — строк изменено: 6
+- `submodules/TelegramCore/Sources/State/ManagedSynchronizeChatInputStateOperations.swift` — строк изменено: 7
+- `submodules/ItemListUI/Sources/Items/ItemListDisclosureItem.swift` — строк изменено: 7
+- `submodules/ItemListUI/Sources/ItemListController.swift` — строк изменено: 7
+- `submodules/TelegramStringFormatting/Sources/ServiceMessageStrings.swift` — строк изменено: 6
+- `submodules/TelegramCore/Sources/State/PendingMessageManager.swift` — строк изменено: 6
 - `submodules/MtProtoKit/PublicHeaders/MtProtoKit/MTApiEnvironment.h` — строк изменено: 6
+- `submodules/GalleryUI/Sources/Items/ChatImageGalleryItem.swift` — строк изменено: 6
+- `submodules/TelegramUI/Sources/Chat/ChatControllerOpenMessageContextMenu.swift` — строк изменено: 5
+- `submodules/TelegramUI/Components/Stories/StoryContainerScreen/Sources/StoryContainerScreen.swift` — строк изменено: 5
 - `submodules/TelegramUI/Components/EntityKeyboard/Sources/EntityKeyboard.swift` — строк изменено: 5
-- `submodules/TelegramUI/Components/Chat/ChatMessageTextBubbleContentNode/Sources/ChatMessageTextBubbleContentNode.swift` — строк изменено: 4
-- `submodules/TelegramUI/Components/Chat/ChatMessageMediaBubbleContentNode/Sources/ChatMessageMediaBubbleContentNode.swift` — строк изменено: 4
-- `submodules/TelegramUI/Components/Chat/ChatMessageInteractiveMediaNode/Sources/ChatMessageInteractiveMediaNode.swift` — строк изменено: 4
-- `submodules/TelegramUI/Components/Chat/ChatMessageInteractiveFileNode/Sources/ChatMessageInteractiveFileNode.swift` — строк изменено: 4
-- `submodules/TelegramUI/Components/VideoMessageCameraScreen/Sources/VideoMessageCameraScreen.swift` — строк изменено: 3
-- `submodules/TelegramUI/Components/ChatControllerInteraction/Sources/ChatControllerInteraction.swift` — строк изменено: 3
-- `submodules/TgVoipWebrtc/tgcalls` — сабмодуль (сдвинут указатель)
+- `submodules/TelegramUI/Components/ChatControllerInteraction/Sources/ChatControllerInteraction.swift` — строк изменено: 5
+- `submodules/TelegramUI/Components/Chat/ChatTextInputPanelNode/Sources/AccessoryItemIconButton.swift` — строк изменено: 5
+- `submodules/TelegramCore/Sources/State/HistoryViewStateValidation.swift` — строк изменено: 5
+- `submodules/ChatPresentationInterfaceState/Sources/ChatTextInputPanelState.swift` — строк изменено: 5
+- `submodules/AppLock/Sources/AppLock.swift` — строк изменено: 5
+- `submodules/TranslateUI/Sources/ChatTranslation.swift` — строк изменено: 4
+- `submodules/TelegramUI/Components/Settings/PeerNameColorScreen/Sources/UserApperanceScreen.swift` — строк изменено: 4
+- `submodules/TelegramUI/Components/Gifts/GiftViewScreen/Sources/GiftViewBuyGift.swift` — строк изменено: 4
+- `submodules/TelegramUI/Components/Gifts/GiftOptionsScreen/Sources/GiftOptionsScreen.swift` — строк изменено: 4
+- `submodules/TelegramUI/Components/Chat/ChatMessageReplyInfoNode/Sources/ChatMessageReplyInfoNode.swift` — строк изменено: 4
+- `submodules/TelegramUI/Components/Chat/ChatMessageReactionsFooterContentNode/Sources/ChatMessageReactionsFooterContentNode.swift` — строк изменено: 4
+- `submodules/TelegramUI/Components/Chat/ChatMessageItemCommon/Sources/ChatMessageItemCommon.swift` — строк изменено: 4
+- `submodules/TelegramStringFormatting/Sources/DateFormat.swift` — строк изменено: 4
+- `submodules/TelegramCore/Sources/SecretChats/SetSecretChatMessageAutoremoveTimeoutInteractively.swift` — строк изменено: 4
+- `submodules/LegacyComponents/PublicHeaders/LegacyComponents/TGMediaPickerGalleryVideoItemView.h` — строк изменено: 4
+- `submodules/GalleryUI/Sources/SecretMediaPreviewController.swift` — строк изменено: 4
+- `Telegram/Telegram-iOS/Telegram.icon/Assets/Oval.svg` — строк изменено: 4
+- `submodules/TelegramUI/Components/Stars/StarsPurchaseScreen/Sources/StarsPurchaseScreen.swift` — строк изменено: 3
+- `submodules/TelegramUI/Components/Gifts/GiftViewScreen/Sources/GiftAuctionBidScreen.swift` — строк изменено: 3
+- `submodules/TelegramUI/Components/Chat/ChatSendStarsScreen/Sources/ChatSendStarsScreen.swift` — строк изменено: 3
+- `submodules/TelegramUI/Components/Chat/ChatMessageGiftBubbleContentNode/Sources/ChatMessageGiftBubbleContentNode.swift` — строк изменено: 3
+- `submodules/TelegramUI/Components/Chat/ChatEmptyNode/Sources/ChatEmptyNode.swift` — строк изменено: 3
+- `submodules/TelegramCore/Sources/State/ManagedSynchronizeMarkAllUnseenPersonalMessagesOperations.swift` — строк изменено: 3
+- `submodules/TelegramCore/Sources/State/Fetch.swift` — строк изменено: 3
+- `submodules/Components/ReactionListContextMenuContent/Sources/ReactionListContextMenuContent.swift` — строк изменено: 3
+- `submodules/ChatListSearchRecentPeersNode/Sources/ChatListSearchRecentPeersNode.swift` — строк изменено: 3
+- `submodules/TelegramUI/Sources/OpenResolvedUrl.swift` — строк изменено: 2
 - `submodules/TelegramUI/Sources/ChatControllerOpenAttachmentMenu.swift` — строк изменено: 2
-- `submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoScreenSettingsActions.swift` — строк изменено: 2
-- `submodules/TelegramCore/Sources/State/ProcessSecretChatIncomingDecryptedOperations.swift` — строк изменено: 2
+- `submodules/TelegramUI/Sources/Chat/ChatControllerPaidMessage.swift` — строк изменено: 2
+- `submodules/TelegramUI/Components/Chat/ChatTextInputPanelNode/Sources/ChatTextInputPanelNode.swift` — строк изменено: 2
+- `submodules/TelegramUI/Components/Chat/ChatMessageStickerItemNode/Sources/ChatMessageStickerItemNode.swift` — строк изменено: 2
+- `submodules/TelegramUI/Components/Chat/ChatMessageInstantVideoItemNode/Sources/ChatMessageInstantVideoItemNode.swift` — строк изменено: 2
+- `submodules/TelegramUI/Components/Chat/ChatMessageAnimatedStickerItemNode/Sources/ChatMessageAnimatedStickerItemNode.swift` — строк изменено: 2
+- `submodules/TelegramUI/BUILD` — строк изменено: 2
+- `submodules/TelegramCore/Sources/TelegramEngine/Messages/ReplyThreadHistory.swift` — строк изменено: 2
+- `submodules/TelegramCore/Sources/TelegramEngine/AccountData/TelegramEngineAccountData.swift` — строк изменено: 2
+- `submodules/TelegramCore/Sources/State/SynchronizeSavedStickersOperation.swift` — строк изменено: 2
+- `submodules/TelegramCore/Sources/State/ManagedConsumePersonalMessagesActions.swift` — строк изменено: 2
 - `submodules/TelegramCore/Sources/Account/AccountManager.swift` — строк изменено: 2
-- `submodules/TabBarUI/Sources/TabBarContollerNode.swift` — строк изменено: 2
+- `submodules/SettingsUI/BUILD` — строк изменено: 2
+- `submodules/GalleryUI/Sources/ChatItemGalleryFooterContentNode.swift` — строк изменено: 2
+- `submodules/TelegramUI/Components/Stars/StarsTransactionsScreen/BUILD` — строк изменено: 1
+- `submodules/TelegramCore/Sources/State/ManagedSynchronizeViewStoriesOperations.swift` — строк изменено: 1
+- `submodules/TelegramCore/Sources/State/ManagedSynchronizeConsumeMessageContentsOperations.swift` — строк изменено: 1
+- `submodules/ChatListUI/BUILD` — строк изменено: 1
 - `Telegram/Telegram-iOS/DefaultAppIcon.xcassets/AppIconLLC.appiconset/Simple@87x87.png` — строк изменено: 0
 - `Telegram/Telegram-iOS/DefaultAppIcon.xcassets/AppIconLLC.appiconset/Simple@80x80.png` — строк изменено: 0
 - `Telegram/Telegram-iOS/DefaultAppIcon.xcassets/AppIconLLC.appiconset/Simple@80x80-1.png` — строк изменено: 0

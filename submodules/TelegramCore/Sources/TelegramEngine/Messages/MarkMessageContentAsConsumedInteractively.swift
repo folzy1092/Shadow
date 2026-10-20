@@ -255,7 +255,7 @@ func markMessageContentAsConsumedRemotely(transaction: Transaction, mediaBox: Me
 
                     if message.id.peerId.namespace == Namespaces.Peer.SecretChat {
                     } else {
-                        if attribute.timeout == viewOnceTimeout || timestamp >= countdownBeginTime + attribute.timeout {
+                        if attribute.timeout == viewOnceTimeout || timestamp >= autoremoveExpiryTimestamp(countdownBeginTime: countdownBeginTime, timeout: attribute.timeout) {
                             for i in 0 ..< updatedMedia.count {
                                 if let _ = updatedMedia[i] as? TelegramMediaImage {
                                     updatedMedia[i] = TelegramMediaExpiredContent(data: .image)
@@ -280,7 +280,7 @@ func markMessageContentAsConsumedRemotely(transaction: Transaction, mediaBox: Me
                     if message.id.peerId.namespace == Namespaces.Peer.SecretChat {
                     } else {
                         for i in 0 ..< updatedMedia.count {
-                            if attribute.timeout == viewOnceTimeout || timestamp >= countdownBeginTime + attribute.timeout {
+                            if attribute.timeout == viewOnceTimeout || timestamp >= autoremoveExpiryTimestamp(countdownBeginTime: countdownBeginTime, timeout: attribute.timeout) {
                                 if let _ = updatedMedia[i] as? TelegramMediaImage {
                                     updatedMedia[i] = TelegramMediaExpiredContent(data: .image)
                                 } else if let file = updatedMedia[i] as? TelegramMediaFile {

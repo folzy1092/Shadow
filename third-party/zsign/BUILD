@@ -1,3 +1,5 @@
+load("@rules_cc//cc:objc_library.bzl", "objc_library")
+
 # Shadow: zsign (MIT, github.com/zhlynn/zsign via khcrysalis/Zsign-Package,
 # commit c4ba9da) for on-device re-signing of Shadow updates. Only the Mach-O,
 # bundle and code-signature parts are vendored; openssl.cpp is replaced by
