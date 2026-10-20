@@ -62,7 +62,8 @@ public enum ShadowVoiceTime {
     // length (one with ~115 000 hours exists), and the player may report NaN
     // or infinity: `Int32(_:)` traps on all of those, so clamp instead.
     public static func seconds(_ value: Double) -> Int32 {
-        guard value.isFinite, value > 0.0 else {
+        // NaN fails both comparisons; +infinity is just a huge length.
+        guard value > 0.0 else {
             return 0
         }
         if value >= Double(Int32.max) {
