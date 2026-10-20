@@ -215,6 +215,15 @@ public final class ChatListNavigationBar: Component {
     public static let storiesScrollHeight: CGFloat = storiesHeightValue()
 
     public final class View: UIView {
+        // Shadow: the chat list header keeps no top edge effect (hidden while it
+        // is a subview of this bar, see update); screens that host it themselves
+        // (Telegram 13's wallet peer selection) still get it.
+        private let edgeEffectView: EdgeEffectView
+
+        // Layout remains in navigation bar coordinates when this view is hosted externally.
+        public var edgeEffectBackgroundView: UIView {
+            return self.edgeEffectView
+        }
 
         // Shadow: optional custom banner rendered behind the whole header (below
         // the blur, stories, title and search). Gradient at the bottom keeps text
@@ -263,6 +272,8 @@ public final class ChatListNavigationBar: Component {
         private var pinnedFraction: CGFloat = 0.0
         
         override public init(frame: CGRect) {
+            self.edgeEffectView = EdgeEffectView()
+
             self.headerBackgroundContainer = SparseContainerView()
             self.headerBackgroundContainer.layer.anchorPoint = CGPoint()
             
@@ -271,6 +282,7 @@ public final class ChatListNavigationBar: Component {
             
             super.init(frame: frame)
             
+            self.addSubview(self.edgeEffectView)
             self.addSubview(self.bottomContentsContainer)
         }
         
@@ -406,7 +418,8 @@ public final class ChatListNavigationBar: Component {
             let previousHeight = self.currentHeight
 
             self.currentHeight = visibleSize.height
-            
+
+            var embeddedSearchBarExpansionHeight: CGFloat = 0.0
             var searchFrameValue: CGRect?
             if let search = component.search {
                 if let searchContentNode = self.searchContentNode, searchContentNode.hasOwnGlassContainer != component.hasOwnGlassContainer {
@@ -467,7 +480,7 @@ public final class ChatListNavigationBar: Component {
                 let clippedSearchOffset = max(0.0, min(clippedScrollOffset, searchOffsetDistance))
                 let searchOffsetFraction = clippedSearchOffset / searchOffsetDistance
                 searchContentNode.expansionProgress = 1.0 - searchOffsetFraction
-                let _ = 60.0 - floorToScreenPixels((1.0 - searchOffsetFraction) * searchSize.height)
+                embeddedSearchBarExpansionHeight = 60.0 - floorToScreenPixels((1.0 - searchOffsetFraction) * searchSize.height)
                 if searchOffsetFraction > 0.0 {
                     searchFrame.origin.y -= (60.0 - 44.0) * 0.5 * searchOffsetFraction
                 }
@@ -499,7 +512,20 @@ public final class ChatListNavigationBar: Component {
             } else {
                 self.bannerView?.isHidden = false
             }
-            
+
+            var edgeEffectHeight: CGFloat = currentLayout.size.height + 14.0
+            if component.search != nil {
+                if component.activeSearch != nil {
+                } else {
+                    edgeEffectHeight -= embeddedSearchBarExpansionHeight
+                }
+            } else if component.activeSearch != nil {
+            }
+            edgeEffectHeight = max(0.0, edgeEffectHeight)
+            let edgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: currentLayout.size.width, height: edgeEffectHeight))
+            transition.setFrame(view: self.edgeEffectView, frame: edgeEffectFrame)
+            self.edgeEffectView.update(content: nil, blur: true, alpha: 0.85, rect: edgeEffectFrame, edge: .top, edgeSize: min(54.0, edgeEffectHeight), transition: transition)
+
             let headerTransition = transition
             
             let storiesOffsetFraction: CGFloat
@@ -807,6 +833,23 @@ public final class ChatListNavigationBar: Component {
         }
         
         private func updateEdgeEffectColor(transition: ComponentTransition) {
+            guard let component = self.component else {
+                return
+            }
+            let color: UIColor
+            if let edgeEffectColor = component.edgeEffectColor {
+                color = edgeEffectColor
+            } else {
+                var defaultColor = component.theme.list.plainBackgroundColor
+                if component.activeSearch == nil {
+                    defaultColor = component.theme.list.plainBackgroundColor.mixedWith(component.theme.chatList.pinnedItemBackgroundColor, alpha: self.pinnedFraction)
+                }
+                if !component.hasEdgeEffect {
+                    defaultColor = component.theme.list.itemModalBlocksBackgroundColor
+                }
+                color = defaultColor
+            }
+            self.edgeEffectView.updateColor(color: color, transition: transition)
         }
         
         func update(component: ChatListNavigationBar, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
@@ -914,7 +957,11 @@ public final class ChatListNavigationBar: Component {
             }
             
             self.updateEdgeEffectColor(transition: transition)
-            
+
+            // Shadow: hidden in the bar's own hierarchy (the chat list header),
+            // shown where a screen hosts it itself.
+            self.edgeEffectView.isHidden = !component.hasEdgeEffect || self.edgeEffectView.superview === self
+
             return size
         }
     }
