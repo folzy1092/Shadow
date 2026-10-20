@@ -284,7 +284,10 @@ func _internal_togglePeerUnreadMarkInteractively(transaction: Transaction, netwo
             }
         }
         
-        if !hasUnread && peerId.namespace == Namespaces.Peer.SecretChat {
+        // Shadow: a chat whose only unread thing is a mention (e.g. one read
+        // under Ghost Mode, so the server still counts it) is unread too, so
+        // «Прочитать» clears the «@».
+        if !hasUnread {
             let unseenSummary = transaction.getMessageTagSummary(peerId: peerId, threadId: nil, tagMask: .unseenPersonalMessage, namespace: Namespaces.Message.Cloud, customTag: nil)
             let actionSummary = transaction.getPendingMessageActionsSummary(peerId: peerId, type: PendingMessageActionType.consumeUnseenPersonalMessage, namespace: Namespaces.Message.Cloud)
             if (unseenSummary?.count ?? 0) - (actionSummary ?? 0) > 0 {
@@ -329,6 +332,34 @@ public func clearPeerUnseenReactionsAndPollVotesInteractively(account: Account, 
     |> ignoreValues
 }
 
+// Shadow: the «@» counter of a chat cleared on this device only, no request.
+// A mention read under Ghost Mode stays unread on the server and its counter
+// comes back with the dialog, while the message itself is already consumed
+// here, so nothing in the chat clears it. Returns whether there was one.
+@discardableResult
+func _internal_shadowClearMentionsLocally(transaction: Transaction, peerId: PeerId) -> Bool {
+    guard let summary = transaction.getMessageTagSummary(peerId: peerId, threadId: nil, tagMask: .unseenPersonalMessage, namespace: Namespaces.Message.Cloud, customTag: nil), summary.count > 0 else {
+        return false
+    }
+    for index in transaction.getMessageIndicesWithTag(peerId: peerId, threadId: nil, namespace: Namespaces.Message.Cloud, tag: .unseenPersonalMessage) {
+        transaction.updateMessage(index.id, update: { currentMessage in
+            let storeForwardInfo = currentMessage.forwardInfo.flatMap(StoreMessageForwardInfo.init)
+            var attributes = currentMessage.attributes
+            for i in 0 ..< attributes.count {
+                if let attribute = attributes[i] as? ConsumablePersonalMentionMessageAttribute {
+                    attributes[i] = ConsumablePersonalMentionMessageAttribute(consumed: true, pending: attribute.pending)
+                    break
+                }
+            }
+            var tags = currentMessage.tags
+            tags.remove(.unseenPersonalMessage)
+            return .update(StoreMessage(id: currentMessage.id, customStableId: nil, globallyUniqueId: currentMessage.globallyUniqueId, groupingKey: currentMessage.groupingKey, threadId: currentMessage.threadId, timestamp: currentMessage.timestamp, flags: StoreMessageFlags(currentMessage.flags), tags: tags, globalTags: currentMessage.globalTags, localTags: currentMessage.localTags, forwardInfo: storeForwardInfo, authorId: currentMessage.author?.id, text: currentMessage.text, attributes: attributes, media: currentMessage.media))
+        })
+    }
+    transaction.replaceMessageTagSummary(peerId: peerId, threadId: nil, tagMask: .unseenPersonalMessage, namespace: Namespaces.Message.Cloud, customTag: nil, count: 0, maxId: summary.range.maxId)
+    return true
+}
+
 func _internal_markAllChatsAsReadInteractively(transaction: Transaction, network: Network, viewTracker: AccountViewTracker, groupId: PeerGroupId, filterPredicate: ChatListFilterPredicate?) {
     for peerId in transaction.getUnreadChatListPeerIds(groupId: groupId, filterPredicate: filterPredicate, additionalFilter: nil, stopOnFirstMatch: false) {
         _internal_togglePeerUnreadMarkInteractively(transaction: transaction, network: network, viewTracker: viewTracker, peerId: peerId, setToValue: false)
@@ -339,6 +370,12 @@ func _internal_markAllChatsAsReadInteractively(transaction: Transaction, network
 // action. This is deliberately separate from the interactive/server path so a
 // Ghost Mode user can clean the local chat list without emitting receipts.
 func _internal_markAllChatsAsReadLocally(transaction: Transaction, groupId: PeerGroupId, filterPredicate: ChatListFilterPredicate?) {
+    // Mentions too: a chat can have no unread messages but a stuck «@».
+    if filterPredicate == nil {
+        for peerId in transaction.chatListGetAllPeerIds(groupId: groupId) where peerId.namespace != Namespaces.Peer.SecretChat {
+            _internal_shadowClearMentionsLocally(transaction: transaction, peerId: peerId)
+        }
+    }
     for peerId in transaction.getUnreadChatListPeerIds(groupId: groupId, filterPredicate: filterPredicate, additionalFilter: nil, stopOnFirstMatch: false) {
         guard let peer = transaction.getPeer(peerId) else {
             continue

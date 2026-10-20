@@ -6,6 +6,8 @@ import SwiftSignalKit
 // ничего не уходит), часть скрытой подмены баланса (ShadowStarsBalance):
 //  - «Фейковое зачисление» — продажа коллекционного подарка: меню двойного
 //    тапа по балансу → ссылка t.me/nft/…, цена, покупатель;
+//  - «Фейковое списание» — покупка коллекционного подарка: ссылка, цена,
+//    продавец;
 //  - отправка подарка, когда настоящих звёзд не хватает, а подмена включена:
 //    карточка «Вы отправили подарок» в чате и списание в истории.
 // Каждая операция сдвигает показанный баланс и стоит в истории операций
@@ -20,6 +22,7 @@ public final class ShadowFakeStars {
     enum Kind: Int32, Codable {
         case giftSale = 0
         case giftSent = 1
+        case giftPurchase = 2
     }
 
     struct Record: Codable {
@@ -74,7 +77,7 @@ public final class ShadowFakeStars {
                 }
                 let parts = ShadowStarsBalance.parts(record.nanos)
                 result.append(StarsContext.State.Transaction(
-                    flags: [],
+                    flags: record.kind == .giftPurchase ? [.isStarGiftResale] : [],
                     id: record.id,
                     count: CurrencyAmount(amount: StarsAmount(value: parts.value, nanos: parts.nanos), currency: .stars),
                     date: record.date,
@@ -147,9 +150,10 @@ public enum ShadowFakeStarsError {
     case noBuyer
 }
 
-// «Фейковое зачисление»: продажа коллекционного подарка по ссылке за `stars`.
-// Покупатель — `buyerPeerId`, иначе нынешний владелец подарка.
-public func shadowAddFakeGiftSale(account: Account, slug: String, stars: Int64, buyerPeerId: EnginePeer.Id?) -> Signal<Never, ShadowFakeStarsError> {
+// «Фейковое зачисление» (продажа) или, с `isPurchase`, «Фейковое списание»
+// (покупка) коллекционного подарка по ссылке за `stars`. Другая сторона —
+// `buyerPeerId`, иначе нынешний владелец подарка.
+public func shadowAddFakeGiftSale(account: Account, slug: String, stars: Int64, buyerPeerId: EnginePeer.Id?, isPurchase: Bool = false) -> Signal<Never, ShadowFakeStarsError> {
     return _internal_getUniqueStarGift(account: account, slug: slug)
     |> mapError { _ -> ShadowFakeStarsError in
         return .notFound
@@ -163,10 +167,10 @@ public func shadowAddFakeGiftSale(account: Account, slug: String, stars: Int64, 
                 ShadowFakeStars.shared.add(account: account, record: ShadowFakeStars.Record(
                     id: ShadowFakeStars.idPrefix + UUID().uuidString,
                     date: Int32(Date().timeIntervalSince1970),
-                    nanos: stars * ShadowStarsBalance.nanosPerStar,
+                    nanos: (isPurchase ? -stars : stars) * ShadowStarsBalance.nanosPerStar,
                     peerId: buyer.toInt64(),
-                    kind: .giftSale,
-                    gift: .unique(gift.withOwner(.peerId(buyer)))
+                    kind: isPurchase ? .giftPurchase : .giftSale,
+                    gift: .unique(gift.withOwner(.peerId(isPurchase ? account.peerId : buyer)))
                 ))
                 subscriber.putCompletion()
             }

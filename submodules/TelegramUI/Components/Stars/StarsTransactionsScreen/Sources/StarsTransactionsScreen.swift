@@ -183,7 +183,10 @@ final class StarsTransactionsScreenComponent: Component {
                     controller?.present(prompt, in: .window(.root))
                 }),
                 TextAlertAction(type: .genericAction, title: "Фейковое зачисление", action: { [weak controller] in
-                    shadowPresentFakeGiftSale(context: context, controller: controller)
+                    shadowPresentFakeGiftSale(context: context, controller: controller, isPurchase: false)
+                }),
+                TextAlertAction(type: .genericAction, title: "Фейковое списание", action: { [weak controller] in
+                    shadowPresentFakeGiftSale(context: context, controller: controller, isPurchase: true)
                 }),
                 TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_Cancel, action: {})
             ], actionLayout: .vertical)
@@ -1574,14 +1577,15 @@ public final class StarsTransactionsScreen: ViewControllerComponentContainer {
     }
 }
 
-// Shadow: «Фейковое зачисление» (ShadowFakeStars): продажа коллекционного
-// подарка — ссылка, цена, покупатель. Только на этом устройстве.
-private func shadowPresentFakeGiftSale(context: AccountContext, controller: ViewController?) {
+// Shadow: «Фейковое зачисление» / «Фейковое списание» (ShadowFakeStars):
+// продажа или покупка коллекционного подарка — ссылка, цена, другая сторона.
+// Только на этом устройстве.
+private func shadowPresentFakeGiftSale(context: AccountContext, controller: ViewController?, isPurchase: Bool) {
     let presentationData = context.sharedContext.currentPresentationData.with { $0 }
     let showError: (ViewController?, String) -> Void = { controller, text in
         controller?.present(textAlertController(context: context, title: nil, text: text, actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]), in: .window(.root))
     }
-    let linkPrompt = promptController(context: context, text: "Продажа подарка", subtitle: "Ссылка на коллекционный подарок, например t.me/nft/InputKey-111881.", value: nil, placeholder: "t.me/nft/…", characterLimit: 200, apply: { [weak controller] value in
+    let linkPrompt = promptController(context: context, text: isPurchase ? "Покупка подарка" : "Продажа подарка", subtitle: "Ссылка на коллекционный подарок, например t.me/nft/InputKey-111881.", value: nil, placeholder: "t.me/nft/…", characterLimit: 200, apply: { [weak controller] value in
         guard let value else {
             return
         }
@@ -1589,7 +1593,7 @@ private func shadowPresentFakeGiftSale(context: AccountContext, controller: View
             showError(controller, "Это не ссылка на коллекционный подарок. Нужна ссылка вида t.me/nft/InputKey-111881.")
             return
         }
-        let pricePrompt = promptController(context: context, text: "Цена продажи", subtitle: "Сколько звёзд зачислить.", value: "1000", placeholder: "Звёзды", characterLimit: 9, apply: { [weak controller] value in
+        let pricePrompt = promptController(context: context, text: isPurchase ? "Цена покупки" : "Цена продажи", subtitle: isPurchase ? "Сколько звёзд списать." : "Сколько звёзд зачислить.", value: "1000", placeholder: "Звёзды", characterLimit: 9, apply: { [weak controller] value in
             guard let value else {
                 return
             }
@@ -1597,7 +1601,7 @@ private func shadowPresentFakeGiftSale(context: AccountContext, controller: View
                 showError(controller, "Нужно число звёзд, например 1000.")
                 return
             }
-            let buyerPrompt = promptController(context: context, text: "Покупатель", subtitle: "@username покупателя. Пусто — нынешний владелец подарка.", value: nil, placeholder: "@username", characterLimit: 64, apply: { [weak controller] value in
+            let buyerPrompt = promptController(context: context, text: isPurchase ? "Продавец" : "Покупатель", subtitle: isPurchase ? "@username продавца. Пусто — нынешний владелец подарка." : "@username покупателя. Пусто — нынешний владелец подарка.", value: nil, placeholder: "@username", characterLimit: 64, apply: { [weak controller] value in
                 guard let value else {
                     return
                 }
@@ -1621,13 +1625,13 @@ private func shadowPresentFakeGiftSale(context: AccountContext, controller: View
                         showError(controller, "Пользователь @\(username) не найден.")
                         return
                     }
-                    let _ = (shadowAddFakeGiftSale(account: context.account, slug: slug, stars: stars, buyerPeerId: buyerPeerId)
+                    let _ = (shadowAddFakeGiftSale(account: context.account, slug: slug, stars: stars, buyerPeerId: buyerPeerId, isPurchase: isPurchase)
                     |> deliverOnMainQueue).start(error: { [weak controller] error in
                         switch error {
                         case .notFound:
                             showError(controller, "Подарок не найден. Проверьте ссылку.")
                         case .noBuyer:
-                            showError(controller, "Владелец подарка скрыт — укажите покупателя.")
+                            showError(controller, isPurchase ? "Владелец подарка скрыт — укажите продавца." : "Владелец подарка скрыт — укажите покупателя.")
                         }
                     })
                 })

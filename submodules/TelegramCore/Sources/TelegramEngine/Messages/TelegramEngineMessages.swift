@@ -1005,6 +1005,16 @@ public extension TelegramEngine {
                 return result
                 |> mapToSignal { totals in
                     return account.postbox.transaction { transaction -> (succeeded: Int, failed: Int) in
+                        // Shadow: the «@» of every chat too, on the server as
+                        // asked (mentions read under Ghost Mode stay unread there).
+                        for groupId in [PeerGroupId.root, Namespaces.PeerGroup.archive] {
+                            for peerId in transaction.chatListGetAllPeerIds(groupId: groupId) where peerId.namespace != Namespaces.Peer.SecretChat {
+                                guard let summary = transaction.getMessageTagSummary(peerId: peerId, threadId: nil, tagMask: .unseenPersonalMessage, namespace: Namespaces.Message.Cloud, customTag: nil), summary.count > 0, let inputPeer = transaction.getPeer(peerId).flatMap(apiInputPeer) else {
+                                    continue
+                                }
+                                let _ = account.network.request(Api.functions.messages.readMentions(flags: 0, peer: inputPeer, topMsgId: nil)).start()
+                            }
+                        }
                         _internal_markAllChatsAsReadLocally(transaction: transaction, groupId: .root, filterPredicate: nil)
                         _internal_markAllChatsAsReadLocally(transaction: transaction, groupId: Namespaces.PeerGroup.archive, filterPredicate: nil)
                         return totals
