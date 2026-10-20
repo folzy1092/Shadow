@@ -262,7 +262,10 @@ static TGMediaLivePhotoMode TGMediaPickerGalleryResolvedLivePhotoMode(NSNumber *
         // Shadow: the round video (кружок) toggle sits opposite the mute button.
         _roundButton = [[TGModernButton alloc] initWithFrame:CGRectMake(0, 0, 40.0f, 40.0f)];
         _roundButton.hidden = true;
+        #pragma clang diagnostic push
+        #pragma clang diagnostic ignored "-Wdeprecated-declarations" // legacy non-configuration UIButton, like _muteButton
         _roundButton.adjustsImageWhenHighlighted = false;
+        #pragma clang diagnostic pop
         [_roundButton setBackgroundImage:[TGPhotoEditorInterfaceAssets gifBackgroundImage] forState:UIControlStateNormal];
         [_roundButton setImage:[TGMediaPickerGalleryInterfaceView shadowRoundVideoIcon:false] forState:UIControlStateNormal];
         [_roundButton setImage:[TGMediaPickerGalleryInterfaceView shadowRoundVideoIcon:true] forState:UIControlStateSelected];
