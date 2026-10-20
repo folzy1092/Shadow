@@ -230,7 +230,8 @@ UI-проекция настроек выбирается в `TelegramRootContro
 ## 5d. Версии, ветки обновлений, автокоммит вайтлиста
 
 - Версия форка — `ShadowVersion.fork` (Swift) и `versions.json` ключ `fork`
-  (CI, контракт-тест сверяет). Полная версия `ShadowVersion.full` = `12.9.2-1.3.1`.
+  (CI, контракт-тест сверяет). Полная версия `ShadowVersion.full` = `<Telegram>-<форк>`,
+  например `13.0.0-1.13.6` (база Telegram — `versions.json` → `app`, с 2026-10-20 это 13.0.0).
 - **Схема версии форка — Г.О.Ф** (правило Folzy, например `1.1.1`):
   **Г**лобальное (первая цифра) — глобальная переделка;
   **О**бновление (вторая) — базовое обновление, новые фичи (1.2.0 → 1.3.0);
@@ -845,6 +846,32 @@ UI-проекция настроек выбирается в `TelegramRootContro
   (`AyuSavedMedia.swift`, `ShadowSavedMediaFiles.swift`). Время сохранения
   берётся из метаданных, **не из mtime** (mtime у hard-link общий с кэшем).
 - История правок: `AyuEditHistory.swift` + `SavedMessageEditsAttribute`.
+
+## 5o. База Telegram 13.0.0 (2026-10-20)
+
+- Форк переехал с Telegram 12.9.2 на 13.0.0 (мерж тега `release-13.0.0`, ветка
+  `update-release-13.0.0`). `versions.json`: `app` 13.0.0, Xcode 26.6, Bazel 9.2.0.
+  Номер сборки — число коммитов, поэтому после мержа он прыгнул примерно на 830
+  (коммиты апстрима); это нормально, сборки по-прежнему растут.
+- Код-пароль: в 13.0 Telegram хранит его в `PasscodeCredentialStore` (Keychain,
+  только обёрнутый ключ, `PostboxAccessChallengeData.secured`) и проверяет
+  асинхронно в `PasscodeEntryController.verifyCode`. Второй код и код под
+  принуждением сверяются **до** хранилища Telegram, только на экране блокировки,
+  неудачной попыткой не считаются, но ждут его кулдаун. Совпадение нового кода с
+  код-паролем проверяет `PasscodeCredentialStore.shadowMatchesPasscode` (без счётчика
+  попыток) — открытого текста код-пароля больше нет.
+- Бизнес-бот: в 13.0 Telegram сам показывает панель бота над закрепом
+  (`managingBotTitlePanelForChatPresentationInterfaceState`). Составная панель
+  Shadow (`ShadowBusinessBotPinnedTitlePanelNode`) выбирается в ветке
+  `.pinnedMessage` у `titlePanelForChatPresentationInterfaceState`, а стоковая
+  панель бота тогда (и при «Только закреп») не показывается.
+- Списки: `ListViewItem` получает `neighbors: ListViewItemNeighbors` вместо
+  `previousItem`/`nextItem`; отступы ItemList — `itemListNeighbors(item:topFacet:bottomFacet:)`.
+- Камера разделена на `CameraLegacy` и `CameraNeo`; правка стартовой камеры
+  кружков — в `CameraLegacy/Sources/LegacyCamera.swift`.
+- CI: у `workflow_dispatch` есть флаг `keep_going` (все ошибки компиляции за
+  один прогон, `--continueOnError`); тестовая сборка ветки не публикует релиз и
+  не шлёт уведомления (эти шаги только для `master`).
 
 ## 7. Подводные камни
 
