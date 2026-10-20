@@ -151,10 +151,10 @@ public enum ShadowChatStatsCollect {
             case let file as TelegramMediaFile:
                 if file.isInstantVideo {
                     item.kind = .round
-                    item.duration = Int32(file.duration ?? 0)
+                    item.duration = ShadowVoiceTime.seconds(file.duration ?? 0)
                 } else if file.isVoice {
                     item.kind = .voice
-                    item.duration = Int32(file.duration ?? 0)
+                    item.duration = ShadowVoiceTime.seconds(file.duration ?? 0)
                 } else if file.isSticker || file.isAnimatedSticker || file.isVideoSticker {
                     item.kind = .sticker
                     item.stickerKey = "sticker:\(file.fileId.id)"

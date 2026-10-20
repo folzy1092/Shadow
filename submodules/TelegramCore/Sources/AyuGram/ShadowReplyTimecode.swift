@@ -35,7 +35,7 @@ public enum ShadowReplyTimecode {
         guard let position, duration >= 2.0, position >= 1.0, position <= duration - 1.0 else {
             return nil
         }
-        return ShadowVoiceTime.clock(Int32(position))
+        return ShadowVoiceTime.clock(ShadowVoiceTime.seconds(position))
     }
 
     public static func applying(_ timecode: String, to text: String) -> String {

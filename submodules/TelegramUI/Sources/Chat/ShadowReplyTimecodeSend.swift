@@ -69,7 +69,7 @@ func shadowReplyTimecodeAlertController(context: AccountContext, candidate: Shad
     let presentationData = context.sharedContext.currentPresentationData.with { $0 }
     let checkState = AlertCheckComponent.ExternalState()
     let kind = candidate.isRoundVideo ? "Кружок" : "Голосовое"
-    let length = ShadowVoiceTime.clock(Int32(candidate.duration))
+    let length = ShadowVoiceTime.clock(ShadowVoiceTime.seconds(candidate.duration))
 
     let content: [AnyComponentWithIdentity<AlertComponentEnvironment>] = [
         AnyComponentWithIdentity(id: "title", component: AnyComponent(AlertTitleComponent(title: "Добавить тайм-код \(candidate.timecode)?"))),

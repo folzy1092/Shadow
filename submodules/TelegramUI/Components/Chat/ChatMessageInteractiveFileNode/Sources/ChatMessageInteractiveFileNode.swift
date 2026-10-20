@@ -670,7 +670,7 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
                         isAudio = true
                         isVoice = true
                         
-                        let durationString = stringForDuration(Int32(videoDuration))
+                        let durationString = stringForDuration(ShadowVoiceTime.seconds(Double(videoDuration)))
                         candidateDescriptionString = NSAttributedString(string: durationString, font: durationFont, textColor: messageTheme.fileDurationColor)
                     }
                     if case let .Audio(voice, duration, title, performer, waveform) = attribute {
@@ -696,7 +696,8 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
                             }
                         }
                         
-                        audioDuration = Int32(duration)
+                        // Shadow: `Int32(_:)` traps on a claimed length it cannot hold.
+                        audioDuration = ShadowVoiceTime.seconds(Double(duration))
                         if voice {
                             isVoice = true
                             let durationString = stringForDuration(audioDuration)
@@ -1665,12 +1666,12 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
             if case let .Video(duration, _, flags, _, _, _) = attribute, flags.contains(.instantRoundVideo) {
                 isAudio = true
                 isVoice = true
-                audioDuration = Int32(duration)
+                audioDuration = ShadowVoiceTime.seconds(Double(duration))
             } else if case let .Audio(voice, duration, _, _, _) = attribute {
                 isAudio = true
                 if voice {
                     isVoice = true
-                    audioDuration = Int32(duration)
+                    audioDuration = ShadowVoiceTime.seconds(Double(duration))
                 }
             }
         }
@@ -1718,7 +1719,7 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
                 
                 let effectiveDuration = playerDuration > 0 ? playerDuration : Double(audioDuration ?? 0)
                 
-                var durationString = stringForDuration(Int32(effectiveDuration), position: playerPosition.flatMap { Int32($0) })
+                var durationString = stringForDuration(ShadowVoiceTime.seconds(effectiveDuration), position: playerPosition.flatMap { ShadowVoiceTime.seconds($0) })
                 // Shadow: the chosen time format (Кастомизация → Время на голосовых).
                 if !isViewOnceMessage, let shadowFormat = shadowVoiceTimeFormat(context: context, file: file), shadowFormat != ShadowVoiceTime.defaultFormat {
                     var isPlaying = false

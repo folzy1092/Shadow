@@ -35,6 +35,22 @@ struct VoiceTimeTests {
         check(ShadowVoiceTime.formats.count == 6 && Set(ShadowVoiceTime.formats.map { ShadowVoiceTime.title($0) }).count == 6, "Six titled formats")
         check(ShadowVoiceTime.example(2) == "0:22 / 1:14", "Example")
 
+        // A voice message that claims ~115 000 hours (one exists and crashed the
+        // chat): `elapsed * 100` overflowed Int32 while laying out a wide format.
+        let huge = 115_000.0 * 3600.0
+        check(ShadowVoiceTime.text(format: 2, duration: huge, position: huge) == "115000:00:00 / 115000:00:00", "Huge length, elapsed / total")
+        check(ShadowVoiceTime.text(format: 4, duration: huge, position: huge) == "115000:00:00 · 100%", "Huge length, percent")
+        check(ShadowVoiceTime.text(format: 5, duration: huge, position: huge / 2.0) == "50%", "Huge length, half")
+        check(ShadowVoiceTime.widestText(format: 3, duration: huge) == "-8:88 / 888888:88:88", "Huge length, widest text")
+        for format in ShadowVoiceTime.formats {
+            let _ = ShadowVoiceTime.widestText(format: format, duration: huge)
+            let _ = ShadowVoiceTime.text(format: format, duration: Double(Int32.max) * 4.0, position: Double.infinity)
+            let _ = ShadowVoiceTime.text(format: format, duration: Double.nan, position: Double.nan)
+        }
+        check(ShadowVoiceTime.seconds(.infinity) == Int32.max, "Infinity is clamped")
+        check(ShadowVoiceTime.seconds(.nan) == 0 && ShadowVoiceTime.seconds(-5) == 0, "NaN and negative are 0")
+        check(ShadowVoiceTime.seconds(1e12) == Int32.max && ShadowVoiceTime.seconds(74.9) == 74, "Large values clamp, others truncate")
+
         print("Voice time: \(count) checks passed")
     }
 }

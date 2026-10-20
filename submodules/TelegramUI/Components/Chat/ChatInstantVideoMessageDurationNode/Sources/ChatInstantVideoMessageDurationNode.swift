@@ -8,6 +8,15 @@ import AnimatedCountLabelNode
 
 private let textFont = Font.with(size: 11.0, design: .regular, weight: .regular, traits: [.monospacedNumbers])
 
+// Shadow: `Int32(_:)` traps on a length it cannot hold (a message can claim
+// any duration; the player may report NaN or infinity).
+private func shadowWholeSeconds(_ value: Double) -> Int32 {
+    guard value.isFinite, value > 0.0 else {
+        return 0
+    }
+    return value >= Double(Int32.max) ? Int32.max : Int32(value)
+}
+
 private struct ChatInstantVideoMessageDurationNodeState: Equatable {
     let hours: Int32?
     let minutes: Int32?
@@ -202,10 +211,10 @@ public final class ChatInstantVideoMessageDurationNode: ASImageNode {
             } else {
                 timestampSeconds = statusValue.timestamp
             }
-            let timestamp = Int32(timestampSeconds)
+            let timestamp = shadowWholeSeconds(timestampSeconds)
             self.state = ChatInstantVideoMessageDurationNodeState(hours: timestamp / (60 * 60), minutes: timestamp % (60 * 60) / 60, seconds: timestamp % 60)
         } else if let defaultDuration = self.defaultDuration {
-            let timestamp = Int32(defaultDuration)
+            let timestamp = shadowWholeSeconds(defaultDuration)
             self.state = ChatInstantVideoMessageDurationNodeState(hours: timestamp / (60 * 60), minutes: timestamp % (60 * 60) / 60, seconds: timestamp % 60)
         } else {
             self.state = ChatInstantVideoMessageDurationNodeState()

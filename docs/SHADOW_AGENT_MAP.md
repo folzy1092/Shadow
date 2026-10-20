@@ -412,6 +412,11 @@ UI-проекция настроек выбирается в `TelegramRootContro
   `ChatMessageInteractiveInstantVideoNode`), верхний плеер — подзаголовок в
   **обоих** `MediaNavigationAccessoryHeaderNode` (`TelegramBaseController` и
   `MediaPlaybackHeaderPanelComponent`). Пока не играет — просто длина.
+- Огромная длина (1.13.9): есть голосовое, которое заявляет ~115 000 часов, и чат
+  с ним падал. Swift ловит переполнение `Int32` и `Int32(_:)` от значения, которое
+  не влезает (огромное, бесконечность, NaN). Длину в секунды переводить только
+  через `ShadowVoiceTime.seconds(_:)` (с ограничением), процент — в `Int64`
+  (тест `VoiceTimeTests.swift`, `test_huge_voice_duration_contracts.py`).
 
 ## 5g. Автообновление с подписью на устройстве (1.4.0, установка 1.4.1), плитка камеры
 

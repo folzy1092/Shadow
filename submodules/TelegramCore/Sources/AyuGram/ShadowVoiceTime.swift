@@ -58,15 +58,29 @@ public enum ShadowVoiceTime {
         return nil
     }
 
+    // Whole seconds of a media time, for the clock. A message can claim any
+    // length (one with ~115 000 hours exists), and the player may report NaN
+    // or infinity: `Int32(_:)` traps on all of those, so clamp instead.
+    public static func seconds(_ value: Double) -> Int32 {
+        guard value.isFinite, value > 0.0 else {
+            return 0
+        }
+        if value >= Double(Int32.max) {
+            return Int32.max
+        }
+        return Int32(value)
+    }
+
     // `position` nil: not playing, the plain length.
     public static func text(format: Int32, duration: Double, position: Double?) -> String {
-        let total = Int32(max(0.0, duration))
+        let total = seconds(duration)
         guard let position else {
             return clock(total)
         }
-        let elapsed = min(total, Int32(max(0.0, position)))
+        let elapsed = min(total, seconds(position))
         let remaining = max(0, total - elapsed)
-        let percent = total > 0 ? Int(min(100, elapsed * 100 / total)) : 0
+        // In Int64: `elapsed * 100` overflows Int32 (a crash) past ~5 965 hours.
+        let percent = total > 0 ? Int(min(100, Int64(elapsed) * 100 / Int64(total))) : 0
         switch normalized(format) {
         case 1:
             return clock(elapsed)
