@@ -791,6 +791,14 @@ UI-проекция настроек выбирается в `TelegramRootContro
   `translateMessageIds`. Обычный текст переводит телефон; опросы, расшифровки
   и rich-сообщения по-прежнему идут на сервер (без Premium не переведутся).
 
+- Время прочтения голосовых (1.13.11): Telegram скрывает «Прочитано …» в меню
+  своего голосового/кружка, пока его не прослушали (`canViewReadStats` в
+  `ChatInterfaceStateContextMenus.swift` требует `ConsumableContentMessageAttribute.consumed`),
+  хотя галочки уже две. В личных чатах дата — это отметка прочтения чата
+  (`messages.getOutboxReadDate`), от прослушивания не зависит, поэтому Shadow
+  показывает её всегда; второй строкой «не прослушано» / «не просмотрено»
+  (`shadowUnplayedSuffix`). В группах правило Telegram (там считаются прослушавшие).
+
 ## 5a. Замки чатов и второе пространство
 
 - Замки: `ShadowChatLock.swift` (хранилище), `TelegramUI/Sources/ShadowChatLockUI.swift`

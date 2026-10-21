@@ -61,6 +61,27 @@ private func canEditFactCheck(appConfig: AppConfiguration) -> Bool {
     return false
 }
 
+// Shadow: a read voice message or round that was not played yet.
+private func shadowUnplayedSuffix(message: EngineRawMessage) -> String {
+    var isVoice = false
+    var isRound = false
+    for media in message.media {
+        if let file = media as? TelegramMediaFile {
+            isVoice = file.isVoice
+            isRound = file.isInstantVideo
+        }
+    }
+    guard isVoice || isRound else {
+        return ""
+    }
+    for attribute in message.attributes {
+        if let attribute = attribute as? ConsumableContentMessageAttribute, attribute.consumed {
+            return ""
+        }
+    }
+    return isRound ? "\nне просмотрено" : "\nне прослушано"
+}
+
 private func canViewReadStats(message: EngineRawMessage, participantCount: Int?, isMessageRead: Bool, isPremium: Bool, appConfig: AppConfiguration) -> Bool {
     guard let peer = message.peers[message.id.peerId] else {
         return false
@@ -78,7 +99,12 @@ private func canViewReadStats(message: EngineRawMessage, participantCount: Int?,
         if let _ = media as? TelegramMediaAction {
             return false
         } else if let file = media as? TelegramMediaFile {
-            if file.isVoice || file.isInstantVideo {
+            // Shadow: in a private chat the read date is the chat's read mark,
+            // which the server reports whether or not the voice message or
+            // round was played, so show it like any other message (the item
+            // says "не прослушано" until it is). Groups count listeners there,
+            // so they keep Telegram's rule.
+            if (file.isVoice || file.isInstantVideo) && !(peer is TelegramUser) {
                 var hasRead = false
                 for attribute in message.attributes {
                     if let attribute = attribute as? ConsumableContentMessageAttribute {
@@ -3820,7 +3846,10 @@ private final class ChatReadReportContextItemNode: ASDisplayNode, ContextMenuCus
                     }
                 )).string
                 
-                self.textNode.attributedText = NSAttributedString(string: dateText, font: Font.regular(floor(self.presentationData.listsFontSize.baseDisplaySize * 0.8)), textColor: self.presentationData.theme.contextMenu.primaryColor)
+                // Shadow: "не прослушано" on a second line (the item is 250 pt wide).
+                let unplayedSuffix = shadowUnplayedSuffix(message: self.item.message)
+                self.textNode.maximumNumberOfLines = unplayedSuffix.isEmpty ? 1 : 2
+                self.textNode.attributedText = NSAttributedString(string: dateText + unplayedSuffix, font: Font.regular(floor(self.presentationData.listsFontSize.baseDisplaySize * 0.8)), textColor: self.presentationData.theme.contextMenu.primaryColor)
             } else {
                 if reactionCount != 0 {
                     let text: String
