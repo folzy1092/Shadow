@@ -81,8 +81,8 @@ struct ActivityImitationTests {
         } else {
             check(false, "Second user prank")
         }
-        let full = (1 ... Clip.maxPranks).map { Clip.Prank(title: "p", channel: "chan_\($0)", messageId: 1) }
-        check(Clip.addingUserPrank(full, title: "x", link: "t.me/another/1") == .failure(.full), "At most maxPranks")
+        let fullPranks = (1 ... Clip.maxPranks).map { Clip.Prank(title: "p", channel: "chan_\($0)", messageId: 1) }
+        check(Clip.addingUserPrank(fullPranks, title: "x", link: "t.me/another/1") == .failure(.full), "At most maxPranks")
         let merged = Clip.mergedPranks(user: mine, catalog: [Clip.Prank(title: "Каталог", channel: "MyChannel", messageId: 7), Clip.Prank(title: "Другой", channel: "kartinki5222", messageId: 93)])
         check(merged.map { $0.id } == ["mychannel/7", "kartinki5222/93"] && merged[0].title == "Моё гс", "User pranks first, catalog duplicates dropped")
         check(Clip.removingUserPrank(mine, id: "mychannel/7").isEmpty, "User prank removed")
