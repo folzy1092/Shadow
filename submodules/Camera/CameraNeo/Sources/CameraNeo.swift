@@ -123,25 +123,34 @@ final class CameraNeo: NSObject, CameraProtocol {
 
     deinit {
         NotificationCenter.default.removeObserver(self)
-        let cleanUpSession = {
-            self.primaryVideoOutput?.setSampleBufferDelegate(nil, queue: nil)
-            self.secondaryVideoOutput?.setSampleBufferDelegate(nil, queue: nil)
-            self.audioOutput?.setSampleBufferDelegate(nil, queue: nil)
-            if self.session.isRunning {
-                self.session.stopRunning()
+        // Shadow: never wait here. The camera is released on the main thread
+        // when the round-video screen closes (Cancel, Send, leaving the chat),
+        // and the stock deinit did `sessionQueue.sync` + `mediaQueue.sync`
+        // there: stopping and reconfiguring a session whose preview layer is
+        // on screen can need the main thread, so the app froze. Like
+        // CameraLegacy, hand the session and the recorder to their own queues
+        // and return; only the delegates (this object) are dropped right away.
+        self.primaryVideoOutput?.setSampleBufferDelegate(nil, queue: nil)
+        self.secondaryVideoOutput?.setSampleBufferDelegate(nil, queue: nil)
+        self.audioOutput?.setSampleBufferDelegate(nil, queue: nil)
+
+        let session = self.session
+        self.sessionQueue.async {
+            if session.isRunning {
+                session.stopRunning()
             }
-            self.tearDownSession()
+            session.beginConfiguration()
+            for output in session.outputs {
+                session.removeOutput(output)
+            }
+            for input in session.inputs {
+                session.removeInput(input)
+            }
+            session.commitConfiguration()
         }
-        if DispatchQueue.getSpecific(key: self.sessionQueueKey) != nil {
-            cleanUpSession()
-        } else {
-            self.sessionQueue.sync(execute: cleanUpSession)
-        }
-        if DispatchQueue.getSpecific(key: self.mediaQueueKey) != nil {
-            self.recorder?.cancel()
-        } else {
-            self.mediaQueue.sync {
-                self.recorder?.cancel()
+        if let recorder = self.recorder {
+            self.mediaQueue.async {
+                recorder.cancel()
             }
         }
     }

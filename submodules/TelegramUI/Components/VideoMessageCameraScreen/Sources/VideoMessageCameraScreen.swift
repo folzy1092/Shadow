@@ -1046,6 +1046,7 @@ public class VideoMessageCameraScreen: ViewController {
             let useModernVideoMessagePipeline = self.context.sharedContext.immediateExperimentalUISettings.useModernVideoMessagePipeline ?? (self.context.getAppConfigValue("ios_killswitch_disable_neo_round_camera_v2") == nil && !ShadowRoundVideoCameraFallback.prefersLegacyCamera)
             if useModernVideoMessagePipeline {
                 self.cameraImpl = NeoCameraImpl.shared
+                ShadowRoundVideoCameraFallback.beginModernSession()
             } else {
                 self.cameraImpl = LegacyCameraImpl.shared
             }
@@ -1368,6 +1369,10 @@ public class VideoMessageCameraScreen: ViewController {
         // nil = the awaited recording failed (see `shadowRecordingFailed`).
         fileprivate var resultsPipe = ValuePipe<VideoMessageCameraScreen.CaptureResult?>()
 
+        fileprivate var shadowUsesModernCamera: Bool {
+            return self.cameraImpl is NeoCameraImpl
+        }
+        
         fileprivate func shadowNoteCameraFailure() {
             if self.cameraImpl is NeoCameraImpl {
                 ShadowRoundVideoCameraFallback.noteModernCameraFailure()
@@ -2354,12 +2359,24 @@ public class VideoMessageCameraScreen: ViewController {
         
         self.node.camera?.stopCapture(invalidate: true)
         self.isDismissed = true
+        // Shadow: the CameraNeo screen is over once the main thread is still
+        // alive a moment after it closed (see ShadowRoundVideoCameraFallback).
+        let endsModernSession = self.node.shadowUsesModernCamera
+        let dismissed = {
+            if endsModernSession {
+                Queue.mainQueue().after(1.0) {
+                    ShadowRoundVideoCameraFallback.endModernSession()
+                }
+            }
+        }
         if animated {
             self.node.animateOut(completion: {
                 self.dismiss(animated: false)
+                dismissed()
             })
         } else {
             self.dismiss(animated: false)
+            dismissed()
         }
     }
         

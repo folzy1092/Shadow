@@ -58,6 +58,30 @@ class RoundVideoCameraContracts(unittest.TestCase):
         self.assertIn('"CFBundleVersion"', fallback)
         self.assertIn("failedBuild == Self.currentBuild", fallback)
 
+    def test_camera_neo_never_blocks_the_main_thread_on_release(self):
+        # Cancel/Send close the screen and release the camera on the main
+        # thread; the stock deinit waited on the session and media queues there
+        # and froze the app.
+        neo = read(NEO / "CameraNeo.swift")
+        deinit = neo.split("    deinit {", 1)[1].split("\n    }\n", 1)[0]
+        code = "\n".join(line for line in deinit.splitlines() if not line.strip().startswith("//"))
+        self.assertNotIn(".sync", code)
+        self.assertIn("self.sessionQueue.async {", deinit)
+        self.assertIn("self.mediaQueue.async {", deinit)
+        self.assertNotIn("self.", deinit.split("self.sessionQueue.async {", 1)[1].split("if let recorder", 1)[0])
+        for source in (NEO).glob("*.swift"):
+            self.assertNotIn("DispatchQueue.main.sync", read(source), source.name)
+            self.assertNotIn(".sync(", read(source), source.name)
+
+    def test_a_freeze_on_camera_neo_falls_back_to_the_old_camera(self):
+        screen = read(SCREEN / "VideoMessageCameraScreen.swift")
+        self.assertIn("ShadowRoundVideoCameraFallback.beginModernSession()", screen)
+        dismiss = screen.split("fileprivate func requestDismiss(animated: Bool)", 1)[1].split("override public func containerLayoutUpdated", 1)[0]
+        self.assertIn("ShadowRoundVideoCameraFallback.endModernSession()", dismiss)
+        fallback = read(SCREEN / "ShadowRoundVideoCameraFallback.swift")
+        self.assertIn("parts[1] != Self.launchId", fallback)
+        self.assertIn("Self.noteModernCameraFailure()", fallback)
+
     def test_chat_drops_the_dead_round_draft(self):
         media = read(MEDIA_RECORDING)
         failed = media.split("guard var message else {", 1)[1].split("let replyMessageSubject", 1)[0]
