@@ -25,7 +25,8 @@ extension ChatControllerImpl {
         let accountPeerId = context.account.peerId.toInt64()
         let key = ShadowActivityImitation.Key(accountPeerId: accountPeerId, peerId: peerId.toInt64(), threadId: threadId)
         let settings = currentAyuGramSettings(accountId: context.account.id)
-        let pranks = ShadowDeviceAccess.cachedWhitelist?.paperclipPranks ?? []
+        // The user's own pranks («Мои приколы») first, then the Shadow catalog.
+        let pranks = ShadowPaperclip.mergedPranks(user: ShadowPaperclipUserPrankStore.pranks, catalog: ShadowDeviceAccess.cachedWhitelist?.paperclipPranks ?? [])
         let running = ShadowActivityImitation.shared.mode(key)
         let runningCount = ShadowActivityImitation.shared.count(accountPeerId: accountPeerId)
 
@@ -77,7 +78,18 @@ extension ChatControllerImpl {
                     return generateTintedImage(image: UIImage(systemName: "theatermasks"), color: theme.contextMenu.primaryColor)
                 }, action: { [weak self] _, f in
                     f(.default)
-                    self?.shadowSendPaperclipPrank(prank, peerId: peerId, threadId: threadId)
+                    guard let self else {
+                        return
+                    }
+                    // A reply chosen in the chat (swipe on a message) is taken now
+                    // and cleared, as a sent message clears it.
+                    let replySubject = self.presentationInterfaceState.interfaceState.replyMessageSubject?.subjectModel
+                    if replySubject != nil {
+                        self.updateChatPresentationInterfaceState(animated: true, interactive: false, {
+                            $0.updatedInterfaceState { $0.withUpdatedReplyMessageSubject(nil) }
+                        })
+                    }
+                    self.shadowSendPaperclipPrank(prank, peerId: peerId, threadId: threadId, replySubject: replySubject)
                 })))
             }
         }
@@ -103,8 +115,14 @@ extension ChatControllerImpl {
 
     // Loads the prank post and forwards it without the author. With
     // paperclipPrankImitation the chat first shows the matching «записывает…» /
-    // «отправляет…» for paperclipPrankSeconds.
-    private func shadowSendPaperclipPrank(_ prank: ShadowPaperclip.Prank, peerId: EnginePeer.Id, threadId: Int64?) {
+    // «отправляет…» for paperclipPrankSeconds, and a voice message or round
+    // video then «отправляет…» for paperclipPrankSendSeconds (0: skipped).
+    //
+    // As a reply it is sent as a copy instead: a forward cannot be a reply
+    // (TelegramCore drops the reply of a forward), while the same file sent by
+    // reference is an ordinary message of the user's, reply included, and is not
+    // uploaded again.
+    private func shadowSendPaperclipPrank(_ prank: ShadowPaperclip.Prank, peerId: EnginePeer.Id, threadId: Int64?, replySubject: EngineMessageReplySubject?) {
         let context = self.context
         let loaded: Signal<EngineRawMessage?, NoError> = context.engine.peers.resolvePeerByName(name: prank.channel, referrer: nil)
         |> mapToSignal { result -> Signal<EnginePeer?, NoError> in
@@ -139,26 +157,60 @@ extension ChatControllerImpl {
             }
             let settings = currentAyuGramSettings(accountId: context.account.id)
             let send: () -> Void = {
-                let _ = enqueueMessages(account: context.account, peerId: peerId, messages: [
-                    .forward(source: message.id, threadId: threadId, grouping: .none, attributes: [ForwardOptionsMessageAttribute(hideNames: true, hideCaptions: false)], correlationId: nil)
-                ]).startStandalone()
+                let enqueued: EnqueueMessage
+                if let replySubject {
+                    enqueued = shadowPrankCopy(message, threadId: threadId, replySubject: replySubject)
+                } else {
+                    enqueued = .forward(source: message.id, threadId: threadId, grouping: .none, attributes: [ForwardOptionsMessageAttribute(hideNames: true, hideCaptions: false)], correlationId: nil)
+                }
+                let _ = enqueueMessages(account: context.account, peerId: peerId, messages: [enqueued]).startStandalone()
             }
             guard settings.paperclipPrankImitation else {
                 send()
                 return
             }
             let key = ShadowActivityImitation.Key(accountPeerId: context.account.peerId.toInt64(), peerId: peerId.toInt64(), threadId: threadId)
-            let mode = ShadowPaperclip.imitationMode(for: shadowPrankMedia(message))
+            let media = shadowPrankMedia(message)
+            let mode = ShadowPaperclip.imitationMode(for: media)
+            let sendSeconds = ShadowPaperclip.normalizedPrankSendSeconds(settings.paperclipPrankSendSeconds)
+            let sendingMode = sendSeconds > 0 ? ShadowPaperclip.sendingMode(for: media) : nil
             ShadowActivityImitation.shared.start(account: context.account, peerId: peerId, threadId: threadId, mode: mode)
             Queue.mainQueue().after(Double(ShadowPaperclip.normalizedPrankSeconds(settings.paperclipPrankSeconds)), {
                 // A different imitation the user started meanwhile keeps running.
-                if ShadowActivityImitation.shared.mode(key) == mode {
-                    ShadowActivityImitation.shared.stop(key)
+                guard ShadowActivityImitation.shared.mode(key) == mode else {
+                    send()
+                    return
                 }
-                send()
+                guard let sendingMode else {
+                    ShadowActivityImitation.shared.stop(key)
+                    send()
+                    return
+                }
+                // Second phase: «записывает…» becomes «отправляет…».
+                ShadowActivityImitation.shared.start(account: context.account, peerId: peerId, threadId: threadId, mode: sendingMode)
+                Queue.mainQueue().after(Double(sendSeconds), {
+                    if ShadowActivityImitation.shared.mode(key) == sendingMode {
+                        ShadowActivityImitation.shared.stop(key)
+                    }
+                    send()
+                })
             })
         })
     }
+}
+
+// The prank post as the user's own message: its text (with formatting) and its
+// file or photo by reference to the post, answering `replySubject`.
+private func shadowPrankCopy(_ message: EngineRawMessage, threadId: Int64?, replySubject: EngineMessageReplySubject) -> EnqueueMessage {
+    var attributes: [EngineMessage.Attribute] = []
+    for attribute in message.attributes {
+        if let attribute = attribute as? TextEntitiesMessageAttribute {
+            attributes.append(attribute)
+        }
+    }
+    let media = message.media.first(where: { $0 is TelegramMediaFile || $0 is TelegramMediaImage })
+    let mediaReference: AnyMediaReference? = media.map { .message(message: MessageReference(message), media: $0) }
+    return .message(text: message.text, attributes: attributes, inlineStickers: [:], mediaReference: mediaReference, threadId: threadId, replyToMessageId: replySubject, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])
 }
 
 private func shadowPrankMedia(_ message: EngineRawMessage) -> ShadowPaperclip.PrankMedia {

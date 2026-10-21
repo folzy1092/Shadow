@@ -64,6 +64,29 @@ struct ActivityImitationTests {
         check(Clip.normalizedPrankSeconds(0) == 1 && Clip.normalizedPrankSeconds(5) == 5 && Clip.normalizedPrankSeconds(500) == 60, "Seconds clamped")
         check(Clip.imitationMode(for: .voice) == .recordingVoice && Clip.imitationMode(for: .roundVideo) == .recordingRound && Clip.imitationMode(for: .text) == .typing, "Prank imitation by media")
 
+        // 1.14.0: «отправляет…» after «записывает…», and the user's own pranks.
+        check(Clip.normalizedPrankSendSeconds(-1) == 0 && Clip.normalizedPrankSendSeconds(2) == 2 && Clip.normalizedPrankSendSeconds(90) == 60, "Sending seconds clamped, 0 allowed")
+        check(Clip.sendingMode(for: .voice) == .sendingAudio && Clip.sendingMode(for: .roundVideo) == .sendingRound, "Voice and round video are then sent")
+        check(Clip.sendingMode(for: .photo) == nil && Clip.sendingMode(for: .text) == nil, "Other pranks have no second phase")
+        var mine: [Clip.Prank] = []
+        if case let .success(updated) = Clip.addingUserPrank(mine, title: "  Моё гс  ", link: "https://t.me/MyChannel/7?single") {
+            mine = updated
+        }
+        check(mine.count == 1 && mine[0].title == "Моё гс" && mine[0].id == "mychannel/7", "User prank added from a link")
+        check(Clip.addingUserPrank(mine, title: "", link: "t.me/mychannel/7") == .failure(.duplicate), "Same post twice")
+        check(Clip.addingUserPrank(mine, title: "x", link: "https://t.me/c/123/4") == .failure(.badLink), "Private channel links are refused")
+        check(Clip.addingUserPrank(mine, title: "x", link: "hello") == .failure(.badLink), "Not a link")
+        if case let .success(updated) = Clip.addingUserPrank(mine, title: "", link: "@other_chan/2") {
+            check(updated[1].title == "Прикол", "Untitled user prank")
+        } else {
+            check(false, "Second user prank")
+        }
+        let full = (1 ... Clip.maxPranks).map { Clip.Prank(title: "p", channel: "chan_\($0)", messageId: 1) }
+        check(Clip.addingUserPrank(full, title: "x", link: "t.me/another/1") == .failure(.full), "At most maxPranks")
+        let merged = Clip.mergedPranks(user: mine, catalog: [Clip.Prank(title: "Каталог", channel: "MyChannel", messageId: 7), Clip.Prank(title: "Другой", channel: "kartinki5222", messageId: 93)])
+        check(merged.map { $0.id } == ["mychannel/7", "kartinki5222/93"] && merged[0].title == "Моё гс", "User pranks first, catalog duplicates dropped")
+        check(Clip.removingUserPrank(mine, id: "mychannel/7").isEmpty, "User prank removed")
+
         print("ActivityImitationTests: \(count) checks passed")
     }
 }

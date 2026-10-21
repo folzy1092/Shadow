@@ -10,7 +10,11 @@ import Foundation
 //     edited in «Доступ устройств»): a post of a public channel, e.g. the
 //     «longest» voice message, forwarded into the chat without the author. With
 //     paperclipPrankImitation a voice or round video is preceded by
-//     «записывает…» for paperclipPrankSeconds.
+//     «записывает…» for paperclipPrankSeconds, then «отправляет…» for
+//     paperclipPrankSendSeconds (1.14.0; 0 skips that phase);
+//   - a prank of the user's own (1.14.0): a post of a public channel added by
+//     link in «Действия скрепки → Мои приколы», kept on this device
+//     (ShadowPaperclipUserPrankStore) and listed with the catalog's.
 //
 // The chosen actions are stored as one string, "a1,a2,pkartinki5222/93":
 // "a<mode>" for an imitation, "p<channel>/<post>" for a prank. Foundation only,
@@ -19,6 +23,8 @@ public enum ShadowPaperclip {
     public static let maxActions = 20
     public static let defaultPrankSeconds: Int32 = 5
     public static let prankSecondsRange: ClosedRange<Int32> = 1 ... 60
+    public static let defaultPrankSendSeconds: Int32 = 2
+    public static let prankSendSecondsRange: ClosedRange<Int32> = 0 ... 60
     // «Печатает», «Записывает голосовое», «Записывает кружок».
     public static let defaultActions = "a0,a1,a2"
 
@@ -81,6 +87,10 @@ public enum ShadowPaperclip {
 
     public static func normalizedPrankSeconds(_ value: Int32) -> Int32 {
         return min(prankSecondsRange.upperBound, max(prankSecondsRange.lowerBound, value))
+    }
+
+    public static func normalizedPrankSendSeconds(_ value: Int32) -> Int32 {
+        return min(prankSendSecondsRange.upperBound, max(prankSendSecondsRange.lowerBound, value))
     }
 
     // Known actions, in order, without duplicates, at most maxActions.
@@ -217,6 +227,54 @@ public enum ShadowPaperclip {
         case file
         case sticker
         case text
+    }
+
+    // The second phase, after «записывает…»: only a voice message and a round
+    // video are recorded first and then uploaded; every other kind already
+    // imitates its upload in the first phase.
+    public static func sendingMode(for media: PrankMedia) -> ShadowActivityImitationMode? {
+        switch media {
+        case .voice: return .sendingAudio
+        case .roundVideo: return .sendingRound
+        default: return nil
+        }
+    }
+
+    // The menu's pranks: the user's own first, then the catalog's that are not
+    // also the user's.
+    public static func mergedPranks(user: [Prank], catalog: [Prank]) -> [Prank] {
+        var result = user
+        for prank in catalog where !result.contains(where: { $0.id == prank.id }) {
+            result.append(prank)
+        }
+        return result
+    }
+
+    public enum UserPrankError: Error, Equatable {
+        // Not a post of a public channel (t.me/<channel>/<post>).
+        case badLink
+        case duplicate
+        case full
+    }
+
+    // Adds a prank of the user's own, at the end.
+    public static func addingUserPrank(_ pranks: [Prank], title: String, link: String) -> Result<[Prank], UserPrankError> {
+        guard let parsed = parsePrankLink(link) else {
+            return .failure(.badLink)
+        }
+        let trimmed = String(title.trimmingCharacters(in: .whitespacesAndNewlines).prefix(maxTitleLength))
+        let prank = Prank(title: trimmed.isEmpty ? "Прикол" : trimmed, channel: parsed.channel, messageId: parsed.messageId)
+        if pranks.contains(where: { $0.id == prank.id }) {
+            return .failure(.duplicate)
+        }
+        if pranks.count >= maxPranks {
+            return .failure(.full)
+        }
+        return .success(pranks + [prank])
+    }
+
+    public static func removingUserPrank(_ pranks: [Prank], id: String) -> [Prank] {
+        return pranks.filter { $0.id != id }
     }
 
     public static func imitationMode(for media: PrankMedia) -> ShadowActivityImitationMode {

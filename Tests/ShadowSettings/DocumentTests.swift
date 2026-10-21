@@ -95,6 +95,9 @@ struct DocumentTests {
         let quality = try ShadowSettingsDocument.decode(ShadowSettingsDocument(settings: ["mediaSendQuality": .integer(2)]).encoded())
         check(quality.settings["mediaSendQuality"] == .integer(2), "Media send quality is portable")
         expectFailure("Unsupported media send quality") { _ = try ShadowSettingsDocument(settings: ["mediaSendQuality": .integer(3)]) }
+        let prankSend = try ShadowSettingsDocument.decode(ShadowSettingsDocument(settings: ["paperclipPrankSeconds": .integer(5), "paperclipPrankSendSeconds": .integer(0)]).encoded())
+        check(prankSend.settings["paperclipPrankSendSeconds"] == .integer(0), "Prank sending seconds are portable (0 skips the phase)")
+        expectFailure("Prank sending seconds out of range") { _ = try ShadowSettingsDocument(settings: ["paperclipPrankSendSeconds": .integer(61)]) }
         expectFailure("Unsupported silent send minute") { _ = try ShadowSettingsDocument(settings: ["silentSendTo": .integer(1440)]) }
         let feed = try ShadowSettingsDocument.decode(ShadowSettingsDocument(settings: ["feedEnabled": .bool(true), "feedPosition": .integer(2), "feedAutoplay": .bool(false)]).encoded())
         check(feed.settings["feedEnabled"] == .bool(true) && feed.settings["feedPosition"] == .integer(2) && feed.settings["feedAutoplay"] == .bool(false), "Feed settings are portable")

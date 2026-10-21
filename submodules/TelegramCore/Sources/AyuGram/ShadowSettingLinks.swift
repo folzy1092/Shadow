@@ -285,6 +285,7 @@ public enum ShadowSettingLinks {
         ShadowSettingLink(screen: "customization", slug: "paperclip-actions", entryId: 134, key: nil, title: "Действия скрепки", parentEntryId: 133, since: "1.13.7"),
         ShadowSettingLink(screen: "customization", slug: "paperclip-prank-recording", entryId: 135, key: "paperclipPrankImitation", title: "Приколы: имитировать запись", parentEntryId: 133, since: "1.13.7"),
         ShadowSettingLink(screen: "customization", slug: "paperclip-prank-seconds", entryId: 136, key: nil, title: "Секунд записи", parentEntryId: 135, since: "1.13.7"),
+        ShadowSettingLink(screen: "customization", slug: "paperclip-prank-sending", entryId: 137, key: nil, title: "Секунд отправки", parentEntryId: 135, since: "1.14.0"),
         ShadowSettingLink(screen: "customization", slug: "unlimited-favorites", entryId: 131, key: "unlimitedFavorites", title: "Безлимитное избранное", icon: "star", since: "1.13.0"),
         ShadowSettingLink(screen: "customization", slug: "compact-chats", entryId: 110, key: "compactChatList", title: "Компактный список чатов"),
         ShadowSettingLink(screen: "customization", slug: "chat-banners", entryId: 122, key: "chatBannersEnabled", title: "Фоны чатов", icon: "photo", since: "1.10.0"),

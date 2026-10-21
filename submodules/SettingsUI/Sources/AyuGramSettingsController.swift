@@ -826,6 +826,7 @@ private final class AyuCustomizationArguments {
     var selectBusinessBotPinnedLayout: () -> Void = {}
     var openPaperclipActions: () -> Void = {}
     var editPaperclipPrankSeconds: () -> Void = {}
+    var editPaperclipPrankSendSeconds: () -> Void = {}
     var selectMediaSendQuality: () -> Void = {}
     var updateSetting: (@escaping (inout AyuGramSettings) -> Void) -> Void = { _ in }
     // true: background color, false: glyph color.
@@ -998,6 +999,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
     case paperclipActions(Int)
     case paperclipPrankImitation(Bool)
     case paperclipPrankSeconds(Int32)
+    case paperclipPrankSendSeconds(Int32)
     case compactChatList(Bool)
     case chatBanners(Bool)
     case chatBannersList(Int)
@@ -1076,7 +1078,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .appearanceHeader, .showMessageSeconds, .editedIndicatorAsPencil, .editedIndicatorText, .deletedIndicatorText, .regularEmojiFirst, .doubleTapToEdit, .showExactLastSeen, .showExactLastSeenSeconds, .wideChannelPosts, .showExactViewCounts, .showForwardCount, .appearanceFooter:
             return AyuCustomizationSection.appearance.rawValue
         case .headerButtons: return AyuCustomizationSection.chats.rawValue
-        case .chatsHeader, .hideAllChatsFolder, .hideStoriesBar, .hideGiftButton, .hideGreetingSticker, .hidePremiumBadges, .hideSponsoredMessages, .unlimitedPinnedChats, .unlimitedFavorites, .localChatTranslation, .paperclipMenu, .paperclipActions, .paperclipPrankImitation, .paperclipPrankSeconds, .compactChatList, .chatBanners, .chatBannersList, .chatsFooter:
+        case .chatsHeader, .hideAllChatsFolder, .hideStoriesBar, .hideGiftButton, .hideGreetingSticker, .hidePremiumBadges, .hideSponsoredMessages, .unlimitedPinnedChats, .unlimitedFavorites, .localChatTranslation, .paperclipMenu, .paperclipActions, .paperclipPrankImitation, .paperclipPrankSeconds, .paperclipPrankSendSeconds, .compactChatList, .chatBanners, .chatBannersList, .chatsFooter:
             return AyuCustomizationSection.chats.rawValue
         case .businessBotHeader, .businessBotPinned, .businessBotPinnedLayout, .businessBotPinnedFirst, .businessBotPinnedCompact, .businessBotFooter:
             return AyuCustomizationSection.businessBot.rawValue
@@ -1154,6 +1156,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .paperclipActions: return 134
         case .paperclipPrankImitation: return 135
         case .paperclipPrankSeconds: return 136
+        case .paperclipPrankSendSeconds: return 137
         case .monochromeSettingsIcons: return 106
         case .settingsIconBackground: return 107
         case .settingsIconGlyph: return 108
@@ -1223,6 +1226,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .paperclipActions: return (12, 13)
         case .paperclipPrankImitation: return (12, 14)
         case .paperclipPrankSeconds: return (12, 15)
+        case .paperclipPrankSendSeconds: return (12, 16)
         // Right after the chats section (chatsFooter = 13).
         case .businessBotHeader: return (13, 1)
         case .businessBotPinned: return (13, 2)
@@ -1403,6 +1407,8 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
             })
         case let .paperclipPrankSeconds(seconds):
             return ItemListDisclosureItem(presentationData: presentationData, title: "Секунд записи", label: "\(seconds) с", labelStyle: .detailText, sectionId: self.section, style: .blocks, action: arguments.editPaperclipPrankSeconds)
+        case let .paperclipPrankSendSeconds(seconds):
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Секунд отправки", label: seconds == 0 ? "Выкл." : "\(seconds) с", labelStyle: .detailText, sectionId: self.section, style: .blocks, action: arguments.editPaperclipPrankSendSeconds)
         case let .unlimitedFavorites(value):
             return ItemListSwitchItem(presentationData: presentationData, title: "Безлимитное избранное", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 arguments.updateSetting { $0.unlimitedFavorites = value }
@@ -1640,6 +1646,7 @@ private func ayuCustomizationEntries(settings: AyuGramSettings, chatVoiceSpeedCo
         entries.append(.paperclipPrankImitation(settings.paperclipPrankImitation))
         if settings.paperclipPrankImitation {
             entries.append(.paperclipPrankSeconds(settings.paperclipPrankSeconds))
+            entries.append(.paperclipPrankSendSeconds(settings.paperclipPrankSendSeconds))
         }
     }
     entries.append(.chatsFooter)
@@ -2015,6 +2022,19 @@ func ayuCustomizationController(context: AccountContext, focus: ShadowSettingsSe
                 return
             }
             ayuUpdateSettings(context: context) { var settings = $0; settings.paperclipPrankSeconds = ShadowPaperclip.normalizedPrankSeconds(number); return settings }
+        }), nil)
+    }
+    arguments.editPaperclipPrankSendSeconds = {
+        let current = currentAyuGramSettings(accountId: context.account.id).paperclipPrankSendSeconds
+        let range = ShadowPaperclip.prankSendSecondsRange
+        presentControllerImpl?(promptController(context: context, text: "Секунд отправки", subtitle: "Сколько после «записывает…» собеседник видит «отправляет голосовое / кружок»: от \(range.lowerBound) до \(range.upperBound), 0 — сразу отправить", value: "\(current)", placeholder: "\(ShadowPaperclip.defaultPrankSendSeconds)", characterLimit: 2, apply: { value in
+            guard let value else {
+                return
+            }
+            guard let number = Int32(value.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+                return
+            }
+            ayuUpdateSettings(context: context) { var settings = $0; settings.paperclipPrankSendSeconds = ShadowPaperclip.normalizedPrankSendSeconds(number); return settings }
         }), nil)
     }
     arguments.selectMediaSendQuality = {

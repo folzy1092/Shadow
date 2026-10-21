@@ -196,6 +196,9 @@ public struct AyuGramSettings: Codable, Equatable {
     // paperclipPrankSeconds; off: it is just forwarded without the author.
     public var paperclipPrankImitation: Bool = true
     public var paperclipPrankSeconds: Int32 = ShadowPaperclip.defaultPrankSeconds
+    // Then «отправляет…» (voice, round video) for this long before it is sent;
+    // 0 skips that phase.
+    public var paperclipPrankSendSeconds: Int32 = ShadowPaperclip.defaultPrankSendSeconds
     // Local history of when contacts were online (ShadowOnlineHistory).
     public var onlineHistory: Bool = false
     // Keep a local copy of viewed stories (ShadowStoryArchive).
@@ -798,6 +801,7 @@ public struct AyuGramSettings: Codable, Equatable {
         self.paperclipActions = ShadowPaperclip.normalizedActions((try container.decodeIfPresent(String.self, forKey: "paperclipActions")) ?? ShadowPaperclip.defaultActions)
         self.paperclipPrankImitation = ((try container.decodeIfPresent(Int32.self, forKey: "paperclipPrankImitation")) ?? 1) != 0
         self.paperclipPrankSeconds = ShadowPaperclip.normalizedPrankSeconds((try container.decodeIfPresent(Int32.self, forKey: "paperclipPrankSeconds")) ?? ShadowPaperclip.defaultPrankSeconds)
+        self.paperclipPrankSendSeconds = ShadowPaperclip.normalizedPrankSendSeconds((try container.decodeIfPresent(Int32.self, forKey: "paperclipPrankSendSeconds")) ?? ShadowPaperclip.defaultPrankSendSeconds)
         self.onlineHistory = ((try container.decodeIfPresent(Int32.self, forKey: "onlineHistory")) ?? 0) != 0
         self.saveViewedStories = ((try container.decodeIfPresent(Int32.self, forKey: "saveViewedStories")) ?? 0) != 0
         self.settingsIconBackgroundColor = ((try container.decodeIfPresent(Int32.self, forKey: "settingsIconBackgroundColor")) ?? 0x1C1C1E) & 0xFFFFFF
@@ -926,6 +930,7 @@ public struct AyuGramSettings: Codable, Equatable {
         try container.encode(self.paperclipActions, forKey: "paperclipActions")
         try container.encode((self.paperclipPrankImitation ? 1 : 0) as Int32, forKey: "paperclipPrankImitation")
         try container.encode(self.paperclipPrankSeconds, forKey: "paperclipPrankSeconds")
+        try container.encode(self.paperclipPrankSendSeconds, forKey: "paperclipPrankSendSeconds")
         try container.encode((self.onlineHistory ? 1 : 0) as Int32, forKey: "onlineHistory")
         try container.encode((self.saveViewedStories ? 1 : 0) as Int32, forKey: "saveViewedStories")
         try container.encode(self.settingsIconBackgroundColor, forKey: "settingsIconBackgroundColor")

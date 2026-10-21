@@ -170,6 +170,7 @@ public enum ShadowSettingsTransfer {
         values["feedPosition"] = .integer(Int64(settings.feedPosition))
         values["businessBotPinnedLayout"] = .integer(Int64(settings.businessBotPinnedLayout))
         values["paperclipPrankSeconds"] = .integer(Int64(settings.paperclipPrankSeconds))
+        values["paperclipPrankSendSeconds"] = .integer(Int64(settings.paperclipPrankSendSeconds))
         values["silentSendMode"] = .integer(Int64(settings.silentSendMode))
         values["silentSendFrom"] = .integer(Int64(settings.silentSendFrom))
         values["silentSendTo"] = .integer(Int64(settings.silentSendTo))
@@ -238,6 +239,7 @@ public enum ShadowSettingsTransfer {
                 case "feedPosition": updated.feedPosition = ShadowFeed.Position.normalized(Int32(clamping: number)).rawValue
                 case "businessBotPinnedLayout": updated.businessBotPinnedLayout = ShadowBusinessBotPanel.Layout.normalized(Int32(clamping: number)).rawValue
                 case "paperclipPrankSeconds": updated.paperclipPrankSeconds = ShadowPaperclip.normalizedPrankSeconds(Int32(clamping: number))
+                case "paperclipPrankSendSeconds": updated.paperclipPrankSendSeconds = ShadowPaperclip.normalizedPrankSendSeconds(Int32(clamping: number))
                 case "silentSendMode": updated.silentSendMode = ShadowSilentSend.normalizedMode(Int32(clamping: number))
                 case "silentSendFrom": updated.silentSendFrom = ShadowSilentSend.normalizedMinute(Int32(clamping: number))
                 case "silentSendTo": updated.silentSendTo = ShadowSilentSend.normalizedMinute(Int32(clamping: number))

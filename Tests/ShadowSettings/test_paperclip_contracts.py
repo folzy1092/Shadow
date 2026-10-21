@@ -90,5 +90,54 @@ class PaperclipContracts(unittest.TestCase):
         self.assertIn("'submodules/TelegramCore/Sources/AyuGram/ShadowPaperclip.swift'", runner)
 
 
+class PaperclipPranks114Contracts(unittest.TestCase):
+    """1.14.0: «отправляет…» after «записывает…», own pranks, pranks as replies."""
+
+    def test_send_seconds_setting(self):
+        settings = read("TelegramCore/Sources/AyuGram/AyuGramSettings.swift")
+        self.assertIn("public var paperclipPrankSendSeconds: Int32 = ShadowPaperclip.defaultPrankSendSeconds", settings)
+        self.assertIn('forKey: "paperclipPrankSendSeconds")', settings)
+        document = read("TelegramCore/Sources/AyuGram/ShadowSettingsDocument.swift")
+        self.assertIn('key == "paperclipPrankSendSeconds" && (0...60).contains(number)', document)
+        transfer = read("TelegramCore/Sources/AyuGram/ShadowSettingsTransfer.swift")
+        self.assertIn('values["paperclipPrankSendSeconds"] = .integer(Int64(settings.paperclipPrankSendSeconds))', transfer)
+        self.assertIn('case "paperclipPrankSendSeconds":', transfer)
+        links = read("TelegramCore/Sources/AyuGram/ShadowSettingLinks.swift")
+        self.assertIn('slug: "paperclip-prank-sending", entryId: 137, key: nil, title: "Секунд отправки", parentEntryId: 135, since: "1.14.0"', links)
+        self.assertIn("`shadow://customization/paperclip-prank-sending`", (ROOT / "docs/shadow-links.md").read_text(encoding="utf-8"))
+        self.assertIn("destination: .customization, entryId: 137,", read("SettingsUI/Sources/ShadowSettingsSearchIndex.swift"))
+        screen = read("SettingsUI/Sources/AyuGramSettingsController.swift")
+        self.assertIn("case .paperclipPrankSendSeconds: return 137", screen)
+        self.assertIn("entries.append(.paperclipPrankSendSeconds(settings.paperclipPrankSendSeconds))", screen)
+
+    def test_second_phase(self):
+        menu = read("TelegramUI/Sources/Chat/ShadowPaperclipMenu.swift")
+        self.assertIn("ShadowPaperclip.sendingMode(for: media)", menu)
+        self.assertIn("ShadowPaperclip.normalizedPrankSendSeconds(settings.paperclipPrankSendSeconds)", menu)
+        self.assertIn("mode: sendingMode)", menu)
+
+    def test_own_pranks(self):
+        menu = read("TelegramUI/Sources/Chat/ShadowPaperclipMenu.swift")
+        self.assertIn("ShadowPaperclip.mergedPranks(user: ShadowPaperclipUserPrankStore.pranks, catalog:", menu)
+        store = read("TelegramCore/Sources/AyuGram/ShadowPaperclipUserPrankStore.swift")
+        self.assertIn('"shadow.paperclip.userPranks.v1"', store)
+        self.assertIn("ShadowPaperclip.addingUserPrank(Self.pranks, title: title, link: link)", store)
+        actions = read("SettingsUI/Sources/ShadowPaperclipActionsController.swift")
+        self.assertIn('"МОИ ПРИКОЛЫ"', actions)
+        self.assertIn('"Добавить прикол по ссылке"', actions)
+        self.assertIn("ShadowPaperclipUserPrankStore.add(title: title, link: link)", actions)
+        self.assertIn("ShadowPaperclipUserPrankStore.remove(id: prank.id)", actions)
+
+    def test_prank_as_reply(self):
+        menu = read("TelegramUI/Sources/Chat/ShadowPaperclipMenu.swift")
+        self.assertIn("self.presentationInterfaceState.interfaceState.replyMessageSubject?.subjectModel", menu)
+        self.assertIn("$0.withUpdatedReplyMessageSubject(nil)", menu)
+        self.assertIn("shadowPrankCopy(message, threadId: threadId, replySubject: replySubject)", menu)
+        self.assertIn(".message(message: MessageReference(message), media: $0)", menu)
+        self.assertIn("replyToMessageId: replySubject", menu)
+        # Without a reply the tested forward path stays.
+        self.assertIn("ForwardOptionsMessageAttribute(hideNames: true, hideCaptions: false)", menu)
+
+
 if __name__ == "__main__":
     unittest.main()
