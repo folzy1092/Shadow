@@ -201,9 +201,9 @@ public func shadowPaperclipActionsController(context: AccountContext) -> ViewCon
                     case .failure(.badLink):
                         toast("Это не ссылка на пост публичного канала")
                     }
-                }), nil)
+                }))
             }
-        }), nil)
+        }))
     }, removeUserPrank: {
         let pranks = ShadowPaperclipUserPrankStore.pranks
         guard !pranks.isEmpty else {
