@@ -2039,12 +2039,9 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             let leftOffset: CGFloat = nextIconX + 4.0
             let leftExpandedOffset: CGFloat = nextExpandedIconX + 4.0
 
-            var collapsedTransitionOffset: CGFloat = 0.0
-            if let navigationTransition = self.navigationTransition {
-                collapsedTransitionOffset = -10.0 * navigationTransition.fraction
-            }
-
-            transition.updateFrame(view: self.titleExteraIconView, frame: CGRect(origin: CGPoint(x: leftOffset + collapsedTransitionOffset, y: floor((titleSize.height - exteraIconSize.height) / 2.0)), size: exteraIconSize))
+            // Telegram 13.1 dropped the header's navigation transition offset for
+            // the title icons; the badge follows them.
+            transition.updateFrame(view: self.titleExteraIconView, frame: CGRect(origin: CGPoint(x: leftOffset, y: floor((titleSize.height - exteraIconSize.height) / 2.0)), size: exteraIconSize))
             transition.updateFrame(view: self.titleExpandedExteraIconView, frame: CGRect(origin: CGPoint(x: leftExpandedOffset, y: floor((titleExpandedSize.height - titleExpandedExteraIconSize.height) / 2.0) + 1.0), size: titleExpandedExteraIconSize))
 
             nextIconX += 4.0 + exteraIconSize.width
