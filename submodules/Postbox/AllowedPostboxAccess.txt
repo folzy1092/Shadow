@@ -23,6 +23,7 @@ submodules/BrowserUI/Sources/BrowserWebContent.swift
 submodules/ChatImportUI/Sources/ChatImportActivityScreen.swift
 submodules/ChatListSearchRecentPeersNode/Sources/ChatListSearchRecentPeersNode.swift
 submodules/ChatListUI/Sources/ChatListController.swift
+submodules/ChatListUI/Sources/ChatListControllerNode.swift
 submodules/ChatListUI/Sources/ChatListFilterPresetController.swift
 submodules/ChatListUI/Sources/ChatListSearchContainerNode.swift
 submodules/ChatListUI/Sources/ChatListSearchListPaneNode.swift
@@ -30,6 +31,7 @@ submodules/ChatListUI/Sources/ChatListSearchMediaNode.swift
 submodules/ChatListUI/Sources/Node/ChatListItem.swift
 submodules/ChatListUI/Sources/Node/ChatListNode.swift
 submodules/ChatListUI/Sources/Node/ChatListNodeLocation.swift
+submodules/ChatListUI/Sources/Node/ShadowChatBannerRendering.swift
 submodules/ChatListUI/Sources/TabBarChatListFilterController.swift
 submodules/DebugSettingsUI/Sources/DebugController.swift
 submodules/DirectMediaImageCache/Sources/DirectMediaImageCache.swift
@@ -84,6 +86,9 @@ submodules/PremiumUI/Sources/PhoneDemoComponent.swift
 submodules/PremiumUI/Sources/PremiumIntroScreen.swift
 submodules/PremiumUI/Sources/StickersCarouselComponent.swift
 submodules/SelectablePeerNode/Sources/SelectablePeerNode.swift
+submodules/SettingsUI/Sources/AyuArchiveChatContents.swift
+submodules/SettingsUI/Sources/AyuForkStorageController.swift
+submodules/SettingsUI/Sources/AyuGramSettingsController.swift
 submodules/SettingsUI/Sources/Data and Storage/DataAndStorageSettingsController.swift
 submodules/SettingsUI/Sources/Data and Storage/StorageUsageExceptionsScreen.swift
 submodules/SettingsUI/Sources/Data and Storage/WebBrowserDomainExceptionItem.swift
@@ -94,6 +99,21 @@ submodules/SettingsUI/Sources/Notifications/NotificationsAndSoundsController.swi
 submodules/SettingsUI/Sources/NotificationsPeerCategoryController.swift
 submodules/SettingsUI/Sources/ReactionNotificationSettingsController.swift
 submodules/SettingsUI/Sources/Search/SettingsSearchableItems.swift
+submodules/SettingsUI/Sources/ShadowChatBannersController.swift
+submodules/SettingsUI/Sources/ShadowChatExportUI.swift
+submodules/SettingsUI/Sources/ShadowChatPrivacyController.swift
+submodules/SettingsUI/Sources/ShadowChatStatsUI.swift
+submodules/SettingsUI/Sources/ShadowFeedSettingsController.swift
+submodules/SettingsUI/Sources/ShadowHeaderButtonsController.swift
+submodules/SettingsUI/Sources/ShadowMessageFilterEditController.swift
+submodules/SettingsUI/Sources/ShadowMessageFiltersController.swift
+submodules/SettingsUI/Sources/ShadowMessageScreenshotSettingsController.swift
+submodules/SettingsUI/Sources/ShadowPaperclipActionsController.swift
+submodules/SettingsUI/Sources/ShadowPushDiagnosticsController.swift
+submodules/SettingsUI/Sources/ShadowQuickRepliesController.swift
+submodules/SettingsUI/Sources/ShadowSettingLinkUI.swift
+submodules/SettingsUI/Sources/ShadowSettingsBackupController.swift
+submodules/SettingsUI/Sources/ShadowUpdateController.swift
 submodules/SettingsUI/Sources/Text Size/TextSizeSelectionController.swift
 submodules/SettingsUI/Sources/ThemePickerGridItem.swift
 submodules/SettingsUI/Sources/Themes/ThemePreviewControllerNode.swift
@@ -131,6 +151,7 @@ submodules/TelegramUI/Components/Chat/ChatMessageInteractiveMediaNode/Sources/Ch
 submodules/TelegramUI/Components/Chat/ChatMessageNotificationItem/Sources/ChatMessageNotificationItem.swift
 submodules/TelegramUI/Components/Chat/ChatMessagePollBubbleContentNode/Sources/ChatMessagePollBubbleContentNode.swift
 submodules/TelegramUI/Components/Chat/ChatMessageProfilePhotoSuggestionContentNode/Sources/ChatMessageProfilePhotoSuggestionContentNode.swift
+submodules/TelegramUI/Components/Chat/ChatMessageSelectionInputPanelNode/Sources/ChatMessageSelectionInputPanelNode.swift
 submodules/TelegramUI/Components/Chat/ChatMessageStoryMentionContentNode/Sources/ChatMessageStoryMentionContentNode.swift
 submodules/TelegramUI/Components/Chat/ChatQrCodeScreen/Sources/ChatQrCodeScreen.swift
 submodules/TelegramUI/Components/Chat/ChatRecentActionsController/Sources/ChatRecentActionsController.swift
@@ -140,7 +161,10 @@ submodules/TelegramUI/Components/Chat/MessageInlineBlockBackgroundView/Sources/M
 submodules/TelegramUI/Components/Chat/ReplyAccessoryPanelNode/Sources/ReplyAccessoryPanelNode.swift
 submodules/TelegramUI/Components/ChatEntityKeyboardInputNode/Sources/ChatEntityKeyboardInputNode.swift
 submodules/TelegramUI/Components/ChatFolderLinkPreviewScreen/Sources/ChatFolderLinkPreviewScreen.swift
+submodules/TelegramUI/Components/ChatListHeaderComponent/Sources/ChatListNavigationBar.swift
 submodules/TelegramUI/Components/ChatThemeScreen/Sources/ChatThemeScreen.swift
+submodules/TelegramUI/Components/ChatTitleView/Sources/ChatTitleComponent.swift
+submodules/TelegramUI/Components/ChatTitleView/Sources/ChatTitleView.swift
 submodules/TelegramUI/Components/Communities/CommunityEditScreen/Sources/CommunityEditScreen.swift
 submodules/TelegramUI/Components/Communities/CommunityViewScreen/Sources/CommunityViewScreen.swift
 submodules/TelegramUI/Components/ComposePollScreen/Sources/ComposePollScreen.swift
@@ -174,6 +198,7 @@ submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/Panes/PeerInfoG
 submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoAvatarTransformContainerNode.swift
 submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoData.swift
 submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoEditingAvatarNode.swift
+submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoHeaderNode.swift
 submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoMembers.swift
 submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoScreen.swift
 submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoScreenAvatarSetup.swift
@@ -195,6 +220,8 @@ submodules/TelegramUI/Components/Stars/StarsAvatarComponent/Sources/StarsAvatarC
 submodules/TelegramUI/Components/Stars/StarsImageComponent/Sources/StarsImageComponent.swift
 submodules/TelegramUI/Components/StickerPickerScreen/Sources/StickerPickerScreen.swift
 submodules/TelegramUI/Components/Stories/PeerListItemComponent/Sources/PeerListItemComponent.swift
+submodules/TelegramUI/Components/Stories/StoryContainerScreen/Sources/OpenStories.swift
+submodules/TelegramUI/Components/Stories/StoryContainerScreen/Sources/ShadowStoryGhostSession.swift
 submodules/TelegramUI/Components/Stories/StoryContainerScreen/Sources/StoryChatContent.swift
 submodules/TelegramUI/Components/Stories/StoryContainerScreen/Sources/StoryItemContentComponent.swift
 submodules/TelegramUI/Components/Stories/StoryContainerScreen/Sources/StoryItemOverlaysView.swift
@@ -203,6 +230,7 @@ submodules/TelegramUI/Sources/AccountContext.swift
 submodules/TelegramUI/Sources/AppDelegate.swift
 submodules/TelegramUI/Sources/ApplicationContext.swift
 submodules/TelegramUI/Sources/Chat/ChatControllerLoadDisplayNode.swift
+submodules/TelegramUI/Sources/Chat/ChatControllerMessageScreenshot.swift
 submodules/TelegramUI/Sources/Chat/ChatControllerOpenLinkContextMenu.swift
 submodules/TelegramUI/Sources/Chat/ChatControllerPaste.swift
 submodules/TelegramUI/Sources/Chat/ChatControllerQuickShare.swift
@@ -211,6 +239,7 @@ submodules/TelegramUI/Sources/ChatController.swift
 submodules/TelegramUI/Sources/ChatControllerContentData.swift
 submodules/TelegramUI/Sources/ChatControllerNode.swift
 submodules/TelegramUI/Sources/ChatControllerOpenMessageShareMenu.swift
+submodules/TelegramUI/Sources/ChatHistoryEntriesForView.swift
 submodules/TelegramUI/Sources/ChatHistoryListNode.swift
 submodules/TelegramUI/Sources/ChatPinnedMessageTitlePanelNode.swift
 submodules/TelegramUI/Sources/CreateGroupController.swift
@@ -228,10 +257,14 @@ submodules/TelegramUI/Sources/OpenResolvedUrl.swift
 submodules/TelegramUI/Sources/OverlayAudioPlayerController.swift
 submodules/TelegramUI/Sources/OverlayInstantVideoNode.swift
 submodules/TelegramUI/Sources/PrefetchManager.swift
+submodules/TelegramUI/Sources/ShadowEasterEggs.swift
+submodules/TelegramUI/Sources/ShadowFeedController.swift
+submodules/TelegramUI/Sources/ShadowSettingsSyncManager.swift
 submodules/TelegramUI/Sources/SharedAccountContext.swift
 submodules/TelegramUI/Sources/SharedMediaPlayer.swift
 submodules/TelegramUI/Sources/SharedWakeupManager.swift
 submodules/TelegramUI/Sources/StoreDownloadedMedia.swift
+submodules/TelegramUI/Sources/TelegramRootController.swift
 submodules/TelegramUIPreferences/Sources/MediaAutoDownloadSettings.swift
 submodules/TelegramUniversalVideoContent/Sources/HLSVideoContent.swift
 submodules/TelegramUniversalVideoContent/Sources/HLSVideoJSNativeContentNode.swift
