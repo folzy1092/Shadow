@@ -44,9 +44,11 @@ class HeaderButtonsContracts(unittest.TestCase):
         self.assertIn("extraLeftButtons: primaryContext.extraLeftButtons", chat_list)
         self.assertIn("if let shadowRightButtons = self.shadowRightButtons", chat_list)
         header = read("TelegramUI/Components/ChatListHeaderComponent/Sources/ChatListHeaderComponent.swift")
-        self.assertIn("allLeftButtons.append(contentsOf: content.extraLeftButtons)", header)
-        # The stories header copies the content; it must keep the extra buttons.
-        self.assertIn("extraLeftButtons: primaryContent.extraLeftButtons", header)
+        # Telegram 13.1: the header hands them to the navigation bar's content,
+        # which lays them out after the left button.
+        self.assertIn("extraLeftButtons: content.extraLeftButtons", header)
+        bar = read("TelegramUI/Components/NavigationBarComponent/Sources/NavigationBarContentView.swift")
+        self.assertIn("for extraButton in content.extraLeftButtons", bar)
 
     def test_settings_screen_is_reachable(self):
         ui = read("SettingsUI/Sources/AyuGramSettingsController.swift")

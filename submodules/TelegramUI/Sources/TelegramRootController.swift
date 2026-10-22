@@ -30,6 +30,7 @@ import PeerInfoScreen
 import PeerInfoStoryGridScreen
 import ShareWithPeersScreen
 import ChatEmptyNode
+import NewsScreen
 
 private class DetailsChatPlaceholderNode: ASDisplayNode, NavigationDetailsPlaceholderNode {
     private var presentationData: PresentationData
@@ -79,6 +80,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
     public var callListController: CallListController?
     public var chatListController: ChatListController?
     public var accountSettingsController: PeerInfoScreen?
+    public var newsController: NewsScreen?
     
     private var permissionsDisposable: Disposable?
     private var presentationDataDisposable: Disposable?
@@ -94,6 +96,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
     private var shadowFeedController: ShadowFeedController?
     private var shadowFeedLayout: (enabled: Bool, position: Int32)?
     private var shadowShowCallsTab = true
+    private var shadowShowNewsTab = false
     private var shadowFeedDisposable: Disposable?
 
     override public var minimizedContainer: MinimizedContainer? {
@@ -203,7 +206,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         super.containerLayoutUpdated(layout, transition: transition)
     }
     
-    public func addRootControllers(showCallsTab: Bool) {
+    public func addRootControllers(showCallsTab: Bool, showNewsTab: Bool) {
         // Restore this account's cold-start snapshot before the first layout.
         let _ = ayuSyncBottomBarDefaults(accountId: self.context.account.id)
 
@@ -214,6 +217,8 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
             chatListController.tabBarItem.badgeValue = sharedContext.switchingData.chatListBadge
         }
         let callListController = CallListController(context: self.context, mode: .tab)
+        // Created even when hidden, like the calls tab: `updateRootControllers` shows and hides it.
+        let newsController = NewsScreen(context: self.context)
         
         var controllers: [ViewController] = []
         
@@ -227,6 +232,9 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
             controllers.append(callListController)
         }
         controllers.append(chatListController)
+        if showNewsTab {
+            controllers.append(newsController)
+        }
         
         var restoreSettignsController: (ViewController & SettingsController)?
         if let sharedContext = self.context.sharedContext as? SharedAccountContextImpl {
@@ -249,6 +257,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
 
         // Shadow: the feed tab, at the place chosen in its settings.
         self.shadowShowCallsTab = showCallsTab
+        self.shadowShowNewsTab = showNewsTab
         let feedSettings = currentAyuGramSettings(accountId: self.context.account.id)
         self.shadowFeedLayout = (feedSettings.feedEnabled, feedSettings.feedPosition)
         if feedSettings.feedEnabled {
@@ -260,12 +269,13 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         if restoreSettignsController != nil {
             initialIndex = controllers.firstIndex(where: { $0 === accountSettingsController }) ?? (controllers.count - 1)
         } else {
-            initialIndex = controllers.firstIndex(where: { $0 === chatListController }) ?? (controllers.count - 2)
+            initialIndex = controllers.firstIndex(where: { $0 === chatListController }) ?? 0
         }
         tabBarController.setControllers(controllers, selectedIndex: initialIndex)
 
         self.contactsController = contactsController
         self.callListController = callListController
+        self.newsController = newsController
         self.chatListController = chatListController
         self.accountSettingsController = accountSettingsController
         self.rootTabController = tabBarController
@@ -293,7 +303,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         self.shadowObserveFeedSettings()
     }
         
-    public func updateRootControllers(showCallsTab: Bool) {
+    public func updateRootControllers(showCallsTab: Bool, showNewsTab: Bool) {
         guard let rootTabController = self.rootTabController as? TabBarControllerImpl else {
             return
         }
@@ -303,13 +313,22 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
             controllers.append(self.callListController!)
         }
         controllers.append(self.chatListController!)
+        if showNewsTab, let newsController = self.newsController {
+            controllers.append(newsController)
+        }
         controllers.append(self.accountSettingsController!)
         self.shadowShowCallsTab = showCallsTab
+        self.shadowShowNewsTab = showNewsTab
         if let feedController = self.shadowFeedController {
             shadowInsertFeed(feedController, into: &controllers, position: currentAyuGramSettings(accountId: self.context.account.id).feedPosition)
         }
 
-        rootTabController.setControllers(controllers, selectedIndex: nil)
+        // A removed selected tab would otherwise fall back to index 0 (Contacts): select Chats instead.
+        var selectedIndex: Int?
+        if let currentController = rootTabController.currentController, !controllers.contains(where: { $0 === currentController }) {
+            selectedIndex = controllers.firstIndex(where: { $0 === self.chatListController })
+        }
+        rootTabController.setControllers(controllers, selectedIndex: selectedIndex)
     }
 
     // Shadow: the feed tab follows its switch and position. A stream of its own:
@@ -339,7 +358,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
             } else {
                 self.shadowFeedController = nil
             }
-            self.updateRootControllers(showCallsTab: self.shadowShowCallsTab)
+            self.updateRootControllers(showCallsTab: self.shadowShowCallsTab, showNewsTab: self.shadowShowNewsTab)
         })
     }
     

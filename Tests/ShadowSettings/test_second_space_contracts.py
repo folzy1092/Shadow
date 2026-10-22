@@ -71,7 +71,7 @@ class SecondSpaceContracts(unittest.TestCase):
         self.assertIn("visibility == .secondOnly && !ShadowSpaceStore.shared.hasCode", menus)
         controller = read("ChatListUI/Sources/ChatListController.swift")
         self.assertIn('id: "shadowSpace"', controller)
-        self.assertIn('content: .icon(imageName: "sf:eye.slash")', controller)
+        self.assertIn('content: shadowHeaderButtonContent(imageName: "sf:eye.slash")', controller)
         self.assertIn("func shadowChooseSpaceForSelectedChats(", controller)
         hub = read("SettingsUI/Sources/AyuGramSettingsController.swift")
         self.assertIn("pushControllerImpl?(shadowSecondSpaceController(context: context))", hub)

@@ -114,7 +114,7 @@ class ShadowVisualSettingsContracts(unittest.TestCase):
             self.assertIn(f"{name}: params.{name}", self.node)
         self.assertIn('showTabNames: !defaults.bool(forKey: "shadow.compactBottomBar")', self.node)
         self.assertIn('hideBottomSearch: defaults.bool(forKey: "shadow.hideBottomSearch")', self.node)
-        self.assertIn("search: params.hideBottomSearch ? nil", self.node)
+        self.assertIn("search: (sidePlacement != nil || params.hideBottomSearch) ? nil", self.node)
 
     def test_component_equality_includes_settings_and_has_no_hidden_defaults_reads(self):
         equality = section(self.component, "public static func ==(lhs: TabBarComponent", "public final class View:")
@@ -124,10 +124,12 @@ class ShadowVisualSettingsContracts(unittest.TestCase):
         self.assertNotIn("shadowShowTabNames", self.component)
 
     def test_measured_normal_and_selected_items_receive_label_visibility(self):
-        self.assertEqual(self.component.count("showTabNames: component.showTabNames"), 3)
+        # Telegram 13.1: the item's showsTitle carries the setting.
+        self.assertEqual(self.component.count("showsTitle: component.showTabNames"), 1)
+        self.assertEqual(self.component.count("showsTitle: !component.isCompact && component.showTabNames"), 2)
         item = self.component.split("private final class ItemComponent:", 1)[1]
-        self.assertIn("lhs.showTabNames != rhs.showTabNames", item)
-        self.assertIn("if component.showTabNames, let titleView", item)
+        self.assertIn("lhs.showsTitle != rhs.showsTitle", item)
+        self.assertIn("if component.showsTitle, let titleView", item)
         self.assertIn("titleView.removeFromSuperview()", item)
 
     def test_profile_uses_its_account_and_refreshes_on_foreground(self):

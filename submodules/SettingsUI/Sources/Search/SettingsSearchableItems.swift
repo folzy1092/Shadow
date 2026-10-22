@@ -30,6 +30,7 @@ import QuickReactionSetupController
 import AvatarEditorScreen
 import PeerSelectionScreen
 import DeviceModel
+import DebugSettingsUI
 
 enum SettingsSearchableItemIcon {
     case profile
@@ -4387,6 +4388,16 @@ func settingsSearchableItems(
                 }
             )
         })
+
+        allItems.append(SettingsSearchableItem(
+            id: "debug/crash_reports",
+            title: "Crash Logs",
+            icon: .support,
+            breadcrumbs: ["Debug Settings"],
+            present: { context, _, present in
+                present(.push, crashReportsController(sharedContext: context.sharedContext, context: context))
+            }
+        ))
         
         let profileItems = profileSearchableItems(context: context, canAddAccount: canAddAccount)
         allItems.append(contentsOf: profileItems)
