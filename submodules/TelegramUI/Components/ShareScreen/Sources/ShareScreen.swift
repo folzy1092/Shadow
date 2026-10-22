@@ -316,7 +316,7 @@ public final class ShareScreen: ViewControllerComponentContainer {
     private var copyIsLink = false
     private var linkPending = false
     private var copyWhenLinkReady = false
-    private let animateOut = ActionSlot<Action<()>>()
+    private let animateOut: ActionSlot<Action<()>>
     fileprivate var caption = NSAttributedString(string: "")
 
     public init(context: AccountContext, subject: Subject, externalShare: Bool = true, presetText: String? = nil, shareStory: (() -> Void)? = nil, preferredAction: ShareControllerPreferredAction = .default, externalShareSubject: ShareControllerSubject? = nil, shareAsLink: Bool = false, forceTheme: PresentationTheme? = nil, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)? = nil, externalConfiguration: ShareScreenExternalConfiguration? = nil, mediaParameters: ShareControllerSubject.MediaParameters? = nil, segmentedValues: [ShareScreenSegmentedValue]? = nil, collectibleItemInfo: TelegramCollectibleItemInfo? = nil, forcedActionTitle: String? = nil, showInChat: ((EngineRawMessage) -> Void)? = nil, immediatePeerId: EnginePeer.Id? = nil) {
@@ -342,15 +342,22 @@ public final class ShareScreen: ViewControllerComponentContainer {
         self.preferredAction = preferredAction
         self.externalShareSubject = externalShareSubject
         self.shareAsLink = shareAsLink
-        self.model = ShareScreenState(context: context)
-        self.model.defersItemsUntilFirstLoad = externalConfiguration != nil
-        self.sender = ShareScreenSendCoordinator(context: context, subject: subject)
+        // Shadow: locals instead of reads of self before super.init, which Swift 6.3
+        // (Xcode 26.6) miscompiles here (see BUILD).
+        let model = ShareScreenState(context: context)
+        model.defersItemsUntilFirstLoad = externalConfiguration != nil
+        let sender = ShareScreenSendCoordinator(context: context, subject: subject)
+        let caption = NSAttributedString(string: presetText ?? "")
+        let animateOut = ActionSlot<Action<()>>()
+        self.model = model
+        self.sender = sender
+        self.caption = caption
+        self.animateOut = animateOut
+        super.init(context: context, component: ShareScreenComponent(model: model, sender: sender, externalShare: externalShare, initialCaption: caption, hasStory: shareStory != nil, animateOut: animateOut), navigationBarAppearance: .none, statusBarStyle: .ignore, theme: forceTheme.map { .custom($0) } ?? .default, updatedPresentationData: updatedPresentationData)
         let contentReady = self.contentReady
-        self.model.firstLoadCompleted = {
+        model.firstLoadCompleted = {
             contentReady.set(.single(true))
         }
-        self.caption = NSAttributedString(string: presetText ?? "")
-        super.init(context: context, component: ShareScreenComponent(model: self.model, sender: self.sender, externalShare: externalShare, initialCaption: self.caption, hasStory: shareStory != nil, animateOut: self.animateOut), navigationBarAppearance: .none, statusBarStyle: .ignore, theme: forceTheme.map { .custom($0) } ?? .default, updatedPresentationData: updatedPresentationData)
         self.navigationPresentation = .flatModal
         self.configureSender()
         if let externalConfiguration {

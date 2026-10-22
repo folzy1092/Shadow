@@ -10,6 +10,10 @@ swift_library(
     ]),
     copts = [
         "-warnings-as-errors",
+        # Shadow: Swift 6.3 (Xcode 26.6, which CI builds with) crashes in
+        # OSSACompleteLifetime on ShareScreen.init's never-taken failure path
+        # (a "leak" right before `unreachable`). Upstream builds with Xcode 27.
+        "-Xfrontend", "-disable-sil-ownership-verifier",
     ],
     deps = [
         "//submodules/AsyncDisplayKit",
