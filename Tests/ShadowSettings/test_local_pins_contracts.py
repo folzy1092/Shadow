@@ -13,7 +13,7 @@ def read(path):
 class LocalPinsContracts(unittest.TestCase):
     def test_header_merges_local_pins(self):
         controller = read("TelegramUI/Sources/ChatController.swift")
-        self.assertIn("return shadowMergeLocalPins(server: ChatControllerImpl.topPinnedMessageSignal(", controller)
+        self.assertIn("return shadowMergeLocalPins(server: ChatControllerImpl.topPinnedMessageState(", controller)
         chat = read("TelegramUI/Sources/Chat/ShadowLocalPinsChat.swift")
         self.assertIn("ShadowLocalPinStore.didChangeNotification", chat)
         self.assertIn("!message.tags.contains(.pinned)", chat)

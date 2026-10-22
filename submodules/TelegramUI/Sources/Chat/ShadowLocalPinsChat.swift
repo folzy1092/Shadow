@@ -45,7 +45,7 @@ func shadowLocalPinnedMessages(context: AccountContext, peerId: EnginePeer.Id) -
 // The pinned message the header shows with local pins mixed in. Only plain
 // chats (not threads); a local pin of a message that is really pinned is
 // skipped. Counts and the "#N" index treat both kinds as one list.
-func shadowMergeLocalPins(server: Signal<ChatPinnedMessage?, NoError>, context: AccountContext, chatLocation: ChatLocation, referenceMessage: Signal<ChatControllerImpl.PinnedReferenceMessage?, NoError>) -> Signal<ChatPinnedMessage?, NoError> {
+func shadowMergeLocalPins(server: Signal<ChatControllerImpl.TopPinnedMessageState, NoError>, context: AccountContext, chatLocation: ChatLocation, referenceMessage: Signal<ChatControllerImpl.PinnedReferenceMessage?, NoError>) -> Signal<ChatControllerImpl.TopPinnedMessageState, NoError> {
     guard case let .peer(peerId) = chatLocation else {
         return server
     }
@@ -54,38 +54,46 @@ func shadowMergeLocalPins(server: Signal<ChatPinnedMessage?, NoError>, context: 
         shadowLocalPinnedMessages(context: context, peerId: peerId),
         referenceMessage
     )
-    |> map { server, local, reference -> ChatPinnedMessage? in
-        let local = local.filter { message in
-            return message.id != server?.message.id && !message.tags.contains(.pinned)
+    |> map { serverState, local, reference -> ChatControllerImpl.TopPinnedMessageState in
+        // Still loading: the header waits for the real pins.
+        guard case let .resolved(server) = serverState else {
+            return serverState
         }
-        if local.isEmpty {
-            return server
-        }
-        var referenceId: Int32?
-        var isScrolled = false
-        if let reference, case let .ready(loaded) = reference, loaded.id.peerId == peerId {
-            referenceId = loaded.id.id
-            isScrolled = loaded.isScrolled
-        }
-        guard let localIndex = ShadowLocalPins.pickIndex(ids: local.map { $0.id.id }, referenceId: referenceId, isScrolled: isScrolled) else {
-            return server
-        }
-        let localPick = local[localIndex]
-        let localTopId = local[local.count - 1].id
-        guard let server else {
-            return ChatPinnedMessage(message: localPick, index: localIndex, totalCount: local.count, topMessageId: localTopId)
-        }
-        let totalCount = server.totalCount + local.count
-        let topMessageId = max(server.topMessageId, localTopId)
-        if ShadowLocalPins.prefersFirst(localPick.id.id, over: server.message.id.id, referenceId: referenceId, isScrolled: isScrolled) {
-            let olderServer = server.message.id < localPick.id ? server.index + 1 : server.index
-            return ChatPinnedMessage(message: localPick, index: min(totalCount - 1, olderServer + localIndex), totalCount: totalCount, topMessageId: topMessageId)
-        } else {
-            let olderLocal = local.filter { $0.id < server.message.id }.count
-            return ChatPinnedMessage(message: server.message, index: min(totalCount - 1, server.index + olderLocal), totalCount: totalCount, topMessageId: topMessageId)
-        }
+        return .resolved(shadowMergedPin(server: server, local: local, reference: reference, peerId: peerId))
     }
     |> distinctUntilChanged
+}
+
+private func shadowMergedPin(server: ChatPinnedMessage?, local: [Message], reference: ChatControllerImpl.PinnedReferenceMessage?, peerId: EnginePeer.Id) -> ChatPinnedMessage? {
+    let local = local.filter { message in
+        return message.id != server?.message.id && !message.tags.contains(.pinned)
+    }
+    if local.isEmpty {
+        return server
+    }
+    var referenceId: Int32?
+    var isScrolled = false
+    if let reference, case let .ready(loaded) = reference, loaded.id.peerId == peerId {
+        referenceId = loaded.id.id
+        isScrolled = loaded.isScrolled
+    }
+    guard let localIndex = ShadowLocalPins.pickIndex(ids: local.map { $0.id.id }, referenceId: referenceId, isScrolled: isScrolled) else {
+        return server
+    }
+    let localPick = local[localIndex]
+    let localTopId = local[local.count - 1].id
+    guard let server else {
+        return ChatPinnedMessage(message: localPick, index: localIndex, totalCount: local.count, topMessageId: localTopId)
+    }
+    let totalCount = server.totalCount + local.count
+    let topMessageId = max(server.topMessageId, localTopId)
+    if ShadowLocalPins.prefersFirst(localPick.id.id, over: server.message.id.id, referenceId: referenceId, isScrolled: isScrolled) {
+        let olderServer = server.message.id < localPick.id ? server.index + 1 : server.index
+        return ChatPinnedMessage(message: localPick, index: min(totalCount - 1, olderServer + localIndex), totalCount: totalCount, topMessageId: topMessageId)
+    } else {
+        let olderLocal = local.filter { $0.id < server.message.id }.count
+        return ChatPinnedMessage(message: server.message, index: min(totalCount - 1, server.index + olderLocal), totalCount: totalCount, topMessageId: topMessageId)
+    }
 }
 
 func shadowIsLocallyPinned(context: AccountContext, messageId: EngineMessage.Id) -> Bool {

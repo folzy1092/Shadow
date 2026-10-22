@@ -1,7 +1,7 @@
 import Foundation
 import Postbox
 import SwiftSignalKit
-import TelegramApi
+internal import TelegramApi
 
 // Shadow: asks @ayugrambot for a user's registration date with the inline
 // query `regdate <id>` — the same request AyuGram Desktop makes

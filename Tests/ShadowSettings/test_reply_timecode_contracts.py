@@ -48,7 +48,8 @@ class ReplyTimecodeContracts(unittest.TestCase):
         self.assertIn("shadowReplyTimecode: ShadowReplyTimecode.Resolved? = nil", node)
         self.assertIn("shadowReplyTimecodeCandidate(context: self.context, state: effectivePresentationInterfaceState, chatLocation: self.chatLocation)", node)
         self.assertIn("shadowReplyTimecode: resolved, completion: completion", node)
-        self.assertIn("prefixed.append(inputText)", node)
+        self.assertIn("prefixed.append(effectiveInputText)", node)
+        self.assertIn("chatComposerTextMessages(effectiveInputText: shadowInputText", node)
         # The timecode goes before the lastSendTimestamp guard, so the alert's resend is not swallowed.
         self.assertLess(node.index("shadowReplyTimecodeAlertController(context:"), node.index("if self.lastSendTimestamp + 0.15 > timestamp"))
         send = read("TelegramUI/Sources/Chat/ShadowReplyTimecodeSend.swift")

@@ -30,9 +30,10 @@ class ProfileButtonContracts(unittest.TestCase):
         self.assertIn("ShadowHeaderAvatars.shared.iconName(context: context, link: first.link)", chat_list)
         self.assertIn("ShadowHeaderAvatars.shared.version.get()", chat_list)
         self.assertIn('self.shadowOpenHeaderUrl("shadow://gift")', chat_list)
-        button = read("TelegramUI/Components/ChatListHeaderComponent/Sources/NavigationButtonComponent.swift")
-        self.assertIn('imageName.hasPrefix("img:")', button)
-        self.assertIn("public enum NavigationButtonCustomImages", button)
+        self.assertIn('if imageName.hasPrefix("img:") {', chat_list)
+        self.assertIn("ShadowHeaderButtonImages.images[String(imageName.dropFirst(4))]", chat_list)
+        avatars = read("ChatListUI/Sources/ShadowHeaderAvatars.swift")
+        self.assertIn("enum ShadowHeaderButtonImages", avatars)
 
     def test_picker_offers_me_chats_and_typing(self):
         picker = read("SettingsUI/Sources/ShadowHeaderButtonsController.swift")

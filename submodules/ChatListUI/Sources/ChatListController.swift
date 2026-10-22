@@ -42,6 +42,7 @@ import ChatTitleView
 import PeerInfoUI
 import ComponentDisplayAdapters
 import ChatListHeaderComponent
+import NavigationBarComponent
 import ChatListTitleView
 import InviteLinksUI
 import ChatFolderLinkPreviewScreen
@@ -93,6 +94,11 @@ private final class ContextControllerContentSourceImpl: ContextControllerContent
 }
 
 public class ChatListControllerImpl: TelegramBaseController, ChatListController {
+    /// iPhone Duo: this screen lays out its own side column, back button included.
+    override public var placesNavigationButtonInSideColumn: Bool {
+        return false
+    }
+    
     private var validLayout: ContainerViewLayout?
 
     func shadowRevealScrollingBar() {
@@ -128,6 +134,15 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
     
     let openMessageFromSearchDisposable: MetaDisposable = MetaDisposable()
     
+    /// The chat list draws its own header (no Display bar); it takes part in navigation transitions itself. During a search too:
+    /// `displayNavigationBar` doubles as the search flag here, so it is not consulted.
+    override public var navigationBarTransitionSource: NavigationBarTransitionSource? {
+        guard self.isNodeLoaded else {
+            return nil
+        }
+        return self.chatListDisplayNode.navigationBarView.view as? ChatListNavigationBar.View
+    }
+
     private var chatListDisplayNode: ChatListControllerNode {
         return super.displayNode as! ChatListControllerNode
     }
@@ -365,19 +380,20 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                         self.tabBarItem.animationOffset = CGPoint(x: 0.0, y: UIScreenPixel)
                     }
                     
-                    self.primaryContext?.leftButton = AnyComponentWithIdentity(id: "edit", component: AnyComponent(NavigationButtonComponent(
+                    self.primaryContext?.leftButton = NavigationBarComponent.Button(id: "edit",
                         content: .text(title: self.presentationData.strings.Common_Edit, isBold: false),
-                        pressed: { [weak self] _ in
+                        action: { [weak self] _ in
                             self?.editPressed()
                         }
-                    )))
+                    )
                     
-                    self.primaryContext?.rightButton = AnyComponentWithIdentity(id: "compose", component: AnyComponent(NavigationButtonComponent(
+                    self.primaryContext?.rightButton = NavigationBarComponent.Button(id: "compose",
                         content: .icon(imageName: "Chat List/ComposeIcon"),
-                        pressed: { [weak self] _ in
+                        tint: .accent,
+                        action: { [weak self] _ in
                             self?.composePressed()
                         }
-                    )))
+                    )
                     
                     //let backBarButtonItem = UIBarButtonItem(title: self.presentationData.strings.DialogList_Title, style: .plain, target: nil, action: nil)
                     //backBarButtonItem.accessibilityLabel = self.presentationData.strings.Common_Back
@@ -385,12 +401,12 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                 } else {
                     switch self.location {
                     case .chatList:
-                        self.primaryContext?.rightButton = AnyComponentWithIdentity(id: "edit", component: AnyComponent(NavigationButtonComponent(
+                        self.primaryContext?.rightButton = NavigationBarComponent.Button(id: "edit",
                             content: .text(title: self.presentationData.strings.Common_Edit, isBold: false),
-                            pressed: { [weak self] _ in
+                            action: { [weak self] _ in
                                 self?.editPressed()
                             }
-                        )))
+                        )
                     case .forum:
                         break
                     case .savedMessagesChats:
@@ -847,25 +863,10 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         switch currentContext.location {
         case .chatList:
             self.navigationBar?.userInfo = nil
-            self.navigationBar?.allowsCustomTransition = {
-                return false
-            }
         case let .forum(peerId):
             self.navigationBar?.userInfo = PeerInfoNavigationSourceTag(peerId: peerId, threadId: nil)
-            self.navigationBar?.allowsCustomTransition = { [weak self] in
-                guard let strongSelf = self else {
-                    return false
-                }
-                if strongSelf.navigationBar?.userInfo == nil {
-                    return false
-                }
-                return true
-            }
         case .savedMessagesChats:
             self.navigationBar?.userInfo = nil
-            self.navigationBar?.allowsCustomTransition = {
-                return false
-            }
         }
     }
     
@@ -2914,13 +2915,8 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
             if self.previousItem != nil {
                 displayBackButton = true
             }
-            var navigationBackTitle: String?
-            if case .chatList(.archive) = self.location {
-                navigationBackTitle = self.presentationData.strings.Common_Back
-            }
             primaryContent = ChatListHeaderComponent.Content(
                 title: self.plainTitle,
-                navigationBackTitle: navigationBackTitle,
                 titleComponent: primaryContext.chatTitleComponent.flatMap { AnyComponent<Empty>($0) },
                 chatListTitle: primaryContext.chatListTitle,
                 leftButton: primaryContext.leftButton,
@@ -2931,14 +2927,14 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                         return
                     }
                     self.navigationBackPressed()
-                } : nil
+                } : nil,
+                overflowInfo: chatListHeaderOverflowInfo(strings: self.presentationData.strings)
             )
         }
         var secondaryContent: ChatListHeaderComponent.Content?
         if let secondaryContext = self.secondaryContext {
             secondaryContent = ChatListHeaderComponent.Content(
                 title: self.plainTitle,
-                navigationBackTitle: nil,
                 titleComponent: secondaryContext.chatTitleComponent.flatMap { AnyComponent<Empty>($0) },
                 chatListTitle: secondaryContext.chatListTitle,
                 leftButton: secondaryContext.leftButton,
@@ -2948,7 +2944,8 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                         return
                     }
                     self.setInlineChatList(location: nil)
-                }
+                },
+                overflowInfo: chatListHeaderOverflowInfo(strings: self.presentationData.strings)
             )
         }
         
@@ -2997,7 +2994,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
     }
     
     private weak var storyCameraTooltip: TooltipScreen?
-    fileprivate func openStoryCamera(fromList: Bool, gesturePullOffset: CGFloat? = nil) {
+    fileprivate func openStoryCamera(fromList: Bool, gesturePullOffset: CGFloat? = nil, sourceView: UIView? = nil) {
         guard !self.context.isFrozen else {
             let controller = self.context.sharedContext.makeAccountFreezeInfoScreen(context: self.context)
             self.push(controller)
@@ -3075,7 +3072,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                         }
                     }
                 } else {
-                    if let rightButtonView = componentView.rightButtonViews["story"] {
+                    if let rightButtonView = componentView.rightButtonViews["story"] ?? sourceView {
                         sourceFrame = rightButtonView.convert(rightButtonView.bounds, to: nil).offsetBy(dx: 5.0, dy: -8.0)
                     }
                 }
@@ -3584,7 +3581,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
     private func updateLayout(layout: ContainerViewLayout, transition: ContainedViewLayoutTransition) {
         var tabContainerOffset: CGFloat = 0.0
         if !self.displayNavigationBar {
-            tabContainerOffset += layout.statusBarHeight ?? 0.0
+            tabContainerOffset += layout.navigationBarStatusBarHeight ?? 0.0
             tabContainerOffset += 44.0 + 20.0
         }
 
@@ -3610,20 +3607,20 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
     @objc func editPressed() {
         if self.secondaryContext == nil {
             if case .chatList(.root) = self.chatListDisplayNode.effectiveContainerNode.location {
-                self.effectiveContext?.leftButton = AnyComponentWithIdentity(id: "done", component: AnyComponent(NavigationButtonComponent(
+                self.effectiveContext?.leftButton = NavigationBarComponent.Button(id: "done",
                     content: .text(title: self.presentationData.strings.Common_Done, isBold: true),
-                    pressed: { [weak self] _ in
+                    action: { [weak self] _ in
                         self?.donePressed()
                     }
-                )))
+                )
                 (self.navigationController as? NavigationController)?.updateMasterDetailsBlackout(.details, transition: .animated(duration: 0.5, curve: .spring))
             } else {
-                self.effectiveContext?.rightButton = AnyComponentWithIdentity(id: "done", component: AnyComponent(NavigationButtonComponent(
+                self.effectiveContext?.rightButton = NavigationBarComponent.Button(id: "done",
                     content: .text(title: self.presentationData.strings.Common_Done, isBold: true),
-                    pressed: { [weak self] _ in
+                    action: { [weak self] _ in
                         self?.donePressed()
                     }
-                )))
+                )
                 (self.navigationController as? NavigationController)?.updateMasterDetailsBlackout(.master, transition: .animated(duration: 0.5, curve: .spring))
             }
         }
@@ -4037,6 +4034,25 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
             let contextController = makeContextController(presentationData: presentationData, source: .reference(HeaderContextReferenceContentSource(controller: self, sourceView: sourceView)), items: .single(ContextController.Items(content: .list(items))), gesture: gesture)
             self.presentInGlobalOverlay(contextController)
         })
+    }
+    
+    /// iPhone Duo: the side column's "…" menu, the buttons that did not fit; each runs its own action
+    /// from the "…" button.
+    func openSideColumnOverflowMenu(sourceView: UIView, items: [NavigationBarComponent.OverflowItem]) {
+        let presentationData = self.presentationData
+        let menuItems: [ContextMenuItem] = items.map { item in
+            return .action(ContextMenuActionItem(text: item.title, icon: { theme in
+                guard let iconName = item.iconName else {
+                    return nil
+                }
+                return generateScaledImage(image: generateTintedImage(image: UIImage(bundleImageName: iconName), color: theme.contextMenu.primaryColor), size: CGSize(width: 24.0, height: 24.0), opaque: false)
+            }, action: { _, f in
+                f(.default)
+                item.action(sourceView)
+            }))
+        }
+        let contextController = makeContextController(presentationData: presentationData, source: .reference(HeaderContextReferenceContentSource(controller: self, sourceView: sourceView)), items: .single(ContextController.Items(content: .list(menuItems))), gesture: nil)
+        self.presentInGlobalOverlay(contextController)
     }
     
     private var initializedFilters = false
@@ -6384,9 +6400,13 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                 })
             })))
             
-            if strongSelf.chatListDisplayNode.effectiveContainerNode.currentItemNode.chatListFilter != nil && strongSelf.chatListDisplayNode.mainContainerNode.navigableFilters.contains(.all) {
+            // Shadow: no "All Chats" item while the All folder is hidden.
+            let shadowShowsAllChats = strongSelf.chatListDisplayNode.effectiveContainerNode.currentItemNode.chatListFilter != nil && strongSelf.chatListDisplayNode.mainContainerNode.navigableFilters.contains(.all)
+            if shadowShowsAllChats {
+                items.append(.separator)
+                
                 items.append(.action(ContextMenuActionItem(text: strongSelf.presentationData.strings.ChatList_FolderAllChats, icon: { theme in
-                    return nil
+                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Chats"), color: theme.contextMenu.primaryColor)
                 }, action: { c, f in
                     f(.dismissWithoutContent)
                     guard let strongSelf = self else {
@@ -6397,9 +6417,10 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
             }
             
             if !presetList.isEmpty {
-                if presetList.count > 1 {
+                if !shadowShowsAllChats {
                     items.append(.separator)
                 }
+                
                 var filterCount = 0
                 for case let .filter(id, title, _, data) in presetList {
                     let filterType = chatListFilterType(data)
@@ -6753,7 +6774,7 @@ private final class ChatListTabBarContextReferenceContentSource: ContextReferenc
     func transitionInfo() -> ContextControllerReferenceViewInfo? {
         return ContextControllerReferenceViewInfo(
             referenceView: self.sourceView.contentView,
-            contentAreaInScreenSpace: UIScreen.main.bounds,
+            contentAreaInScreenSpace: mainWindowScreenBounds,
             actionsPosition: .top
         )
     }
@@ -6774,7 +6795,7 @@ private final class ChatListHeaderBarContextReferenceContentSource: ContextRefer
     func transitionInfo() -> ContextControllerReferenceViewInfo? {
         return ContextControllerReferenceViewInfo(
             referenceView: self.sourceView.contentView,
-            contentAreaInScreenSpace: UIScreen.main.bounds,
+            contentAreaInScreenSpace: mainWindowScreenBounds,
             actionsPosition: .bottom
         )
     }
@@ -6798,14 +6819,14 @@ private final class ChatListHeaderBarContextExtractedContentSource: ContextExtra
     
     func takeView() -> ContextControllerTakeViewInfo? {
         if let sourceNode = self.sourceNode {
-            return ContextControllerTakeViewInfo(containingItem: .node(sourceNode), contentAreaInScreenSpace: UIScreen.main.bounds)
+            return ContextControllerTakeViewInfo(containingItem: .node(sourceNode), contentAreaInScreenSpace: mainWindowScreenBounds)
         } else {
-            return ContextControllerTakeViewInfo(containingItem: .view(self.sourceView!), contentAreaInScreenSpace: UIScreen.main.bounds)
+            return ContextControllerTakeViewInfo(containingItem: .view(self.sourceView!), contentAreaInScreenSpace: mainWindowScreenBounds)
         }
     }
     
     func putBack() -> ContextControllerPutBackViewInfo? {
-        return ContextControllerPutBackViewInfo(contentAreaInScreenSpace: UIScreen.main.bounds)
+        return ContextControllerPutBackViewInfo(contentAreaInScreenSpace: mainWindowScreenBounds)
     }
 }
 
@@ -6819,7 +6840,7 @@ private final class ChatListContextLocationContentSource: ContextLocationContent
     }
     
     func transitionInfo() -> ContextControllerLocationViewInfo? {
-        return ContextControllerLocationViewInfo(location: self.location, contentAreaInScreenSpace: UIScreen.main.bounds)
+        return ContextControllerLocationViewInfo(location: self.location, contentAreaInScreenSpace: mainWindowScreenBounds)
     }
 }
 
@@ -6833,8 +6854,19 @@ private final class HeaderContextReferenceContentSource: ContextReferenceContent
     }
 
     func transitionInfo() -> ContextControllerReferenceViewInfo? {
-        return ContextControllerReferenceViewInfo(referenceView: self.sourceView, contentAreaInScreenSpace: UIScreen.main.bounds)
+        return ContextControllerReferenceViewInfo(referenceView: self.sourceView, contentAreaInScreenSpace: mainWindowScreenBounds)
     }
+}
+
+/// iPhone Duo: titles, menu icons and overflow priorities of the chat list's header buttons in the
+/// side column (spec 2026-10-06): compose stays longest, then proxy (it shows status), then story.
+private func chatListHeaderOverflowInfo(strings: PresentationStrings) -> [AnyHashable: NavigationBarComponent.OverflowInfo] {
+    return [
+        "compose": NavigationBarComponent.OverflowInfo(title: strings.Compose_NewMessage, iconName: "Chat List/ComposeIcon", priority: 3),
+        "proxy": NavigationBarComponent.OverflowInfo(title: strings.SocksProxySetup_Title, iconName: "Chat List/ProxyShieldIcon", priority: 2),
+        "story": NavigationBarComponent.OverflowInfo(title: strings.StoryFeed_AddStory, iconName: "Chat List/AddStoryIcon", priority: 1),
+        "more": NavigationBarComponent.OverflowInfo(title: strings.Common_More, iconName: nil, priority: nil)
+    ]
 }
 
 private final class ChatListLocationContext {
@@ -6851,19 +6883,19 @@ private final class ChatListLocationContext {
     private(set) var chatTitleComponent: ChatTitleComponent?
     private(set) var chatListTitle: NetworkStatusTitle?
     
-    var leftButton: AnyComponentWithIdentity<NavigationButtonComponentEnvironment>?
-    var rightButton: AnyComponentWithIdentity<NavigationButtonComponentEnvironment>?
-    var proxyButton: AnyComponentWithIdentity<NavigationButtonComponentEnvironment>?
-    var storyButton: AnyComponentWithIdentity<NavigationButtonComponentEnvironment>?
+    var leftButton: NavigationBarComponent.Button?
+    var rightButton: NavigationBarComponent.Button?
+    var proxyButton: NavigationBarComponent.Button?
+    var storyButton: NavigationBarComponent.Button?
     // AyuGram: Ghost Mode master toggle, shown on the root chat list navbar.
-    var ghostButton: AnyComponentWithIdentity<NavigationButtonComponentEnvironment>?
+    var ghostButton: NavigationBarComponent.Button?
     // Shadow: custom header buttons (ShadowHeaderButtons). Left: the second
     // button after `leftButton`. Right: when set, replaces compose/ghost/story
     // (right to left, like `rightButtons`); the proxy indicator stays.
-    var extraLeftButtons: [AnyComponentWithIdentity<NavigationButtonComponentEnvironment>] = []
-    var shadowRightButtons: [AnyComponentWithIdentity<NavigationButtonComponentEnvironment>]?
+    var extraLeftButtons: [NavigationBarComponent.Button] = []
+    var shadowRightButtons: [NavigationBarComponent.Button]?
 
-    var rightButtons: [AnyComponentWithIdentity<NavigationButtonComponentEnvironment>] {
+    var rightButtons: [NavigationBarComponent.Button] {
         if let shadowRightButtons = self.shadowRightButtons {
             var result = shadowRightButtons
             if let proxyButton = self.proxyButton {
@@ -6871,7 +6903,7 @@ private final class ChatListLocationContext {
             }
             return result
         }
-        var result: [AnyComponentWithIdentity<NavigationButtonComponentEnvironment>] = []
+        var result: [NavigationBarComponent.Button] = []
         if let rightButton = self.rightButton {
             result.append(rightButton)
         }
@@ -6895,6 +6927,14 @@ private final class ChatListLocationContext {
     
     private var didSetReady: Bool = false
     let ready = Promise<Bool>()
+    
+    /// Whether the screen is in a window (a screen being pushed is not, until the push starts).
+    private var parentIsShown: Bool {
+        guard let parentController = self.parentController, parentController.isViewLoaded else {
+            return false
+        }
+        return parentController.view.window != nil
+    }
     
     private var stateDisposable: Disposable?
     
@@ -7290,9 +7330,9 @@ private final class ChatListLocationContext {
                 if selectedPeerIds.isEmpty || ShadowDisguise.shared.isFull {
                     self.rightButton = nil
                 } else {
-                    self.rightButton = AnyComponentWithIdentity(id: "shadowLock", component: AnyComponent(NavigationButtonComponent(
-                        content: .icon(imageName: "sf:lock"),
-                        pressed: { [weak self] _ in
+                    self.rightButton = NavigationBarComponent.Button(id: "shadowLock",
+                        content: shadowHeaderButtonContent(imageName: "sf:lock"),
+                        action: { [weak self] _ in
                             // The header keeps the first closure for an unchanged icon, so
                             // read the selection at press time, not when the button was made.
                             guard let parent = self?.parentController else {
@@ -7300,21 +7340,21 @@ private final class ChatListLocationContext {
                             }
                             parent.shadowToggleLockForSelectedChats(parent.shadowCurrentSelectedPeerIds())
                         }
-                    )))
+                    )
                 }
                 // Shadow: the eye-slash button moves the selected chats between spaces (spec section 6).
                 if selectedPeerIds.isEmpty || ShadowDisguise.shared.isFull {
                     self.storyButton = nil
                 } else {
-                    self.storyButton = AnyComponentWithIdentity(id: "shadowSpace", component: AnyComponent(NavigationButtonComponent(
-                        content: .icon(imageName: "sf:eye.slash"),
-                        pressed: { [weak self] _ in
+                    self.storyButton = NavigationBarComponent.Button(id: "shadowSpace",
+                        content: shadowHeaderButtonContent(imageName: "sf:eye.slash"),
+                        action: { [weak self] _ in
                             guard let parent = self?.parentController else {
                                 return
                             }
                             parent.shadowChooseSpaceForSelectedChats(parent.shadowCurrentSelectedPeerIds())
                         }
-                    )))
+                    )
                 }
                 self.proxyButton = nil
                 self.ghostButton = nil
@@ -7340,12 +7380,12 @@ private final class ChatListLocationContext {
                 self.extraLeftButtons = []
                 self.shadowRightButtons = nil
             }
-            self.leftButton = AnyComponentWithIdentity(id: "done", component: AnyComponent(NavigationButtonComponent(
+            self.leftButton = NavigationBarComponent.Button(id: "done",
                 content: .text(title: presentationData.strings.Common_Done, isBold: true),
-                pressed: { [weak self] _ in
+                action: { [weak self] _ in
                     let _ = self?.parentController?.reorderingDonePressed()
                 }
-            )))
+            )
             
             let (_, connectsViaProxy) = proxy
             
@@ -7370,50 +7410,51 @@ private final class ChatListLocationContext {
                 isRoot = true
                 
                 if isReorderingTabs {
-                    self.rightButton = AnyComponentWithIdentity(id: "done", component: AnyComponent(NavigationButtonComponent(
+                    self.rightButton = NavigationBarComponent.Button(id: "done",
                         content: .text(title: presentationData.strings.Common_Done, isBold: true),
-                        pressed: { [weak self] _ in
+                        action: { [weak self] _ in
                             self?.parentController?.editPressed()
                         }
-                    )))
+                    )
                 } else {
-                    self.rightButton = AnyComponentWithIdentity(id: "compose", component: AnyComponent(NavigationButtonComponent(
+                    self.rightButton = NavigationBarComponent.Button(id: "compose",
                         content: .icon(imageName: "Chat List/ComposeIcon"),
-                        pressed: { [weak self] _ in
+                        tint: .accent,
+                        action: { [weak self] _ in
                             self?.parentController?.composePressed()
                         }
-                    )))
+                    )
                 }
                 
                 if isReorderingTabs {
-                    self.leftButton = AnyComponentWithIdentity(id: "done", component: AnyComponent(NavigationButtonComponent(
+                    self.leftButton = NavigationBarComponent.Button(id: "done",
                         content: .text(title: presentationData.strings.Common_Done, isBold: true),
-                        pressed: { [weak self] _ in
+                        action: { [weak self] _ in
                             let _ = self?.parentController?.reorderingDonePressed()
                         }
-                    )))
+                    )
                 } else {
                     if stateAndFilterId.state.editing {
-                        self.leftButton = AnyComponentWithIdentity(id: "done", component: AnyComponent(NavigationButtonComponent(
+                        self.leftButton = NavigationBarComponent.Button(id: "done",
                             content: .text(title: presentationData.strings.Common_Done, isBold: true),
-                            pressed: { [weak self] _ in
+                            action: { [weak self] _ in
                                 self?.parentController?.donePressed()
                             }
-                        )))
+                        )
                     } else {
-                        self.leftButton = AnyComponentWithIdentity(id: "edit", component: AnyComponent(NavigationButtonComponent(
+                        self.leftButton = NavigationBarComponent.Button(id: "edit",
                             content: .text(title: presentationData.strings.Common_Edit, isBold: false),
-                            pressed: { [weak self] _ in
+                            action: { [weak self] _ in
                                 self?.parentController?.editPressed()
                             }
-                        )))
+                        )
                     }
                 }
                 
                 if storyPostingAvailable {
-                    self.storyButton = AnyComponentWithIdentity(id: "story", component: AnyComponent(NavigationButtonComponent(
+                    self.storyButton = NavigationBarComponent.Button(id: "story",
                         content: .icon(imageName: "Chat List/AddStoryIcon"),
-                        pressed: { [weak self] _ in
+                        action: { [weak self] sourceView in
                             guard let self, let parentController = self.parentController else {
                                 return
                             }
@@ -7421,10 +7462,10 @@ private final class ChatListLocationContext {
                             if let componentView = parentController.chatListHeaderView(), let storyPeerListView = componentView.storyPeerListView(), storyPeerListView.isLiveStreaming {
                                 parentController.displayContinueLiveStream()
                             } else {
-                                parentController.openStoryCamera(fromList: false)
+                                parentController.openStoryCamera(fromList: false, sourceView: sourceView)
                             }
                         }
-                    )))
+                    )
                 } else {
                     self.storyButton = nil
                 }
@@ -7447,9 +7488,9 @@ private final class ChatListLocationContext {
                 if ShadowDisguise.shared.isFull {
                     self.ghostButton = nil
                 } else {
-                self.ghostButton = AnyComponentWithIdentity(id: (ghostMode ? "ghost_on" : "ghost_off") + (ghostOpensSettings ? "" : "_hidden"), component: AnyComponent(NavigationButtonComponent(
+                self.ghostButton = NavigationBarComponent.Button(id: (ghostMode ? "ghost_on" : "ghost_off") + (ghostOpensSettings ? "" : "_hidden"),
                     content: .icon(imageName: ghostMode ? "Chat List/GhostActiveIcon" : "Chat List/GhostIcon"),
-                    pressed: { _ in
+                    action: { _ in
                         let _ = updateAyuGramSettings(postbox: ghostContext.account.postbox, { settings in
                             var settings = settings
                             settings.ghostMode = !settings.ghostMode
@@ -7458,7 +7499,7 @@ private final class ChatListLocationContext {
                         }).startStandalone()
                     },
                     contextAction: ghostContextAction
-                )))
+                )
                 }
 
                 // Shadow: custom header buttons. The stock layout keeps the code
@@ -7473,9 +7514,9 @@ private final class ChatListLocationContext {
                 self.extraLeftButtons = []
                 self.shadowRightButtons = nil
                 let parentController = self.parentController
-                self.rightButton = AnyComponentWithIdentity(id: "more", component: AnyComponent(NavigationButtonComponent(
+                self.rightButton = NavigationBarComponent.Button(id: "more",
                     content: .more,
-                    pressed: { [weak parentController] sourceView in
+                    action: { [weak parentController] sourceView in
                         if let primaryContext = parentController?.primaryContext {
                             primaryContext.performMoreAction(sourceView: sourceView)
                         }
@@ -7486,7 +7527,7 @@ private final class ChatListLocationContext {
                         }
                         parentController.openArchiveMoreMenu(sourceView: sourceView, gesture: gesture)
                     }
-                )))
+                )
             }
             
             let (hasProxy, connectsViaProxy) = proxy
@@ -7515,15 +7556,15 @@ private final class ChatListLocationContext {
                     proxyStatus = .available
                 }
                 
-                self.proxyButton = AnyComponentWithIdentity(id: "proxy", component: AnyComponent(NavigationButtonComponent(
-                    content: .proxy(status: proxyStatus),
-                    pressed: { [weak self] _ in
+                self.proxyButton = NavigationBarComponent.Button(id: "proxy",
+                    content: .custom(AnyComponent(ChatListProxyButtonComponent(theme: presentationData.theme, status: proxyStatus))),
+                    action: { [weak self] _ in
                         guard let self, let parentController = self.parentController else {
                             return
                         }
                         (parentController.navigationController as? NavigationController)?.pushViewController(self.context.sharedContext.makeProxySettingsController(context: self.context))
                     }
-                )))
+                )
                 
                 titleContent.hasProxy = false
                 titleContent.connectsViaProxy = false
@@ -7559,12 +7600,15 @@ private final class ChatListLocationContext {
             }
         }
         
-        if !self.didSetReady {
+        // The header takes this content before ready lets a push start: a push lifts the header as it is then and holds
+        // it until the push ends. Content for a screen not shown yet is laid out at once.
+        let isFirstUpdate = !self.didSetReady
+        self.parentController?.requestLayout(transition: self.parentIsShown ? .animated(duration: 0.45, curve: .spring) : .immediate)
+        
+        if isFirstUpdate {
             self.didSetReady = true
             self.ready.set(.single(true))
         }
-        
-        self.parentController?.requestLayout(transition: .animated(duration: 0.45, curve: .spring))
         
         Queue.mainQueue().after(1.0, { [weak self] in
             guard let self else {
@@ -7634,17 +7678,17 @@ private final class ChatListLocationContext {
         }
         
         if stateAndFilterId.state.editing {
-            self.rightButton = AnyComponentWithIdentity(id: "done", component: AnyComponent(NavigationButtonComponent(
+            self.rightButton = NavigationBarComponent.Button(id: "done",
                 content: .text(title: presentationData.strings.Common_Done, isBold: true),
-                pressed: { [weak self] _ in
+                action: { [weak self] _ in
                     self?.parentController?.donePressed()
                 }
-            )))
+            )
         } else {
             let parentController = self.parentController
-            self.rightButton = AnyComponentWithIdentity(id: "more", component: AnyComponent(NavigationButtonComponent(
+            self.rightButton = NavigationBarComponent.Button(id: "more",
                 content: .more,
-                pressed: { [weak parentController] sourceView in
+                action: { [weak parentController] sourceView in
                     if let secondaryContext = parentController?.secondaryContext {
                         secondaryContext.performMoreAction(sourceView: sourceView)
                     } else if let primaryContext = parentController?.primaryContext {
@@ -7657,21 +7701,26 @@ private final class ChatListLocationContext {
                     }
                     ChatListControllerImpl.openMoreMenu(context: self.context, peerId: peerId, sourceController: parentController, isViewingAsTopics: true, sourceView: sourceView, gesture: gesture)
                 }
-            )))
+            )
         }
         
-        if !self.didSetReady {
-            self.didSetReady = true
-            self.ready.set(.single(true))
-        }
-        
+        let isFirstUpdate = !self.didSetReady
         if let channel = peerView.peers[peerView.peerId] as? TelegramChannel, !channel.isForumOrMonoForum {
+            if isFirstUpdate {
+                self.didSetReady = true
+                self.ready.set(.single(true))
+            }
             if let parentController = self.parentController, let navigationController = parentController.navigationController as? NavigationController {
                 let chatController = self.context.sharedContext.makeChatController(context: self.context, chatLocation: .peer(id: peerId), subject: nil, botStart: nil, mode: .standard(.default), params: nil)
                 navigationController.replaceController(parentController, with: chatController, animated: true)
             }
         } else {
-            self.parentController?.requestLayout(transition: .animated(duration: 0.45, curve: .spring))
+            // As in `updateChatList`: the header takes the forum's title and buttons before ready lets a push lift it.
+            self.parentController?.requestLayout(transition: self.parentIsShown ? .animated(duration: 0.45, curve: .spring) : .immediate)
+            if isFirstUpdate {
+                self.didSetReady = true
+                self.ready.set(.single(true))
+            }
         }
     }
     
@@ -7706,7 +7755,7 @@ private final class AdsInfoContextReferenceContentSource: ContextReferenceConten
     }
     
     func transitionInfo() -> ContextControllerReferenceViewInfo? {
-        return ContextControllerReferenceViewInfo(referenceView: self.sourceView, contentAreaInScreenSpace: UIScreen.main.bounds.inset(by: self.insets), insets: self.contentInsets)
+        return ContextControllerReferenceViewInfo(referenceView: self.sourceView, contentAreaInScreenSpace: mainWindowScreenBounds.inset(by: self.insets), insets: self.contentInsets)
     }
 }
 
@@ -7990,7 +8039,7 @@ extension ChatListLocationContext {
         let buttons = state.buttons.normalized()
         let proxyEnabled = proxy.0 && proxy.1
 
-        var left: [AnyComponentWithIdentity<NavigationButtonComponentEnvironment>] = []
+        var left: [NavigationBarComponent.Button] = []
         for (index, button) in buttons.left.enumerated() {
             if let component = self.shadowHeaderButtonComponent(button: button, key: "l\(index)", state: state, presentationData: presentationData, storyPostingAvailable: storyPostingAvailable, proxyEnabled: proxyEnabled) {
                 left.append(component)
@@ -7999,7 +8048,7 @@ extension ChatListLocationContext {
         self.leftButton = left.first
         self.extraLeftButtons = Array(left.dropFirst())
 
-        var right: [AnyComponentWithIdentity<NavigationButtonComponentEnvironment>] = []
+        var right: [NavigationBarComponent.Button] = []
         for (index, button) in buttons.right.enumerated() {
             if let component = self.shadowHeaderButtonComponent(button: button, key: "r\(index)", state: state, presentationData: presentationData, storyPostingAvailable: storyPostingAvailable, proxyEnabled: proxyEnabled) {
                 right.append(component)
@@ -8010,7 +8059,7 @@ extension ChatListLocationContext {
         let _ = isPasscodeSet
     }
 
-    private func shadowHeaderButtonComponent(button: ShadowHeaderButton, key: String, state: ShadowChatListHeaderState, presentationData: PresentationData, storyPostingAvailable: Bool, proxyEnabled: Bool) -> AnyComponentWithIdentity<NavigationButtonComponentEnvironment>? {
+    private func shadowHeaderButtonComponent(button: ShadowHeaderButton, key: String, state: ShadowChatListHeaderState, presentationData: PresentationData, storyPostingAvailable: Bool, proxyEnabled: Bool) -> NavigationBarComponent.Button? {
         let tapSteps = button.tapSteps
         if tapSteps.isEmpty {
             return nil
@@ -8019,13 +8068,13 @@ extension ChatListLocationContext {
             return nil
         }
 
-        let content: NavigationButtonComponent.Content
+        let content: NavigationBarComponent.Button.Content
         var stateKey = "off"
         if tapSteps.count == 1 && button.tap == .edit && button.icon.isEmpty {
             content = .text(title: presentationData.strings.Common_Edit, isBold: false)
         } else {
             let (imageName, isActive) = shadowHeaderButtonIcon(button, context: self.context, state: state, isDark: presentationData.theme.overallDarkAppearance, proxyEnabled: proxyEnabled)
-            content = .icon(imageName: imageName)
+            content = shadowHeaderButtonContent(imageName: imageName)
             stateKey = isActive ? "on" : "off"
             if imageName.hasPrefix("img:") {
                 stateKey += "_" + imageName
@@ -8043,14 +8092,41 @@ extension ChatListLocationContext {
         // The header keeps the first closures for an unchanged identity, so
         // everything the closures capture is part of the id.
         let id = "shadow_\(key)_\(button.identityKey)_\(stateKey)"
-        return AnyComponentWithIdentity(id: id, component: AnyComponent(NavigationButtonComponent(
+        return NavigationBarComponent.Button(id: id,
             content: content,
-            pressed: { [weak self] sourceView in
+            action: { [weak self] sourceView in
                 self?.parentController?.shadowPerformHeaderSteps(tapSteps, sourceView: sourceView)
             },
             contextAction: contextAction
-        )))
+        )
     }
+}
+
+// Shadow: header icon names. "sf:<name>" is an SF Symbol in the weight of the
+// bundled header glyphs, tinted like them; "img:<key>" a ready image
+// (ShadowHeaderButtonImages, a person's avatar) drawn as is; anything else a
+// bundle image.
+private var shadowHeaderSymbolImages: [String: UIImage] = [:]
+
+func shadowHeaderButtonContent(imageName: String) -> NavigationBarComponent.Button.Content {
+    if imageName.hasPrefix("img:") {
+        if let image = ShadowHeaderButtonImages.images[String(imageName.dropFirst(4))] {
+            return .image(image)
+        }
+        return shadowHeaderButtonContent(imageName: "sf:person.crop.circle")
+    }
+    if imageName.hasPrefix("sf:") {
+        // The same instance for the same symbol: the bar compares contents.
+        if let image = shadowHeaderSymbolImages[imageName] {
+            return .image(image)
+        }
+        if let symbol = UIImage(systemName: String(imageName.dropFirst(3)), withConfiguration: UIImage.SymbolConfiguration(pointSize: 21.0, weight: .medium)) {
+            let image = symbol.withRenderingMode(.alwaysTemplate)
+            shadowHeaderSymbolImages[imageName] = image
+            return .image(image)
+        }
+    }
+    return .icon(imageName: imageName)
 }
 
 extension ChatListControllerImpl {

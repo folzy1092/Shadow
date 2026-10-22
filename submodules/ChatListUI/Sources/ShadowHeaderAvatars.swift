@@ -4,15 +4,22 @@ import SwiftSignalKit
 import TelegramCore
 import AccountContext
 import AvatarNode
-import ChatListHeaderComponent
 
 // Shadow: avatars for "Открыть профиль" header buttons (ShadowHeaderAction.openProfile).
 //
 // The header asks for an image key by the step link; the first request starts
 // loading the person (by id, @username or "me") and their avatar, the header
-// redraws when `version` changes. The image goes to NavigationButtonCustomImages
+// redraws when `version` changes. The image goes to ShadowHeaderButtonImages
 // under a new key every time it changes (letters first, then the photo).
 // Main thread only.
+// Images for header buttons that are not glyphs (a person's avatar on a
+// "Открыть профиль" button). `img:<key>` draws `images[key]` untinted; a new
+// picture must come under a new key, so the button sees a new image. Main
+// thread only.
+enum ShadowHeaderButtonImages {
+    static var images: [String: UIImage] = [:]
+}
+
 final class ShadowHeaderAvatars {
     static let shared = ShadowHeaderAvatars()
 
@@ -28,7 +35,7 @@ final class ShadowHeaderAvatars {
         return "\(context.account.peerId.toInt64())|\(link)"
     }
 
-    // "img:<key>" for NavigationButtonComponent, nil until the image is loaded.
+    // "img:<key>" for shadowHeaderButtonContent, nil until the image is loaded.
     func iconName(context: AccountContext, link: String) -> String? {
         let cacheKey = self.cacheKey(context: context, link: link)
         if let key = self.keys[cacheKey] {
@@ -49,9 +56,9 @@ final class ShadowHeaderAvatars {
                 self.counter += 1
                 let key = "shadow-avatar-\(self.counter)"
                 if let previous = self.keys[cacheKey] {
-                    NavigationButtonCustomImages.images[previous] = nil
+                    ShadowHeaderButtonImages.images[previous] = nil
                 }
-                NavigationButtonCustomImages.images[key] = image
+                ShadowHeaderButtonImages.images[key] = image
                 self.keys[cacheKey] = key
                 self.versionValue += 1
                 self.version.set(self.versionValue)

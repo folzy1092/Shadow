@@ -36,3 +36,8 @@ build:macos --strategy=SwiftCompile=worker
 
 common:macos --features=swift.use_global_module_cache
 common:macos --features=oso_prefix_is_pwd
+
+# Shadow: Telegram 13.1's TelegramCore prints more than Bazel's 1 MB default of
+# compiler output (warnings), and Bazel then drops the whole stderr, errors
+# included. -1: no limit.
+common --experimental_ui_max_stdouterr_bytes=-1
