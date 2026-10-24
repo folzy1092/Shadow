@@ -241,7 +241,7 @@ private func ayuCopyItem(context: AccountContext, message: EngineRawMessage, thr
                 return .progress(1.0)
             case let (.finished(fileCopy), .finished(thumbnailCopy)):
                 guard let fileCopy else {
-                    return .failed
+                    return .finished(.failed)
                 }
                 // A thumbnail that failed to download is dropped, not fatal:
                 // the server builds its own preview for the uploaded file.
@@ -251,7 +251,7 @@ private func ayuCopyItem(context: AccountContext, message: EngineRawMessage, thr
                 } else {
                     previewRepresentations = []
                 }
-                return enqueue(TelegramMediaFile(fileId: MediaId(namespace: Namespaces.Media.LocalFile, id: Int64.random(in: Int64.min ... Int64.max)), partialReference: nil, resource: fileCopy, previewRepresentations: previewRepresentations, videoThumbnails: [], immediateThumbnailData: file.immediateThumbnailData, mimeType: file.mimeType, size: file.size, attributes: file.attributes, alternativeRepresentations: []))
+                return .finished(enqueue(TelegramMediaFile(fileId: MediaId(namespace: Namespaces.Media.LocalFile, id: Int64.random(in: Int64.min ... Int64.max)), partialReference: nil, resource: fileCopy, previewRepresentations: previewRepresentations, videoThumbnails: [], immediateThumbnailData: file.immediateThumbnailData, mimeType: file.mimeType, size: file.size, attributes: file.attributes, alternativeRepresentations: [])))
             }
         }
     }
