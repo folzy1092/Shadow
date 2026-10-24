@@ -86,6 +86,7 @@ submodules/TelegramUI/Sources/Chat/ShadowReplyTimecodeSend.swift
 submodules/TelegramUI/Sources/Chat/ShadowScreenshotMessageAnonymizer.swift
 submodules/TelegramUI/Sources/ChatController.swift
 submodules/TelegramUI/Sources/ChatControllerContentData.swift
+submodules/TelegramUI/Sources/ChatControllerForwardAsCopy.swift
 submodules/TelegramUI/Sources/ChatControllerForwardMessages.swift
 submodules/TelegramUI/Sources/ChatControllerNode.swift
 submodules/TelegramUI/Sources/ChatControllerOpenAttachmentMenu.swift

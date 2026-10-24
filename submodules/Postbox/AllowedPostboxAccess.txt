@@ -113,6 +113,7 @@ submodules/SettingsUI/Sources/ShadowPushDiagnosticsController.swift
 submodules/SettingsUI/Sources/ShadowQuickRepliesController.swift
 submodules/SettingsUI/Sources/ShadowSettingLinkUI.swift
 submodules/SettingsUI/Sources/ShadowSettingsBackupController.swift
+submodules/SettingsUI/Sources/ShadowSpyExclusionsController.swift
 submodules/SettingsUI/Sources/ShadowUpdateController.swift
 submodules/SettingsUI/Sources/Text Size/TextSizeSelectionController.swift
 submodules/SettingsUI/Sources/ThemePickerGridItem.swift
