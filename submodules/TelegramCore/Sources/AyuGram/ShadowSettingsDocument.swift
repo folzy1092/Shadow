@@ -39,15 +39,16 @@ public struct ShadowSettingsDocument: Codable, Equatable {
         "saveAllIncomingMedia", "mediaAutoCleanKeepPinned", "mediaAutoCleanKeepChannels",
         "mediaAutoCleanKeepBots", "showProfileId", "showProfileDC",
         "showRegistrationDate", "hideOwnPhoneNumber",
-        "hideStoriesBar", "hideGiftButton", "hideGreetingSticker", "offerGhostBeforeStories", "hidePremiumBadges", "hideSponsoredMessages", "adFilterChannels", "adFilterGroups", "adFilterForwarded", "adHideCompletely", "showChatStreak", "chatStatsCountDeleted", "feedEnabled", "feedAutoplay", "feedShowFolders", "feedIncludeMuted", "feedIncludeArchived", "feedMarkRead", "messageFilterShowPlaceholder", "updateChannelBeta", "unlimitedPinnedChats", "localVoiceTranscription", "voiceTimeRoundVideos", "voiceTimeInPlayer", "replyTimecode", "chatVoiceSpeed", "monochromeSettingsIcons", "compactChatList", "chatBannersEnabled", "businessBotPinned", "businessBotPinnedFirst", "businessBotPinnedCompact", "silentSend", "unlimitedFavorites", "localChatTranslation", "paperclipMenu", "paperclipPrankImitation", "onlineHistory", "saveViewedStories",
+        "hideStoriesBar", "hideGiftButton", "hideGreetingSticker", "offerGhostBeforeStories", "hidePremiumBadges", "hideSponsoredMessages", "adFilterChannels", "adFilterGroups", "adFilterForwarded", "adHideCompletely", "showChatStreak", "chatStatsCountDeleted", "feedEnabled", "feedAutoplay", "feedShowFolders", "feedIncludeMuted", "feedIncludeArchived", "feedMarkRead", "messageFilterShowPlaceholder", "spyExcludeBots", "updateChannelBeta", "unlimitedPinnedChats", "localVoiceTranscription", "voiceTimeRoundVideos", "voiceTimeInPlayer", "replyTimecode", "chatVoiceSpeed", "monochromeSettingsIcons", "compactChatList", "chatBannersEnabled", "businessBotPinned", "businessBotPinnedFirst", "businessBotPinnedCompact", "silentSend", "unlimitedFavorites", "localChatTranslation", "paperclipMenu", "paperclipPrankImitation", "onlineHistory", "saveViewedStories",
         "screenshotAnonymize", "screenshotAnonymizeOwn", "screenshotAnonymizeOthers", "screenshotEnabled", "screenshotAvatars", "screenshotNames", "screenshotBadges", "screenshotTime",
         "spoofProfileIdEnabled", "spoofProfileDcEnabled", "spoofProfilePhoneEnabled", "customBannerEnabled", "customProfileBackgroundEnabled", "customProfileBackgroundForOthers", "customProfileBackgroundForSettings"
     ]
     public static let textKeys: Set<String> = ["paperclipActions", "editedIndicatorText", "deletedIndicatorText", "spoofProfileIdValue", "spoofProfileDcValue", "spoofProfilePhoneValue"]
     // Lists and tables, as JSON text (ShadowSettingsTransfer encodes and checks
     // them): message filters, shadow ban, quick reply templates, header
-    // buttons, per-chat Ghost Mode rules (1.9.1: the file carries everything).
-    public static let jsonKeys: Set<String> = ["messageFilters", "shadowBannedPeerIds", "quickReplyTemplates", "headerButtons", "chatPrivacyRules"]
+    // buttons, per-chat Ghost Mode rules (1.9.1: the file carries everything),
+    // spy exclusions.
+    public static let jsonKeys: Set<String> = ["messageFilters", "shadowBannedPeerIds", "quickReplyTemplates", "headerButtons", "chatPrivacyRules", "spyExcludedPeerIds"]
     public static let maximumJSONBytes = 256 * 1024
     public static let integerKeys: Set<String> = [
         "mediaAutoCleanInterval", "attachmentSizeLimit", "bottomBarScrollMode", "ghostAccountMode",

@@ -72,11 +72,18 @@ final class NavigationButtonComponent: Component {
 
         private var component: NavigationButtonComponent?
         private var currentColor: UIColor?
+        // Shadow: the long press of a button that is not "more" (the header buttons' hold binding, Ghost settings).
+        // The more button has its own ContextGesture; cancelling touches keeps the tap from firing on release.
+        private lazy var longPressGesture = UILongPressGestureRecognizer(target: self, action: #selector(self.longPressed(_:)))
 
         override init(frame: CGRect) {
             super.init(frame: frame)
 
             self.addTarget(self, action: #selector(self.pressed), for: .touchUpInside)
+            self.longPressGesture.minimumPressDuration = 0.45
+            self.longPressGesture.cancelsTouchesInView = true
+            self.longPressGesture.isEnabled = false
+            self.addGestureRecognizer(self.longPressGesture)
 
             self.highligthedChanged = { [weak self] highlighted in
                 guard let self else {
@@ -105,6 +112,13 @@ final class NavigationButtonComponent: Component {
 
         @objc private func pressed() {
             self.component?.pressed(self)
+        }
+
+        @objc private func longPressed(_ gesture: UILongPressGestureRecognizer) {
+            guard gesture.state == .began, self.isEnabled else {
+                return
+            }
+            self.component?.contextAction?(self, nil)
         }
 
         /// Takes the hosted node back once its loan has ended (`NavigationBarNodeLoan.end`).
@@ -238,6 +252,8 @@ final class NavigationButtonComponent: Component {
             case let .custom(customComponentValue):
                 customComponent = customComponentValue
             }
+
+            self.longPressGesture.isEnabled = component.contextAction != nil && !isMore
 
             var size = CGSize(width: 0.0, height: availableSize.height)
 

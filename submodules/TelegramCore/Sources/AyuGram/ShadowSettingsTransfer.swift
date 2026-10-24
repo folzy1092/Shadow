@@ -58,6 +58,7 @@ public enum ShadowSettingsTransfer {
         "mediaAutoCleanKeepPinned": \.mediaAutoCleanKeepPinned,
         "mediaAutoCleanKeepChannels": \.mediaAutoCleanKeepChannels,
         "mediaAutoCleanKeepBots": \.mediaAutoCleanKeepBots,
+        "spyExcludeBots": \.spyExcludeBots,
         "showProfileId": \.showProfileId,
         "showProfileDC": \.showProfileDC,
         "showRegistrationDate": \.showRegistrationDate,
@@ -139,6 +140,12 @@ public enum ShadowSettingsTransfer {
         return try? JSONDecoder().decode(T.self, from: Data(text.utf8))
     }
 
+    // First occurrence wins, order kept.
+    static func uniqueIds(_ ids: [Int64]) -> [Int64] {
+        var seen = Set<Int64>()
+        return ids.filter { seen.insert($0).inserted }
+    }
+
     public static func document(from settings: AyuGramSettings) throws -> ShadowSettingsDocument {
         var values: [String: ShadowSettingValue] = [:]
         for (key, path) in self.booleanFields {
@@ -156,7 +163,8 @@ public enum ShadowSettingsTransfer {
             ("shadowBannedPeerIds", ShadowSettingsTransfer.json(settings.shadowBannedPeerIds)),
             ("quickReplyTemplates", ShadowSettingsTransfer.json(settings.quickReplyTemplates)),
             ("headerButtons", ShadowSettingsTransfer.json(settings.headerButtons)),
-            ("chatPrivacyRules", ShadowSettingsTransfer.json(rules))
+            ("chatPrivacyRules", ShadowSettingsTransfer.json(rules)),
+            ("spyExcludedPeerIds", ShadowSettingsTransfer.json(settings.spyExcludedPeerIds))
         ] {
             if let json {
                 values[key] = .text(json)
@@ -212,8 +220,11 @@ public enum ShadowSettingsTransfer {
                     }
                 case "shadowBannedPeerIds":
                     if let ids: [Int64] = ShadowSettingsTransfer.decodeJSON(text) {
-                        var seen = Set<Int64>()
-                        updated.shadowBannedPeerIds = ids.filter { seen.insert($0).inserted }
+                        updated.shadowBannedPeerIds = ShadowSettingsTransfer.uniqueIds(ids)
+                    }
+                case "spyExcludedPeerIds":
+                    if let ids: [Int64] = ShadowSettingsTransfer.decodeJSON(text) {
+                        updated.spyExcludedPeerIds = ShadowSettingsTransfer.uniqueIds(ids)
                     }
                 case "quickReplyTemplates":
                     if let templates: [String] = ShadowSettingsTransfer.decodeJSON(text) {

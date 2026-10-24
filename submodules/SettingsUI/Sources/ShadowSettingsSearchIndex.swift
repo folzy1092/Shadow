@@ -80,6 +80,8 @@ enum ShadowSettingsSearchIndex {
         ShadowSettingsSearchItem(destination: .spy, entryId: 3, title: "Сохранять самоуничтожающиеся", description: "Оставлять открытые исчезающие медиа", keywords: "view once self destruct"),
         ShadowSettingsSearchItem(destination: .spy, entryId: 6, title: "История редактирования", description: "Сохранять прежние версии сообщений", keywords: "edit history"),
         ShadowSettingsSearchItem(destination: .spy, entryId: 7, title: "Сравнить правки", description: "Отдельно показывать действие сравнения в меню сообщения", keywords: "edit diff comparison сравнение правок"),
+        ShadowSettingsSearchItem(destination: .spy, entryId: 33, title: "Исключить ботов", description: "Не сохранять удалённое, правки и медиа из сообщений ботов", keywords: "bots боты исключить шпион правки удалённые exclude spy"),
+        ShadowSettingsSearchItem(destination: .spy, entryId: 34, title: "Исключённые чаты", description: "Чаты и каналы по ID (-100…), для которых шпион ничего не сохраняет", keywords: "exclude исключения исключить канал чат id айди -100 шпион правки удалённые spy"),
         ShadowSettingsSearchItem(destination: .spy, entryId: 10, title: "Сохранение защищённого контента", description: "Настройка копирования и пересылки", keywords: "restricted protected copy forward"),
         ShadowSettingsSearchItem(destination: .spy, entryId: 13, title: "Спрашивать перед просмотром истории", description: "Предупреждение перед открытием чужой истории", keywords: "ask story view"),
         ShadowSettingsSearchItem(destination: .spy, entryId: 16, title: "Сохранять исчезающие медиа", description: "Копия во внутренней галерее", keywords: "save destructing media"),

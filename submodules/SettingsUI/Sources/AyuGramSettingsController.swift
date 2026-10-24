@@ -2145,6 +2145,8 @@ private final class AyuSpyArguments {
     var updateOnlineHistory: (Bool) -> Void = { _ in }
     var updateSaveViewedStories: (Bool) -> Void = { _ in }
     var openSavedStories: () -> Void = {}
+    var updateSpyExcludeBots: (Bool) -> Void = { _ in }
+    var openSpyExclusions: () -> Void = {}
 
     init(
         updateKeepDeleted: @escaping (Bool) -> Void,
@@ -2184,6 +2186,7 @@ private final class AyuSpyArguments {
 private enum AyuSpySection: Int32 {
     case deleted
     case edits
+    case exclusions
     case restricted
     case storyPrompt
     case savedMedia
@@ -2202,6 +2205,11 @@ private enum AyuSpyEntry: ItemListNodeEntry {
     case saveEditHistory(Bool)
     case showEditComparisonAction(Bool)
     case editsFooter
+
+    case exclusionsHeader
+    case spyExcludeBots(Bool)
+    case spyExcludedChats(Int)
+    case exclusionsFooter
 
     case restrictedHeader
     case allowSaveRestrictedContent(Bool)
@@ -2237,6 +2245,8 @@ private enum AyuSpyEntry: ItemListNodeEntry {
             return AyuSpySection.deleted.rawValue
         case .editsHeader, .saveEditHistory, .showEditComparisonAction, .editsFooter:
             return AyuSpySection.edits.rawValue
+        case .exclusionsHeader, .spyExcludeBots, .spyExcludedChats, .exclusionsFooter:
+            return AyuSpySection.exclusions.rawValue
         case .restrictedHeader, .allowSaveRestrictedContent, .restrictedFooter:
             return AyuSpySection.restricted.rawValue
         case .storyPromptHeader, .askBeforeStoryView, .storyPromptFooter:
@@ -2284,10 +2294,19 @@ private enum AyuSpyEntry: ItemListNodeEntry {
         case .saveViewedStories: return 29
         case .openSavedStories: return 30
         case .storiesFooter: return 31
+        case .exclusionsHeader: return 32
+        case .spyExcludeBots: return 33
+        case .spyExcludedChats: return 34
+        case .exclusionsFooter: return 35
         }
     }
 
+    // stableId is also the setting link's entryId, so rows added later get new
+    // ids and the order goes by section first.
     static func <(lhs: AyuSpyEntry, rhs: AyuSpyEntry) -> Bool {
+        if lhs.section != rhs.section {
+            return lhs.section < rhs.section
+        }
         return lhs.stableId < rhs.stableId
     }
 
@@ -2342,6 +2361,18 @@ private enum AyuSpyEntry: ItemListNodeEntry {
             })
         case .editsFooter:
             return ItemListTextItem(presentationData: presentationData, text: .plain("При каждом изменении сообщения сохраняется предыдущая версия — старый текст, подписи и медиа. «История изменений» остаётся в контекстном меню. Включите отдельный переключатель, если хотите также видеть кнопку сравнения добавленного и удалённого текста."), sectionId: self.section)
+        case .exclusionsHeader:
+            return ItemListSectionHeaderItem(presentationData: presentationData, text: "ИСКЛЮЧЕНИЯ", sectionId: self.section)
+        case let .spyExcludeBots(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Исключить ботов", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.updateSpyExcludeBots(value)
+            })
+        case let .spyExcludedChats(count):
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Исключённые чаты", label: count == 0 ? "" : "\(count)", sectionId: self.section, style: .blocks, action: {
+                arguments.openSpyExclusions()
+            })
+        case .exclusionsFooter:
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Для этих чатов не сохраняются удалённые сообщения, история правок и входящие медиа — например, для канала, который правит посты каждую секунду. «Исключить ботов» — то же для сообщений от ботов. Уже сохранённое остаётся."), sectionId: self.section)
         case .restrictedHeader:
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "ЗАЩИЩЁННЫЙ КОНТЕНТ", sectionId: self.section)
         case let .allowSaveRestrictedContent(value):
@@ -2381,11 +2412,11 @@ private enum AyuSpyEntry: ItemListNodeEntry {
                 arguments.updateKeepPinned(value)
             })
         case let .keepChannels(value):
-            return ItemListSwitchItem(presentationData: presentationData, title: "Исключить каналы", value: value, sectionId: self.section, style: .blocks, updated: { value in
+            return ItemListSwitchItem(presentationData: presentationData, title: "Не очищать каналы", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 arguments.updateKeepChannels(value)
             })
         case let .keepBots(value):
-            return ItemListSwitchItem(presentationData: presentationData, title: "Исключить ботов", value: value, sectionId: self.section, style: .blocks, updated: { value in
+            return ItemListSwitchItem(presentationData: presentationData, title: "Не очищать ботов", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 arguments.updateKeepBots(value)
             })
         case .forkStorage:
@@ -2393,7 +2424,7 @@ private enum AyuSpyEntry: ItemListNodeEntry {
                 arguments.openForkStorage()
             })
         case .savedMediaFooter:
-            return ItemListTextItem(presentationData: presentationData, text: .plain("Приватная локальная копия медиа, которая переживает удаление. «Сохранять самоуничтожающиеся» копирует view-once / TTL-медиа до их исчезновения (и не уведомляет отправителя). «Сохранять все входящие медиа» сохраняет каждое входящее фото, видео, документ, голосовое и кружок — независимо от «Сохранения в галерею» и защиты от копирования.\n\nАвтоочистка работает по двум независимым лимитам, их можно использовать вместе: «Лимит размера» удаляет самые старые файлы при превышении общего размера папки; «Срок хранения» удаляет вложения старше выбранного срока, а также сами сохранённые удалённые сообщения, помеченные корзиной раньше этого срока. При очистке всегда удаляются самые старые файлы. Исключения (закреплённые, каналы, боты) никогда не очищаются. «Хранилище и размер папки» показывает занятое место по чатам."), sectionId: self.section)
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Приватная локальная копия медиа, которая переживает удаление. «Сохранять самоуничтожающиеся» копирует view-once / TTL-медиа до их исчезновения (и не уведомляет отправителя). «Сохранять все входящие медиа» сохраняет каждое входящее фото, видео, документ, голосовое и кружок — независимо от «Сохранения в галерею» и защиты от копирования.\n\nАвтоочистка работает по двум независимым лимитам, их можно использовать вместе: «Лимит размера» удаляет самые старые файлы при превышении общего размера папки; «Срок хранения» удаляет вложения старше выбранного срока, а также сами сохранённые удалённые сообщения, помеченные корзиной раньше этого срока. При очистке всегда удаляются самые старые файлы. Отмеченное «Не очищать» (закреплённые, каналы, боты) не удаляется автоочисткой. «Хранилище и размер папки» показывает занятое место по чатам."), sectionId: self.section)
         }
     }
 }
@@ -2411,6 +2442,11 @@ private func ayuSpyEntries(settings: AyuGramSettings) -> [AyuSpyEntry] {
     entries.append(.saveEditHistory(settings.saveEditHistory))
     entries.append(.showEditComparisonAction(settings.showEditComparisonAction))
     entries.append(.editsFooter)
+
+    entries.append(.exclusionsHeader)
+    entries.append(.spyExcludeBots(settings.spyExcludeBots))
+    entries.append(.spyExcludedChats(settings.spyExcludedPeerIds.count))
+    entries.append(.exclusionsFooter)
 
     entries.append(.restrictedHeader)
     entries.append(.allowSaveRestrictedContent(settings.allowSaveRestrictedContent))
@@ -2538,6 +2574,12 @@ func ayuSpyController(context: AccountContext, focus: ShadowSettingsSearchItem? 
     }
     arguments.openSavedStories = {
         pushControllerImpl?(shadowSavedStoriesController(context: context))
+    }
+    arguments.updateSpyExcludeBots = { value in
+        ayuUpdateSettings(context: context) { var s = $0; s.spyExcludeBots = value; return s }
+    }
+    arguments.openSpyExclusions = {
+        pushControllerImpl?(shadowSpyExclusionsController(context: context))
     }
 
     let signal = combineLatest(queue: .mainQueue(),

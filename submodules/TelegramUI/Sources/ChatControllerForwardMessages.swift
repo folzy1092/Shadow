@@ -16,201 +16,6 @@ import TopMessageReactions
 import ChatMessagePaymentAlertController
 
 extension ChatControllerImpl {
-    private struct AyuCopyMessageBatch {
-        let messages: [EnqueueMessage]
-        let temporaryFiles: [EngineTempBoxFile]
-        let failedCount: Int
-
-        static let empty = AyuCopyMessageBatch(messages: [], temporaryFiles: [], failedCount: 0)
-    }
-
-    private func ayuReportCopyFailure(_ batch: AyuCopyMessageBatch) {
-        self.ayuDisposeCopyBatch(batch)
-        let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
-        self.present(textAlertController(context: self.context, title: "Не удалось переслать", text: "Не удалось подготовить все сообщения (недоступно: \(batch.failedCount)). Проверь загрузку медиа и повтори попытку.", actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]), in: .window(.root))
-    }
-
-    private func ayuTemporaryUploadCopy(sourcePath: String, fileName: String) -> EngineTempBoxFile? {
-        let file = EngineTempBox.shared.tempFile(fileName: fileName)
-        let fileManager = FileManager.default
-        do {
-            if fileManager.fileExists(atPath: file.path) {
-                try fileManager.removeItem(atPath: file.path)
-            }
-            do {
-                try fileManager.linkItem(atPath: sourcePath, toPath: file.path)
-            } catch {
-                try fileManager.copyItem(atPath: sourcePath, toPath: file.path)
-            }
-            return file
-        } catch {
-            EngineTempBox.shared.dispose(file)
-            return nil
-        }
-    }
-
-    private func ayuDisposeCopyBatch(_ batch: AyuCopyMessageBatch) {
-        for file in batch.temporaryFiles {
-            EngineTempBox.shared.dispose(file)
-        }
-    }
-
-    // Shadow: waits for a media resource to be FULLY present in the local
-    // MediaBox, actively triggering the download rather than assuming it's
-    // already cached. A copy-protected source often has auto-download disabled
-    // or only a downscaled preview loaded (grid thumbnails in a multi-photo
-    // post, in particular), so "the bytes are already there from display" does
-    // not hold — enqueueing a copy against a resource that isn't actually local
-    // fails at upload time, which is the error the forward-as-copy path used to
-    // hit. Returns nil after a timeout instead of hanging forever if
-    // the resource can't be fetched at all (e.g. it expired server-side).
-    // Returns the resolved local file path once the resource is complete, or
-    // nil after the timeout.
-    private func ayuWaitForResourceDownload(resource: MediaResource, mediaReference: AnyMediaReference, userLocation: MediaResourceUserLocation, userContentType: MediaResourceUserContentType) -> Signal<String?, NoError> {
-        let context = self.context
-        let waitSignal = Signal<String?, NoError> { subscriber in
-            let fetchDisposable = context.engine.resources.fetch(
-                reference: mediaReference.resourceReference(resource),
-                userLocation: userLocation,
-                userContentType: userContentType
-            ).start()
-            let dataDisposable = (context.engine.resources.data(resource: EngineMediaResource(resource), waitUntilFetchStatus: true)
-            |> filter { $0.isComplete }
-            |> take(1)).start(next: { data in
-                subscriber.putNext(data.path)
-                subscriber.putCompletion()
-            })
-            return ActionDisposable {
-                fetchDisposable.dispose()
-                dataDisposable.dispose()
-            }
-        }
-        return waitSignal
-        |> timeout(60.0, queue: Queue.mainQueue(), alternate: .single(nil))
-    }
-
-    // Shadow: build "copy" enqueue messages that bypass content-protection
-    // (noforwards). Instead of a native .forward (which the server rejects for
-    // copy-protected sources), we re-send each message's media as a NEW standalone
-    // upload plus its text/caption, the same technique the core uses for secret-
-    // chat forwards (convertForwardedMediaForSecretChat) — after first making
-    // sure the resource is actually downloaded (see ayuWaitForResourceDownload).
-    // Messages that originally shared a groupingKey (a multi-media post) keep a
-    // shared — freshly generated — grouping key, so the copy lands as ONE
-    // grouped post with its caption intact, not N separate messages, regardless
-    // of how many media items the original post had. If any item cannot be copied, report failure for the whole batch;
-    // never silently send an incomplete album or discard its media.
-    private func ayuBuildCopyMessages(_ messages: [EngineRawMessage], threadId: Int64?) -> Signal<AyuCopyMessageBatch, NoError> {
-        var groupingKeyMap: [Int64: Int64] = [:]
-        var perMessageSignals: [Signal<(EnqueueMessage?, EngineTempBoxFile?), NoError>] = []
-
-        for message in messages {
-            // Shadow: resourceToWait carries the ORIGINAL resource only to
-            // download-trigger + wait on it — buildMedia below constructs the
-            // copy's media from a resolved LOCAL PATH via
-            // LocalFileReferenceMediaResource, a resource identity with its own
-            // randomId, completely independent of the original's. Reusing the
-            // original resource object directly (an earlier version of this did
-            // exactly that) meant the copy message's media and the source
-            // message's media shared the same MediaResourceId — if the copy's
-            // send failed and got cleaned up, that cleanup could remove the
-            // shared on-disk file, leaving the ORIGINAL undownloadable too
-            // (catastrophic for view-once/self-destruct media the whole feature
-            // exists to preserve, since the local copy may be the only one left).
-            var resourceToWait: (resource: MediaResource, mediaReference: AnyMediaReference, userContentType: MediaResourceUserContentType)?
-            var buildMedia: ((String) -> Media)?
-            var temporaryFileName = "shadow-forward.bin"
-            for media in message.media {
-                if let file = media as? TelegramMediaFile {
-                    if let fileName = file.fileName {
-                        let lastPathComponent = (fileName as NSString).lastPathComponent
-                        temporaryFileName = lastPathComponent.isEmpty ? "shadow-forward.bin" : lastPathComponent
-                    }
-                    resourceToWait = (file.resource, .message(message: MessageReference(message), media: file), MediaResourceUserContentType(file: file))
-                    buildMedia = { path in
-                        let localResource = LocalFileReferenceMediaResource(localFilePath: path, randomId: Int64.random(in: Int64.min ... Int64.max))
-                        return TelegramMediaFile(fileId: MediaId(namespace: Namespaces.Media.LocalFile, id: Int64.random(in: Int64.min ... Int64.max)), partialReference: nil, resource: localResource, previewRepresentations: file.previewRepresentations, videoThumbnails: file.videoThumbnails, immediateThumbnailData: file.immediateThumbnailData, mimeType: file.mimeType, size: file.size, attributes: file.attributes, alternativeRepresentations: [])
-                    }
-                    break
-                } else if let image = media as? TelegramMediaImage {
-                    temporaryFileName = "shadow-forward.jpg"
-                    if let largest = largestImageRepresentation(image.representations) {
-                        resourceToWait = (largest.resource, .message(message: MessageReference(message), media: image), .image)
-                        buildMedia = { path in
-                            let localResource = LocalFileReferenceMediaResource(localFilePath: path, randomId: Int64.random(in: Int64.min ... Int64.max))
-                            let representation = TelegramMediaImageRepresentation(dimensions: largest.dimensions, resource: localResource, progressiveSizes: [], immediateThumbnailData: image.immediateThumbnailData)
-                            return TelegramMediaImage(imageId: MediaId(namespace: Namespaces.Media.LocalImage, id: Int64.random(in: Int64.min ... Int64.max)), representations: [representation], immediateThumbnailData: image.immediateThumbnailData, reference: nil, partialReference: nil, flags: [])
-                        }
-                    }
-                    break
-                }
-            }
-
-            var attributes: [MessageAttribute] = []
-            for attribute in message.attributes {
-                if let entities = attribute as? TextEntitiesMessageAttribute {
-                    attributes.append(entities)
-                }
-            }
-
-            if resourceToWait == nil && (!message.media.isEmpty || message.text.isEmpty) {
-                perMessageSignals.append(.single((nil, nil)))
-                continue
-            }
-
-            var localGroupingKey: Int64?
-            if let originalKey = message.groupingKey {
-                if let mapped = groupingKeyMap[originalKey] {
-                    localGroupingKey = mapped
-                } else {
-                    let newKey = Int64.random(in: Int64.min ... Int64.max)
-                    groupingKeyMap[originalKey] = newKey
-                    localGroupingKey = newKey
-                }
-            }
-
-            let text = message.text
-            if let resourceToWait, let buildMedia {
-                let userLocation: MediaResourceUserLocation = .peer(message.id.peerId)
-                perMessageSignals.append(
-                    ayuWaitForResourceDownload(resource: resourceToWait.resource, mediaReference: resourceToWait.mediaReference, userLocation: userLocation, userContentType: resourceToWait.userContentType)
-                    |> deliverOn(Queue.concurrentDefaultQueue())
-                    |> mapToSignal { [weak self] path -> Signal<(EnqueueMessage?, EngineTempBoxFile?), NoError> in
-                        guard let self, let path, let temporaryFile = self.ayuTemporaryUploadCopy(sourcePath: path, fileName: temporaryFileName) else {
-                            return .single((nil, nil))
-                        }
-                        let media = buildMedia(temporaryFile.path)
-                        let resource: MediaResource
-                        if let file = media as? TelegramMediaFile {
-                            resource = file.resource
-                        } else if let image = media as? TelegramMediaImage, let largest = largestImageRepresentation(image.representations) {
-                            resource = largest.resource
-                        } else {
-                            EngineTempBox.shared.dispose(temporaryFile)
-                            return .single((nil, nil))
-                        }
-                        let mediaReference: AnyMediaReference = .standalone(media: media)
-                        // Complete the independent MediaBox copy before releasing the
-                        // temporary link. Enqueue completion does not mean upload completion.
-                        return self.ayuWaitForResourceDownload(resource: resource, mediaReference: mediaReference, userLocation: userLocation, userContentType: resourceToWait.userContentType)
-                        |> map { path -> (EnqueueMessage?, EngineTempBoxFile?) in
-                            guard path != nil else { return (nil, nil) }
-                            return (.message(text: text, attributes: attributes, inlineStickers: [:], mediaReference: mediaReference, threadId: threadId, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: localGroupingKey, correlationId: nil, bubbleUpEmojiOrStickersets: []), nil)
-                        }
-                        |> afterDisposed { EngineTempBox.shared.dispose(temporaryFile) }
-                    }
-                )
-            } else {
-                perMessageSignals.append(.single((.message(text: text, attributes: attributes, inlineStickers: [:], mediaReference: nil, threadId: threadId, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: localGroupingKey, correlationId: nil, bubbleUpEmojiOrStickersets: []), nil)))
-            }
-        }
-
-        return combineLatest(perMessageSignals)
-        |> map { results in
-            return AyuCopyMessageBatch(messages: results.compactMap { $0.0 }, temporaryFiles: results.compactMap { $0.1 }, failedCount: results.filter { $0.0 == nil }.count)
-        }
-    }
-
     func forwardMessages(messageIds: [EngineMessage.Id], options: ChatInterfaceForwardOptionsState? = nil, resetCurrent: Bool = false, asCopy: Bool = false) {
         let _ = (self.context.engine.data.get(EngineDataMap(
             messageIds.map(TelegramEngine.EngineData.Item.Messages.Message.init)
@@ -339,12 +144,12 @@ extension ChatControllerImpl {
 
                         // Shadow: everything that used to run directly inside `proceed`
                         // now runs inside this closure, so the asCopy branch can fetch
-                        // (async, see ayuBuildCopyMessages) before this body executes,
+                        // (async, see ayuPrepareCopyBatch) before this body executes,
                         // while the non-asCopy branch still calls it synchronously —
                         // zero behavior change for the native-forward path.
                         let continueForward: (AyuCopyMessageBatch) -> Void = { copyBatch in
-                        if asCopy && copyBatch.failedCount > 0 {
-                            strongSelf.ayuReportCopyFailure(copyBatch)
+                        if asCopy && !copyBatch.canSend {
+                            strongSelf.ayuReportUnsendableCopy(copyBatch)
                             return
                         }
                         var result: [EnqueueMessage] = []
@@ -403,19 +208,8 @@ extension ChatControllerImpl {
                                 }
                                 
                                 var displayConvertingTooltip = false
-                                var pendingCopyEnqueues = asCopy ? targetPeersShouldDivert.count : 0
-                                var copyFilesDisposed = false
-                                let finishCopyEnqueue: () -> Void = {
-                                    guard asCopy, !copyFilesDisposed else { return }
-                                    pendingCopyEnqueues -= 1
-                                    if pendingCopyEnqueues <= 0 {
-                                        copyFilesDisposed = true
-                                        strongSelf.ayuDisposeCopyBatch(copyBatch)
-                                    }
-                                }
-                                if pendingCopyEnqueues == 0 {
-                                    copyFilesDisposed = true
-                                    strongSelf.ayuDisposeCopyBatch(copyBatch)
+                                if asCopy, let skippedNote = copyBatch.skippedNote {
+                                    strongSelf.ayuPresentCopyInfo(skippedNote)
                                 }
 
                                 var displayPeers: [EnginePeer] = []
@@ -466,7 +260,6 @@ extension ChatControllerImpl {
                                             strongSelf.shareStatusDisposable?.set((combineLatest(signals)
                                             |> deliverOnMainQueue).startStrict())
                                         }
-                                        finishCopyEnqueue()
                                     })
                                     
                                     if case let .secretChat(secretPeer) = peer {
@@ -559,10 +352,7 @@ extension ChatControllerImpl {
                         }
 
                         if asCopy {
-                            let _ = (strongSelf.ayuBuildCopyMessages(messages, threadId: nil)
-                            |> deliverOnMainQueue).startStandalone(next: { copyBatch in
-                                continueForward(copyBatch)
-                            })
+                            strongSelf.ayuPrepareCopyBatch(messages, threadId: nil, completion: continueForward)
                         } else {
                             continueForward(.empty)
                         }
@@ -601,33 +391,23 @@ extension ChatControllerImpl {
                     // the source chat, so instead of routing through the forward
                     // preview panel we enqueue re-uploaded copies straight into the
                     // chosen peer (works the same whether it's the current chat,
-                    // Saved Messages, or another chat). ayuBuildCopyMessages is async —
-                    // it waits for each media item to actually finish downloading
-                    // before building the enqueue list — so the UI dismisses right
-                    // away (matches the instant feel of a native forward) while the
+                    // Saved Messages, or another chat). ayuPrepareCopyBatch is async —
+                    // it downloads every media item behind a progress toast before
+                    // building the enqueue list — so the UI dismisses right away
+                    // (matches the instant feel of a native forward) while the
                     // download+upload continues in the background.
                     strongSelf.updateChatPresentationInterfaceState(animated: false, interactive: true, { $0.updatedInterfaceState({ $0.withoutSelectionState() }) })
                     strongController.dismiss()
-                    // The copy downloads every media item first, which can take a
-                    // while: say so, or it looks like nothing happened.
-                    let presentationData = strongSelf.context.sharedContext.currentPresentationData.with { $0 }
-                    strongSelf.present(UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: "Пересылка защищена — отправляю копией, скачиваю медиа…", timeout: nil, customUndoText: nil), elevatedLayout: false, action: { _ in return false }), in: .current)
-                    let _ = (strongSelf.ayuBuildCopyMessages(messages, threadId: threadId)
-                    |> deliverOnMainQueue).startStandalone(next: { copyBatch in
-                        if copyBatch.failedCount > 0 {
-                            strongSelf.ayuReportCopyFailure(copyBatch)
+                    strongSelf.ayuPrepareCopyBatch(messages, threadId: threadId, completion: { copyBatch in
+                        guard copyBatch.canSend else {
+                            strongSelf.ayuReportUnsendableCopy(copyBatch)
                             return
                         }
-                        if !copyBatch.messages.isEmpty {
-                            let _ = (enqueueMessages(account: strongSelf.context.account, peerId: peerId, messages: copyBatch.messages)
-                            |> deliverOnMainQueue).startStandalone(next: { _ in
-                                strongSelf.ayuDisposeCopyBatch(copyBatch)
-                                let presentationData = strongSelf.context.sharedContext.currentPresentationData.with { $0 }
-                                strongSelf.present(UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: "Копия отправлена (\(copyBatch.messages.count))", timeout: nil, customUndoText: nil), elevatedLayout: false, action: { _ in return false }), in: .current)
-                            })
-                        } else {
-                            strongSelf.ayuDisposeCopyBatch(copyBatch)
-                        }
+                        let _ = (enqueueMessages(account: strongSelf.context.account, peerId: peerId, messages: copyBatch.messages)
+                        |> deliverOnMainQueue).startStandalone(next: { _ in
+                            let sentText = "Копия отправлена (\(copyBatch.messages.count))"
+                            strongSelf.ayuPresentCopyInfo(copyBatch.skippedNote.map { "\(sentText). \($0)" } ?? sentText)
+                        })
                     })
                     return
                 }

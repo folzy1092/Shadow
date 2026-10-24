@@ -206,7 +206,7 @@ private final class ShadowSettingsBackupCoordinator: NSObject, UIDocumentPickerD
                     if ["messageFilters", "shadowBannedPeerIds", "messageFilterShowPlaceholder"].contains(key) || key.hasPrefix("adFilter") || key == "adHideCompletely" { return "Фильтры" }
                     if key.hasPrefix("spoofProfile") || key.hasPrefix("customBanner") || key.hasPrefix("customProfileBackground") { return "Профиль" }
                     if key.hasPrefix("feed") { return "Лента" }
-                    if key.hasPrefix("keep") || key.hasPrefix("save") || key.hasPrefix("mediaAutoClean") || key == "showEditComparisonAction" || key == "attachmentSizeLimit" || key == "allowSaveRestrictedContent" || key == "askBeforeStoryView" { return "Архив и медиа" }
+                    if key.hasPrefix("keep") || key.hasPrefix("save") || key.hasPrefix("spy") || key.hasPrefix("mediaAutoClean") || key == "showEditComparisonAction" || key == "attachmentSizeLimit" || key == "allowSaveRestrictedContent" || key == "askBeforeStoryView" { return "Архив и медиа" }
                     return "Интерфейс"
                 }).sorted().joined(separator: ", ")
                 let accountLine = accountName.isEmpty ? "" : "Аккаунт: \(accountName)\n"

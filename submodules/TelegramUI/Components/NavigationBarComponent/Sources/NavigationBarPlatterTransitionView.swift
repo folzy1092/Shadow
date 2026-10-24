@@ -1194,6 +1194,10 @@ private func navigationBarCapsuleSignature(_ content: NavigationBarComponent.Con
         if let leftButton = placement.rowLeftButton {
             signature.append(leftButton.id)
         }
+        // Shadow: the header's extra left buttons share the row's left capsule.
+        if placement.columnLayout == nil {
+            signature.append(contentsOf: content.extraLeftButtons.map { $0.id })
+        }
         return signature.isEmpty ? nil : signature
     case let .trailing(index):
         return index < placement.rowRightSections.count ? placement.rowRightSections[index].map { $0.id } : nil

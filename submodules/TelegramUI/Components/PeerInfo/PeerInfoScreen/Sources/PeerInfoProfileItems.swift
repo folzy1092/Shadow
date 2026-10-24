@@ -62,19 +62,6 @@ enum InfoSection: Int, CaseIterable {
 
 // MARK: - AyuGram profile fields
 
-// Bot API-style numeric id for a peer (users/secret positive, basic groups
-// negated, channels/supergroups in the -100… form).
-private func ayuGramBotApiId(_ peerId: EnginePeer.Id) -> Int64 {
-    let raw = peerId.id._internalGetInt64Value()
-    if peerId.namespace == Namespaces.Peer.CloudChannel {
-        return -(1_000_000_000_000 + raw)
-    } else if peerId.namespace == Namespaces.Peer.CloudGroup {
-        return -raw
-    } else {
-        return raw
-    }
-}
-
 // The data-center a peer's profile photo is served from, if it has one.
 private func ayuGramPhotoDatacenterId(_ representations: [TelegramMediaImageRepresentation]) -> Int? {
     for representation in representations {
@@ -151,7 +138,7 @@ private func ayuGramProfileItems(peerId: EnginePeer.Id, photo: [TelegramMediaIma
         getController()?.present(UndoOverlayController(presentationData: presentationData, content: .copy(text: presentationData.strings.Conversation_TextCopied), elevatedLayout: false, animateInAsReplacement: false, action: { _ in return false }), in: .current)
     }
     if settings.showProfileId {
-        let botApiId = ayuGramBotApiId(peerId)
+        let botApiId = ShadowBotApiPeerId.botApiId(peerId)
         // Shadow: visual-only ID spoof, own profile only (for screenshots).
         let idText = isSelf ? settings.effectiveProfileIdForDisplay(realId: botApiId) : "\(botApiId)"
         result.append(PeerInfoScreenLabeledValueItem(id: idBase + 0, label: "id: \(idText)", text: "", textColor: .primary, action: { _, _ in

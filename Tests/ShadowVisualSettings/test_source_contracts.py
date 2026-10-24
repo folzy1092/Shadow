@@ -87,11 +87,8 @@ class ShadowVisualSettingsContracts(unittest.TestCase):
         self.assertIn("return AyuGramSettings.defaultSettings", body)
         for filename, flag in (("AyuEditHistory.swift", "saveEditHistory"), ("AyuSavedMedia.swift", "saveAllIncomingMedia")):
             source = read_source(CORE + filename)
-            if filename == "AyuSavedMedia.swift":
-                self.assertIn("let settings = currentAyuGramSettings(mediaBox: mediaBox)", source)
-                self.assertIn(f"settings.{flag}", source)
-            else:
-                self.assertIn(f"currentAyuGramSettings(mediaBox: mediaBox).{flag}", source)
+            self.assertIn("let settings = currentAyuGramSettings(mediaBox: mediaBox)", source)
+            self.assertIn(f"settings.{flag}", source)
             self.assertNotIn(f"ayuGramSettingsCurrent.{flag}", source)
 
     def test_root_selects_its_account_before_creating_ui(self):

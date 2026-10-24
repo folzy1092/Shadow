@@ -52,11 +52,28 @@ class ShadowPrivacyFeatures(unittest.TestCase):
         self.assertIn("forwardMessagesAsCopy", protected)
         self.assertNotIn("without author", protected.lower())
 
-    def test_forward_owns_temp_file_until_enqueue(self):
-        source = (UI / "Sources/ChatControllerForwardMessages.swift").read_text()
-        self.assertIn("ayuTemporaryUploadCopy", source)
-        self.assertIn("EngineTempBox.shared.dispose", source)
-        self.assertIn("finishCopyEnqueue()", source)
+    def test_forward_copy_owns_a_local_mediabox_copy(self):
+        forward = (UI / "Sources/ChatControllerForwardMessages.swift").read_text()
+        copy = (UI / "Sources/ChatControllerForwardAsCopy.swift").read_text()
+        # Both entry points (multi-peer share and single peer) build the copy
+        # through one place, behind a progress toast.
+        self.assertEqual(forward.count("ayuPrepareCopyBatch(messages"), 2)
+        self.assertNotIn("EngineTempBox", forward)
+        # The copy is a new local resource, so it never depends on the source
+        # file staying in cache or on a temp file outliving the upload.
+        self.assertIn("LocalFileMediaResource(", copy)
+        self.assertIn("linkItem(atPath: sourcePath, toPath: targetPath)", copy)
+        # A cloud thumbnail of the original would be uploaded through a
+        # reference that cannot be refreshed and hang the send.
+        self.assertIn("videoThumbnails: []", copy)
+        self.assertNotIn("previewRepresentations: file.previewRepresentations", copy)
+        # A stalled download fails instead of hanging; a large file that keeps
+        # making progress is not cut off by a fixed timeout.
+        self.assertIn("stallTimeout", copy)
+        self.assertNotIn("|> timeout(", copy)
+        # A link preview never blocks the copy; polls and stories are skipped.
+        self.assertIn("case is TelegramMediaWebpage:", copy)
+        self.assertIn("skippedNote", forward)
 
     def test_chat_rules_are_account_scoped_and_used(self):
         settings = (CORE / "AyuGram/AyuGramSettings.swift").read_text()

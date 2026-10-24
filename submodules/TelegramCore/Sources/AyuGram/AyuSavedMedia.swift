@@ -300,6 +300,9 @@ public enum AyuSavedMedia {
             return nil
         }
         let settings = currentAyuGramSettings(mediaBox: mediaBox)
+        guard !settings.isSpyExcluded(peerId: messageId.peerId) else {
+            return nil
+        }
         let saveAllIncomingMedia = settings.saveAllIncomingMedia
         let preserveSecretChatMedia = messageId.peerId.namespace == Namespaces.Peer.SecretChat && settings.keepDeletedSecretChatMessages
         let saveDestructingMedia = settings.saveDestructingMedia && messageReference.isSecret == true

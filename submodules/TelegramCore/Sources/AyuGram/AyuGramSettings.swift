@@ -98,6 +98,11 @@ public struct AyuGramSettings: Codable, Equatable {
     // ones (stub or entirely, per messageFilterShowPlaceholder), without
     // blocking them.
     public var shadowBannedPeerIds: [Int64] = []
+    // Shadow: spy exclusions. The spy (edit history, kept deletions, auto-saved
+    // incoming media) skips these chats (PeerId.toInt64(), like
+    // shadowBannedPeerIds) and, with spyExcludeBots, bot-authored messages.
+    public var spyExcludeBots: Bool = true
+    public var spyExcludedPeerIds: [Int64] = []
     // Shadow: opt in to the beta release channel (shadow-update.json "beta").
     public var updateChannelBeta: Bool = false
     // Clean interface (all off by default).
@@ -542,6 +547,20 @@ public struct AyuGramSettings: Codable, Equatable {
         return self.shadowBannedPeerIds.contains(peerId)
     }
 
+    public func isSpyExcluded(peerId: PeerId) -> Bool {
+        return self.spyExcludedPeerIds.contains(peerId.toInt64())
+    }
+
+    public func isSpyExcluded(message: Message) -> Bool {
+        if self.isSpyExcluded(peerId: message.id.peerId) {
+            return true
+        }
+        if self.spyExcludeBots, let author = message.author as? TelegramUser, author.botInfo != nil {
+            return true
+        }
+        return false
+    }
+
     public var adScope: ShadowAdScope {
         return ShadowAdScope(channels: self.adFilterChannels, groups: self.adFilterGroups, forwarded: self.adFilterForwarded)
     }
@@ -749,6 +768,8 @@ public struct AyuGramSettings: Codable, Equatable {
         }
         self.messageFilterShowPlaceholder = ((try container.decodeIfPresent(Int32.self, forKey: "messageFilterShowPlaceholder")) ?? 1) != 0
         self.shadowBannedPeerIds = (try? container.decodeIfPresent([Int64].self, forKey: "shadowBannedPeerIdsV1")) ?? []
+        self.spyExcludeBots = ((try container.decodeIfPresent(Int32.self, forKey: "spyExcludeBots")) ?? 1) != 0
+        self.spyExcludedPeerIds = (try? container.decodeIfPresent([Int64].self, forKey: "spyExcludedPeerIds")) ?? []
         self.updateChannelBeta = ((try container.decodeIfPresent(Int32.self, forKey: "updateChannelBeta")) ?? 0) != 0
         self.hideStoriesBar = ((try container.decodeIfPresent(Int32.self, forKey: "hideStoriesBar")) ?? 0) != 0
         self.hideGiftButton = ((try container.decodeIfPresent(Int32.self, forKey: "hideGiftButton")) ?? 0) != 0
@@ -882,6 +903,8 @@ public struct AyuGramSettings: Codable, Equatable {
         try container.encode(self.messageFilters, forKey: "messageFiltersV2")
         try container.encode((self.messageFilterShowPlaceholder ? 1 : 0) as Int32, forKey: "messageFilterShowPlaceholder")
         try container.encode(self.shadowBannedPeerIds, forKey: "shadowBannedPeerIdsV1")
+        try container.encode((self.spyExcludeBots ? 1 : 0) as Int32, forKey: "spyExcludeBots")
+        try container.encode(self.spyExcludedPeerIds, forKey: "spyExcludedPeerIds")
         try container.encode((self.updateChannelBeta ? 1 : 0) as Int32, forKey: "updateChannelBeta")
         try container.encode((self.hideStoriesBar ? 1 : 0) as Int32, forKey: "hideStoriesBar")
         try container.encode((self.hideGiftButton ? 1 : 0) as Int32, forKey: "hideGiftButton")

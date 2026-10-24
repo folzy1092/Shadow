@@ -103,25 +103,13 @@ public func gitConfigProfileBadges(forUserId userId: Int64) -> [GitConfigProfile
     return gitConfigCurrent.profileBadges.filter({ $0.userId == userId })
 }
 
-// Look up a chat badge by chat id.
+// Look up a chat badge by chat id. The remote config may store either the raw
+// internal id or the Bot API (-100…) form, so callers try both.
 public func gitConfigChatBadge(forChatId chatId: Int64) -> GitConfigBadge? {
     if ShadowDisguise.shared.isFull {
         return nil
     }
     return gitConfigCurrent.badges.first(where: { $0.chatId == chatId })
-}
-
-// The Bot API (-100…) form of a peer id. The remote config may store either this
-// or the raw internal id, so chat lookups try both.
-private func gitConfigBotApiId(_ peerId: PeerId) -> Int64 {
-    let raw = peerId.id._internalGetInt64Value()
-    if peerId.namespace == Namespaces.Peer.CloudChannel {
-        return -(1_000_000_000_000 + raw)
-    } else if peerId.namespace == Namespaces.Peer.CloudGroup {
-        return -raw
-    } else {
-        return raw
-    }
 }
 
 // Shadow: the fork's remote-config badge for a peer's NAME — profile header,
@@ -173,7 +161,7 @@ public func ayuGramNameBadge(peerId: PeerId, displayName: String) -> AyuGramName
     if peerId.namespace == Namespaces.Peer.CloudUser, let badge = gitConfigProfileBadges(forUserId: raw).first {
         emojiId = badge.emojiId
         textTemplate = badge.textTemplate
-    } else if let badge = gitConfigChatBadge(forChatId: raw) ?? gitConfigChatBadge(forChatId: gitConfigBotApiId(peerId)) {
+    } else if let badge = gitConfigChatBadge(forChatId: raw) ?? gitConfigChatBadge(forChatId: ShadowBotApiPeerId.botApiId(peerId)) {
         emojiId = badge.emojiId
         textTemplate = badge.textTemplate
     } else {

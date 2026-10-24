@@ -93,13 +93,15 @@
 | `shadow://spy/view-once` | Сохранять «одноразовые» |
 | `shadow://spy/edit-history` | Сохранять историю правок |
 | `shadow://spy/edit-compare` | Показывать «Сравнить правки» |
+| `shadow://spy/exclude-bots` | Исключить ботов |
+| `shadow://spy/excluded-chats` | Исключённые чаты (только открыть) |
 | `shadow://spy/save-restricted` | Разрешить сохранение |
 | `shadow://spy/ask-story-view` | Спросить перед просмотром истории |
 | `shadow://spy/save-destructing` | Сохранять самоуничтожающиеся |
 | `shadow://spy/save-all-media` | Сохранять все входящие медиа |
 | `shadow://spy/clean-keep-pinned` | Не очищать закреплённые |
-| `shadow://spy/clean-skip-channels` | Исключить каналы |
-| `shadow://spy/clean-skip-bots` | Исключить ботов |
+| `shadow://spy/clean-skip-channels` | Не очищать каналы |
+| `shadow://spy/clean-skip-bots` | Не очищать ботов |
 | `shadow://spy/online-history` | Записывать, когда контакты в сети |
 | `shadow://spy/save-stories` | Сохранять просмотренные истории |
 

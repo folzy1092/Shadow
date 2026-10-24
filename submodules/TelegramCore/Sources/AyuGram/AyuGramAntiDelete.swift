@@ -7,11 +7,13 @@ import Postbox
 // referencing it, so it is not garbage-collected.
 //
 // Shadow: anti-delete is meant for other people's messages in regular user
-// conversations only. Two sender types are never kept:
-//   • BOT authors — a bot deleting its own messages (menus, throwaway prompts,
-//     cleanup) should not leave "deleted" ghosts.
+// conversations only. Never kept:
 //   • OUR OWN outgoing messages — deleting something we sent is intentional and
 //     must not be resurrected.
+//   • spy exclusions (AyuGramSettings.isSpyExcluded): chats on the exclusion
+//     list and, with «Исключить ботов» on (the default), BOT authors — a bot
+//     deleting its own messages (menus, throwaway prompts, cleanup) should not
+//     leave "deleted" ghosts.
 // The sender is resolved per-id from the stored message (author peer / incoming
 // flag).
 //
@@ -21,6 +23,7 @@ import Postbox
 // with no trash badge — exactly the "ghost" this exclusion exists to prevent.
 @discardableResult
 func ayuGramMarkMessagesDeleted(transaction: Transaction, mediaBox: MediaBox, ids: [MessageId]) -> [MessageId] {
+    let settings = currentAyuGramSettings(mediaBox: mediaBox)
     var filteredIds: [MessageId] = []
     var excludedIds: [MessageId] = []
     for id in ids {
@@ -34,8 +37,8 @@ func ayuGramMarkMessagesDeleted(transaction: Transaction, mediaBox: MediaBox, id
             excludedIds.append(id)
             continue
         }
-        // Skip messages authored by a bot.
-        if let author = message.author as? TelegramUser, author.botInfo != nil {
+        // Skip excluded chats and bot-authored messages.
+        if settings.isSpyExcluded(message: message) {
             excludedIds.append(id)
             continue
         }

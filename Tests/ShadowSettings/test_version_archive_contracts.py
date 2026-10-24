@@ -45,7 +45,9 @@ class VersionArchiveContracts(unittest.TestCase):
         shown = [entry for entry in changelog["entries"] if entry["build"] >= 34725]
         self.assertTrue(shown)
         for entry in shown:
-            self.assertRegex(entry.get("version", ""), r"^\d+\.\d+\.\d+(-\d+\.\d+\.\d+)?$", entry["build"])
+            # Telegram itself ships two-part versions too (13.1), the fork part is
+            # always three-part.
+            self.assertRegex(entry.get("version", ""), r"^\d+\.\d+(\.\d+)?(-\d+\.\d+\.\d+)?$", entry["build"])
             self.assertTrue(entry.get("ipa_url", "").startswith("https://github.com/folzy1092/"), entry["build"])
             self.assertTrue(entry["ipa_url"].endswith(f"build-{entry['build']}/Shadow.ipa"), entry["build"])
 

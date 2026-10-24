@@ -21,7 +21,10 @@ private func ayuPrincipalResourceId(_ mediaList: [Media]) -> String? {
 }
 
 func ayuBuildEditHistoryVersions(mediaBox: MediaBox, previousMessage: Message, newText: String, newMedia: [Media]) -> [SavedMessageEditVersion]? {
-    guard currentAyuGramSettings(mediaBox: mediaBox).saveEditHistory else {
+    // Shadow: excluded chats and (by default) bots — a bot or channel that edits
+    // the same message every second would otherwise grow the archive non-stop.
+    let settings = currentAyuGramSettings(mediaBox: mediaBox)
+    guard settings.saveEditHistory, !settings.isSpyExcluded(message: previousMessage) else {
         return nil
     }
 

@@ -250,6 +250,10 @@ public final class ChatListNavigationBar: Component {
         // readable. Never interactive. nil unless the setting is on + image stored.
         private var bannerView: UIImageView?
         private var bannerLoadedSignature: String?
+        // Shadow: advanced by each change of the glass's backdrop; only the latest change's readaptation runs
+        // (`readaptHeaderGlass`).
+        private var glassReadaptationGeneration = 0
+        private var glassWasDetached = false
         
         private var headerBackgroundContainer: UIView
         public let headerContent = ComponentView<Empty>()
@@ -381,6 +385,7 @@ public final class ChatListNavigationBar: Component {
                     bannerView.removeFromSuperview()
                     self.bannerView = nil
                     self.bannerLoadedSignature = nil
+                    self.readaptHeaderGlass(after: transition)
                 }
                 return
             }
@@ -395,6 +400,7 @@ public final class ChatListNavigationBar: Component {
                     bannerView.removeFromSuperview()
                     self.bannerView = nil
                     self.bannerLoadedSignature = nil
+                    self.readaptHeaderGlass(after: transition)
                 }
                 return
             }
@@ -415,6 +421,9 @@ public final class ChatListNavigationBar: Component {
                 if let data = AyuSavedMedia.bannerData(basePath: basePath), let image = UIImage(data: data) {
                     bannerView.image = image
                     self.bannerLoadedSignature = signature
+                    // The capsules' glass adapted to the header without the image (it loads after they join their
+                    // container): the right pill stayed dark grey over a light banner.
+                    self.readaptHeaderGlass(after: transition)
                 } else {
                     bannerView.removeFromSuperview()
                     self.bannerView = nil
@@ -432,6 +441,8 @@ public final class ChatListNavigationBar: Component {
                 self.glassHold.barLeftHierarchy()
             } else {
                 self.glassHold.barEnteredHierarchy()
+                // Shadow: glass that joined its container off screen adapts to the backdrop it is shown over.
+                self.readaptHeaderGlass(after: .immediate)
             }
         }
 
@@ -778,6 +789,13 @@ public final class ChatListNavigationBar: Component {
                 if headerContentView.superview !== headerContainerContentView {
                     headerContentView.layer.anchorPoint = CGPoint()
                     headerContainerContentView.addSubview(headerContentView)
+                }
+                // Shadow: as the regular bar (NavigationBarNode), a capsule that appeared in place adapts its glass again
+                // once the capsules settle.
+                if let barView = (headerContentView as? ChatListHeaderComponent.View)?.navigationBarComponentView, barView.glassNeedsReadaptation == nil {
+                    barView.glassNeedsReadaptation = { [weak self] in
+                        self?.readaptHeaderGlass()
+                    }
                 }
                 transition.setFrameWithAdditivePosition(view: self.headerBackgroundContainer, frame: headerContentFrame)
                 if let glassContainer = self.headerBackgroundContainer as? GlassBackgroundContainerView {
@@ -1200,11 +1218,49 @@ extension ChatListNavigationBar.View: NavigationBarComponentTransitionSource {
     func applyGlassVisibility(transition: ComponentTransition = .immediate) {
         let detached = self.transitionRole != nil || self.glassHold.isHeld
         (self.headerContent.view as? ChatListHeaderComponent.View)?.navigationBarComponentView?.plattersDetached = detached
+        // Shadow: the capsules rejoin the container when a transition or a hold hands them back; they adapt to the
+        // header's backdrop (the custom banner) again.
+        if self.glassWasDetached && !detached {
+            self.readaptHeaderGlass(after: transition)
+        }
+        self.glassWasDetached = detached
         if let sideColumnContainer = self.sideColumnContainer {
             let isVisible = self.sideColumnIsVisible && !detached
             transition.setAlpha(view: sideColumnContainer, alpha: isVisible ? 1.0 : 0.0)
             sideColumnContainer.isUserInteractionEnabled = isVisible
         }
+    }
+
+    /// Shadow: UIKit's glass keeps how it adapted to the backdrop when it joined the container (`readaptToBackdrop`).
+    /// After `transition` and once no capsule is still animating in place, the header's glass adapts again.
+    fileprivate func readaptHeaderGlass(after transition: ComponentTransition) {
+        self.glassReadaptationGeneration += 1
+        let generation = self.glassReadaptationGeneration
+        var delay: Double = 0.0
+        if case let .curve(duration, _) = transition.animation {
+            delay = duration * UIView.animationDurationFactor()
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: { [weak self] in
+            guard let self, self.glassReadaptationGeneration == generation else {
+                return
+            }
+            let readapt: () -> Void = { [weak self] in
+                guard let self, self.glassReadaptationGeneration == generation else {
+                    return
+                }
+                self.readaptHeaderGlass()
+            }
+            if let barView = (self.headerContent.view as? ChatListHeaderComponent.View)?.navigationBarComponentView {
+                barView.afterInPlaceAnimations(readapt)
+            } else {
+                readapt()
+            }
+        })
+    }
+
+    fileprivate func readaptHeaderGlass() {
+        (self.headerBackgroundContainer as? GlassBackgroundContainerView)?.readaptToBackdrop()
+        self.sideColumnContainer?.readaptToBackdrop()
     }
 
     public var componentTransitionState: NavigationBarComponentTransitionState? {
