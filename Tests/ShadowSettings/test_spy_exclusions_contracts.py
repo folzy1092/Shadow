@@ -1,4 +1,4 @@
-"""Source contracts for spy exclusions (1.14.1): «Исключить ботов» and chats by id."""
+"""Source contracts for spy exclusions: «Исключить ботов» and chats by id (1.14.1), channels and groups (1.14.2)."""
 from pathlib import Path
 import unittest
 
@@ -24,6 +24,15 @@ class SpyExclusionsContracts(unittest.TestCase):
         check = check[:check.index("\n    }\n")]
         self.assertIn("self.isSpyExcluded(peerId: message.id.peerId)", check)
         self.assertIn("self.spyExcludeBots, let author = message.author as? TelegramUser, author.botInfo != nil", check)
+        # Channels and supergroups are both TelegramChannel: told apart by info.
+        self.assertIn("public var spyExcludeChannels: Bool = false", settings)
+        self.assertIn("public var spyExcludeGroups: Bool = false", settings)
+        self.assertIn("case .broadcast:\n                    if self.spyExcludeChannels {", check)
+        self.assertIn("case .group:\n                    if self.spyExcludeGroups {", check)
+        self.assertIn("self.spyExcludeGroups, message.peers[message.id.peerId] is TelegramGroup", check)
+        for key in ("spyExcludeChannels", "spyExcludeGroups"):
+            self.assertIn(f'forKey: "{key}")) ?? 0) != 0', settings)
+            self.assertIn(f'try container.encode((self.{key} ? 1 : 0) as Int32, forKey: "{key}")', settings)
 
     def test_every_spy_hook_honours_exclusions(self):
         # Edit history: bot and excluded-chat edits never reach the archive.
@@ -57,6 +66,9 @@ class SpyExclusionsContracts(unittest.TestCase):
         transfer = read(CORE + "ShadowSettingsTransfer.swift")
         self.assertIn('"spyExcludeBots"', document)
         self.assertIn('"spyExcludedPeerIds"', document)
+        for key in ("spyExcludeChannels", "spyExcludeGroups"):
+            self.assertIn(f'"{key}"', document)
+            self.assertIn(f'"{key}": \\.{key}', transfer)
         self.assertIn('"spyExcludeBots": \\.spyExcludeBots', transfer)
         self.assertIn('("spyExcludedPeerIds", ShadowSettingsTransfer.json(settings.spyExcludedPeerIds))', transfer)
         self.assertIn("updated.spyExcludedPeerIds = ShadowSettingsTransfer.uniqueIds(ids)", transfer)
@@ -65,12 +77,17 @@ class SpyExclusionsContracts(unittest.TestCase):
 
     def test_spy_screen_rows(self):
         screen = read("SettingsUI/Sources/AyuGramSettingsController.swift")
-        for case, entry in (("exclusionsHeader", 32), ("spyExcludeBots", 33), ("spyExcludedChats", 34), ("exclusionsFooter", 35)):
+        # Shipped ids are link entryIds and never change; rows added later get new ids.
+        for case, entry in (("exclusionsHeader", 32), ("spyExcludeBots", 33), ("spyExcludedChats", 34), ("exclusionsFooter", 35), ("spyExcludeChannels", 36), ("spyExcludeGroups", 37)):
             self.assertIn(f"case .{case}: return {entry}", screen)
         self.assertIn('text: "ИСКЛЮЧЕНИЯ"', screen)
         self.assertIn('title: "Исключённые чаты"', screen)
         self.assertIn("pushControllerImpl?(shadowSpyExclusionsController(context: context))", screen)
         self.assertIn("s.spyExcludeBots = value", screen)
+        self.assertIn("s.spyExcludeChannels = value", screen)
+        self.assertIn("s.spyExcludeGroups = value", screen)
+        self.assertIn('title: "Исключить каналы"', screen)
+        self.assertIn('title: "Исключить группы"', screen)
         # The new section sits between edits and restricted; order is section first.
         sections = screen[screen.index("private enum AyuSpySection"):]
         sections = sections[:sections.index("}")]
@@ -79,10 +96,14 @@ class SpyExclusionsContracts(unittest.TestCase):
         less = screen[screen.index("static func <(lhs: AyuSpyEntry"):]
         less = less[:less.index("func item(")]
         self.assertIn("if lhs.section != rhs.section", less)
-        # The auto-clean toggles keep media from cleanup, they do not exclude anything.
+        self.assertIn("return lhs.sortIndex < rhs.sortIndex", less)
+        # On screen: bots, channels, groups, then the chat list.
+        self.assertIn("case .spyExcludeChannels: return 33.1", screen)
+        self.assertIn("case .spyExcludeGroups: return 33.2", screen)
+        # The auto-clean toggles keep media from cleanup; the spy toggles above are separate.
         self.assertIn('title: "Не очищать каналы"', screen)
         self.assertIn('title: "Не очищать ботов"', screen)
-        self.assertNotIn('title: "Исключить каналы"', screen)
+        self.assertIn("s.mediaAutoCleanKeepChannels = value", screen)
 
     def test_exclusions_screen(self):
         screen = read("SettingsUI/Sources/ShadowSpyExclusionsController.swift")
@@ -90,7 +111,9 @@ class SpyExclusionsContracts(unittest.TestCase):
         self.assertIn('placeholder: "-100123456789"', screen)
         self.assertIn("makeContactMultiselectionController", screen)
         # The picker returns the whole selection: merge it so ids added by hand survive.
-        self.assertIn("shadowMergedSpyExclusions(current: ids, selected: selected)", screen)
+        self.assertIn("shadowMergedChatList(current: ids, selected: selected)", screen)
+        self.assertIn("ids: \\.spyExcludedPeerIds", screen)
+        self.assertIn("return shadowChatListController(context: context, screen: .spyExclusions)", screen)
         self.assertIn("ShadowBotApiPeerId.botApiId(peerId)", screen)
         self.assertIn("ids.filter { $0 != id }", screen)
 
@@ -101,13 +124,18 @@ class SpyExclusionsContracts(unittest.TestCase):
         self.assertIn('slug: "exclude-bots", entryId: 33, key: "spyExcludeBots"', links)
         self.assertIn('slug: "excluded-chats", entryId: 34, key: nil', links)
         self.assertEqual(links.count('since: "1.14.1"'), 2)
+        self.assertIn('slug: "exclude-channels", entryId: 36, key: "spyExcludeChannels"', links)
+        self.assertIn('slug: "exclude-groups", entryId: 37, key: "spyExcludeGroups"', links)
+        self.assertIn('slug: "online-history-selected", entryId: 38, key: "onlineHistorySelectedOnly"', links)
+        self.assertIn('slug: "online-history-chats", entryId: 39, key: nil', links)
         self.assertIn('slug: "clean-skip-channels", entryId: 21, key: "mediaAutoCleanKeepChannels", title: "Не очищать каналы"', links)
         self.assertIn('slug: "clean-skip-bots", entryId: 22, key: "mediaAutoCleanKeepBots", title: "Не очищать ботов"', links)
-        for slug in ("exclude-bots", "excluded-chats"):
+        for slug in ("exclude-bots", "excluded-chats", "exclude-channels", "exclude-groups", "online-history-selected", "online-history-chats"):
             self.assertIn(f"`shadow://spy/{slug}`", docs)
         self.assertIn("| `shadow://spy/clean-skip-bots` | Не очищать ботов |", docs)
         self.assertIn("destination: .spy, entryId: 33,", search)
-        self.assertIn("destination: .spy, entryId: 34,", search)
+        for entry in (34, 36, 37, 38, 39):
+            self.assertIn(f"destination: .spy, entryId: {entry},", search)
 
 
 if __name__ == "__main__":

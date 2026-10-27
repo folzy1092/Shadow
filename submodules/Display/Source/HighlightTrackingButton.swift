@@ -14,6 +14,15 @@ open class HighlightTrackingButton: UIButton {
         fatalError("init(coder:) has not been implemented")
     }
     
+    /// Clears a highlight whose touch never ended here, e.g. a long press that moved the button off screen.
+    public func resetHighlight() {
+        if self.internalHighlighted {
+            self.internalHighlighted = false
+            self.highligthedChanged(false)
+            self.internalHighligthedChanged(false)
+        }
+    }
+
     open override func beginTracking(_ touch: UITouch, with event: UIEvent?) -> Bool {
         if !self.internalHighlighted {
             self.internalHighlighted = true

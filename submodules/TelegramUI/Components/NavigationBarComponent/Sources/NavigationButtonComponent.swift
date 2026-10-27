@@ -115,10 +115,19 @@ final class NavigationButtonComponent: Component {
         }
 
         @objc private func longPressed(_ gesture: UILongPressGestureRecognizer) {
-            guard gesture.state == .began, self.isEnabled else {
-                return
+            switch gesture.state {
+            case .began:
+                guard self.isEnabled else {
+                    return
+                }
+                self.component?.contextAction?(self, nil)
+            case .ended, .cancelled, .failed:
+                // The recognizer cancels the button's touches, and a hold that navigates away may never deliver that
+                // cancel here: the highlight would stay latched and the next press would not light up.
+                self.resetHighlight()
+            default:
+                break
             }
-            self.component?.contextAction?(self, nil)
         }
 
         /// Takes the hosted node back once its loan has ended (`NavigationBarNodeLoan.end`).
@@ -146,6 +155,13 @@ final class NavigationButtonComponent: Component {
 
         override func didMoveToWindow() {
             super.didMoveToWindow()
+            if self.window == nil {
+                self.resetHighlight()
+                if self.forwardedTouchCount != 0 {
+                    self.forwardedTouchCount = 0
+                    self.highligthedChanged(false)
+                }
+            }
             guard self.window != nil, let node = self.hostedNode, let component = self.component else {
                 return
             }

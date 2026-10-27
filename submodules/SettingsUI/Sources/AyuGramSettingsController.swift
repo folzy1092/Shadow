@@ -2146,6 +2146,10 @@ private final class AyuSpyArguments {
     var updateSaveViewedStories: (Bool) -> Void = { _ in }
     var openSavedStories: () -> Void = {}
     var updateSpyExcludeBots: (Bool) -> Void = { _ in }
+    var updateSpyExcludeChannels: (Bool) -> Void = { _ in }
+    var updateSpyExcludeGroups: (Bool) -> Void = { _ in }
+    var updateOnlineHistorySelectedOnly: (Bool) -> Void = { _ in }
+    var openOnlineHistoryChats: () -> Void = {}
     var openSpyExclusions: () -> Void = {}
 
     init(
@@ -2208,6 +2212,8 @@ private enum AyuSpyEntry: ItemListNodeEntry {
 
     case exclusionsHeader
     case spyExcludeBots(Bool)
+    case spyExcludeChannels(Bool)
+    case spyExcludeGroups(Bool)
     case spyExcludedChats(Int)
     case exclusionsFooter
 
@@ -2232,6 +2238,8 @@ private enum AyuSpyEntry: ItemListNodeEntry {
 
     case onlineHistoryHeader
     case onlineHistory(Bool)
+    case onlineHistorySelectedOnly(Bool)
+    case onlineHistoryChats(Int)
     case onlineHistoryFooter
 
     case storiesHeader
@@ -2245,7 +2253,7 @@ private enum AyuSpyEntry: ItemListNodeEntry {
             return AyuSpySection.deleted.rawValue
         case .editsHeader, .saveEditHistory, .showEditComparisonAction, .editsFooter:
             return AyuSpySection.edits.rawValue
-        case .exclusionsHeader, .spyExcludeBots, .spyExcludedChats, .exclusionsFooter:
+        case .exclusionsHeader, .spyExcludeBots, .spyExcludeChannels, .spyExcludeGroups, .spyExcludedChats, .exclusionsFooter:
             return AyuSpySection.exclusions.rawValue
         case .restrictedHeader, .allowSaveRestrictedContent, .restrictedFooter:
             return AyuSpySection.restricted.rawValue
@@ -2253,7 +2261,7 @@ private enum AyuSpyEntry: ItemListNodeEntry {
             return AyuSpySection.storyPrompt.rawValue
         case .savedMediaHeader, .saveDestructingMedia, .saveAllIncomingMedia, .attachmentSizeLimit, .attachmentAge, .keepPinned, .keepChannels, .keepBots, .forkStorage, .savedMediaFooter:
             return AyuSpySection.savedMedia.rawValue
-        case .onlineHistoryHeader, .onlineHistory, .onlineHistoryFooter:
+        case .onlineHistoryHeader, .onlineHistory, .onlineHistorySelectedOnly, .onlineHistoryChats, .onlineHistoryFooter:
             return AyuSpySection.onlineHistory.rawValue
         case .storiesHeader, .saveViewedStories, .openSavedStories, .storiesFooter:
             return AyuSpySection.stories.rawValue
@@ -2298,16 +2306,32 @@ private enum AyuSpyEntry: ItemListNodeEntry {
         case .spyExcludeBots: return 33
         case .spyExcludedChats: return 34
         case .exclusionsFooter: return 35
+        case .spyExcludeChannels: return 36
+        case .spyExcludeGroups: return 37
+        case .onlineHistorySelectedOnly: return 38
+        case .onlineHistoryChats: return 39
+        }
+    }
+
+    // Rows added after a section shipped take their place on screen from here,
+    // since their stableIds come after the section's footer.
+    private var sortIndex: Double {
+        switch self {
+        case .spyExcludeChannels: return 33.1
+        case .spyExcludeGroups: return 33.2
+        case .onlineHistorySelectedOnly: return 26.1
+        case .onlineHistoryChats: return 26.2
+        default: return Double(self.stableId)
         }
     }
 
     // stableId is also the setting link's entryId, so rows added later get new
-    // ids and the order goes by section first.
+    // ids and the order goes by section first, then by sortIndex.
     static func <(lhs: AyuSpyEntry, rhs: AyuSpyEntry) -> Bool {
         if lhs.section != rhs.section {
             return lhs.section < rhs.section
         }
-        return lhs.stableId < rhs.stableId
+        return lhs.sortIndex < rhs.sortIndex
     }
 
     func item(presentationData: ItemListPresentationData, arguments: Any) -> ListViewItem {
@@ -2331,8 +2355,16 @@ private enum AyuSpyEntry: ItemListNodeEntry {
             return ItemListSwitchItem(presentationData: presentationData, title: "Записывать, когда контакты в сети", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 arguments.updateOnlineHistory(value)
             })
+        case let .onlineHistorySelectedOnly(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Только выбранные чаты", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.updateOnlineHistorySelectedOnly(value)
+            })
+        case let .onlineHistoryChats(count):
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Выбранные чаты", label: count == 0 ? "" : "\(count)", sectionId: self.section, style: .blocks, action: {
+                arguments.openOnlineHistoryChats()
+            })
         case .onlineHistoryFooter:
-            return ItemListTextItem(presentationData: presentationData, text: .plain("Shadow запоминает входы и выходы контактов из обновлений статуса, которые Telegram и так присылает, и хранит их 30 дней только на этом устройстве. Смотреть — в профиле контакта: «История в сети». Если контакт скрыл время захода, записываются только моменты, когда приложение видело его онлайн."), sectionId: self.section)
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Shadow запоминает входы и выходы контактов из обновлений статуса, которые Telegram и так присылает, и хранит их 30 дней только на этом устройстве. Смотреть — в профиле контакта: «История в сети». Если контакт скрыл время захода, записываются только моменты, когда приложение видело его онлайн.\n\n«Только выбранные чаты» — записывать не всех контактов, а только людей из списка «Выбранные чаты»; их можно выбрать и не из контактов."), sectionId: self.section)
         case .deletedHeader:
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "УДАЛЁННЫЕ СООБЩЕНИЯ", sectionId: self.section)
         case let .keepDeleted(value):
@@ -2367,12 +2399,20 @@ private enum AyuSpyEntry: ItemListNodeEntry {
             return ItemListSwitchItem(presentationData: presentationData, title: "Исключить ботов", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 arguments.updateSpyExcludeBots(value)
             })
+        case let .spyExcludeChannels(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Исключить каналы", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.updateSpyExcludeChannels(value)
+            })
+        case let .spyExcludeGroups(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Исключить группы", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.updateSpyExcludeGroups(value)
+            })
         case let .spyExcludedChats(count):
             return ItemListDisclosureItem(presentationData: presentationData, title: "Исключённые чаты", label: count == 0 ? "" : "\(count)", sectionId: self.section, style: .blocks, action: {
                 arguments.openSpyExclusions()
             })
         case .exclusionsFooter:
-            return ItemListTextItem(presentationData: presentationData, text: .plain("Для этих чатов не сохраняются удалённые сообщения, история правок и входящие медиа — например, для канала, который правит посты каждую секунду. «Исключить ботов» — то же для сообщений от ботов. Уже сохранённое остаётся."), sectionId: self.section)
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Для этих чатов не сохраняются удалённые сообщения, история правок и входящие медиа — например, для канала, который правит посты каждую секунду. «Исключить ботов» — то же для сообщений от ботов. «Исключить каналы» и «Исключить группы» не сохраняют удалённое и правки во всех каналах или во всех группах сразу. Уже сохранённое остаётся."), sectionId: self.section)
         case .restrictedHeader:
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "ЗАЩИЩЁННЫЙ КОНТЕНТ", sectionId: self.section)
         case let .allowSaveRestrictedContent(value):
@@ -2445,6 +2485,8 @@ private func ayuSpyEntries(settings: AyuGramSettings) -> [AyuSpyEntry] {
 
     entries.append(.exclusionsHeader)
     entries.append(.spyExcludeBots(settings.spyExcludeBots))
+    entries.append(.spyExcludeChannels(settings.spyExcludeChannels))
+    entries.append(.spyExcludeGroups(settings.spyExcludeGroups))
     entries.append(.spyExcludedChats(settings.spyExcludedPeerIds.count))
     entries.append(.exclusionsFooter)
 
@@ -2469,6 +2511,12 @@ private func ayuSpyEntries(settings: AyuGramSettings) -> [AyuSpyEntry] {
 
     entries.append(.onlineHistoryHeader)
     entries.append(.onlineHistory(settings.onlineHistory))
+    if settings.onlineHistory {
+        entries.append(.onlineHistorySelectedOnly(settings.onlineHistorySelectedOnly))
+        if settings.onlineHistorySelectedOnly {
+            entries.append(.onlineHistoryChats(settings.onlineHistoryPeerIds.count))
+        }
+    }
     entries.append(.onlineHistoryFooter)
 
     entries.append(.storiesHeader)
@@ -2580,6 +2628,18 @@ func ayuSpyController(context: AccountContext, focus: ShadowSettingsSearchItem? 
     }
     arguments.openSpyExclusions = {
         pushControllerImpl?(shadowSpyExclusionsController(context: context))
+    }
+    arguments.updateSpyExcludeChannels = { value in
+        ayuUpdateSettings(context: context) { var s = $0; s.spyExcludeChannels = value; return s }
+    }
+    arguments.updateSpyExcludeGroups = { value in
+        ayuUpdateSettings(context: context) { var s = $0; s.spyExcludeGroups = value; return s }
+    }
+    arguments.updateOnlineHistorySelectedOnly = { value in
+        ayuUpdateSettings(context: context) { var s = $0; s.onlineHistorySelectedOnly = value; return s }
+    }
+    arguments.openOnlineHistoryChats = {
+        pushControllerImpl?(shadowOnlineHistoryChatsController(context: context))
     }
 
     let signal = combineLatest(queue: .mainQueue(),

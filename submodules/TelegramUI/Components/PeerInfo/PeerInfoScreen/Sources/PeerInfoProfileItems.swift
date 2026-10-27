@@ -395,7 +395,7 @@ func infoItems(
             }))
         }
         // Shadow: local online history of this contact (spec 7.4).
-        if ayuGramSettingsCurrent.onlineHistory, user.id != context.account.peerId {
+        if ayuGramSettingsCurrent.recordsOnlineHistory(peerId: user.id), user.id != context.account.peerId {
             items[.ayugram]!.append(PeerInfoScreenDisclosureItem(id: 3510, text: "История в сети", icon: nil, action: { [weak interaction] in
                 guard let controller = interaction?.getController() else {
                     return

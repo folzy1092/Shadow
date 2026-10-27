@@ -945,6 +945,8 @@ public final class NavigationBarNode: ASDisplayNode, NavigationBar, NavigationBa
 
     func enteredHierarchy() {
         self.glassHold.barEnteredHierarchy()
+        // Shadow: стекло подстроилось под фон анимации перехода
+        self.readaptGlass(after: .animated(duration: 0.5, curve: .spring))
     }
 
     public var componentTransitionState: NavigationBarComponentTransitionState? {

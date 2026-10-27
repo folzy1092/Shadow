@@ -103,6 +103,8 @@ public struct AyuGramSettings: Codable, Equatable {
     // shadowBannedPeerIds) and, with spyExcludeBots, bot-authored messages.
     public var spyExcludeBots: Bool = true
     public var spyExcludedPeerIds: [Int64] = []
+    public var spyExcludeChannels: Bool = false
+    public var spyExcludeGroups: Bool = false
     // Shadow: opt in to the beta release channel (shadow-update.json "beta").
     public var updateChannelBeta: Bool = false
     // Clean interface (all off by default).
@@ -206,6 +208,10 @@ public struct AyuGramSettings: Codable, Equatable {
     public var paperclipPrankSendSeconds: Int32 = ShadowPaperclip.defaultPrankSendSeconds
     // Local history of when contacts were online (ShadowOnlineHistory).
     public var onlineHistory: Bool = false
+    // With onlineHistorySelectedOnly, only the chats in onlineHistoryPeerIds
+    // (PeerId.toInt64()) are recorded and shown.
+    public var onlineHistorySelectedOnly: Bool = false
+    public var onlineHistoryPeerIds: [Int64] = []
     // Keep a local copy of viewed stories (ShadowStoryArchive).
     public var saveViewedStories: Bool = false
     public var settingsIconBackgroundColor: Int32 = 0x1C1C1E
@@ -558,7 +564,30 @@ public struct AyuGramSettings: Codable, Equatable {
         if self.spyExcludeBots, let author = message.author as? TelegramUser, author.botInfo != nil {
             return true
         }
+        if self.spyExcludeChannels || self.spyExcludeGroups {
+            if let channel = message.peers[message.id.peerId] as? TelegramChannel {
+                switch channel.info {
+                case .broadcast:
+                    if self.spyExcludeChannels {
+                        return true
+                    }
+                case .group:
+                    if self.spyExcludeGroups {
+                        return true
+                    }
+                }
+            } else if self.spyExcludeGroups, message.peers[message.id.peerId] is TelegramGroup {
+                return true
+            }
+        }
         return false
+    }
+
+    public func recordsOnlineHistory(peerId: PeerId) -> Bool {
+        if !self.onlineHistory {
+            return false
+        }
+        return !self.onlineHistorySelectedOnly || self.onlineHistoryPeerIds.contains(peerId.toInt64())
     }
 
     public var adScope: ShadowAdScope {
@@ -770,6 +799,8 @@ public struct AyuGramSettings: Codable, Equatable {
         self.shadowBannedPeerIds = (try? container.decodeIfPresent([Int64].self, forKey: "shadowBannedPeerIdsV1")) ?? []
         self.spyExcludeBots = ((try container.decodeIfPresent(Int32.self, forKey: "spyExcludeBots")) ?? 1) != 0
         self.spyExcludedPeerIds = (try? container.decodeIfPresent([Int64].self, forKey: "spyExcludedPeerIds")) ?? []
+        self.spyExcludeChannels = ((try container.decodeIfPresent(Int32.self, forKey: "spyExcludeChannels")) ?? 0) != 0
+        self.spyExcludeGroups = ((try container.decodeIfPresent(Int32.self, forKey: "spyExcludeGroups")) ?? 0) != 0
         self.updateChannelBeta = ((try container.decodeIfPresent(Int32.self, forKey: "updateChannelBeta")) ?? 0) != 0
         self.hideStoriesBar = ((try container.decodeIfPresent(Int32.self, forKey: "hideStoriesBar")) ?? 0) != 0
         self.hideGiftButton = ((try container.decodeIfPresent(Int32.self, forKey: "hideGiftButton")) ?? 0) != 0
@@ -824,6 +855,8 @@ public struct AyuGramSettings: Codable, Equatable {
         self.paperclipPrankSeconds = ShadowPaperclip.normalizedPrankSeconds((try container.decodeIfPresent(Int32.self, forKey: "paperclipPrankSeconds")) ?? ShadowPaperclip.defaultPrankSeconds)
         self.paperclipPrankSendSeconds = ShadowPaperclip.normalizedPrankSendSeconds((try container.decodeIfPresent(Int32.self, forKey: "paperclipPrankSendSeconds")) ?? ShadowPaperclip.defaultPrankSendSeconds)
         self.onlineHistory = ((try container.decodeIfPresent(Int32.self, forKey: "onlineHistory")) ?? 0) != 0
+        self.onlineHistorySelectedOnly = ((try container.decodeIfPresent(Int32.self, forKey: "onlineHistorySelectedOnly")) ?? 0) != 0
+        self.onlineHistoryPeerIds = (try? container.decodeIfPresent([Int64].self, forKey: "onlineHistoryPeerIds")) ?? []
         self.saveViewedStories = ((try container.decodeIfPresent(Int32.self, forKey: "saveViewedStories")) ?? 0) != 0
         self.settingsIconBackgroundColor = ((try container.decodeIfPresent(Int32.self, forKey: "settingsIconBackgroundColor")) ?? 0x1C1C1E) & 0xFFFFFF
         self.settingsIconGlyphColor = ((try container.decodeIfPresent(Int32.self, forKey: "settingsIconGlyphColor")) ?? 0xFFFFFF) & 0xFFFFFF
@@ -905,6 +938,8 @@ public struct AyuGramSettings: Codable, Equatable {
         try container.encode(self.shadowBannedPeerIds, forKey: "shadowBannedPeerIdsV1")
         try container.encode((self.spyExcludeBots ? 1 : 0) as Int32, forKey: "spyExcludeBots")
         try container.encode(self.spyExcludedPeerIds, forKey: "spyExcludedPeerIds")
+        try container.encode((self.spyExcludeChannels ? 1 : 0) as Int32, forKey: "spyExcludeChannels")
+        try container.encode((self.spyExcludeGroups ? 1 : 0) as Int32, forKey: "spyExcludeGroups")
         try container.encode((self.updateChannelBeta ? 1 : 0) as Int32, forKey: "updateChannelBeta")
         try container.encode((self.hideStoriesBar ? 1 : 0) as Int32, forKey: "hideStoriesBar")
         try container.encode((self.hideGiftButton ? 1 : 0) as Int32, forKey: "hideGiftButton")
@@ -955,6 +990,8 @@ public struct AyuGramSettings: Codable, Equatable {
         try container.encode(self.paperclipPrankSeconds, forKey: "paperclipPrankSeconds")
         try container.encode(self.paperclipPrankSendSeconds, forKey: "paperclipPrankSendSeconds")
         try container.encode((self.onlineHistory ? 1 : 0) as Int32, forKey: "onlineHistory")
+        try container.encode((self.onlineHistorySelectedOnly ? 1 : 0) as Int32, forKey: "onlineHistorySelectedOnly")
+        try container.encode(self.onlineHistoryPeerIds, forKey: "onlineHistoryPeerIds")
         try container.encode((self.saveViewedStories ? 1 : 0) as Int32, forKey: "saveViewedStories")
         try container.encode(self.settingsIconBackgroundColor, forKey: "settingsIconBackgroundColor")
         try container.encode(self.settingsIconGlyphColor, forKey: "settingsIconGlyphColor")

@@ -639,6 +639,34 @@ final class NavigationTransitionCoordinator {
         let timing = self.clock.start(duration: curve.restTime, continuing: continuing)
         self._progress = curve.target
         self.installProgressKeyframes(curve: curve, timing: timing)
+        self.scheduleCornersRestoreOnArrival(curve: curve, timing: timing)
+    }
+
+    /// Shadow: how close to its place a card is when it counts as arrived, in points.
+    private static let arrivedCardTolerance: CGFloat = 0.5
+
+    /// Shadow: the card is in place well before the spring rests (`NavigationSpringRest.progress`; ~0.3 s later on a
+    /// tap push), and until then it kept the screen's corners: a screenshot taken right after entering a chat came out
+    /// with them cut. The corners go once the card stays within half a point of its place; a reversed or stopped run
+    /// moves the clock's generation on and drops this.
+    private func scheduleCornersRestoreOnArrival(curve: NavigationSpringCurve, timing: NavigationKeyframeTiming) {
+        guard self.topNodeInitialParameters != nil || self.bottomNodeInitialParameters != nil else {
+            return
+        }
+        let tolerance = NavigationTransitionCoordinator.arrivedCardTolerance / max(1.0, self.container.bounds.width)
+        var arrival: Double?
+        for time in timing.sampleTimes.reversed() {
+            if abs(curve.value(at: time) - curve.target) > tolerance {
+                break
+            }
+            arrival = time
+        }
+        guard let arrival else {
+            return
+        }
+        self.clock.schedule(atAnimationTime: arrival, { [weak self] in
+            self?.restoreTopNodeCorners()
+        })
     }
 
     /// Samples `curve` at `timing` and puts the keyframes on every layer that follows the progress; the model values are

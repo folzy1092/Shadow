@@ -506,11 +506,13 @@ func updatePeerPresencesClean(transaction: Transaction, accountPeerId: PeerId, p
         parsedPresences.removeValue(forKey: accountPeerId)
     }
     
-    // Shadow: local online history of contacts (spec 7.4).
-    if currentAyuGramSettings(transaction: transaction).onlineHistory {
+    // Shadow: local online history of contacts (spec 7.4), or with
+    // onlineHistorySelectedOnly of the chosen people, contacts or not.
+    let shadowSettings = currentAyuGramSettings(transaction: transaction)
+    if shadowSettings.onlineHistory {
         let now = Int32(Date().timeIntervalSince1970)
         for (peerId, presence) in parsedPresences {
-            guard peerId.namespace == Namespaces.Peer.CloudUser, let presence = presence as? TelegramUserPresence, transaction.isPeerContact(peerId: peerId) else {
+            guard peerId.namespace == Namespaces.Peer.CloudUser, let presence = presence as? TelegramUserPresence, shadowSettings.recordsOnlineHistory(peerId: peerId), shadowSettings.onlineHistorySelectedOnly || transaction.isPeerContact(peerId: peerId) else {
                 continue
             }
             if case let .present(until) = presence.status {

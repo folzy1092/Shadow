@@ -144,10 +144,30 @@ class CleanInterfaceContracts(unittest.TestCase):
 
     def test_online_history(self):
         updates = read("TelegramCore/Sources/TelegramEngine/../UpdatePeers.swift")
-        self.assertIn("currentAyuGramSettings(transaction: transaction).onlineHistory", updates)
-        self.assertIn("transaction.isPeerContact(peerId: peerId)", updates)
+        self.assertIn("let shadowSettings = currentAyuGramSettings(transaction: transaction)\n    if shadowSettings.onlineHistory {", updates)
+        # All contacts, or (1.14.2) only the chosen people, contacts or not.
+        self.assertIn("shadowSettings.recordsOnlineHistory(peerId: peerId), shadowSettings.onlineHistorySelectedOnly || transaction.isPeerContact(peerId: peerId)", updates)
+        settings = read("TelegramCore/Sources/AyuGram/AyuGramSettings.swift")
+        self.assertIn("return !self.onlineHistorySelectedOnly || self.onlineHistoryPeerIds.contains(peerId.toInt64())", settings)
+        self.assertIn('decodeIfPresent([Int64].self, forKey: "onlineHistoryPeerIds")) ?? []', settings)
+        self.assertIn('try container.encode(self.onlineHistoryPeerIds, forKey: "onlineHistoryPeerIds")', settings)
         profile = read("TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoProfileItems.swift")
         self.assertIn("shadowOnlineHistoryController(context: context, peerId: user.id)", profile)
+        self.assertIn("ayuGramSettingsCurrent.recordsOnlineHistory(peerId: user.id)", profile)
+        hub = read("SettingsUI/Sources/AyuGramSettingsController.swift")
+        self.assertIn("pushControllerImpl?(shadowOnlineHistoryChatsController(context: context))", hub)
+        self.assertIn("s.onlineHistorySelectedOnly = value", hub)
+        for case, entry in (("onlineHistorySelectedOnly", 38), ("onlineHistoryChats", 39)):
+            self.assertIn(f"case .{case}: return {entry}", hub)
+        # Only people have an online status: the picker keeps users only.
+        picker = read("SettingsUI/Sources/ShadowSpyExclusionsController.swift")
+        self.assertIn("ids: \\.onlineHistoryPeerIds", picker)
+        self.assertIn("accepts: { $0.namespace == Namespaces.Peer.CloudUser }", picker)
+        document = read("TelegramCore/Sources/AyuGram/ShadowSettingsDocument.swift")
+        self.assertIn('"onlineHistorySelectedOnly"', document)
+        self.assertIn('"onlineHistoryPeerIds"', document)
+        transfer = read("TelegramCore/Sources/AyuGram/ShadowSettingsTransfer.swift")
+        self.assertIn("updated.onlineHistoryPeerIds = ShadowSettingsTransfer.uniqueIds(ids)", transfer)
         self.assertIn("'online-history'", (ROOT / "build-system/ci/test_shadow_foundation.py").read_text())
 
     def test_saved_stories(self):

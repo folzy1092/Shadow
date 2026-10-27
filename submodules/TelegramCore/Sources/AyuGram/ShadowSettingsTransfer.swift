@@ -59,6 +59,8 @@ public enum ShadowSettingsTransfer {
         "mediaAutoCleanKeepChannels": \.mediaAutoCleanKeepChannels,
         "mediaAutoCleanKeepBots": \.mediaAutoCleanKeepBots,
         "spyExcludeBots": \.spyExcludeBots,
+        "spyExcludeChannels": \.spyExcludeChannels,
+        "spyExcludeGroups": \.spyExcludeGroups,
         "showProfileId": \.showProfileId,
         "showProfileDC": \.showProfileDC,
         "showRegistrationDate": \.showRegistrationDate,
@@ -108,6 +110,7 @@ public enum ShadowSettingsTransfer {
         "paperclipMenu": \.paperclipMenu,
         "paperclipPrankImitation": \.paperclipPrankImitation,
         "onlineHistory": \.onlineHistory,
+        "onlineHistorySelectedOnly": \.onlineHistorySelectedOnly,
         "saveViewedStories": \.saveViewedStories,
         "screenshotAnonymize": \.messageScreenshot.anonymize,
         "screenshotAnonymizeOwn": \.messageScreenshot.anonymizeOwn,
@@ -164,7 +167,8 @@ public enum ShadowSettingsTransfer {
             ("quickReplyTemplates", ShadowSettingsTransfer.json(settings.quickReplyTemplates)),
             ("headerButtons", ShadowSettingsTransfer.json(settings.headerButtons)),
             ("chatPrivacyRules", ShadowSettingsTransfer.json(rules)),
-            ("spyExcludedPeerIds", ShadowSettingsTransfer.json(settings.spyExcludedPeerIds))
+            ("spyExcludedPeerIds", ShadowSettingsTransfer.json(settings.spyExcludedPeerIds)),
+            ("onlineHistoryPeerIds", ShadowSettingsTransfer.json(settings.onlineHistoryPeerIds))
         ] {
             if let json {
                 values[key] = .text(json)
@@ -225,6 +229,10 @@ public enum ShadowSettingsTransfer {
                 case "spyExcludedPeerIds":
                     if let ids: [Int64] = ShadowSettingsTransfer.decodeJSON(text) {
                         updated.spyExcludedPeerIds = ShadowSettingsTransfer.uniqueIds(ids)
+                    }
+                case "onlineHistoryPeerIds":
+                    if let ids: [Int64] = ShadowSettingsTransfer.decodeJSON(text) {
+                        updated.onlineHistoryPeerIds = ShadowSettingsTransfer.uniqueIds(ids)
                     }
                 case "quickReplyTemplates":
                     if let templates: [String] = ShadowSettingsTransfer.decodeJSON(text) {

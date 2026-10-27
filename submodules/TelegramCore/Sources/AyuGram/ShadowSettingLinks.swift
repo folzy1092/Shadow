@@ -244,6 +244,8 @@ public enum ShadowSettingLinks {
         ShadowSettingLink(screen: "spy", slug: "edit-compare", entryId: 7, key: "showEditComparisonAction", title: "Показывать «Сравнить правки»"),
         ShadowSettingLink(screen: "spy", slug: "exclude-bots", entryId: 33, key: "spyExcludeBots", title: "Исключить ботов", icon: "person.crop.circle.badge.xmark", since: "1.14.1"),
         ShadowSettingLink(screen: "spy", slug: "excluded-chats", entryId: 34, key: nil, title: "Исключённые чаты", since: "1.14.1"),
+        ShadowSettingLink(screen: "spy", slug: "exclude-channels", entryId: 36, key: "spyExcludeChannels", title: "Исключить каналы", since: "1.14.2"),
+        ShadowSettingLink(screen: "spy", slug: "exclude-groups", entryId: 37, key: "spyExcludeGroups", title: "Исключить группы", since: "1.14.2"),
         ShadowSettingLink(screen: "spy", slug: "save-restricted", entryId: 10, key: "allowSaveRestrictedContent", title: "Разрешить сохранение", icon: "square.and.arrow.down"),
         ShadowSettingLink(screen: "spy", slug: "ask-story-view", entryId: 13, key: "askBeforeStoryView", title: "Спросить перед просмотром истории"),
         ShadowSettingLink(screen: "spy", slug: "save-destructing", entryId: 16, key: "saveDestructingMedia", title: "Сохранять самоуничтожающиеся", icon: "timer"),
@@ -252,6 +254,8 @@ public enum ShadowSettingLinks {
         ShadowSettingLink(screen: "spy", slug: "clean-skip-channels", entryId: 21, key: "mediaAutoCleanKeepChannels", title: "Не очищать каналы"),
         ShadowSettingLink(screen: "spy", slug: "clean-skip-bots", entryId: 22, key: "mediaAutoCleanKeepBots", title: "Не очищать ботов"),
         ShadowSettingLink(screen: "spy", slug: "online-history", entryId: 26, key: "onlineHistory", title: "Записывать, когда контакты в сети", icon: "chart.bar"),
+        ShadowSettingLink(screen: "spy", slug: "online-history-selected", entryId: 38, key: "onlineHistorySelectedOnly", title: "История в сети: только выбранные чаты", parentEntryId: 26, since: "1.14.2"),
+        ShadowSettingLink(screen: "spy", slug: "online-history-chats", entryId: 39, key: nil, title: "История в сети: выбранные чаты", parentEntryId: 26, since: "1.14.2"),
         ShadowSettingLink(screen: "spy", slug: "save-stories", entryId: 29, key: "saveViewedStories", title: "Сохранять просмотренные истории"),
 
         // Кастомизация (AyuCustomizationEntry)
