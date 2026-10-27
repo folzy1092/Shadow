@@ -22,12 +22,31 @@ class ShadowChatEntryContracts(unittest.TestCase):
         cls.bar = read_source(NAVIGATION_BAR)
         cls.coordinator = read_source(COORDINATOR)
 
-    def test_bar_readapts_glass_after_entering_hierarchy(self):
+    def test_bar_readapts_glass_when_the_transition_hands_it_over(self):
+        body = section(self.bar, "private func applyGlassVisibility() {", "\n    }\n")
+        unhide = body.index("titleView.isGlassPillDetached = detached && self.transitionTitlePill != nil")
+        readapt = body.index("self.readaptGlassOnHandover()")
+        self.assertLess(unhide, readapt)
+        self.assertIn("if wasDetached && !detached {", body)
+        handover = section(self.bar, "private func readaptGlassOnHandover() {", "\n    }\n")
+        self.assertIn("self.glassReadaptationGeneration += 1", handover)
+        self.assertIn("self.readaptGlass()", handover)
+        self.assertNotIn("asyncAfter", handover)
+
+    def test_entering_hierarchy_does_not_readapt_on_a_timer(self):
         body = section(self.bar, "func enteredHierarchy() {", "\n    }")
-        hold = body.index("self.glassHold.barEnteredHierarchy()")
-        readapt = body.index("self.readaptGlass(after: .animated(duration: 0.5, curve: .spring))")
-        self.assertLess(hold, readapt)
-        self.assertIn("// Shadow: стекло подстроилось под фон анимации перехода", body)
+        self.assertNotIn("readaptGlass", body)
+
+    def test_header_capsule_pressed_by_a_hold_gets_new_glass_when_detached(self):
+        bar = read_source("submodules/TelegramUI/Components/NavigationBarComponent/Sources/NavigationBarComponent.swift")
+        detach = section(bar, "public var plattersDetached: Bool = false {", "self.applyPlattersDetached()")
+        sampled = detach.index("self.detachedRightPressScales = zip(rightScales, barRightPresses)")
+        renew = detach.index("self.renewGlassPressedAtDetach()")
+        self.assertLess(sampled, renew)
+        body = section(bar, "private func renewGlassPressedAtDetach() {", "\n        }\n\n")
+        self.assertIn("navigationBarCapsulePress(container).isPressed || hasActiveTouch(container)", body)
+        self.assertIn("container.renewGlass()", body)
+        self.assertIn("self.isLeftCapsuleLent", body)
 
     def test_progress_run_schedules_corner_restore_on_arrival(self):
         run = section(self.coordinator, "private func runProgressCurve(", "\n    }")

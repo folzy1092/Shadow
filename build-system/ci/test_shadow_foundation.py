@@ -42,6 +42,7 @@ def main():
         ('silent-send', 'submodules/TelegramCore/Sources/AyuGram/ShadowSilentSend.swift', 'Tests/ShadowSettings/SilentSendTests.swift'),
         ('activity-imitation', ('submodules/TelegramCore/Sources/AyuGram/ShadowActivityImitationMode.swift', 'submodules/TelegramCore/Sources/AyuGram/ShadowPaperclip.swift'), 'Tests/ShadowSettings/ActivityImitationTests.swift'),
         ('local-pins', 'submodules/TelegramCore/Sources/AyuGram/ShadowLocalPins.swift', 'Tests/ShadowSettings/LocalPinsTests.swift'),
+        ('text-diff', 'submodules/TelegramCore/Sources/AyuGram/ShadowTextDiff.swift', 'Tests/ShadowSettings/TextDiffTests.swift'),
         ('chat-titles', 'submodules/TelegramCore/Sources/AyuGram/ShadowChatTitles.swift', 'Tests/ShadowSettings/ChatTitlesTests.swift'),
         ('chat-stats', ('submodules/TelegramCore/Sources/AyuGram/ShadowChatStats.swift', 'submodules/TelegramCore/Sources/AyuGram/ShadowChatStatsPage.swift'), 'Tests/ShadowSettings/ChatStatsTests.swift'),
         ('links', 'submodules/TelegramCore/Sources/AyuGram/ShadowLinks.swift', 'Tests/ShadowSettings/LinksTests.swift'),

@@ -61,6 +61,10 @@ private let validTimecodePreviousSet: CharacterSet = {
 public struct ApplicationSpecificEntityType {
     public static let Timecode: Int32 = 1
     public static let Button: Int32 = 2
+    /// Shadow: text a later version of a message removed, shown in «Сравнить правки» (never sent).
+    public static let ShadowDiffDeleted: Int32 = 1001
+    /// Shadow: text a later version of a message added, shown in «Сравнить правки» (never sent).
+    public static let ShadowDiffInserted: Int32 = 1002
 }
 
 private enum CurrentEntityType {

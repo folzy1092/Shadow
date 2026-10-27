@@ -214,6 +214,7 @@ public final class NavigationBarComponent: Component {
                         self.detachedRightPressGlows = zip(self.rightPills, rightScales).map { navigationBarCapsulePressGlow($0.background, press: $1) }
                         self.detachedLeftPressScale = leftScale * barLeftPress
                         self.detachedRightPressScales = zip(rightScales, barRightPresses).map { $0 * $1 }
+                        self.renewGlassPressedAtDetach()
                     } else {
                         self.detachedLeftPressScale = 1.0
                         self.detachedLeftPressGlow = 0.0
@@ -381,6 +382,28 @@ public final class NavigationBarComponent: Component {
                 buttonView.isHidden = false
             }
             self.applyPlattersDetached()
+        }
+
+        /// Shadow: a hold on a header button can start a transition while the finger is still down (the hold binding
+        /// opens a chat or a channel). The capsule then leaves the hierarchy in the middle of UIKit's press, which never
+        /// ends on that effect view: back on the chat list the capsule no longer lit up or grew under a finger, though
+        /// the buttons still worked. The press has been read for the transition above, so a pressed capsule (or one with
+        /// a touch still in it) gets a new effect view now, while it is off screen (`GlassBackgroundView.renewNativeView`).
+        private func renewGlassPressedAtDetach() {
+            func hasActiveTouch(_ view: UIView) -> Bool {
+                if let control = view as? UIControl, control.isTracking || control.isHighlighted {
+                    return true
+                }
+                return view.subviews.contains(where: hasActiveTouch)
+            }
+            for container in [self.leftButtonsBackgroundContainer].compactMap({ $0 }) + self.rightBackgroundContainers {
+                if container === self.leftButtonsBackgroundContainer && self.isLeftCapsuleLent {
+                    continue
+                }
+                if navigationBarCapsulePress(container).isPressed || hasActiveTouch(container) {
+                    container.renewGlass()
+                }
+            }
         }
 
         private func applyPlattersDetached() {

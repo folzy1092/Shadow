@@ -5,6 +5,7 @@ import SwiftSignalKit
 import Postbox
 import TelegramCore
 import AccountContext
+import TextFormat
 
 // Shadow: «архив» — сохранённые форком сообщения, показанные обычным чатом.
 // Входы в один и тот же экран:
@@ -269,6 +270,10 @@ private func ayuEditHistoryMessages(context: AccountContext, message: Message) -
     |> runOn(Queue.concurrentDefaultQueue())
 }
 
+// Shadow: «Сравнить правки». Первое сообщение — один текст, где видно только
+// изменённое: удалённые слова красные и зачёркнутые, добавленные — зелёные и
+// подчёркнутые (ShadowTextDiff, сущности ShadowDiffDeleted/ShadowDiffInserted).
+// Ниже — обе версии целиком, «До» и «После».
 private func ayuEditComparisonMessages(context: AccountContext, message: Message) -> Signal<[Message], NoError> {
     let basePath = context.account.postbox.mediaBox.basePath
     return Signal { subscriber in
@@ -279,41 +284,78 @@ private func ayuEditComparisonMessages(context: AccountContext, message: Message
             return EmptyDisposable
         }
 
-        let oldLine = "− " + (previous.text.isEmpty ? "[без текста]" : previous.text)
-        let newLine = "+ " + (message.text.isEmpty ? "[без текста]" : message.text)
-        var mediaLine = ""
+        var summaryText = ""
+        var summaryEntities: [MessageTextEntity] = []
+        if previous.text.isEmpty && message.text.isEmpty {
+            summaryText = "[без текста]"
+        } else {
+            for segment in ShadowTextDiff.segments(old: previous.text, new: message.text) {
+                let location = (summaryText as NSString).length
+                let length = (segment.text as NSString).length
+                summaryText += segment.text
+                switch segment.kind {
+                case .same:
+                    break
+                case .deleted:
+                    summaryEntities.append(MessageTextEntity(range: location ..< location + length, type: .Custom(type: ApplicationSpecificEntityType.ShadowDiffDeleted)))
+                case .inserted:
+                    summaryEntities.append(MessageTextEntity(range: location ..< location + length, type: .Custom(type: ApplicationSpecificEntityType.ShadowDiffInserted)))
+                }
+            }
+            if previous.text == message.text {
+                summaryText = "Текст не изменился\n\n" + summaryText
+                summaryEntities = [MessageTextEntity(range: 0 ..< ("Текст не изменился" as NSString).length, type: .Bold)]
+            }
+        }
+
         let currentMediaKind = AyuSavedMedia.mediaKind(for: message.media)
         if previous.mediaKind != currentMediaKind || previous.mediaFileName != nil {
-            if previous.mediaKind == nil { mediaLine = "\n+ Вложение добавлено" }
-            else if currentMediaKind == nil { mediaLine = "\n− Вложение удалено" }
-            else { mediaLine = "\n↔ Вложение заменено: \(previous.mediaKind ?? "файл") → \(currentMediaKind ?? "файл")" }
+            let mediaLine: String
+            if previous.mediaKind == nil {
+                mediaLine = "+ Вложение добавлено"
+            } else if currentMediaKind == nil {
+                mediaLine = "− Вложение удалено"
+            } else {
+                mediaLine = "↔ Вложение заменено: \(previous.mediaKind ?? "файл") → \(currentMediaKind ?? "файл")"
+            }
+            summaryText += "\n\n"
+            let location = (summaryText as NSString).length
+            summaryText += mediaLine
+            summaryEntities.append(MessageTextEntity(range: location ..< location + (mediaLine as NSString).length, type: .Italic))
         }
-        let summaryText = oldLine + "\n" + newLine + mediaLine
-        let oldRange = NSRange(location: 0, length: (oldLine as NSString).length)
-        let newRange = NSRange(location: oldRange.length + 1, length: (newLine as NSString).length)
-        let entities = TextEntitiesMessageAttribute(entities: [
-            MessageTextEntity(range: oldRange.location ..< oldRange.location + oldRange.length, type: .Strikethrough),
-            MessageTextEntity(range: newRange.location ..< newRange.location + newRange.length, type: .Bold)
-        ])
-        let cleanAttributes = message.attributes.filter { !($0 is SavedMessageEditsAttribute) && !($0 is DeletedMessageAttribute) }
+
+        // Атрибуты форка снимаем, а сущности текста у каждой версии свои: сущности
+        // текущего текста к старому не подходят, а к «После\n» + текст — со сдвигом
+        // (раньше они ехали на длину подписи: «@ban» серым, «koffo» белым).
+        let cleanAttributes = message.attributes.filter { !($0 is SavedMessageEditsAttribute) && !($0 is DeletedMessageAttribute) && !($0 is TextEntitiesMessageAttribute) }
+        let currentEntities = (message.attributes.first(where: { $0 is TextEntitiesMessageAttribute }) as? TextEntitiesMessageAttribute)?.entities ?? []
+
         let summary = message
             .withUpdatedId(id: MessageId(peerId: message.id.peerId, namespace: Namespaces.Message.Local, id: 1))
             .withUpdatedStableId(stableId: 1)
             .withUpdatedText(summaryText)
             .withUpdatedMedia([])
-            .withUpdatedAttributes(cleanAttributes + [entities])
+            .withUpdatedAttributes(cleanAttributes + [TextEntitiesMessageAttribute(entities: summaryEntities)])
+
+        let oldTitle = "До"
         var oldVersion = message
             .withUpdatedId(id: MessageId(peerId: message.id.peerId, namespace: Namespaces.Message.Local, id: 2))
             .withUpdatedStableId(stableId: 2)
-            .withUpdatedText("До\n" + previous.text)
+            .withUpdatedText(oldTitle + "\n" + previous.text)
             .withUpdatedTimestamp(previous.date)
-            .withUpdatedAttributes(cleanAttributes)
+            .withUpdatedAttributes(cleanAttributes + [TextEntitiesMessageAttribute(entities: [MessageTextEntity(range: 0 ..< (oldTitle as NSString).length, type: .Bold)])])
         oldVersion = oldVersion.withUpdatedMedia(ayuRestoredMedia(basePath: basePath, version: previous).map { [$0] } ?? [])
+
+        let newTitle = "После"
+        let shift = (newTitle as NSString).length + 1
+        let shiftedEntities = currentEntities.map { entity in
+            MessageTextEntity(range: entity.range.lowerBound + shift ..< entity.range.upperBound + shift, type: entity.type)
+        }
         let current = message
             .withUpdatedId(id: MessageId(peerId: message.id.peerId, namespace: Namespaces.Message.Local, id: 3))
             .withUpdatedStableId(stableId: 3)
-            .withUpdatedText("После\n" + message.text)
-            .withUpdatedAttributes(cleanAttributes)
+            .withUpdatedText(newTitle + "\n" + message.text)
+            .withUpdatedAttributes(cleanAttributes + [TextEntitiesMessageAttribute(entities: [MessageTextEntity(range: 0 ..< (newTitle as NSString).length, type: .Bold)] + shiftedEntities)])
         subscriber.putNext([summary, oldVersion, current])
         subscriber.putCompletion()
         return EmptyDisposable
