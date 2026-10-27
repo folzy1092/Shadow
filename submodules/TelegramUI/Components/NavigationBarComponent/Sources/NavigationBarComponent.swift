@@ -413,7 +413,25 @@ public final class NavigationBarComponent: Component {
                     container.removeFromSuperview()
                 } else if container.superview == nil {
                     self.addSubview(container)
+                    // Shadow: a capsule back from a transition no longer lit up or grew under a finger (any chat opened
+                    // and closed did it); a new effect view presses cleanly.
+                    (container as? GlassContextExtractableContainer)?.renewGlass()
                 }
+            }
+        }
+
+        /// Shadow: every capsule gets a new effect view (`GlassBackgroundView.renewNativeView`), for a host that has just
+        /// reset the glass container the capsules are in (`readaptToBackdrop`): UIKit's press on the old effect views
+        /// stopped working after it.
+        public func renewCapsuleGlass() {
+            for container in [self.leftButtonsBackgroundContainer].compactMap({ $0 }) + self.rightBackgroundContainers {
+                if container.superview == nil {
+                    continue
+                }
+                if container === self.leftButtonsBackgroundContainer && self.isLeftCapsuleLent {
+                    continue
+                }
+                container.renewGlass()
             }
         }
         /// iPhone Duo: the side column (back circle and capsule), laid out in its own bounds. The host adds it to

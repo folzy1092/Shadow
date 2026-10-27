@@ -665,6 +665,8 @@ public final class NavigationBarNode: ASDisplayNode, NavigationBar, NavigationBa
     private func readaptGlass() {
         self.glassContainer.readaptToBackdrop()
         self.sideColumnContainer?.readaptToBackdrop()
+        // Shadow: the capsules' press does not survive the container's reset; new effect views press again.
+        self.rowView?.renewCapsuleGlass()
         self.glassReadaptationCountForTesting += 1
     }
 

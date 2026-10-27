@@ -45,6 +45,19 @@ class ShadowChatEntryContracts(unittest.TestCase):
         renderer = read_source("submodules/TelegramUI/Components/NavigationBarNode/Sources/NavigationBarTransitionRenderer.swift")
         self.assertIn("self.platterView?.readaptGlass()", renderer)
 
+    def test_capsules_get_new_glass_after_the_container_is_reset(self):
+        bar = read_source("submodules/TelegramUI/Components/NavigationBarComponent/Sources/NavigationBarComponent.swift")
+        attach = section(bar, "private func applyPlattersDetached() {", "\n        }\n\n")
+        added = attach.index("self.addSubview(container)")
+        renew = attach.index("(container as? GlassContextExtractableContainer)?.renewGlass()")
+        self.assertLess(added, renew)
+        self.assertIn("public func renewCapsuleGlass() {", bar)
+        header = read_source("submodules/TelegramUI/Components/ChatListHeaderComponent/Sources/ChatListNavigationBar.swift")
+        body = section(header, "fileprivate func readaptHeaderGlass() {", "\n    }\n")
+        self.assertLess(body.index("readaptToBackdrop()"), body.index("navigationBarComponentView?.renewCapsuleGlass()"))
+        node = section(self.bar, "private func readaptGlass() {", "\n    }\n")
+        self.assertLess(node.index("self.glassContainer.readaptToBackdrop()"), node.index("self.rowView?.renewCapsuleGlass()"))
+
     def test_entering_hierarchy_does_not_readapt_on_a_timer(self):
         body = section(self.bar, "func enteredHierarchy() {", "\n    }")
         self.assertNotIn("readaptGlass", body)
