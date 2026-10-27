@@ -99,6 +99,9 @@ public protocol NavigationBarTransitionRenderer: AnyObject {
     /// What another transition took from the lower bar (an expansion: the chat's pill and avatar): the morph leaves it
     /// out.
     func updateExclusions(bottom: NavigationBarTransitionExclusions)
+    /// Shadow: the screens' transition is over and the glass lingers over the screen it ended on, without the
+    /// transition's backdrop: it adapts to what is under it now.
+    func readaptGlass()
 }
 
 public extension NavigationBarTransitionRenderer {
@@ -115,6 +118,9 @@ public extension NavigationBarTransitionRenderer {
     }
 
     func updateExclusions(bottom: NavigationBarTransitionExclusions) {
+    }
+
+    func readaptGlass() {
     }
 
     var isGlassAnimating: Bool {

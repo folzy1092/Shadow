@@ -33,6 +33,18 @@ class ShadowChatEntryContracts(unittest.TestCase):
         self.assertIn("self.readaptGlass()", handover)
         self.assertNotIn("asyncAfter", handover)
 
+    def test_transition_glass_readapts_when_the_screens_settle(self):
+        layer = read_source("submodules/Display/Source/NavigationBarTransitionLayer.swift")
+        put_back = section(layer, "func putBack(lingering: Bool) -> Bool {", "\n    }\n")
+        removed = put_back.index("self.renderer.backdropView.removeFromSuperview()")
+        readapt = put_back.index("self.renderer.readaptGlass()")
+        self.assertLess(removed, readapt)
+        platters = read_source("submodules/TelegramUI/Components/NavigationBarComponent/Sources/NavigationBarPlatterTransitionView.swift")
+        body = section(platters, "public func readaptGlass() {", "\n    }\n")
+        self.assertIn("platter.container.readaptToBackdrop()", body)
+        renderer = read_source("submodules/TelegramUI/Components/NavigationBarNode/Sources/NavigationBarTransitionRenderer.swift")
+        self.assertIn("self.platterView?.readaptGlass()", renderer)
+
     def test_entering_hierarchy_does_not_readapt_on_a_timer(self):
         body = section(self.bar, "func enteredHierarchy() {", "\n    }")
         self.assertNotIn("readaptGlass", body)

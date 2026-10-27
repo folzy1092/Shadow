@@ -155,6 +155,10 @@ final class NavigationBarTransitionRendererImpl: NavigationBarTransitionRenderer
         self.lentNodes = nodes
     }
 
+    func readaptGlass() {
+        self.platterView?.readaptGlass()
+    }
+
     func end() {
         let nodes = self.lentNodes
         self.lentNodes = [:]

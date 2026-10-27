@@ -913,9 +913,9 @@ public final class NavigationBarNode: ASDisplayNode, NavigationBar, NavigationBa
     }
 
     /// Shadow: the bar's own glass was laid out while the transition drew it (the chat's title pill is made during the
-    /// push, hidden), and UIKit's glass keeps how it adapted when it joined the container: on entering a chat the pill
-    /// came up grey and turned clear only when a later readaptation ran. It adapts again in the same commit that shows
-    /// it, so the first frame of the bar's own glass is already the adapted one.
+    /// push, hidden), and UIKit's glass keeps how it adapted when it joined the container. It adapts again in the same
+    /// commit that shows it, so the first frame of the bar's own glass is already the adapted one (the transition's
+    /// glass adapts again as the screens settle, `NavigationBarTransitionRenderer.readaptGlass`).
     private func readaptGlassOnHandover() {
         guard self.view.window != nil else {
             return

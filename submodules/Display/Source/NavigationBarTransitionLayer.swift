@@ -228,6 +228,9 @@ final class NavigationBarTransitionLayer: ASDisplayNode {
             return false
         }
         self.renderer.backdropView.removeFromSuperview()
+        // Shadow: the capsules adapted to the transition's dark backdrop when they were made; the chat's title pill
+        // lingered clear over the chat's wallpaper and turned grey only when the bar took it back.
+        self.renderer.readaptGlass()
         self.renderer.glassSettled = { [weak self] in
             self?.endLingering()
         }
