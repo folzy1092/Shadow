@@ -464,16 +464,6 @@ public func stringWithAppliedEntities(_ text: String, entities: [MessageTextEnti
                 } else if type == ApplicationSpecificEntityType.Button {
                     string.addAttribute(NSAttributedString.Key(rawValue: TelegramTextAttributes.Button), value: true as NSNumber, range: range)
                     addFontAttributes(range, .smaller)
-                } else if type == ApplicationSpecificEntityType.ShadowDiffDeleted {
-                    // Shadow: «Сравнить правки» — removed text, red and struck through.
-                    string.addAttribute(NSAttributedString.Key.foregroundColor, value: UIColor(rgb: 0xFF453A), range: range)
-                    string.addAttribute(NSAttributedString.Key.strikethroughStyle, value: NSUnderlineStyle.single.rawValue as NSNumber, range: range)
-                } else if type == ApplicationSpecificEntityType.ShadowDiffInserted {
-                    // Shadow: «Сравнить правки» — added text, green and underlined.
-                    let insertedColor = UIColor(rgb: 0x30D158)
-                    string.addAttribute(NSAttributedString.Key.foregroundColor, value: insertedColor, range: range)
-                    string.addAttribute(NSAttributedString.Key.underlineStyle, value: NSUnderlineStyle.single.rawValue as NSNumber, range: range)
-                    string.addAttribute(NSAttributedString.Key.underlineColor, value: insertedColor, range: range)
                 }
             case let .CustomEmoji(_, fileId):
                 let mediaId = EngineMedia.Id(namespace: Namespaces.Media.CloudFile, id: fileId)

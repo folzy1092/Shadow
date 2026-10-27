@@ -109,17 +109,6 @@ class ShadowPrivacyFeatures(unittest.TestCase):
         self.assertIn("showEditComparisonAction", hub)
         self.assertIn("ayuGramSettingsCurrent.showEditComparisonAction", menu)
 
-    def test_edit_comparison_marks_changed_words(self):
-        history = (ROOT / "submodules/SettingsUI/Sources/AyuArchiveChatContents.swift").read_text()
-        body = history.split("private func ayuEditComparisonMessages(", 1)[1].split("// MARK: - Экраны", 1)[0]
-        self.assertIn("ShadowTextDiff.segments(old: previous.text, new: message.text)", body)
-        self.assertIn("ApplicationSpecificEntityType.ShadowDiffDeleted", body)
-        self.assertIn("ApplicationSpecificEntityType.ShadowDiffInserted", body)
-        self.assertIn("!($0 is TextEntitiesMessageAttribute)", body)
-        entities = (ROOT / "submodules/TextFormat/Sources/StringWithAppliedEntities.swift").read_text()
-        self.assertIn("type == ApplicationSpecificEntityType.ShadowDiffDeleted", entities)
-        self.assertIn("type == ApplicationSpecificEntityType.ShadowDiffInserted", entities)
-
     def test_filter_hides_a_whole_media_album_as_one_safe_placeholder(self):
         source = (UI / "Sources/ChatHistoryEntriesForView.swift").read_text()
         block = source.split("case let .MessageGroupEntry(_, messages, presentation):", 1)[1].split("case let .MessageEntry", 1)[0]

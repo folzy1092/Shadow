@@ -854,16 +854,6 @@ public final class NavigationBarPlatterTransitionView: UIView {
         platter.tintFade = NavigationSpringCurve(startTime: self.time, from: 1.0, target: 0.0, spring: NavigationBarGlassSettings.tintCrossFade, rest: .glass(0.001))
     }
 
-    /// Shadow: makes every capsule's glass adapt again to the backdrop under it now (`readaptToBackdrop`): the
-    /// transition's own backdrop is gone and the screen it ended on is in place.
-    public func readaptGlass() {
-        for platter in self.platters.values {
-            platter.container.readaptToBackdrop()
-            platter.fadingContainer?.readaptToBackdrop()
-        }
-        self.mergedGlassContainer?.readaptToBackdrop()
-    }
-
     /// The animation time now: every change happens at it.
     private var now: Double {
         return self.clock.isRunning ? self.clock.animationTime() : 0.0

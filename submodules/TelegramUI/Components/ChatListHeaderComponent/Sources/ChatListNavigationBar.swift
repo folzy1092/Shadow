@@ -1261,9 +1261,6 @@ extension ChatListNavigationBar.View: NavigationBarComponentTransitionSource {
     fileprivate func readaptHeaderGlass() {
         (self.headerBackgroundContainer as? GlassBackgroundContainerView)?.readaptToBackdrop()
         self.sideColumnContainer?.readaptToBackdrop()
-        // Shadow: resetting the container's effect left the capsules' press dead (no glow, no growth after returning
-        // from a chat); new effect views press again.
-        (self.headerContent.view as? ChatListHeaderComponent.View)?.navigationBarComponentView?.renewCapsuleGlass()
     }
 
     public var componentTransitionState: NavigationBarComponentTransitionState? {

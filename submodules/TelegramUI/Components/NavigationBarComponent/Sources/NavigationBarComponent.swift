@@ -214,7 +214,6 @@ public final class NavigationBarComponent: Component {
                         self.detachedRightPressGlows = zip(self.rightPills, rightScales).map { navigationBarCapsulePressGlow($0.background, press: $1) }
                         self.detachedLeftPressScale = leftScale * barLeftPress
                         self.detachedRightPressScales = zip(rightScales, barRightPresses).map { $0 * $1 }
-                        self.renewGlassPressedAtDetach()
                     } else {
                         self.detachedLeftPressScale = 1.0
                         self.detachedLeftPressGlow = 0.0
@@ -384,28 +383,6 @@ public final class NavigationBarComponent: Component {
             self.applyPlattersDetached()
         }
 
-        /// Shadow: a hold on a header button can start a transition while the finger is still down (the hold binding
-        /// opens a chat or a channel). The capsule then leaves the hierarchy in the middle of UIKit's press, which never
-        /// ends on that effect view: back on the chat list the capsule no longer lit up or grew under a finger, though
-        /// the buttons still worked. The press has been read for the transition above, so a pressed capsule (or one with
-        /// a touch still in it) gets a new effect view now, while it is off screen (`GlassBackgroundView.renewNativeView`).
-        private func renewGlassPressedAtDetach() {
-            func hasActiveTouch(_ view: UIView) -> Bool {
-                if let control = view as? UIControl, control.isTracking || control.isHighlighted {
-                    return true
-                }
-                return view.subviews.contains(where: hasActiveTouch)
-            }
-            for container in [self.leftButtonsBackgroundContainer].compactMap({ $0 }) + self.rightBackgroundContainers {
-                if container === self.leftButtonsBackgroundContainer && self.isLeftCapsuleLent {
-                    continue
-                }
-                if navigationBarCapsulePress(container).isPressed || hasActiveTouch(container) {
-                    container.renewGlass()
-                }
-            }
-        }
-
         private func applyPlattersDetached() {
             let containers: [UIView] = ([self.leftButtonsBackgroundContainer].compactMap { $0 } as [UIView]) + self.rightBackgroundContainers
             for container in containers {
@@ -413,25 +390,7 @@ public final class NavigationBarComponent: Component {
                     container.removeFromSuperview()
                 } else if container.superview == nil {
                     self.addSubview(container)
-                    // Shadow: a capsule back from a transition no longer lit up or grew under a finger (any chat opened
-                    // and closed did it); a new effect view presses cleanly.
-                    (container as? GlassContextExtractableContainer)?.renewGlass()
                 }
-            }
-        }
-
-        /// Shadow: every capsule gets a new effect view (`GlassBackgroundView.renewNativeView`), for a host that has just
-        /// reset the glass container the capsules are in (`readaptToBackdrop`): UIKit's press on the old effect views
-        /// stopped working after it.
-        public func renewCapsuleGlass() {
-            for container in [self.leftButtonsBackgroundContainer].compactMap({ $0 }) + self.rightBackgroundContainers {
-                if container.superview == nil {
-                    continue
-                }
-                if container === self.leftButtonsBackgroundContainer && self.isLeftCapsuleLent {
-                    continue
-                }
-                container.renewGlass()
             }
         }
         /// iPhone Duo: the side column (back circle and capsule), laid out in its own bounds. The host adds it to

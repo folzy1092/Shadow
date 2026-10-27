@@ -86,8 +86,6 @@ public final class NavigationBarNode: ASDisplayNode, NavigationBar, NavigationBa
     /// After a transition: the transition's glass still animating above this bar, which keeps its own capsules out
     /// until it hands over (`holdGlass`).
     private let glassHold = NavigationBarGlassHold()
-    /// Shadow: whether the bar's glass was last hidden for a transition (`applyGlassVisibility`).
-    private var isGlassDetached = false
     private var currentRowFrame: CGRect = CGRect()
     public var transitionContentFrameUpdated: ((CGRect) -> Void)?
 
@@ -665,8 +663,6 @@ public final class NavigationBarNode: ASDisplayNode, NavigationBar, NavigationBa
     private func readaptGlass() {
         self.glassContainer.readaptToBackdrop()
         self.sideColumnContainer?.readaptToBackdrop()
-        // Shadow: the capsules' press does not survive the container's reset; new effect views press again.
-        self.rowView?.renewCapsuleGlass()
         self.glassReadaptationCountForTesting += 1
     }
 
@@ -900,40 +896,12 @@ public final class NavigationBarNode: ASDisplayNode, NavigationBar, NavigationBa
 
     private func applyGlassVisibility() {
         let detached = self.transitionRole != nil || self.glassHold.isHeld
-        let wasDetached = self.isGlassDetached
-        self.isGlassDetached = detached
         // While the transition's glass lingers above the bar it draws the column's capsules too.
         self.columnHost.alpha = self.columnHostTargetAlpha
         self.rowView?.plattersDetached = detached
         // And the title's glass pill, which it treats as the second right platter.
         if let titleView = self.titleView as? NavigationBarGlassPillTitleView {
             titleView.isGlassPillDetached = detached && self.transitionTitlePill != nil
-        }
-        if wasDetached && !detached {
-            self.readaptGlassOnHandover()
-        }
-    }
-
-    /// Shadow: the bar's own glass was laid out while the transition drew it (the chat's title pill is made during the
-    /// push, hidden), and UIKit's glass keeps how it adapted when it joined the container. It adapts again in the same
-    /// commit that shows it, so the first frame of the bar's own glass is already the adapted one (the transition's
-    /// glass adapts again as the screens settle, `NavigationBarTransitionRenderer.readaptGlass`).
-    private func readaptGlassOnHandover() {
-        guard self.view.window != nil else {
-            return
-        }
-        self.glassReadaptationGeneration += 1
-        let generation = self.glassReadaptationGeneration
-        let readapt: () -> Void = { [weak self] in
-            guard let self, self.glassReadaptationGeneration == generation else {
-                return
-            }
-            self.readaptGlass()
-        }
-        if let rowView = self.rowView {
-            rowView.afterInPlaceAnimations(readapt)
-        } else {
-            readapt()
         }
     }
 
@@ -977,6 +945,8 @@ public final class NavigationBarNode: ASDisplayNode, NavigationBar, NavigationBa
 
     func enteredHierarchy() {
         self.glassHold.barEnteredHierarchy()
+        // Shadow: стекло подстроилось под фон анимации перехода
+        self.readaptGlass(after: .animated(duration: 0.5, curve: .spring))
     }
 
     public var componentTransitionState: NavigationBarComponentTransitionState? {
