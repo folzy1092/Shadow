@@ -105,6 +105,7 @@ submodules/SettingsUI/Sources/ShadowChatPrivacyController.swift
 submodules/SettingsUI/Sources/ShadowChatStatsUI.swift
 submodules/SettingsUI/Sources/ShadowFeedSettingsController.swift
 submodules/SettingsUI/Sources/ShadowHeaderButtonsController.swift
+submodules/SettingsUI/Sources/ShadowInputToolbarSettingsController.swift
 submodules/SettingsUI/Sources/ShadowMessageFilterEditController.swift
 submodules/SettingsUI/Sources/ShadowMessageFiltersController.swift
 submodules/SettingsUI/Sources/ShadowMessageScreenshotSettingsController.swift

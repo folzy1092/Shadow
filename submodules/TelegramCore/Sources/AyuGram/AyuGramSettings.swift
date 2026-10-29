@@ -206,6 +206,13 @@ public struct AyuGramSettings: Codable, Equatable {
     // Then «отправляет…» (voice, round video) for this long before it is sent;
     // 0 skips that phase.
     public var paperclipPrankSendSeconds: Int32 = ShadowPaperclip.defaultPrankSendSeconds
+    // Shadow 2.0.0: «Панель форматирования» under the input field
+    // (ShadowInputToolbar), with these buttons in this order.
+    public var inputToolbar: Bool = true
+    public var inputToolbarButtons: String = ShadowInputToolbar.defaultButtons
+    // «Перевод при отправке»: the language pairs offered when it is turned on
+    // (ShadowInputTranslation); the active pair is device state.
+    public var inputTranslateTemplates: String = ShadowInputTranslation.defaultTemplates
     // Local history of when contacts were online (ShadowOnlineHistory).
     public var onlineHistory: Bool = false
     // With onlineHistorySelectedOnly, only the chats in onlineHistoryPeerIds
@@ -517,6 +524,7 @@ public struct AyuGramSettings: Codable, Equatable {
         settings.unlimitedFavorites = false
         settings.localChatTranslation = false
         settings.paperclipMenu = false
+        settings.inputToolbar = false
         return settings
     }
 
@@ -854,6 +862,9 @@ public struct AyuGramSettings: Codable, Equatable {
         self.paperclipPrankImitation = ((try container.decodeIfPresent(Int32.self, forKey: "paperclipPrankImitation")) ?? 1) != 0
         self.paperclipPrankSeconds = ShadowPaperclip.normalizedPrankSeconds((try container.decodeIfPresent(Int32.self, forKey: "paperclipPrankSeconds")) ?? ShadowPaperclip.defaultPrankSeconds)
         self.paperclipPrankSendSeconds = ShadowPaperclip.normalizedPrankSendSeconds((try container.decodeIfPresent(Int32.self, forKey: "paperclipPrankSendSeconds")) ?? ShadowPaperclip.defaultPrankSendSeconds)
+        self.inputToolbar = ((try container.decodeIfPresent(Int32.self, forKey: "inputToolbar")) ?? 1) != 0
+        self.inputToolbarButtons = ShadowInputToolbar.normalizedButtons((try container.decodeIfPresent(String.self, forKey: "inputToolbarButtons")) ?? ShadowInputToolbar.defaultButtons)
+        self.inputTranslateTemplates = ShadowInputTranslation.normalizedTemplates((try container.decodeIfPresent(String.self, forKey: "inputTranslateTemplates")) ?? ShadowInputTranslation.defaultTemplates)
         self.onlineHistory = ((try container.decodeIfPresent(Int32.self, forKey: "onlineHistory")) ?? 0) != 0
         self.onlineHistorySelectedOnly = ((try container.decodeIfPresent(Int32.self, forKey: "onlineHistorySelectedOnly")) ?? 0) != 0
         self.onlineHistoryPeerIds = (try? container.decodeIfPresent([Int64].self, forKey: "onlineHistoryPeerIds")) ?? []
@@ -989,6 +1000,9 @@ public struct AyuGramSettings: Codable, Equatable {
         try container.encode((self.paperclipPrankImitation ? 1 : 0) as Int32, forKey: "paperclipPrankImitation")
         try container.encode(self.paperclipPrankSeconds, forKey: "paperclipPrankSeconds")
         try container.encode(self.paperclipPrankSendSeconds, forKey: "paperclipPrankSendSeconds")
+        try container.encode((self.inputToolbar ? 1 : 0) as Int32, forKey: "inputToolbar")
+        try container.encode(self.inputToolbarButtons, forKey: "inputToolbarButtons")
+        try container.encode(self.inputTranslateTemplates, forKey: "inputTranslateTemplates")
         try container.encode((self.onlineHistory ? 1 : 0) as Int32, forKey: "onlineHistory")
         try container.encode((self.onlineHistorySelectedOnly ? 1 : 0) as Int32, forKey: "onlineHistorySelectedOnly")
         try container.encode(self.onlineHistoryPeerIds, forKey: "onlineHistoryPeerIds")

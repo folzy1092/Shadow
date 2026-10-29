@@ -28,9 +28,44 @@ public enum ShadowPaperclip {
     // «Печатает», «Записывает голосовое», «Записывает кружок».
     public static let defaultActions = "a0,a1,a2"
 
+    // Chat tools (1.15.0): they act on this chat or its input field and send
+    // nothing by themselves.
+    public enum Tool: Int32, CaseIterable {
+        // Scrolls the chat to its very first message.
+        case scrollToStart = 0
+        // Inserts mentions of every member (not bots, not the account) into the
+        // input field at the caret; groups only.
+        case mentionAll = 1
+        // Turns the input translation (ShadowInputTranslation) on or off.
+        case translate = 2
+
+        public var title: String {
+            switch self {
+            case .scrollToStart:
+                return "К началу переписки"
+            case .mentionAll:
+                return "Упомянуть всех"
+            case .translate:
+                return "Перевод при отправке"
+            }
+        }
+
+        public var icon: String {
+            switch self {
+            case .scrollToStart:
+                return "arrow.up.to.line"
+            case .mentionAll:
+                return "at"
+            case .translate:
+                return "character.bubble"
+            }
+        }
+    }
+
     public enum Action: Hashable {
         case imitation(ShadowActivityImitationMode)
         case prank(id: String)
+        case tool(Tool)
 
         public var storageId: String {
             switch self {
@@ -38,6 +73,8 @@ public enum ShadowPaperclip {
                 return "a\(mode.rawValue)"
             case let .prank(id):
                 return "p\(id)"
+            case let .tool(tool):
+                return "t\(tool.rawValue)"
             }
         }
 
@@ -58,6 +95,11 @@ public enum ShadowPaperclip {
                     return nil
                 }
                 self = .prank(id: ShadowPaperclip.prankId(channel: link.channel, messageId: link.messageId))
+            case "t":
+                guard let raw = Int32(rest), let tool = Tool(rawValue: raw) else {
+                    return nil
+                }
+                self = .tool(tool)
             default:
                 return nil
             }
@@ -209,7 +251,7 @@ public enum ShadowPaperclip {
     public static func menuActions(_ actions: [Action], pranks: [Prank]) -> [Action] {
         return actions.filter { action in
             switch action {
-            case .imitation:
+            case .imitation, .tool:
                 return true
             case let .prank(id):
                 return pranks.contains(where: { $0.id == id })

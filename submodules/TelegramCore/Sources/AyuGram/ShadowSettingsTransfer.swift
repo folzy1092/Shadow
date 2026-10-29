@@ -109,6 +109,7 @@ public enum ShadowSettingsTransfer {
         "localChatTranslation": \.localChatTranslation,
         "paperclipMenu": \.paperclipMenu,
         "paperclipPrankImitation": \.paperclipPrankImitation,
+        "inputToolbar": \.inputToolbar,
         "onlineHistory": \.onlineHistory,
         "onlineHistorySelectedOnly": \.onlineHistorySelectedOnly,
         "saveViewedStories": \.saveViewedStories,
@@ -156,6 +157,8 @@ public enum ShadowSettingsTransfer {
         }
         values["editedIndicatorText"] = .text(settings.editedIndicatorText)
         values["paperclipActions"] = .text(settings.paperclipActions)
+        values["inputToolbarButtons"] = .text(settings.inputToolbarButtons)
+        values["inputTranslateTemplates"] = .text(settings.inputTranslateTemplates)
         values["deletedIndicatorText"] = .text(settings.deletedIndicatorText)
         values["spoofProfileIdValue"] = .text(String(settings.spoofProfileIdValue.prefix(64)))
         values["spoofProfileDcValue"] = .text(String(settings.spoofProfileDcValue.prefix(64)))
@@ -214,6 +217,8 @@ public enum ShadowSettingsTransfer {
                 switch key {
                 case "editedIndicatorText": updated.editedIndicatorText = text
                 case "paperclipActions": updated.paperclipActions = ShadowPaperclip.normalizedActions(text)
+                case "inputToolbarButtons": updated.inputToolbarButtons = ShadowInputToolbar.normalizedButtons(text)
+                case "inputTranslateTemplates": updated.inputTranslateTemplates = ShadowInputTranslation.normalizedTemplates(text)
                 case "deletedIndicatorText": updated.deletedIndicatorText = text
                 case "spoofProfileIdValue": updated.spoofProfileIdValue = text
                 case "spoofProfileDcValue": updated.spoofProfileDcValue = text

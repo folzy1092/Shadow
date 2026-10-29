@@ -825,6 +825,8 @@ private final class AyuCustomizationArguments {
     var openChatBanners: () -> Void = {}
     var selectBusinessBotPinnedLayout: () -> Void = {}
     var openPaperclipActions: () -> Void = {}
+    var openInputToolbarButtons: () -> Void = {}
+    var openInputTranslateTemplates: () -> Void = {}
     var editPaperclipPrankSeconds: () -> Void = {}
     var editPaperclipPrankSendSeconds: () -> Void = {}
     var selectMediaSendQuality: () -> Void = {}
@@ -1000,6 +1002,9 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
     case paperclipPrankImitation(Bool)
     case paperclipPrankSeconds(Int32)
     case paperclipPrankSendSeconds(Int32)
+    case inputToolbar(Bool)
+    case inputToolbarButtons(Int)
+    case inputTranslateTemplates(Int)
     case compactChatList(Bool)
     case chatBanners(Bool)
     case chatBannersList(Int)
@@ -1078,7 +1083,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .appearanceHeader, .showMessageSeconds, .editedIndicatorAsPencil, .editedIndicatorText, .deletedIndicatorText, .regularEmojiFirst, .doubleTapToEdit, .showExactLastSeen, .showExactLastSeenSeconds, .wideChannelPosts, .showExactViewCounts, .showForwardCount, .appearanceFooter:
             return AyuCustomizationSection.appearance.rawValue
         case .headerButtons: return AyuCustomizationSection.chats.rawValue
-        case .chatsHeader, .hideAllChatsFolder, .hideStoriesBar, .hideGiftButton, .hideGreetingSticker, .hidePremiumBadges, .hideSponsoredMessages, .unlimitedPinnedChats, .unlimitedFavorites, .localChatTranslation, .paperclipMenu, .paperclipActions, .paperclipPrankImitation, .paperclipPrankSeconds, .paperclipPrankSendSeconds, .compactChatList, .chatBanners, .chatBannersList, .chatsFooter:
+        case .chatsHeader, .hideAllChatsFolder, .hideStoriesBar, .hideGiftButton, .hideGreetingSticker, .hidePremiumBadges, .hideSponsoredMessages, .unlimitedPinnedChats, .unlimitedFavorites, .localChatTranslation, .paperclipMenu, .paperclipActions, .paperclipPrankImitation, .paperclipPrankSeconds, .paperclipPrankSendSeconds, .inputToolbar, .inputToolbarButtons, .inputTranslateTemplates, .compactChatList, .chatBanners, .chatBannersList, .chatsFooter:
             return AyuCustomizationSection.chats.rawValue
         case .businessBotHeader, .businessBotPinned, .businessBotPinnedLayout, .businessBotPinnedFirst, .businessBotPinnedCompact, .businessBotFooter:
             return AyuCustomizationSection.businessBot.rawValue
@@ -1157,6 +1162,9 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .paperclipPrankImitation: return 135
         case .paperclipPrankSeconds: return 136
         case .paperclipPrankSendSeconds: return 137
+        case .inputToolbar: return 138
+        case .inputToolbarButtons: return 139
+        case .inputTranslateTemplates: return 140
         case .monochromeSettingsIcons: return 106
         case .settingsIconBackground: return 107
         case .settingsIconGlyph: return 108
@@ -1227,6 +1235,9 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .paperclipPrankImitation: return (12, 14)
         case .paperclipPrankSeconds: return (12, 15)
         case .paperclipPrankSendSeconds: return (12, 16)
+        case .inputToolbar: return (12, 17)
+        case .inputToolbarButtons: return (12, 18)
+        case .inputTranslateTemplates: return (12, 19)
         // Right after the chats section (chatsFooter = 13).
         case .businessBotHeader: return (13, 1)
         case .businessBotPinned: return (13, 2)
@@ -1409,6 +1420,14 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
             return ItemListDisclosureItem(presentationData: presentationData, title: "Секунд записи", label: "\(seconds) с", labelStyle: .detailText, sectionId: self.section, style: .blocks, action: arguments.editPaperclipPrankSeconds)
         case let .paperclipPrankSendSeconds(seconds):
             return ItemListDisclosureItem(presentationData: presentationData, title: "Секунд отправки", label: seconds == 0 ? "Выкл." : "\(seconds) с", labelStyle: .detailText, sectionId: self.section, style: .blocks, action: arguments.editPaperclipPrankSendSeconds)
+        case let .inputToolbar(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Панель форматирования", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.updateSetting { $0.inputToolbar = value }
+            })
+        case let .inputToolbarButtons(count):
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Кнопки панели", label: "\(count)", labelStyle: .detailText, sectionId: self.section, style: .blocks, action: arguments.openInputToolbarButtons)
+        case let .inputTranslateTemplates(count):
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Шаблоны перевода", label: "\(count) из \(ShadowInputTranslation.maxTemplates)", labelStyle: .detailText, sectionId: self.section, style: .blocks, action: arguments.openInputTranslateTemplates)
         case let .unlimitedFavorites(value):
             return ItemListSwitchItem(presentationData: presentationData, title: "Безлимитное избранное", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 arguments.updateSetting { $0.unlimitedFavorites = value }
@@ -1649,6 +1668,11 @@ private func ayuCustomizationEntries(settings: AyuGramSettings, chatVoiceSpeedCo
             entries.append(.paperclipPrankSendSeconds(settings.paperclipPrankSendSeconds))
         }
     }
+    entries.append(.inputToolbar(settings.inputToolbar))
+    if settings.inputToolbar {
+        entries.append(.inputToolbarButtons(ShadowInputToolbar.parseButtons(settings.inputToolbarButtons).count))
+    }
+    entries.append(.inputTranslateTemplates(ShadowInputTranslation.parseTemplates(settings.inputTranslateTemplates).count))
     entries.append(.chatsFooter)
 
     entries.append(.businessBotHeader)
@@ -2010,6 +2034,12 @@ func ayuCustomizationController(context: AccountContext, focus: ShadowSettingsSe
     }
     arguments.openPaperclipActions = { [weak controller] in
         controller?.push(shadowPaperclipActionsController(context: context))
+    }
+    arguments.openInputToolbarButtons = { [weak controller] in
+        controller?.push(shadowInputToolbarButtonsController(context: context))
+    }
+    arguments.openInputTranslateTemplates = { [weak controller] in
+        controller?.push(shadowInputTranslateTemplatesController(context: context))
     }
     arguments.editPaperclipPrankSeconds = {
         let current = currentAyuGramSettings(accountId: context.account.id).paperclipPrankSeconds

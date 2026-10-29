@@ -138,6 +138,9 @@
 | `shadow://customization/paperclip-prank-recording` | Приколы: имитировать запись |
 | `shadow://customization/paperclip-prank-seconds` | Секунд записи (открыть) |
 | `shadow://customization/paperclip-prank-sending` | Секунд отправки (открыть) |
+| `shadow://customization/input-toolbar` | Панель форматирования |
+| `shadow://customization/input-toolbar-buttons` | Кнопки панели (открыть) |
+| `shadow://customization/translate-templates` | Шаблоны перевода (открыть) |
 | `shadow://customization/unlimited-favorites` | Безлимитное избранное (стикеры и GIF) |
 | `shadow://customization/compact-chats` | Компактный список чатов |
 | `shadow://customization/chat-banners` | Фоны чатов |

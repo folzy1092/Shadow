@@ -30,12 +30,16 @@ private final class ShadowPaperclipActionsArguments {
 }
 
 private enum ShadowPaperclipActionsSection: Int32 {
+    case tools
     case imitation
     case userPranks
     case pranks
 }
 
 private enum ShadowPaperclipActionsEntry: ItemListNodeEntry {
+    case toolsHeader(Int)
+    case tool(Int32, ShadowPaperclip.Tool, Int?)
+    case toolsFooter
     case imitationHeader(Int)
     case imitation(Int32, ShadowActivityImitationMode, Int?)
     case imitationFooter
@@ -51,6 +55,8 @@ private enum ShadowPaperclipActionsEntry: ItemListNodeEntry {
 
     var section: ItemListSectionId {
         switch self {
+        case .toolsHeader, .tool, .toolsFooter:
+            return ShadowPaperclipActionsSection.tools.rawValue
         case .imitationHeader, .imitation, .imitationFooter:
             return ShadowPaperclipActionsSection.imitation.rawValue
         case .userPranksHeader, .userPrank, .userPrankAdd, .userPrankRemove, .userPranksFooter:
@@ -62,6 +68,9 @@ private enum ShadowPaperclipActionsEntry: ItemListNodeEntry {
 
     var stableId: Int32 {
         switch self {
+        case .toolsHeader: return -100
+        case let .tool(index, _, _): return -90 + index
+        case .toolsFooter: return -10
         case .imitationHeader: return 0
         case let .imitation(index, _, _): return 100 + index
         case .imitationFooter: return 499
@@ -92,6 +101,14 @@ private enum ShadowPaperclipActionsEntry: ItemListNodeEntry {
     func item(presentationData: ItemListPresentationData, arguments: Any) -> ListViewItem {
         let arguments = arguments as! ShadowPaperclipActionsArguments
         switch self {
+        case let .toolsHeader(count):
+            return ItemListSectionHeaderItem(presentationData: presentationData, text: "ИНСТРУМЕНТЫ ЧАТА · ВЫБРАНО \(count) ИЗ \(ShadowPaperclip.maxActions)", sectionId: self.section)
+        case let .tool(_, tool, position):
+            return ItemListCheckboxItem(presentationData: presentationData, title: ShadowPaperclipActionsEntry.title(tool.title, position: position), style: .left, checked: position != nil, zeroSeparatorInsets: false, sectionId: self.section, action: {
+                arguments.toggle(.tool(tool))
+            })
+        case .toolsFooter:
+            return ItemListTextItem(presentationData: presentationData, text: .plain("«К началу переписки» листает чат к самому первому сообщению. «Упомянуть всех» вставляет в поле ввода всех участников группы (кроме ботов и тебя) — @юзернейм или имя-упоминание, если юзернейма нет; ничего не отправляется само. «Перевод при отправке» включает и выключает перевод по шаблону."), sectionId: self.section)
         case let .imitationHeader(count):
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "ИМИТАЦИЯ · ВЫБРАНО \(count) ИЗ \(ShadowPaperclip.maxActions)", sectionId: self.section)
         case let .imitation(_, mode, position):
@@ -245,7 +262,12 @@ public func shadowPaperclipActionsController(context: AccountContext) -> ViewCon
         func position(_ action: ShadowPaperclip.Action) -> Int? {
             return actions.firstIndex(of: action).map { $0 + 1 }
         }
-        var entries: [ShadowPaperclipActionsEntry] = [.imitationHeader(actions.count)]
+        var entries: [ShadowPaperclipActionsEntry] = [.toolsHeader(actions.count)]
+        for (index, tool) in ShadowPaperclip.Tool.allCases.enumerated() {
+            entries.append(.tool(Int32(index), tool, position(.tool(tool))))
+        }
+        entries.append(.toolsFooter)
+        entries.append(.imitationHeader(actions.count))
         for (index, mode) in ShadowActivityImitationMode.menuOrder.enumerated() {
             entries.append(.imitation(Int32(index), mode, position(.imitation(mode))))
         }

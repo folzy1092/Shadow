@@ -44,6 +44,10 @@ struct ActivityImitationTests {
         check(Clip.toggled([.imitation(.typing)], .imitation(.typing)) == [], "Uncheck")
         check(Clip.toggled([.imitation(.typing)], .prank(id: "a/1")) == [.imitation(.typing), .prank(id: "a/1")], "Check appends")
         check(Clip.encodeActions([.imitation(.recordingRound), .prank(id: "kartinki5222/93")]) == "a2,pkartinki5222/93", "Encode")
+        // 1.15.0: chat tools.
+        check(Clip.parseActions("t0,t1,t2,t9,tx,t1") == [.tool(.scrollToStart), .tool(.mentionAll), .tool(.translate)], "Tools parsed, unknown and duplicate dropped")
+        check(Clip.encodeActions([.tool(.mentionAll), .imitation(.typing)]) == "t1,a0", "Tools encoded")
+        check(Clip.menuActions([.tool(.scrollToStart), .prank(id: "gone/1")], pranks: []) == [.tool(.scrollToStart)], "Tools always stay in the menu")
 
         check(Clip.parsePrankLink("https://t.me/kartinki5222/93").map { "\($0.channel)/\($0.messageId)" } == "kartinki5222/93", "Plain link")
         check(Clip.parsePrankLink(" t.me/kartinki5222/93?single ").map { "\($0.channel)/\($0.messageId)" } == "kartinki5222/93", "Query dropped")

@@ -40,6 +40,8 @@ def main():
         ('stars-balance', 'submodules/TelegramCore/Sources/AyuGram/ShadowStarsBalance.swift', 'Tests/ShadowSettings/StarsBalanceTests.swift'),
         ('fake-gift', 'submodules/TelegramCore/Sources/AyuGram/ShadowFakeGift.swift', 'Tests/ShadowSettings/FakeGiftTests.swift'),
         ('silent-send', 'submodules/TelegramCore/Sources/AyuGram/ShadowSilentSend.swift', 'Tests/ShadowSettings/SilentSendTests.swift'),
+        ('input-translation', 'submodules/TelegramCore/Sources/AyuGram/ShadowInputTranslation.swift', 'Tests/ShadowSettings/InputTranslationTests.swift'),
+        ('input-toolbar', ('submodules/TelegramCore/Sources/AyuGram/ShadowInputToolbar.swift', 'submodules/TelegramCore/Sources/AyuGram/ShadowPaperclip.swift', 'submodules/TelegramCore/Sources/AyuGram/ShadowActivityImitationMode.swift'), 'Tests/ShadowSettings/InputToolbarTests.swift'),
         ('activity-imitation', ('submodules/TelegramCore/Sources/AyuGram/ShadowActivityImitationMode.swift', 'submodules/TelegramCore/Sources/AyuGram/ShadowPaperclip.swift'), 'Tests/ShadowSettings/ActivityImitationTests.swift'),
         ('local-pins', 'submodules/TelegramCore/Sources/AyuGram/ShadowLocalPins.swift', 'Tests/ShadowSettings/LocalPinsTests.swift'),
         ('chat-titles', 'submodules/TelegramCore/Sources/AyuGram/ShadowChatTitles.swift', 'Tests/ShadowSettings/ChatTitlesTests.swift'),

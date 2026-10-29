@@ -90,6 +90,11 @@ struct DocumentTests {
         check(translation.settings["localChatTranslation"] == .bool(false), "Local chat translation toggle is portable")
         let imitation = try ShadowSettingsDocument.decode(ShadowSettingsDocument(settings: ["paperclipMenu": .bool(false)]).encoded())
         check(imitation.settings["paperclipMenu"] == .bool(false), "Activity imitation toggle is portable")
+        // 2.0.0: formatting panel and translation pairs.
+        let toolbar = try ShadowSettingsDocument.decode(ShadowSettingsDocument(settings: ["inputToolbar": .bool(false), "inputToolbarButtons": .text("b,i,tr"), "inputTranslateTemplates": .text("ru>en,ru>kk")]).encoded())
+        check(toolbar.settings["inputToolbar"] == .bool(false) && toolbar.settings["inputToolbarButtons"] == .text("b,i,tr"), "Formatting panel is portable")
+        check(toolbar.settings["inputTranslateTemplates"] == .text("ru>en,ru>kk"), "Translation pairs are portable")
+        check((try? ShadowSettingsDocument.decode(ShadowSettingsDocument(settings: ["inputToolbarButtons": .text(String(repeating: "b,", count: 150))]).encoded())) == nil, "Oversized button list refused")
         let favorites = try ShadowSettingsDocument.decode(ShadowSettingsDocument(settings: ["unlimitedFavorites": .bool(false)]).encoded())
         check(favorites.settings["unlimitedFavorites"] == .bool(false), "Unlimited favourites toggle is portable")
         let quality = try ShadowSettingsDocument.decode(ShadowSettingsDocument(settings: ["mediaSendQuality": .integer(2)]).encoded())
