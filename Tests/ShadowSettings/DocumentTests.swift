@@ -46,7 +46,8 @@ struct DocumentTests {
         expectFailure("Negative cleanup interval") { _ = try ShadowSettingsDocument.decode(fixture("{\"mediaAutoCleanInterval\":-1}")) }
         expectFailure("Invalid cleanup interval") { _ = try ShadowSettingsDocument.decode(fixture("{\"mediaAutoCleanInterval\":42}")) }
         expectFailure("Edit history retention out of range") { _ = try ShadowSettingsDocument.decode(fixture("{\"editHistoryRetention\":10}")) }
-        check((try ShadowSettingsDocument.decode(fixture("{\"editHistoryRetention\":9}"))).settings["editHistoryRetention"] == .integer(9), "Edit history retention is transferable")
+        let retention = try ShadowSettingsDocument.decode(fixture("{\"editHistoryRetention\":9}"))
+        check(retention.settings["editHistoryRetention"] == .integer(9), "Edit history retention is transferable")
         expectFailure("Integer overflow") { _ = try ShadowSettingsDocument.decode(fixture("{\"attachmentSizeLimit\":9223372036854775808}")) }
         expectFailure("Empty settings") { _ = try ShadowSettingsDocument.decode(fixture("{}")) }
         expectFailure("Only unknown fields") { _ = try ShadowSettingsDocument.decode(fixture("{\"token\":\"secret\"}")) }
