@@ -29,6 +29,11 @@ extension ChatControllerImpl {
     }
 
     func forwardMessages(messages: [EngineRawMessage], options: ChatInterfaceForwardOptionsState? = nil, resetCurrent: Bool, asCopy: Bool = false) {
+        // Shadow: whichever button started it (the selection panel's Forward,
+        // the message menu, a forward draft being redirected), a forward of a
+        // protected or secret message goes the copy way with its progress toast:
+        // the server rejects it as a native forward.
+        let asCopy = asCopy || ShadowProtectedCopy.needsCopy(messages)
         let _ = self.presentVoiceMessageDiscardAlert(action: { [weak self] in
             guard let self else {
                 return

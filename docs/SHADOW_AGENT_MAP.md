@@ -860,6 +860,28 @@ UI-проекция настроек выбирается в `TelegramRootContro
   берётся из метаданных, **не из mtime** (mtime у hard-link общий с кэшем).
 - История правок: `AyuEditHistory.swift` + `SavedMessageEditsAttribute`.
 
+## 6a. Пересылка защищённого (копией)
+
+- Сервер отклоняет нативную пересылку из чата с защитой контента (noforwards,
+  флаг сообщения `.CopyProtected`) и секретных медиа. Решает
+  `ShadowProtectedCopy.needsCopy` (TelegramCore, `AyuGram/ShadowProtectedCopy.swift`):
+  `isServerCopyProtected()` или `containsSecretMedia` — **не** `isCopyProtected()`,
+  который тумблер «Сохранять защищённое» (`allowSaveRestrictedContent`) делает
+  false везде (из-за этого галерея, профиль и поиск показывали обычную
+  пересылку, и сервер её отбивал).
+- Сетка безопасности — публичный `enqueueMessages` (`EnqueueMessage.swift`):
+  каждый `.forward` с защищённым источником заменяется копией
+  (`replacingProtectedForwards`: скачать → `LocalFileMediaResource` hard-link →
+  новое сообщение; опции отправки и correlation id сохраняются, на каждое
+  входное сообщение — один id, nil если копию не сделать). Через него идут чат,
+  черновик пересылки, ShareController в приложении (`shareLegacy`), профиль,
+  поиск, экран «Поделиться», «дата», приколы скрепки.
+- Чат (`ChatControllerImpl.forwardMessages`) сам включает `asCopy` для
+  защищённых и строит копии заранее с тостом прогресса (`ayuPrepareCopyBatch`).
+- Не покрыто: повторная отправка уже упавшей пересылки (`resendMessages`) и
+  share-расширение (`standaloneSendEnqueueMessages`). Контракты:
+  `test_protected_forward_contracts.py`.
+
 ## 5p. Меню скрепки, имитация активности, приколы (1.13.7)
 
 - «Меню скрепки» (`paperclipMenu`, **выкл** по умолчанию — скрепка как в

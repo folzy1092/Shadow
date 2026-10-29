@@ -54,7 +54,10 @@ class ShadowPrivacyFeatures(unittest.TestCase):
 
     def test_forward_copy_owns_a_local_mediabox_copy(self):
         forward = (UI / "Sources/ChatControllerForwardMessages.swift").read_text()
-        copy = (UI / "Sources/ChatControllerForwardAsCopy.swift").read_text()
+        # The copy engine lives in TelegramCore so enqueueMessages can use it too.
+        copy = (CORE / "AyuGram/ShadowProtectedCopy.swift").read_text(encoding="utf-8")
+        chatCopy = (UI / "Sources/ChatControllerForwardAsCopy.swift").read_text(encoding="utf-8")
+        self.assertIn("ShadowProtectedCopy.build(account: self.context.account", chatCopy)
         # Both entry points (multi-peer share and single peer) build the copy
         # through one place, behind a progress toast.
         self.assertEqual(forward.count("ayuPrepareCopyBatch(messages"), 2)

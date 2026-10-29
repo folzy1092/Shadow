@@ -728,9 +728,44 @@ private func opportunisticallyTransformOutgoingMedia(network: Network, postbox: 
 }
 
 public func enqueueMessages(account: Account, peerId: PeerId, messages: [EnqueueMessage]) -> Signal<[MessageId?], NoError> {
-    return account.postbox.transaction { currentAyuGramSettings(transaction: $0) }
-    |> mapToSignal { settings in
-        return ayuEnqueueMessages(account: account, peerId: peerId, messages: messages, settings: settings)
+    return account.postbox.transaction { transaction -> (AyuGramSettings, [MessageId: Message]) in
+        // Shadow: the sources of native forwards the server would reject
+        // (content protection, secret media). They are re-sent as copies
+        // (ShadowProtectedCopy), wherever the forward was started.
+        var protectedSources: [MessageId: Message] = [:]
+        for message in messages {
+            if case let .forward(source, _, _, _, _) = message, let sourceMessage = transaction.getMessage(source), ShadowProtectedCopy.needsCopy(sourceMessage) {
+                protectedSources[source] = sourceMessage
+            }
+        }
+        return (currentAyuGramSettings(transaction: transaction), protectedSources)
+    }
+    |> mapToSignal { settings, protectedSources -> Signal<[MessageId?], NoError> in
+        if protectedSources.isEmpty {
+            return ayuEnqueueMessages(account: account, peerId: peerId, messages: messages, settings: settings)
+        }
+        return ShadowProtectedCopy.replacingProtectedForwards(account: account, messages: messages, protectedSources: protectedSources)
+        |> mapToSignal { replaced -> Signal<[MessageId?], NoError> in
+            // One id per input message, in order: nil where no copy could be made.
+            let sendable = replaced.compactMap { $0 }
+            if sendable.isEmpty {
+                return .single(replaced.map { _ in nil })
+            }
+            return ayuEnqueueMessages(account: account, peerId: peerId, messages: sendable, settings: settings)
+            |> map { ids -> [MessageId?] in
+                var result: [MessageId?] = []
+                var next = 0
+                for message in replaced {
+                    if message != nil, next < ids.count {
+                        result.append(ids[next])
+                        next += 1
+                    } else {
+                        result.append(nil)
+                    }
+                }
+                return result
+            }
+        }
     }
 }
 
