@@ -1185,6 +1185,25 @@ func shadowChatContextSubmenuItems(context: AccountContext, peerId: EnginePeer.I
             shadowRenameChat(context: context, peerId: peerId, parentController: chatListController)
         })))
 
+        // «Удалить мои сообщения» (ShadowDeleteOwnMessages): private chats and
+        // groups; a broadcast channel is refused after the period is chosen.
+        if peerId.namespace == Namespaces.Peer.CloudUser || peerId.namespace == Namespaces.Peer.CloudGroup || peerId.namespace == Namespaces.Peer.CloudChannel {
+            items.append(.action(ContextMenuActionItem(text: "Удалить мои сообщения", textColor: .destructive, icon: { theme in
+                return generateTintedImage(image: UIImage(systemName: "trash"), color: theme.contextMenu.destructiveColor)
+            }, action: { c, _ in
+                var subItems: [ContextMenuItem] = [shadowContextBackItem(strings: strings), .separator]
+                for period in ShadowDeleteOwnMessages.Period.allCases {
+                    subItems.append(.action(ContextMenuActionItem(text: period.title, icon: { _ in
+                        return nil
+                    }, action: { _, f in
+                        f(.default)
+                        shadowConfirmDeleteOwnMessages(context: context, peerId: peerId, period: period, parentController: chatListController)
+                    })))
+                }
+                c?.pushItems(items: .single(ContextController.Items(content: .list(subItems))))
+            })))
+        }
+
         // «Подарок для розыгрыша» (ShadowFakeGift): only on this device.
         if peerId.namespace == Namespaces.Peer.CloudUser {
             items.append(.action(ContextMenuActionItem(text: "Подарок для розыгрыша", icon: { theme in
@@ -1224,6 +1243,84 @@ func shadowAddFakeGiftPrompt(context: AccountContext, peerId: EnginePeer.Id, par
         parentController?.present(priceController, in: .window(.root))
     })
     parentController?.present(controller, in: .window(.root))
+}
+
+// Shadow: «Удалить мои сообщения» (ShadowDeleteOwnMessages): asks, then deletes
+// for everyone with a progress toast that has «Стоп».
+func shadowConfirmDeleteOwnMessages(context: AccountContext, peerId: EnginePeer.Id, period: ShadowDeleteOwnMessages.Period, parentController: ViewController?) {
+    let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+    let _ = (context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: peerId))
+    |> deliverOnMainQueue).startStandalone(next: { [weak parentController] peer in
+        guard let peer else {
+            return
+        }
+        guard ShadowDeleteOwnMessages.isAvailable(peer: peer, accountPeerId: context.account.peerId) else {
+            parentController?.present(textAlertController(context: context, title: nil, text: "В каналах так нельзя: удалить свои сообщения можно только в личных чатах и группах.", actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+            return
+        }
+        let periodText: String
+        switch period {
+        case .all:
+            periodText = "все ваши сообщения"
+        default:
+            periodText = "ваши сообщения \(period.title.lowercased())"
+        }
+        let text = "Shadow удалит \(periodText) в чате «\(peer.compactDisplayTitle)» у всех участников. Вернуть их будет нельзя."
+        parentController?.present(textAlertController(context: context, title: "Удалить мои сообщения?", text: text, actions: [
+            TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {}),
+            TextAlertAction(type: .destructiveAction, title: "Удалить", action: { [weak parentController] in
+                shadowRunDeleteOwnMessages(context: context, peerId: peerId, period: period, parentController: parentController)
+            })
+        ]), in: .window(.root))
+    })
+}
+
+private func shadowRunDeleteOwnMessages(context: AccountContext, peerId: EnginePeer.Id, period: ShadowDeleteOwnMessages.Period, parentController: ViewController?) {
+    let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+    let disposable = MetaDisposable()
+    let toast = UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: "Ищу ваши сообщения…", timeout: 3600.0, customUndoText: "Стоп"), elevatedLayout: false, animateInAsReplacement: false, action: { action in
+        if case .undo = action {
+            disposable.dispose()
+        }
+        return false
+    })
+    parentController?.present(toast, in: .current)
+
+    var lastProgress: ShadowDeleteOwnMessages.Progress?
+    let finish: (Bool) -> Void = { [weak toast, weak parentController] stopped in
+        toast?.dismiss()
+        let deleted = lastProgress?.deleted ?? 0
+        let text: String
+        if deleted == 0 {
+            text = stopped ? "Остановлено, ничего не удалено" : "Ваших сообщений здесь не нашлось"
+        } else {
+            text = stopped ? "Остановлено. Удалено сообщений: \(deleted)" : "Удалено сообщений: \(deleted)"
+        }
+        parentController?.present(UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: text, timeout: nil, customUndoText: nil), elevatedLayout: false, animateInAsReplacement: true, action: { _ in return false }), in: .current)
+    }
+
+    disposable.set((ShadowDeleteOwnMessages.run(account: context.account, peerId: peerId, period: period)
+    |> deliverOnMainQueue
+    |> afterDisposed {
+        Queue.mainQueue().async {
+            if lastProgress?.isFinished != true {
+                finish(true)
+            }
+        }
+    }).startStrict(next: { [weak toast] progress in
+        lastProgress = progress
+        if progress.isFinished {
+            finish(false)
+            return
+        }
+        let text: String
+        if let total = progress.total, total > 0 {
+            text = "Удаляю: \(progress.deleted) из \(total)"
+        } else {
+            text = "Удаляю: \(progress.deleted)"
+        }
+        toast?.content = .info(title: nil, text: text, timeout: 3600.0, customUndoText: "Стоп")
+    }))
 }
 
 // Shadow: «Своё название» (ShadowChatTitleStore): a name only this device shows.

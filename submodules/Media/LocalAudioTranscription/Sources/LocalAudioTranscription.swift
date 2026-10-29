@@ -1,6 +1,7 @@
 import Foundation
 import SwiftSignalKit
 import Speech
+import AVFoundation
 
 private var sharedRecognizers: [String: NSObject] = [:]
 
@@ -97,6 +98,53 @@ private func transcribeAudio(path: String, locale: String) -> Signal<Transcripti
         return disposable
     }
     |> runOn(.mainQueue())
+}
+
+// Shadow: round videos are MP4 files stored without an extension; AVFoundation
+// needs one to pick the container, so the file is linked under a .mp4 name and
+// its audio track is exported to M4A for the speech recognizer.
+public func extractAudioTrackForTranscription(videoPath: String) -> Signal<String?, NoError> {
+    return Signal { subscriber in
+        let directory = NSTemporaryDirectory()
+        let token = UInt64.random(in: 0 ... UInt64.max)
+        let videoCopyPath = directory + "/shadow-round-\(token).mp4"
+        let audioPath = directory + "/shadow-round-\(token).m4a"
+        do {
+            try FileManager.default.linkItem(atPath: videoPath, toPath: videoCopyPath)
+        } catch {
+            do {
+                try FileManager.default.copyItem(atPath: videoPath, toPath: videoCopyPath)
+            } catch {
+                subscriber.putNext(nil)
+                subscriber.putCompletion()
+                return EmptyDisposable
+            }
+        }
+
+        let asset = AVURLAsset(url: URL(fileURLWithPath: videoCopyPath))
+        guard let session = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetAppleM4A) else {
+            let _ = try? FileManager.default.removeItem(atPath: videoCopyPath)
+            subscriber.putNext(nil)
+            subscriber.putCompletion()
+            return EmptyDisposable
+        }
+        session.outputURL = URL(fileURLWithPath: audioPath)
+        session.outputFileType = .m4a
+        session.exportAsynchronously {
+            let _ = try? FileManager.default.removeItem(atPath: videoCopyPath)
+            if session.status == .completed {
+                subscriber.putNext(audioPath)
+            } else {
+                let _ = try? FileManager.default.removeItem(atPath: audioPath)
+                subscriber.putNext(nil)
+            }
+            subscriber.putCompletion()
+        }
+
+        return ActionDisposable {
+            session.cancelExport()
+        }
+    }
 }
 
 public struct LocallyTranscribedAudio {
