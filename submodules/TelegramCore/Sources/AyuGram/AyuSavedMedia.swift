@@ -603,7 +603,7 @@ public enum AyuSavedMedia {
 // Shared by managedAyuMediaAutoClean and ayuRunMediaCleanupNow (the manual
 // "run now" trigger in the storage screen) so the pinned/channel/bot whitelist
 // logic exists in exactly one place.
-private func ayuMediaAutoCleanParameters(transaction: Transaction, postbox: Postbox) -> (maxAge: Int32, maxBytes: Int64, keep: Set<Int64>) {
+private func ayuMediaAutoCleanParameters(transaction: Transaction, postbox: Postbox) -> (maxAge: Int32, maxBytes: Int64, keep: Set<Int64>, editMaxAge: Int32) {
     let settings = currentAyuGramSettings(transaction: transaction)
     var keep = Set<Int64>()
     if settings.mediaAutoCleanKeepPinned {
@@ -644,7 +644,7 @@ private func ayuMediaAutoCleanParameters(transaction: Transaction, postbox: Post
             }
         }
     }
-    return (settings.mediaAutoCleanInterval, settings.attachmentSizeLimit, keep)
+    return (settings.mediaAutoCleanInterval, settings.attachmentSizeLimit, keep, ShadowEditHistoryRetention.maxAge(choice: settings.editHistoryRetention, deletedMaxAge: settings.mediaAutoCleanInterval))
 }
 
 // Periodic auto-clean task. Started once per account from the managed
@@ -653,10 +653,12 @@ private func ayuMediaAutoCleanParameters(transaction: Transaction, postbox: Post
 public func managedAyuMediaAutoClean(postbox: Postbox) -> Signal<Never, NoError> {
     let checkInterval: Double = 300.0
     let step = postbox.transaction { transaction -> (Int32, Int64, Set<Int64>) in
-        let (maxAge, maxBytes, keep) = ayuMediaAutoCleanParameters(transaction: transaction, postbox: postbox)
+        let (maxAge, maxBytes, keep, editMaxAge) = ayuMediaAutoCleanParameters(transaction: transaction, postbox: postbox)
         // Same retention window applies to the kept (anti-deleted) messages
         // themselves — not just to their media files in the gallery.
         ayuForkStorePruneKeptDeleted(transaction: transaction, mediaBox: postbox.mediaBox, maxAge: maxAge, keepPeerIds: keep, now: Int32(Date().timeIntervalSince1970))
+        // The edit versions have a period of their own (default: the same one).
+        ayuForkStorePruneEditHistory(transaction: transaction, mediaBox: postbox.mediaBox, maxAge: editMaxAge, keepPeerIds: keep, now: Int32(Date().timeIntervalSince1970))
         return (maxAge, maxBytes, keep)
     }
     |> mapToSignal { maxAge, maxBytes, keep -> Signal<Never, NoError> in
@@ -695,6 +697,7 @@ public func ayuRunMediaCleanupNow(postbox: Postbox) -> Signal<(ageRemoved: Int, 
     return postbox.transaction { transaction -> (Int32, Int64, Set<Int64>, Int) in
         let parameters = ayuMediaAutoCleanParameters(transaction: transaction, postbox: postbox)
         let messagesRemoved = ayuForkStorePruneKeptDeleted(transaction: transaction, mediaBox: postbox.mediaBox, maxAge: parameters.maxAge, keepPeerIds: parameters.keep, now: Int32(Date().timeIntervalSince1970))
+        ayuForkStorePruneEditHistory(transaction: transaction, mediaBox: postbox.mediaBox, maxAge: parameters.editMaxAge, keepPeerIds: parameters.keep, now: Int32(Date().timeIntervalSince1970))
         return (parameters.maxAge, parameters.maxBytes, parameters.keep, messagesRemoved)
     }
     |> mapToSignal { maxAge, maxBytes, keep, messagesRemoved -> Signal<(ageRemoved: Int, sizeRemoved: Int, messagesRemoved: Int, maxAge: Int32, maxBytes: Int64), NoError> in

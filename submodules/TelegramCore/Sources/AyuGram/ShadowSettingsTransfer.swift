@@ -179,6 +179,7 @@ public enum ShadowSettingsTransfer {
         }
         values["mediaAutoCleanInterval"] = .integer(Int64(settings.mediaAutoCleanInterval))
         values["attachmentSizeLimit"] = .integer(settings.attachmentSizeLimit)
+        values["editHistoryRetention"] = .integer(Int64(settings.editHistoryRetention))
         values["bottomBarScrollMode"] = .integer(Int64(settings.bottomBarScrollMode))
         values["voiceTimeFormat"] = .integer(Int64(settings.voiceTimeFormat))
         values["replyTimecodeMode"] = .integer(Int64(settings.replyTimecodeMode))
@@ -257,6 +258,7 @@ public enum ShadowSettingsTransfer {
                 switch key {
                 case "mediaAutoCleanInterval": updated.mediaAutoCleanInterval = Int32(number)
                 case "attachmentSizeLimit": updated.attachmentSizeLimit = number
+                case "editHistoryRetention": updated.editHistoryRetention = ShadowEditHistoryRetention.normalized(Int32(clamping: number))
                 case "bottomBarScrollMode": updated.bottomBarScrollMode = Int32(number)
                 case "voiceTimeFormat": updated.voiceTimeFormat = ShadowVoiceTime.normalized(Int32(number))
                 case "replyTimecodeMode": updated.replyTimecodeMode = ShadowReplyTimecode.normalizedMode(Int32(number))

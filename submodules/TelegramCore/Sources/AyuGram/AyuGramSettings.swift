@@ -385,6 +385,9 @@ public struct AyuGramSettings: Codable, Equatable {
     public var mediaAutoCleanKeepChannels: Bool
     // When auto-cleaning, never remove media that belongs to a bot.
     public var mediaAutoCleanKeepBots: Bool
+    // How long the stored edit versions of a message live (ShadowEditHistoryRetention):
+    // 0 follows mediaAutoCleanInterval, 1 never prunes them, 2... are fixed periods.
+    public var editHistoryRetention: Int32
 
     // PROFILES
     // Show the peer's numeric ID (Bot API form) on the profile screen.
@@ -472,6 +475,7 @@ public struct AyuGramSettings: Codable, Equatable {
             mediaAutoCleanKeepPinned: true,
             mediaAutoCleanKeepChannels: false,
             mediaAutoCleanKeepBots: false,
+            editHistoryRetention: ShadowEditHistoryRetention.followDeleted,
             showProfileId: true,
             showProfileDC: true,
             showRegistrationDate: true,
@@ -693,6 +697,7 @@ public struct AyuGramSettings: Codable, Equatable {
         mediaAutoCleanKeepPinned: Bool,
         mediaAutoCleanKeepChannels: Bool,
         mediaAutoCleanKeepBots: Bool,
+        editHistoryRetention: Int32,
         showProfileId: Bool,
         showProfileDC: Bool,
         showRegistrationDate: Bool,
@@ -760,6 +765,7 @@ public struct AyuGramSettings: Codable, Equatable {
         self.mediaAutoCleanKeepPinned = mediaAutoCleanKeepPinned
         self.mediaAutoCleanKeepChannels = mediaAutoCleanKeepChannels
         self.mediaAutoCleanKeepBots = mediaAutoCleanKeepBots
+        self.editHistoryRetention = editHistoryRetention
         self.showProfileId = showProfileId
         self.showProfileDC = showProfileDC
         self.showRegistrationDate = showRegistrationDate
@@ -918,6 +924,7 @@ public struct AyuGramSettings: Codable, Equatable {
         self.mediaAutoCleanKeepPinned = ((try container.decodeIfPresent(Int32.self, forKey: "mediaAutoCleanKeepPinned")) ?? 1) != 0
         self.mediaAutoCleanKeepChannels = ((try container.decodeIfPresent(Int32.self, forKey: "mediaAutoCleanKeepChannels")) ?? 0) != 0
         self.mediaAutoCleanKeepBots = ((try container.decodeIfPresent(Int32.self, forKey: "mediaAutoCleanKeepBots")) ?? 0) != 0
+        self.editHistoryRetention = ShadowEditHistoryRetention.normalized((try container.decodeIfPresent(Int32.self, forKey: "editHistoryRetention")) ?? ShadowEditHistoryRetention.followDeleted)
         self.showProfileId = ((try container.decodeIfPresent(Int32.self, forKey: "showProfileId")) ?? 1) != 0
         self.showProfileDC = ((try container.decodeIfPresent(Int32.self, forKey: "showProfileDC")) ?? 1) != 0
         self.showRegistrationDate = ((try container.decodeIfPresent(Int32.self, forKey: "showRegistrationDate")) ?? 1) != 0
@@ -1055,6 +1062,7 @@ public struct AyuGramSettings: Codable, Equatable {
         try container.encode((self.mediaAutoCleanKeepPinned ? 1 : 0) as Int32, forKey: "mediaAutoCleanKeepPinned")
         try container.encode((self.mediaAutoCleanKeepChannels ? 1 : 0) as Int32, forKey: "mediaAutoCleanKeepChannels")
         try container.encode((self.mediaAutoCleanKeepBots ? 1 : 0) as Int32, forKey: "mediaAutoCleanKeepBots")
+        try container.encode(self.editHistoryRetention, forKey: "editHistoryRetention")
         try container.encode((self.showProfileId ? 1 : 0) as Int32, forKey: "showProfileId")
         try container.encode((self.showProfileDC ? 1 : 0) as Int32, forKey: "showProfileDC")
         try container.encode((self.showRegistrationDate ? 1 : 0) as Int32, forKey: "showRegistrationDate")

@@ -90,6 +90,7 @@ enum ShadowSettingsSearchIndex {
         ShadowSettingsSearchItem(destination: .spy, entryId: 17, title: "Сохранять все входящие медиа", description: "Автоматическая локальная копия вложений", keywords: "save all incoming media"),
         ShadowSettingsSearchItem(destination: .spy, entryId: 18, title: "Лимит галереи", description: "Ограничение объёма сохранённых вложений", keywords: "attachment size storage limit"),
         ShadowSettingsSearchItem(destination: .spy, entryId: 19, title: "Срок хранения медиа", description: "Автоматическая очистка по возрасту", keywords: "auto clean retention age"),
+        ShadowSettingsSearchItem(destination: .spy, entryId: 40, title: "Срок хранения правок", description: "Через сколько удаляется история правок сообщений", keywords: "edit history retention age правки история изменений срок автоудаление очистка"),
         ShadowSettingsSearchItem(destination: .spy, entryId: 20, title: "Не очищать закреплённые", description: "Исключить закреплённые чаты из очистки", keywords: "keep pinned cleanup"),
         ShadowSettingsSearchItem(destination: .spy, entryId: 21, title: "Не очищать каналы", description: "Исключить каналы из очистки", keywords: "keep channels cleanup"),
         ShadowSettingsSearchItem(destination: .spy, entryId: 22, title: "Не очищать ботов", description: "Исключить ботов из очистки", keywords: "keep bots cleanup"),

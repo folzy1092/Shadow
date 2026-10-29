@@ -253,6 +253,7 @@ public enum ShadowSettingLinks {
         ShadowSettingLink(screen: "spy", slug: "clean-keep-pinned", entryId: 20, key: "mediaAutoCleanKeepPinned", title: "Не очищать закреплённые"),
         ShadowSettingLink(screen: "spy", slug: "clean-skip-channels", entryId: 21, key: "mediaAutoCleanKeepChannels", title: "Не очищать каналы"),
         ShadowSettingLink(screen: "spy", slug: "clean-skip-bots", entryId: 22, key: "mediaAutoCleanKeepBots", title: "Не очищать ботов"),
+        ShadowSettingLink(screen: "spy", slug: "edit-history-retention", entryId: 40, key: "editHistoryRetention", title: "Срок хранения правок", choices: ShadowEditHistoryRetention.choices.map { ShadowEditHistoryRetention.title($0) }, since: "2.0.0"),
         ShadowSettingLink(screen: "spy", slug: "online-history", entryId: 26, key: "onlineHistory", title: "Записывать, когда контакты в сети", icon: "chart.bar"),
         ShadowSettingLink(screen: "spy", slug: "online-history-selected", entryId: 38, key: "onlineHistorySelectedOnly", title: "История в сети: только выбранные чаты", parentEntryId: 26, since: "1.14.2"),
         ShadowSettingLink(screen: "spy", slug: "online-history-chats", entryId: 39, key: nil, title: "История в сети: выбранные чаты", parentEntryId: 26, since: "1.14.2"),

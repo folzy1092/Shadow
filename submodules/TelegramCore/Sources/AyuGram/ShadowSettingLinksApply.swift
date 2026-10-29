@@ -31,7 +31,8 @@ extension ShadowSettingsTransfer {
         "feedPosition": \.feedPosition,
         "businessBotPinnedLayout": \.businessBotPinnedLayout,
         "silentSendMode": \.silentSendMode,
-        "mediaSendQuality": \.mediaSendQuality
+        "mediaSendQuality": \.mediaSendQuality,
+        "editHistoryRetention": \.editHistoryRetention
     ]
 
     public static func intValue(_ key: String, in settings: AyuGramSettings) -> Int32? {

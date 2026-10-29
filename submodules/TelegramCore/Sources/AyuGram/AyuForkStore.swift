@@ -200,6 +200,73 @@ func ayuForkStorePruneKeptDeleted(transaction: Transaction, mediaBox: MediaBox, 
     return expiredIds.count
 }
 
+// Age out stored edit versions: every version older than `maxAge` seconds (by the
+// moment it was replaced) is dropped, with its backed-up media. A message left
+// with no versions loses the attribute and leaves the index. `maxAge <= 0` keeps
+// everything. Chats in `keepPeerIds` are left alone, like for the saved media.
+// Returns how many versions were removed.
+@discardableResult
+func ayuForkStorePruneEditHistory(transaction: Transaction, mediaBox: MediaBox, maxAge: Int32, keepPeerIds: Set<Int64>, now: Int32) -> Int {
+    guard maxAge > 0 else {
+        return 0
+    }
+    let store = ayuForkStore(transaction: transaction)
+    if store.editHistory.isEmpty {
+        return 0
+    }
+    var remaining: [AyuForkMsgRef] = []
+    var removedVersions = 0
+    for ref in store.editHistory {
+        if keepPeerIds.contains(ref.peer) {
+            remaining.append(ref)
+            continue
+        }
+        let messageId = ref.messageId
+        guard let message = transaction.getMessage(messageId) else {
+            // Already gone — the ref is stale, drop it.
+            continue
+        }
+        guard let attribute = message.attributes.first(where: { $0 is SavedMessageEditsAttribute }) as? SavedMessageEditsAttribute else {
+            continue
+        }
+        let kept = attribute.versions.filter { !ShadowEditHistoryRetention.isExpired(versionDate: $0.date, now: now, maxAge: maxAge) }
+        if kept.count == attribute.versions.count {
+            remaining.append(ref)
+            continue
+        }
+        removedVersions += attribute.versions.count - kept.count
+        let candidates = Set(attribute.versions.compactMap { $0.mediaFileName })
+        var keeping = Set(kept.compactMap { $0.mediaFileName })
+        if let name = AyuSavedMedia.principalFileName(peerId: messageId.peerId, messageId: messageId, mediaList: message.media) {
+            keeping.insert(name)
+        }
+        AyuSavedMedia.removeEditHistoryMedia(basePath: mediaBox.basePath, candidates: candidates, keeping: keeping)
+        if !kept.isEmpty {
+            remaining.append(ref)
+        }
+        transaction.updateMessage(messageId, update: { currentMessage in
+            var attributes = currentMessage.attributes
+            attributes.removeAll(where: { $0 is SavedMessageEditsAttribute })
+            if !kept.isEmpty {
+                attributes.append(SavedMessageEditsAttribute(versions: kept))
+            }
+            var storeForwardInfo: StoreMessageForwardInfo?
+            if let forwardInfo = currentMessage.forwardInfo {
+                storeForwardInfo = StoreMessageForwardInfo(authorId: forwardInfo.author?.id, sourceId: forwardInfo.source?.id, sourceMessageId: forwardInfo.sourceMessageId, date: forwardInfo.date, authorSignature: forwardInfo.authorSignature, psaType: forwardInfo.psaType, flags: forwardInfo.flags)
+            }
+            return .update(StoreMessage(id: currentMessage.id, customStableId: nil, globallyUniqueId: currentMessage.globallyUniqueId, groupingKey: currentMessage.groupingKey, threadId: currentMessage.threadId, timestamp: currentMessage.timestamp, flags: StoreMessageFlags(currentMessage.flags), tags: currentMessage.tags, globalTags: currentMessage.globalTags, localTags: currentMessage.localTags, forwardInfo: storeForwardInfo, authorId: currentMessage.author?.id, text: currentMessage.text, attributes: attributes, media: currentMessage.media))
+        })
+    }
+    if remaining.count != store.editHistory.count {
+        updateAyuForkStore(transaction: transaction) { current in
+            var current = current
+            current.editHistory = remaining
+            return current
+        }
+    }
+    return removedVersions
+}
+
 // Strip the stored edit versions from the affected messages and clear the index.
 public func ayuForkStoreClearEditHistory(postbox: Postbox) -> Signal<Never, NoError> {
     return postbox.transaction { transaction -> Void in

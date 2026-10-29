@@ -51,7 +51,7 @@ public struct ShadowSettingsDocument: Codable, Equatable {
     public static let jsonKeys: Set<String> = ["messageFilters", "shadowBannedPeerIds", "quickReplyTemplates", "headerButtons", "chatPrivacyRules", "spyExcludedPeerIds", "onlineHistoryPeerIds"]
     public static let maximumJSONBytes = 256 * 1024
     public static let integerKeys: Set<String> = [
-        "mediaAutoCleanInterval", "attachmentSizeLimit", "bottomBarScrollMode", "ghostAccountMode",
+        "mediaAutoCleanInterval", "attachmentSizeLimit", "editHistoryRetention", "bottomBarScrollMode", "ghostAccountMode",
         "screenshotBackground", "screenshotCustomColorARGB",
         "settingsIconBackgroundColor", "settingsIconGlyphColor", "voiceTimeFormat", "replyTimecodeMode", "feedPosition", "businessBotPinnedLayout", "paperclipPrankSeconds", "paperclipPrankSendSeconds", "silentSendMode", "silentSendFrom", "silentSendTo", "mediaSendQuality"
     ]
@@ -121,6 +121,8 @@ public struct ShadowSettingsDocument: Codable, Equatable {
             case let .text(text) where jsonKeys.contains(key) && text.utf8.count <= maximumJSONBytes: break
             case let .integer(number) where key == "mediaAutoCleanInterval" && ageIntervals.contains(number): break
             case let .integer(number) where key == "attachmentSizeLimit" && sizeLimits.contains(number): break
+            // ShadowEditHistoryRetention choices: like deleted, never, 1 day … 1 year.
+            case let .integer(number) where key == "editHistoryRetention" && (0...9).contains(number): break
             case let .integer(number) where key == "bottomBarScrollMode" && (0...3).contains(number): break
             // ShadowVoiceTime formats.
             case let .integer(number) where key == "voiceTimeFormat" && (0...5).contains(number): break

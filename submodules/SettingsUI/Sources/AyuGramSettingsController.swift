@@ -2172,6 +2172,7 @@ private final class AyuSpyArguments {
     let updateKeepChannels: (Bool) -> Void
     let updateKeepBots: (Bool) -> Void
     let openForkStorage: () -> Void
+    var selectEditHistoryRetention: () -> Void = {}
     var updateOnlineHistory: (Bool) -> Void = { _ in }
     var updateSaveViewedStories: (Bool) -> Void = { _ in }
     var openSavedStories: () -> Void = {}
@@ -2260,6 +2261,7 @@ private enum AyuSpyEntry: ItemListNodeEntry {
     case saveAllIncomingMedia(Bool)
     case attachmentSizeLimit(Int64)
     case attachmentAge(Int32)
+    case editHistoryRetention(Int32)
     case keepPinned(Bool)
     case keepChannels(Bool)
     case keepBots(Bool)
@@ -2289,7 +2291,7 @@ private enum AyuSpyEntry: ItemListNodeEntry {
             return AyuSpySection.restricted.rawValue
         case .storyPromptHeader, .askBeforeStoryView, .storyPromptFooter:
             return AyuSpySection.storyPrompt.rawValue
-        case .savedMediaHeader, .saveDestructingMedia, .saveAllIncomingMedia, .attachmentSizeLimit, .attachmentAge, .keepPinned, .keepChannels, .keepBots, .forkStorage, .savedMediaFooter:
+        case .savedMediaHeader, .saveDestructingMedia, .saveAllIncomingMedia, .attachmentSizeLimit, .attachmentAge, .editHistoryRetention, .keepPinned, .keepChannels, .keepBots, .forkStorage, .savedMediaFooter:
             return AyuSpySection.savedMedia.rawValue
         case .onlineHistoryHeader, .onlineHistory, .onlineHistorySelectedOnly, .onlineHistoryChats, .onlineHistoryFooter:
             return AyuSpySection.onlineHistory.rawValue
@@ -2340,6 +2342,7 @@ private enum AyuSpyEntry: ItemListNodeEntry {
         case .spyExcludeGroups: return 37
         case .onlineHistorySelectedOnly: return 38
         case .onlineHistoryChats: return 39
+        case .editHistoryRetention: return 40
         }
     }
 
@@ -2351,6 +2354,7 @@ private enum AyuSpyEntry: ItemListNodeEntry {
         case .spyExcludeGroups: return 33.2
         case .onlineHistorySelectedOnly: return 26.1
         case .onlineHistoryChats: return 26.2
+        case .editHistoryRetention: return 19.1
         default: return Double(self.stableId)
         }
     }
@@ -2477,6 +2481,10 @@ private enum AyuSpyEntry: ItemListNodeEntry {
             return ItemListDisclosureItem(presentationData: presentationData, title: "Срок хранения", label: attachmentAgeLabel(value), sectionId: self.section, style: .blocks, action: {
                 arguments.selectAttachmentAge()
             })
+        case let .editHistoryRetention(value):
+            return ItemListDisclosureItem(presentationData: presentationData, title: "Срок хранения правок", label: ShadowEditHistoryRetention.title(value), sectionId: self.section, style: .blocks, action: {
+                arguments.selectEditHistoryRetention()
+            })
         case let .keepPinned(value):
             return ItemListSwitchItem(presentationData: presentationData, title: "Не очищать закреплённые", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 arguments.updateKeepPinned(value)
@@ -2494,7 +2502,7 @@ private enum AyuSpyEntry: ItemListNodeEntry {
                 arguments.openForkStorage()
             })
         case .savedMediaFooter:
-            return ItemListTextItem(presentationData: presentationData, text: .plain("Приватная локальная копия медиа, которая переживает удаление. «Сохранять самоуничтожающиеся» копирует view-once / TTL-медиа до их исчезновения (и не уведомляет отправителя). «Сохранять все входящие медиа» сохраняет каждое входящее фото, видео, документ, голосовое и кружок — независимо от «Сохранения в галерею» и защиты от копирования.\n\nАвтоочистка работает по двум независимым лимитам, их можно использовать вместе: «Лимит размера» удаляет самые старые файлы при превышении общего размера папки; «Срок хранения» удаляет вложения старше выбранного срока, а также сами сохранённые удалённые сообщения, помеченные корзиной раньше этого срока. При очистке всегда удаляются самые старые файлы. Отмеченное «Не очищать» (закреплённые, каналы, боты) не удаляется автоочисткой. «Хранилище и размер папки» показывает занятое место по чатам."), sectionId: self.section)
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Приватная локальная копия медиа, которая переживает удаление. «Сохранять самоуничтожающиеся» копирует view-once / TTL-медиа до их исчезновения (и не уведомляет отправителя). «Сохранять все входящие медиа» сохраняет каждое входящее фото, видео, документ, голосовое и кружок — независимо от «Сохранения в галерею» и защиты от копирования.\n\nАвтоочистка работает по двум независимым лимитам, их можно использовать вместе: «Лимит размера» удаляет самые старые файлы при превышении общего размера папки; «Срок хранения» удаляет вложения старше выбранного срока, а также сами сохранённые удалённые сообщения, помеченные корзиной раньше этого срока. «Срок хранения правок» отдельно убирает старые версии отредактированных сообщений: по умолчанию тот же срок, что и у удалённых, но можно выбрать свой или не удалять никогда. При очистке всегда удаляются самые старые файлы. Отмеченное «Не очищать» (закреплённые, каналы, боты) не удаляется автоочисткой. «Хранилище и размер папки» показывает занятое место по чатам."), sectionId: self.section)
         }
     }
 }
@@ -2533,6 +2541,7 @@ private func ayuSpyEntries(settings: AyuGramSettings) -> [AyuSpyEntry] {
     entries.append(.saveAllIncomingMedia(settings.saveAllIncomingMedia))
     entries.append(.attachmentSizeLimit(settings.attachmentSizeLimit))
     entries.append(.attachmentAge(settings.mediaAutoCleanInterval))
+    entries.append(.editHistoryRetention(settings.editHistoryRetention))
     entries.append(.keepPinned(settings.mediaAutoCleanKeepPinned))
     entries.append(.keepChannels(settings.mediaAutoCleanKeepChannels))
     entries.append(.keepBots(settings.mediaAutoCleanKeepBots))
@@ -2644,6 +2653,26 @@ func ayuSpyController(context: AccountContext, focus: ShadowSettingsSearchItem? 
             pushControllerImpl?(ayuForkStorageController(context: context))
         }
     )
+    arguments.selectEditHistoryRetention = {
+        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+        let actionSheet = ActionSheetController(presentationData: presentationData)
+        var items: [ActionSheetItem] = []
+        for choice in ShadowEditHistoryRetention.choices {
+            items.append(ActionSheetButtonItem(title: ShadowEditHistoryRetention.title(choice), action: { [weak actionSheet] in
+                actionSheet?.dismissAnimated()
+                ayuUpdateSettings(context: context) { var s = $0; s.editHistoryRetention = choice; return s }
+            }))
+        }
+        actionSheet.setItemGroups([
+            ActionSheetItemGroup(items: items),
+            ActionSheetItemGroup(items: [
+                ActionSheetButtonItem(title: presentationData.strings.Common_Cancel, color: .accent, font: .bold, action: { [weak actionSheet] in
+                    actionSheet?.dismissAnimated()
+                })
+            ])
+        ])
+        presentControllerImpl?(actionSheet, nil)
+    }
     arguments.updateOnlineHistory = { value in
         ayuUpdateSettings(context: context) { var s = $0; s.onlineHistory = value; return s }
     }

@@ -104,6 +104,7 @@
 | `shadow://spy/clean-keep-pinned` | Не очищать закреплённые |
 | `shadow://spy/clean-skip-channels` | Не очищать каналы |
 | `shadow://spy/clean-skip-bots` | Не очищать ботов |
+| `shadow://spy/edit-history-retention` | Срок хранения правок, `?value=0…9`: как у удалённых, никогда, 1 день, 3 дня, 7 дней, 14 дней, 30 дней, 90 дней, 180 дней, 1 год |
 | `shadow://spy/online-history` | Записывать, когда контакты в сети |
 | `shadow://spy/online-history-selected` | История в сети: только выбранные чаты |
 | `shadow://spy/online-history-chats` | История в сети: выбранные чаты (только открыть) |
