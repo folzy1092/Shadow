@@ -245,6 +245,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     public let attachmentButtonDisabledNode: HighlightableButtonNode
     // Shadow: holding the attachment button opens the paperclip menu.
     private let shadowPaperclipGestureDelegate = ShadowPaperclipGestureDelegate()
+    // Shadow: «Панель форматирования» (ShadowInputToolbar.swift in this module).
+    var shadowToolbarNode: ASDisplayNode?
+    var shadowToolbarModel: ShadowInputToolbarModel?
 
     public var attachmentImageNode: TransformImageNode?
     
@@ -2215,8 +2218,13 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                     }
                 }
                 
+                // Shadow: «Перевод при отправке» is on (ShadowInputTranslation).
+                if interfaceState.interfaceState.editMessage == nil, let template = ShadowInputTranslation.activeTemplate {
+                    placeholder = "Перевод \(template.shortTitle)"
+                }
+
                 updatedPlaceholder = placeholder
-                
+
                 self.sendActionButtons.sendButtonLongPressEnabled = !isScheduledMessages
             }
             
@@ -2483,6 +2491,8 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         }
         
         let textInputBackgroundWidthOffset: CGFloat = 0.0
+        // Shadow: the formatting panel spans the panel's own insets.
+        let shadowToolbarLeftInset = leftInset
         var attachmentButtonX: CGFloat = hideOffset.x + leftInset + leftMenuInset + 8.0
         
         var leftButtonsWidth: CGFloat = 40.0 + 6.0
@@ -3935,8 +3945,15 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         let containerFrame = CGRect(origin: CGPoint(), size: CGSize(width: width, height: contentHeight + 64.0))
         transition.updateFrame(view: self.glassBackgroundContainer, frame: containerFrame)
         self.glassBackgroundContainer.update(size: containerFrame.size, isDark: interfaceState.theme.overallDarkAppearance, transition: ComponentTransition(transition))
-        
-        return contentHeight
+
+        // Shadow: «Панель форматирования» under the field while it has focus.
+        var shadowToolbarOffset: CGFloat = 0.0
+        if let context = self.context {
+            self.shadowUpdateToolbarIfNeeded(context: context)
+            shadowToolbarOffset = self.shadowLayoutToolbar(transition: transition, panelHeight: contentHeight, width: width, leftInset: shadowToolbarLeftInset, rightInset: rightInset, displayBotStartButton: displayBotStartButton)
+        }
+
+        return contentHeight + shadowToolbarOffset
     }
     
     @objc private func slowModeButtonPressed() {

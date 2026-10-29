@@ -94,6 +94,9 @@ public final class ChatPanelInterfaceInteraction {
     // the view is the button. Set by ChatControllerImpl after creation, nil
     // elsewhere (the button then works as in Telegram).
     public var shadowPaperclipLongPress: ((UIView) -> Void)?
+    // Shadow 2.0.0: a chat tool (ShadowPaperclip.Tool) from the formatting
+    // panel; the view is the panel. Set by ChatControllerImpl.
+    public var shadowRunChatTool: ((ShadowPaperclip.Tool, UIView) -> Void)?
     public let forwardCurrentForwardMessages: () -> Void
     public let forwardMessages: ([EngineRawMessage]) -> Void
     // AyuGram: forward messages with sender names pre-hidden (hideNames = true),

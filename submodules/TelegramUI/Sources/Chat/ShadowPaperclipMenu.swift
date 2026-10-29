@@ -33,7 +33,11 @@ extension ChatControllerImpl {
         var actions = ShadowPaperclip.menuActions(ShadowPaperclip.parseActions(settings.paperclipActions), pranks: pranks)
         if isSecretChat {
             // Only «печатает» exists there, and pranks cannot be forwarded in.
-            actions = actions.filter { $0 == .imitation(.typing) }
+            actions = actions.filter { $0 == .imitation(.typing) || $0 == .tool(.scrollToStart) || $0 == .tool(.translate) }
+        }
+        // «Упомянуть всех» only where there are members to mention.
+        if !self.shadowCanMentionAll {
+            actions = actions.filter { $0 != .tool(.mentionAll) }
         }
 
         var items: [ContextMenuItem] = []
@@ -69,6 +73,19 @@ extension ChatControllerImpl {
                     f(.default)
                     ShadowActivityImitation.shared.start(account: context.account, peerId: peerId, threadId: threadId, mode: mode)
                     self?.shadowPaperclipToast("Имитация: \(mode.title.lowercased()). Остановить — снова зажать скрепку.")
+                })))
+            case let .tool(tool):
+                let title: String
+                if tool == .translate, let template = ShadowInputTranslation.activeTemplate {
+                    title = "Перевод: \(template.title) — выключить"
+                } else {
+                    title = tool.title
+                }
+                items.append(.action(ContextMenuActionItem(text: title, icon: { theme in
+                    return generateTintedImage(image: UIImage(systemName: tool.icon), color: theme.contextMenu.primaryColor)
+                }, action: { [weak self, weak sourceView] _, f in
+                    f(.default)
+                    self?.shadowRunChatTool(tool, sourceView: sourceView)
                 })))
             case let .prank(id):
                 guard let prank = pranks.first(where: { $0.id == id }) else {

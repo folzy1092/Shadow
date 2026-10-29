@@ -67,7 +67,7 @@ class PaperclipContracts(unittest.TestCase):
         self.assertIn("settings.paperclipPrankImitation", menu)
         self.assertIn("ShadowPaperclip.normalizedPrankSeconds(settings.paperclipPrankSeconds)", menu)
         self.assertIn("ShadowActivityImitation.shared.stopAll(accountPeerId: accountPeerId)", menu)
-        self.assertIn("actions.filter { $0 == .imitation(.typing) }", menu)
+        self.assertIn("actions.filter { $0 == .imitation(.typing) || $0 == .tool(.scrollToStart) || $0 == .tool(.translate) }", menu)
 
     def test_admin_catalog(self):
         access = read("TelegramCore/Sources/AyuGram/ShadowDeviceAccess.swift")

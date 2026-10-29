@@ -9224,7 +9224,15 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         return .single(false)
     }
     
-    func sendMessages(_ messages: [EnqueueMessage], media: Bool = false, postpone: Bool = false, commit: Bool = false) {
+    func sendMessages(_ messages: [EnqueueMessage], media: Bool = false, postpone: Bool = false, commit: Bool = false, shadowTranslated: Bool = false) {
+        // Shadow: «Перевод при отправке» (ShadowInputTranslation) translates the
+        // texts first, then sends through here again.
+        if !shadowTranslated, let template = ShadowInputTranslation.activeTemplate, shadowHasTranslatableText(messages) {
+            self.shadowTranslateOutgoing(messages, template: template, completion: { [weak self] translated in
+                self?.sendMessages(translated, media: media, postpone: postpone, commit: commit, shadowTranslated: true)
+            })
+            return
+        }
         if case let .customChatContents(customChatContents) = self.subject {
             customChatContents.enqueueMessages(messages: messages)
             return
