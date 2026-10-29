@@ -186,6 +186,8 @@ public final class ChatMessageSelectionInputPanelNode: ChatInputPanelNode {
     // forward button in the multi-select panel.
     private let incognitoForwardButton: GlassButtonView
     private let screenshotButton: GlassButtonView
+    // Shadow 2.0.0: «Диапазон» (ShadowRangeSelection).
+    private let rangeButton: GlassButtonView
     private let screenshotSettingsDisposable = MetaDisposable()
     private var observingScreenshotSettings = false
     private var screenshotEnabled = true
@@ -244,6 +246,11 @@ public final class ChatMessageSelectionInputPanelNode: ChatInputPanelNode {
         self.incognitoForwardButton.accessibilityLabel = strings.VoiceOver_MessageContextForward
 
         self.shareButton = GlassButtonView()
+        self.rangeButton = GlassButtonView()
+        self.rangeButton.icon = "arrow.up.and.down"
+        self.rangeButton.isAccessibilityElement = true
+        self.rangeButton.accessibilityLabel = "Выделить диапазон"
+        self.rangeButton.isEnabled = false
         self.screenshotButton = GlassButtonView()
         self.screenshotButton.icon = "camera"
         self.screenshotButton.isAccessibilityElement = true
@@ -279,6 +286,7 @@ public final class ChatMessageSelectionInputPanelNode: ChatInputPanelNode {
         self.view.addSubview(self.forwardButton)
         self.view.addSubview(self.incognitoForwardButton)
         self.view.addSubview(self.screenshotButton)
+        self.view.addSubview(self.rangeButton)
         self.view.addSubview(self.shareButton)
         self.view.addSubview(self.tagButton)
         self.view.addSubview(self.tagEditButton)
@@ -294,6 +302,7 @@ public final class ChatMessageSelectionInputPanelNode: ChatInputPanelNode {
         self.forwardButton.button.addTarget(self, action: #selector(self.forwardButtonPressed), for: .touchUpInside)
         self.incognitoForwardButton.button.addTarget(self, action: #selector(self.incognitoForwardButtonPressed), for: .touchUpInside)
         self.screenshotButton.button.addTarget(self, action: #selector(self.screenshotButtonPressed), for: .touchUpInside)
+        self.rangeButton.button.addTarget(self, action: #selector(self.rangeButtonPressed), for: .touchUpInside)
         self.shareButton.button.addTarget(self, action: #selector(self.shareButtonPressed), for: .touchUpInside)
         self.tagButton.button.addTarget(self, action: #selector(self.tagButtonPressed), for: .touchUpInside)
         self.tagEditButton.button.addTarget(self, action: #selector(self.tagButtonPressed), for: .touchUpInside)
@@ -306,6 +315,7 @@ public final class ChatMessageSelectionInputPanelNode: ChatInputPanelNode {
     
     private func updateActions() {
         self.screenshotButton.isEnabled = !self.selectedMessages.isEmpty
+        self.rangeButton.isEnabled = !self.selectedMessages.isEmpty
         self.forwardButton.isEnabled = self.selectedMessages.count != 0
         self.incognitoForwardButton.isEnabled = self.selectedMessages.count != 0
         
@@ -390,6 +400,11 @@ public final class ChatMessageSelectionInputPanelNode: ChatInputPanelNode {
         } else if !self.incognitoForwardButton.isImplicitlyDisabled {
             self.interfaceInteraction?.forwardSelectedMessagesWithoutAuthor()
         }
+    }
+
+    @objc private func rangeButtonPressed() {
+        guard !self.selectedMessages.isEmpty, !self.peerMedia else { return }
+        self.interfaceInteraction?.shadowSelectRange?(self.rangeButton)
     }
 
     @objc private func screenshotButtonPressed() {
@@ -542,6 +557,7 @@ public final class ChatMessageSelectionInputPanelNode: ChatInputPanelNode {
             }))
         }
         self.screenshotButton.isHidden = !self.screenshotEnabled || self.peerMedia
+        self.rangeButton.isHidden = self.peerMedia || self.interfaceInteraction?.shadowSelectRange == nil
         
         var leftInset = leftInset + 8.0
         var rightInset = rightInset + 8.0
@@ -694,6 +710,9 @@ public final class ChatMessageSelectionInputPanelNode: ChatInputPanelNode {
         if !self.screenshotButton.isHidden {
             let index = visibleButtons.firstIndex(where: { $0 === self.incognitoForwardButton }) ?? max(0, visibleButtons.count - 1)
             visibleButtons.insert(self.screenshotButton, at: index)
+        }
+        if !self.rangeButton.isHidden {
+            visibleButtons.insert(self.rangeButton, at: min(1, visibleButtons.count))
         }
         let buttonSize = CGSize(width: 40.0, height: 40.0)
         

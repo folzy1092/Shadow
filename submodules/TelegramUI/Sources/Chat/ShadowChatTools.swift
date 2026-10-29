@@ -98,6 +98,59 @@ func shadowMentionsText(_ members: [EnginePeer]) -> NSAttributedString {
     return result
 }
 
+// MARK: «Диапазон» (ShadowRangeSelection)
+
+extension ChatControllerImpl {
+    // Two or more selected: everything between the first and the last. One:
+    // a compact menu, up to the newest message or to the start of the chat.
+    func shadowSelectRange(sourceView: UIView) {
+        guard let peerId = self.chatLocation.peerId, let selected = self.presentationInterfaceState.interfaceState.selectionState?.selectedIds, !selected.isEmpty else {
+            return
+        }
+        let ids = selected.filter { $0.peerId == peerId && $0.namespace == Namespaces.Message.Cloud }.sorted()
+        guard let first = ids.first, let last = ids.last else {
+            return
+        }
+        if ids.count >= 2 {
+            self.shadowApplyRange(.between(first, last))
+            return
+        }
+        let presentationData = self.presentationData
+        let items: [ContextMenuItem] = [
+            .action(ContextMenuActionItem(text: "До самого нового", icon: { theme in
+                return generateTintedImage(image: UIImage(systemName: "arrow.down.to.line"), color: theme.contextMenu.primaryColor)
+            }, action: { [weak self] _, f in
+                f(.default)
+                self?.shadowApplyRange(.toNewest(first))
+            })),
+            .action(ContextMenuActionItem(text: "До начала переписки", icon: { theme in
+                return generateTintedImage(image: UIImage(systemName: "arrow.up.to.line"), color: theme.contextMenu.primaryColor)
+            }, action: { [weak self] _, f in
+                f(.default)
+                self?.shadowApplyRange(.toOldest(first))
+            }))
+        ]
+        let contextController = makeContextController(presentationData: presentationData, source: .reference(ChatControllerContextReferenceContentSource(controller: self, sourceView: sourceView, insets: .zero, actionsOnTop: true)), items: .single(ContextController.Items(content: .list(items))), gesture: nil)
+        self.presentInGlobalOverlay(contextController)
+    }
+
+    private func shadowApplyRange(_ direction: ShadowRangeSelection.Direction) {
+        guard let peerId = self.chatLocation.peerId else {
+            return
+        }
+        let presentationData = self.presentationData
+        let _ = (ShadowRangeSelection.messageIds(account: self.context.account, peerId: peerId, threadId: self.chatLocation.threadId, direction: direction)
+        |> deliverOnMainQueue).startStandalone(next: { [weak self] ids in
+            guard let self, !ids.isEmpty else {
+                return
+            }
+            self.updateChatPresentationInterfaceState(animated: true, interactive: true, { $0.updatedInterfaceState { $0.withUpdatedSelectedMessages(ids) } })
+            let count = self.presentationInterfaceState.interfaceState.selectionState?.selectedIds.count ?? ids.count
+            self.present(UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: "Выделено сообщений: \(count). Пересылка и удаление идут частями по 100", timeout: nil, customUndoText: nil), elevatedLayout: false, action: { _ in return false }), in: .current)
+        })
+    }
+}
+
 // MARK: «Перевод при отправке» (ShadowInputTranslation)
 
 extension ChatControllerImpl {

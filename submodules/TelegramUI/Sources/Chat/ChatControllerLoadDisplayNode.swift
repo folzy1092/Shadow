@@ -4847,6 +4847,10 @@ extension ChatControllerImpl {
         interfaceInteraction.shadowRunChatTool = { [weak self] tool, sourceView in
             self?.shadowRunChatTool(tool, sourceView: sourceView)
         }
+        // Shadow 2.0.0: «Диапазон» in the selection panel (ShadowChatTools.swift).
+        interfaceInteraction.shadowSelectRange = { [weak self] sourceView in
+            self?.shadowSelectRange(sourceView: sourceView)
+        }
 
         // AyuGram: double-tap on an own, editable message opens the edit interface.
         // The bubble node only does a lightweight own-message check; the real

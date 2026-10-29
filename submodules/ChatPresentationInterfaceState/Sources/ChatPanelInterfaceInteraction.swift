@@ -97,6 +97,8 @@ public final class ChatPanelInterfaceInteraction {
     // Shadow 2.0.0: a chat tool (ShadowPaperclip.Tool) from the formatting
     // panel; the view is the panel. Set by ChatControllerImpl.
     public var shadowRunChatTool: ((ShadowPaperclip.Tool, UIView) -> Void)?
+    // Shadow 2.0.0: «Диапазон» in the selection panel; the view is the button.
+    public var shadowSelectRange: ((UIView) -> Void)?
     public let forwardCurrentForwardMessages: () -> Void
     public let forwardMessages: ([EngineRawMessage]) -> Void
     // AyuGram: forward messages with sender names pre-hidden (hideNames = true),
