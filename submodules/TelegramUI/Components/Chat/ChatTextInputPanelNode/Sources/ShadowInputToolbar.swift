@@ -7,6 +7,7 @@ import TelegramCore
 import AccountContext
 import TextFormat
 import ChatPresentationInterfaceState
+import ChatInputTextNode
 
 // Shadow 2.0.0: «Панель форматирования» (ShadowInputToolbar), ported from
 // Swiftgram's SGInputToolbar (Swiftgram/SGInputToolbar, MIT-style fork code):
@@ -116,7 +117,28 @@ private struct ShadowInputToolbarButtonStyle: ButtonStyle {
     }
 }
 
+// Shadow 2.0.0: «Обычный» in the Format menu of the selection (as on Android):
+// strips every format from the selected text. It is not a setting and is never
+// disabled, so mixed formatting can always be undone in one tap.
+enum ShadowFormatMenu {
+    static let plainTitle = "Обычный"
+}
+
 extension ChatTextInputPanelNode {
+    // The legacy text view's half of «Обычный»: the same transform as ⇧⌘N, one
+    // undoable step. The native editor's half is `performFormatAction(.clearFormatting)`.
+    func shadowClearSelectionFormatting() {
+        if self.performNativeFormatShortcut(.clearFormatting) {
+            return
+        }
+        if self.performLegacyFormatShortcut({ current in chatTextInputClearFormattingAttributes(current) }) {
+            return
+        }
+        self.interfaceInteraction?.updateTextInputStateAndMode { current, inputMode in
+            return (chatTextInputClearFormattingAttributes(current), inputMode)
+        }
+    }
+
     static let shadowToolbarHeight: CGFloat = 44.0
     static let shadowToolbarSpacing: CGFloat = 6.0
 

@@ -5159,6 +5159,11 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 hasSpoilers = false
             }
             
+            // Shadow: «Обычный» is always first and never disabled or switched off.
+            children.append(UIAction(title: ShadowFormatMenu.plainTitle, image: nil) { [weak self] _ in
+                self?.shadowClearSelectionFormatting()
+            })
+            
             if hasSpoilers {
                 children.append(UIAction(title: self.strings?.TextFormat_Quote ?? "Quote", image: nil) { [weak self] (action) in
                     if let strongSelf = self {
@@ -5249,6 +5254,11 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         }
 
         var children: [UIAction] = []
+        // Shadow: «Обычный» is always first and never disabled or switched off. Clearing is
+        // the editor's own command, the one ⇧⌘N runs.
+        children.append(UIAction(title: ShadowFormatMenu.plainTitle, image: nil) { [weak richTextInputNode] _ in
+            richTextInputNode?.performFormatAction(.clearFormatting)
+        })
         if hasSpoilers {
             children.append(UIAction(title: self.strings?.TextFormat_Quote ?? "Quote", image: nil) { [weak richTextInputNode] _ in
                 richTextInputNode?.performFormatAction(.quote)
