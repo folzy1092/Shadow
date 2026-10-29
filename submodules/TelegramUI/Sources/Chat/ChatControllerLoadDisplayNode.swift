@@ -4864,6 +4864,10 @@ extension ChatControllerImpl {
             }
             if canEditMessage(context: self.context, limitsConfiguration: self.context.currentLimitsConfiguration.with { EngineConfiguration.Limits($0) }, message: message) {
                 self.interfaceInteraction?.setupEditMessage(messageId, { _ in })
+            } else {
+                // Shadow: say why instead of doing nothing (forwarded, sticker,
+                // round video, older than the edit window).
+                self.present(UndoOverlayController(presentationData: self.presentationData, content: .info(title: nil, text: "Это сообщение нельзя редактировать", timeout: nil, customUndoText: nil), elevatedLayout: false, action: { _ in return false }), in: .current)
             }
         }
 

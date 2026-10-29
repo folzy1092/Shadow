@@ -5899,7 +5899,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                         // (gestureRecognized returns .openContextMenu). If the option is on
                         // and it's your own editable message, open the editor instead of
                         // adding the quick reaction. Works in every chat type incl. secret.
-                        if case .doubleTap = gesture, ayuGramSettingsCurrent.doubleTapToEdit, !openContextMenu.tapMessage.flags.contains(.Incoming), (openContextMenu.tapMessage.id.namespace == Namespaces.Message.Cloud || openContextMenu.tapMessage.id.peerId.namespace == Namespaces.Peer.SecretChat), let requestEditMessage = item.controllerInteraction.requestEditMessage {
+                        if case .doubleTap = gesture, ayuGramSettingsCurrent.doubleTapToEdit, shadowIsOwnMessage(openContextMenu.tapMessage, accountPeerId: item.context.account.peerId), (openContextMenu.tapMessage.id.namespace == Namespaces.Message.Cloud || openContextMenu.tapMessage.id.peerId.namespace == Namespaces.Peer.SecretChat), let requestEditMessage = item.controllerInteraction.requestEditMessage {
                             requestEditMessage(openContextMenu.tapMessage.id)
                         } else if canAddMessageReactions(message: EngineMessage(openContextMenu.tapMessage)) {
                             item.controllerInteraction.updateMessageReaction(openContextMenu.tapMessage, .default, false, nil)
@@ -5914,7 +5914,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                     // (works in every chat type, including secret chats). Falls back to
                     // the quick reaction otherwise.
                     if ayuGramSettingsCurrent.doubleTapToEdit,
-                       !item.message.flags.contains(.Incoming),
+                       shadowIsOwnMessage(item.message, accountPeerId: item.context.account.peerId),
                        item.message.id.namespace == Namespaces.Message.Cloud || item.message.id.peerId.namespace == Namespaces.Peer.SecretChat,
                        let requestEditMessage = item.controllerInteraction.requestEditMessage {
                         requestEditMessage(item.message.id)
@@ -8114,4 +8114,14 @@ public final class NameNavigateButton: HighlightableButton {
             self.titleTopicIconComponent = nil
         }
     }
+}
+
+// Shadow: double tap to edit. In Saved Messages Telegram marks the account's
+// own messages as incoming (effectivelyIncoming), so the flag alone missed
+// them there; the author decides. canEditMessage still gates the editor.
+private func shadowIsOwnMessage(_ message: EngineRawMessage, accountPeerId: EnginePeer.Id) -> Bool {
+    if message.author?.id == accountPeerId {
+        return true
+    }
+    return !message.flags.contains(.Incoming)
 }
