@@ -72,7 +72,8 @@ public enum ShadowDeleteOwnMessages {
                 return true
             }
             return false
-        case .secretChat:
+        default:
+            // Secret chats (not on the server) and any other kind.
             return false
         }
     }
