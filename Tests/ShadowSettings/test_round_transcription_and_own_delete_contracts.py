@@ -54,7 +54,7 @@ class DeleteOwnMessagesContracts(unittest.TestCase):
         core = read(self.CORE)
         availability = core.split("public static func isAvailable", 1)[1].split("static func idsToDelete", 1)[0]
         self.assertIn("user.id != accountPeerId", availability)
-        self.assertIn("case .secretChat:\n            return false", availability.replace("\r\n", "\n"))
+        self.assertIn("default:\n            // Secret chats", availability.replace("\r\n", "\n"))
         self.assertIn("case .group = channel.info", availability)
 
     def test_periods(self):
