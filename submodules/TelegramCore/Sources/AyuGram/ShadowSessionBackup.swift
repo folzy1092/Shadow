@@ -43,7 +43,7 @@ public enum ShadowSessionBackup {
 
     private static let service: String = (Bundle.main.bundleIdentifier ?? "shadow") + ".shadow.sessions"
     // How long after a restore a logout is reported as «сессия завершена».
-    private static let verificationWindow: Double = 180.0
+    private static let verificationWindow: Double = 600.0
     private static let pendingLock = NSLock()
     private static var pendingVerification: [Int64: Double] = [:]
 
@@ -169,7 +169,13 @@ public enum ShadowSessionBackup {
         }
         // A peer can have an old logged-out record next to a live one (signed in again).
         for peerId in loggedOut.subtracting(live) {
-            if stored[peerId] != nil {
+            // 2.1.1: an account that fell out right after a restore keeps its item,
+            // so the restore can be tried again.
+            pendingLock.lock()
+            let restoredAt = pendingVerification[peerId]
+            pendingLock.unlock()
+            let recentlyRestored = restoredAt.map { Date().timeIntervalSince1970 - $0 < verificationWindow } ?? false
+            if stored[peerId] != nil && !recentlyRestored {
                 remove(peerId: peerId)
             }
             reportIfRestoredRecently(peerId: peerId)
