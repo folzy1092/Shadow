@@ -21,7 +21,9 @@ public final class AuthorizationSequencePhoneEntryController: ViewController, MF
     
     private var validLayout: ContainerViewLayout?
     
-    private let sharedContext: SharedAccountContext
+    let sharedContext: SharedAccountContext
+    // Shadow 2.1.0: the account backup is offered once per screen.
+    var shadowDidOfferSessionRestore = false
     private var account: UnauthorizedAccount?
     private let apiId: Int32
     private let apiHash: String
@@ -346,6 +348,7 @@ public final class AuthorizationSequencePhoneEntryController: ViewController, MF
         if !self.animatingIn {
             self.controllerNode.activateInput()
         }
+        self.shadowOfferSessionRestore()
     }
     
     override public func viewWillDisappear(_ animated: Bool) {

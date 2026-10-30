@@ -586,6 +586,26 @@ public final class SharedAccountContextImpl: SharedAccountContext {
             }
         }))
         
+        // Shadow 2.1.0: keep the keychain account backup in step with the account
+        // records, and say so when an account restored from it has a dead session.
+        let _ = (accountManager.accountRecords()
+        |> deliverOn(ShadowSessionBackup.queue)).start(next: { view in
+            ShadowSessionBackup.sync(records: view.records)
+        })
+        let _ = NotificationCenter.default.addObserver(forName: ShadowSessionBackup.restoreFailedNotification, object: nil, queue: .main, using: { [weak self] notification in
+            guard let self, let text = notification.userInfo?["text"] as? String else {
+                return
+            }
+            let presentationData = self.currentPresentationData.with { $0 }
+            let alert = textAlertController(sharedContext: self, title: "Аккаунт не восстановлен", text: text, actions: [
+                TextAlertAction(type: .genericAction, title: "Скопировать", action: {
+                    UIPasteboard.general.string = text
+                }),
+                TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})
+            ])
+            self.mainWindow?.present(alert, on: .root)
+        })
+        
         let startTime = CFAbsoluteTimeGetCurrent()
         
         let differenceDisposable = MetaDisposable()

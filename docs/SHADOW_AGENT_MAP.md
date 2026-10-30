@@ -860,6 +860,17 @@ UI-проекция настроек выбирается в `TelegramRootContro
   берётся из метаданных, **не из mtime** (mtime у hard-link общий с кэшем).
 - История правок: `AyuEditHistory.swift` + `SavedMessageEditsAttribute`.
 
+## 6b. Бэкап аккаунтов в связке ключей (2.1.0)
+
+- `ShadowSessionBackup` (TelegramCore): `AccountBackupData` каждого живого production-аккаунта
+  в связке ключей, сервис `<bundleId>.shadow.sessions`, WhenUnlocked, без iCloud (переезжает
+  только с зашифрованным бэкапом iPhone). Читается только сборкой с той же подписью (Team ID).
+- Синхронизация — `SharedAccountContext` (подписка на `accountRecords()`). Стирает запись
+  **только** у записи с `.loggedOut`; отсутствие записи (чистая установка) бэкап не трогает.
+- Восстановление: алерт на экране ввода номера (`AuthorizationUI/ShadowSessionRestore.swift`),
+  Face ID, `restoreAll` создаёт записи с `backupData`. Спек:
+  `docs/specs/2026-10-30-shadow-2.1.0-session-backup.md`.
+
 ## 6a. Пересылка защищённого (копией)
 
 - Сервер отклоняет нативную пересылку из чата с защитой контента (noforwards,
