@@ -1619,7 +1619,9 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                     return activeAccountsAndPeers(context: context.context)
                     |> take(1)
                     |> map { primaryAndAccounts -> (AccountContext, EnginePeer, Int32)? in
-                        return primaryAndAccounts.1.first
+                        // Shadow 2.2.3: the home-screen action never names a hidden account.
+                        let hiddenIds = ShadowHiddenAccounts.ids()
+                        return primaryAndAccounts.1.first(where: { !hiddenIds.contains($0.0.account.peerId.toInt64()) })
                     }
                     |> map { accountAndPeer -> String? in
                         if let (_, peer, _) = accountAndPeer {

@@ -1026,7 +1026,9 @@ final class AuthorizedApplicationContext {
         let _ = (activeAccountsAndPeers(context: self.context)
         |> take(1)
         |> map { primaryAndAccounts -> (AccountContext, EnginePeer, Int32)? in
-            return primaryAndAccounts.1.first
+            // Shadow 2.2.3: the quick switch never lands on a hidden account.
+            let hiddenIds = ShadowHiddenAccounts.ids()
+            return primaryAndAccounts.1.first(where: { !hiddenIds.contains($0.0.account.peerId.toInt64()) })
         }
         |> map { accountAndPeer -> AccountContext? in
             if let (context, _, _) = accountAndPeer {

@@ -118,7 +118,7 @@ func settingsItems(data: PeerInfoScreenData?, context: AccountContext, presentat
             }))
         }
         
-        if !settings.accountsAndPeers.isEmpty {
+        if !settings.accountsAndPeers.isEmpty || settings.hiddenAccountsCount > 0 {
             for (peerAccountContext, peer, badgeCount) in settings.accountsAndPeers {
                 let mappedContext = ItemListPeerItem.Context.custom(ItemListPeerItem.Context.Custom(
                     accountPeerId: peerAccountContext.account.peerId,
@@ -148,6 +148,11 @@ func settingsItems(data: PeerInfoScreenData?, context: AccountContext, presentat
             items[.accounts]!.append(PeerInfoScreenActionItem(id: 100, text: presentationData.strings.Settings_AddAccount, icon: PresentationResourcesItemList.plusIconImage(presentationData.theme), action: {
                 interaction.openSettings(.addAccount)
             }))
+            if settings.hiddenAccountsCount > 0 {
+                items[.accounts]!.append(PeerInfoScreenActionItem(id: 101, text: "Скрыто аккаунтов: \(settings.hiddenAccountsCount)", action: {
+                    interaction.openSettings(.hiddenAccounts)
+                }))
+            }
         }
         
         items[.myProfile]!.append(PeerInfoScreenDisclosureItem(id: 0, text: presentationData.strings.Settings_MyProfile, icon: PresentationResourcesSettings.myProfile, action: {

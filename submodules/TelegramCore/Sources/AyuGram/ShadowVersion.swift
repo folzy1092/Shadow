@@ -7,7 +7,7 @@ import Foundation
 // versions.json ("fork") for the release title; a contract test keeps the two
 // in sync.
 public enum ShadowVersion {
-    public static let fork = "2.2.2"
+    public static let fork = "2.2.3"
 
     // Telegram base version from the bundle (CFBundleShortVersionString).
     public static var telegram: String {

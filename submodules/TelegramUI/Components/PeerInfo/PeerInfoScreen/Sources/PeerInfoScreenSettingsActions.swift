@@ -60,6 +60,8 @@ extension PeerInfoScreenNode {
             self.controller?.push(proxySettingsController(context: self.context))
         case .ayugram:
             self.controller?.push(ayuGramSettingsController(context: self.context))
+        case .hiddenAccounts:
+            self.controller?.push(shadowHiddenAccountsController(context: self.context))
         case .markAllReadLocally:
             let _ = self.context.engine.messages.markAllChatsAsReadLocally(items: [(.root, nil), (.archive, nil)]).startStandalone()
         case .markAllReadOnServer:

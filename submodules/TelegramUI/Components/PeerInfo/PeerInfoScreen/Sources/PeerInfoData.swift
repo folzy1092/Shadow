@@ -280,6 +280,7 @@ final class TelegramGlobalSettings {
     let suggestPasswordSetup: Bool
     let premiumGracePeriod: Bool
     let accountsAndPeers: [(AccountContext, EnginePeer, Int32)]
+    let hiddenAccountsCount: Int
     let activeSessionsContext: ActiveSessionsContext?
     let webSessionsContext: WebSessionsContext?
     let otherSessionsCount: Int?
@@ -304,6 +305,7 @@ final class TelegramGlobalSettings {
         suggestPasswordSetup: Bool,
         premiumGracePeriod: Bool,
         accountsAndPeers: [(AccountContext, EnginePeer, Int32)],
+        hiddenAccountsCount: Int,
         activeSessionsContext: ActiveSessionsContext?,
         webSessionsContext: WebSessionsContext?,
         otherSessionsCount: Int?,
@@ -327,6 +329,7 @@ final class TelegramGlobalSettings {
         self.suggestPasswordSetup = suggestPasswordSetup
         self.premiumGracePeriod = premiumGracePeriod
         self.accountsAndPeers = accountsAndPeers
+        self.hiddenAccountsCount = hiddenAccountsCount
         self.activeSessionsContext = activeSessionsContext
         self.webSessionsContext = webSessionsContext
         self.otherSessionsCount = otherSessionsCount
@@ -925,7 +928,7 @@ private func peerInfoPersonalOrLinkedChannel(context: AccountContext, peerId: En
     |> distinctUntilChanged
 }
 
-func peerInfoScreenSettingsData(context: AccountContext, peerId: EnginePeer.Id, accountsAndPeers: Signal<[(AccountContext, EnginePeer, Int32)], NoError>, activeSessionsContextAndCount: Signal<(ActiveSessionsContext, Int, WebSessionsContext)?, NoError>, notificationExceptions: Signal<NotificationExceptionsList?, NoError>, privacySettings: Signal<AccountPrivacySettings?, NoError>, archivedStickerPacks: Signal<[ArchivedStickerPackItem]?, NoError>, hasPassport: Signal<Bool, NoError>, starsContext: StarsContext?, tonContext: StarsContext?) -> Signal<PeerInfoScreenData, NoError> {
+func peerInfoScreenSettingsData(context: AccountContext, peerId: EnginePeer.Id, accountsAndPeers: Signal<[(AccountContext, EnginePeer, Int32)], NoError>, hiddenAccountsCount: Signal<Int, NoError>, activeSessionsContextAndCount: Signal<(ActiveSessionsContext, Int, WebSessionsContext)?, NoError>, notificationExceptions: Signal<NotificationExceptionsList?, NoError>, privacySettings: Signal<AccountPrivacySettings?, NoError>, archivedStickerPacks: Signal<[ArchivedStickerPackItem]?, NoError>, hasPassport: Signal<Bool, NoError>, starsContext: StarsContext?, tonContext: StarsContext?) -> Signal<PeerInfoScreenData, NoError> {
     let preferences = context.sharedContext.accountManager.sharedData(keys: [
         SharedDataKeys.proxySettings,
         ApplicationSpecificSharedDataKeys.inAppNotificationSettings,
@@ -1068,7 +1071,7 @@ func peerInfoScreenSettingsData(context: AccountContext, peerId: EnginePeer.Id, 
 
     return combineLatest(
         context.account.viewTracker.peerView(peerId, updateData: true),
-        accountsAndPeers,
+        combineLatest(accountsAndPeers, hiddenAccountsCount),
         activeSessionsContextAndCount,
         privacySettings,
         preferences,
@@ -1096,7 +1099,8 @@ func peerInfoScreenSettingsData(context: AccountContext, peerId: EnginePeer.Id, 
         businessConnectedBot,
         walletBalance
     )
-    |> map { peerView, accountsAndPeers, accountSessions, privacySettings, sharedPreferences, notifications, stickerPacks, hasPassport, accountPreferences, suggestions, limits, hasPassword, isPowerSavingEnabled, hasStories, bots, personalChannel, starsState, tonState, businessConnectedBot, walletBalance -> PeerInfoScreenData in
+    |> map { peerView, accountsData, accountSessions, privacySettings, sharedPreferences, notifications, stickerPacks, hasPassport, accountPreferences, suggestions, limits, hasPassword, isPowerSavingEnabled, hasStories, bots, personalChannel, starsState, tonState, businessConnectedBot, walletBalance -> PeerInfoScreenData in
+        let (accountsAndPeers, hiddenAccountsCount) = accountsData
         let (notificationExceptions, notificationsAuthorizationStatus, notificationsWarningSuppressed) = notifications
         let (featuredStickerPacks, archivedStickerPacks) = stickerPacks
         
@@ -1125,6 +1129,7 @@ func peerInfoScreenSettingsData(context: AccountContext, peerId: EnginePeer.Id, 
             suggestPasswordSetup: suggestPasswordSetup,
             premiumGracePeriod: suggestions.contains(.gracePremium),
             accountsAndPeers: accountsAndPeers,
+            hiddenAccountsCount: hiddenAccountsCount,
             activeSessionsContext: accountSessions?.0,
             webSessionsContext: accountSessions?.2,
             otherSessionsCount: accountSessions?.1,
@@ -1781,6 +1786,7 @@ func peerInfoScreenData(
                         suggestPasswordSetup: false,
                         premiumGracePeriod: false,
                         accountsAndPeers: [],
+                        hiddenAccountsCount: 0,
                         activeSessionsContext: nil,
                         webSessionsContext: nil,
                         otherSessionsCount: nil,

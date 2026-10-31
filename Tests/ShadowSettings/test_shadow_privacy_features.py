@@ -136,6 +136,24 @@ class ShadowPrivacyFeatures(unittest.TestCase):
         self.assertIn("ShadowHiddenAccounts.signal()", settings_screen)
         self.assertIn("!hiddenIds.contains", settings_screen)
 
+    def test_hidden_accounts_stay_discoverable_and_are_never_switched_to_silently(self):
+        sources = UI / "Components/PeerInfo/PeerInfoScreen/Sources"
+        items = (sources / "PeerInfoSettingsItems.swift").read_text()
+        actions = (sources / "PeerInfoScreenSettingsActions.swift").read_text()
+        hub = (SETTINGS_UI / "AyuGramSettingsController.swift").read_text()
+        app_context = (UI / "Sources/ApplicationContext.swift").read_text()
+        app_delegate = (UI / "Sources/AppDelegate.swift").read_text()
+        shared = (UI / "Sources/SharedAccountContext.swift").read_text()
+        self.assertIn("Скрыто аккаунтов: ", items)
+        self.assertIn("case .hiddenAccounts", actions)
+        self.assertIn("public func shadowHiddenAccountsController", hub)
+        switch_account = app_context.split("func switchAccount()", 1)[1][:1500]
+        self.assertIn("ShadowHiddenAccounts.ids()", switch_account)
+        self.assertIn("ShadowHiddenAccounts.ids()", app_delegate)
+        self.assertIn("let previousPrimaryId = self.activeAccountsValue!.primary?.account.id", shared)
+        self.assertIn("removedIds.contains(previousPrimaryId)", shared)
+        self.assertIn("ShadowHiddenAccounts.setHidden(false, peerId: primary.account.peerId)", shared)
+
     def test_main_settings_use_requested_flat_sections(self):
         hub = (SETTINGS_UI / "AyuGramSettingsController.swift").read_text()
         expected = [

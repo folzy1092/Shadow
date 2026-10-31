@@ -601,7 +601,7 @@ private func shadowActiveAccounts(context: AccountContext) -> Signal<[ShadowActi
     }
 }
 
-func shadowHiddenAccountsController(context: AccountContext) -> ViewController {
+public func shadowHiddenAccountsController(context: AccountContext) -> ViewController {
     let arguments = ShadowHiddenAccountsArguments(updateHidden: { peerId, value in
         ShadowHiddenAccounts.setHidden(value, peerId: peerId)
     })

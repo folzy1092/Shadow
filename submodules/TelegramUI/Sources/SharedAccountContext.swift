@@ -817,6 +817,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
                         }).start()
                     }
                 }
+                let previousPrimaryId = self.activeAccountsValue!.primary?.account.id
                 var removedIds: [AccountRecordId] = []
                 for id in self.activeAccountsValue!.accounts.map({ $0.0 }) {
                     if records[id] == nil {
@@ -841,6 +842,12 @@ public final class SharedAccountContextImpl: SharedAccountContext {
                 }
                 if primary !== self.activeAccountsValue!.primary {
                     hadUpdates = true
+                    // Shadow 2.2.3: when the current account is removed (logout) and the app falls
+                    // back to a hidden one, that account becomes visible again: otherwise the user
+                    // lands in an account the app was showing nowhere.
+                    if let previousPrimaryId = previousPrimaryId, removedIds.contains(previousPrimaryId), let primary = primary, ShadowHiddenAccounts.contains(primary.account.peerId) {
+                        ShadowHiddenAccounts.setHidden(false, peerId: primary.account.peerId)
+                    }
                     self.activeAccountsValue!.primary?.account.postbox.clearCaches()
                     self.activeAccountsValue!.primary?.account.resetCachedData()
                     self.activeAccountsValue!.primary = primary

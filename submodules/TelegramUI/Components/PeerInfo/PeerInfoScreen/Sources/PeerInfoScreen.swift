@@ -201,6 +201,7 @@ enum PeerInfoSettingsSection {
     case markAllReadLocally
     case markAllReadOnServer
     case wallet
+    case hiddenAccounts
 }
 
 enum PeerInfoReportType {
@@ -382,6 +383,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
     let displayAsPeersPromise = Promise<[FoundPeer]>([])
     
     let accountsAndPeers = Promise<[(AccountContext, EnginePeer, Int32)]>()
+    let hiddenAccountsCount = Promise<Int>(0)
     let activeSessionsContextAndCount = Promise<(ActiveSessionsContext, Int, WebSessionsContext)?>()
     let notificationExceptions = Promise<NotificationExceptionsList?>()
     let privacySettings = Promise<AccountPrivacySettings?>()
@@ -2201,7 +2203,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                 return data?.hasSecretValues ?? false
             }
                         
-            screenData = peerInfoScreenSettingsData(context: context, peerId: peerId, accountsAndPeers: self.accountsAndPeers.get(), activeSessionsContextAndCount: self.activeSessionsContextAndCount.get(), notificationExceptions: self.notificationExceptions.get(), privacySettings: self.privacySettings.get(), archivedStickerPacks: self.archivedPacks.get(), hasPassport: hasPassport, starsContext: starsContext, tonContext: tonContext)
+            screenData = peerInfoScreenSettingsData(context: context, peerId: peerId, accountsAndPeers: self.accountsAndPeers.get(), hiddenAccountsCount: self.hiddenAccountsCount.get(), activeSessionsContextAndCount: self.activeSessionsContextAndCount.get(), notificationExceptions: self.notificationExceptions.get(), privacySettings: self.privacySettings.get(), archivedStickerPacks: self.archivedPacks.get(), hasPassport: hasPassport, starsContext: starsContext, tonContext: tonContext)
             
             
             self.headerNode.displayCopyContextMenu = { [weak self] node, copyPhone, copyUsername in
@@ -6590,6 +6592,7 @@ public final class PeerInfoScreenImpl: ViewController, PeerInfoScreen, KeyShortc
     private let cachedDataPromise = Promise<EngineCachedPeerData?>()
     
     private let accountsAndPeers = Promise<((AccountContext, EnginePeer)?, [(AccountContext, EnginePeer, Int32)])>()
+    private let hiddenAccountsCount = Promise<Int>(0)
     private var accountsAndPeersValue: ((AccountContext, EnginePeer)?, [(AccountContext, EnginePeer, Int32)])?
     private var accountsAndPeersDisposable: Disposable?
     
@@ -6752,13 +6755,20 @@ public final class PeerInfoScreenImpl: ViewController, PeerInfoScreen, KeyShortc
             }
             self.activeSessionsContextAndCount.set(activeSessionsContextAndCountSignal)
             
-            self.accountsAndPeers.set(combineLatest(activeAccountsAndPeers(context: context), ShadowHiddenAccounts.signal())
+            let accountsAndHiddenIds = combineLatest(activeAccountsAndPeers(context: context), ShadowHiddenAccounts.signal())
+            self.accountsAndPeers.set(accountsAndHiddenIds
             |> map { accountData, hiddenIds in
                 let (primary, accounts) = accountData
                 return (primary, accounts.filter { account in
                     return !hiddenIds.contains(account.0.account.peerId.toInt64())
                 })
             })
+            // Shadow: without this count a hidden account leaves no trace in Settings.
+            self.hiddenAccountsCount.set(accountsAndHiddenIds
+            |> map { accountData, hiddenIds -> Int in
+                return accountData.1.filter { hiddenIds.contains($0.0.account.peerId.toInt64()) }.count
+            }
+            |> distinctUntilChanged)
             self.accountsAndPeersDisposable = (self.accountsAndPeers.get()
             |> deliverOnMainQueue).startStrict(next: { [weak self] value in
                 self?.accountsAndPeersValue = value
@@ -7050,6 +7060,7 @@ public final class PeerInfoScreenImpl: ViewController, PeerInfoScreen, KeyShortc
         }
         self.displayNode = PeerInfoScreenNode(controller: self, context: self.context, peerId: self.peerId, avatarInitiallyExpanded: self.avatarInitiallyExpanded, isOpenedFromChat: self.isOpenedFromChat, reactionSourceMessageId: self.reactionSourceMessageId, sourceMessageId: self.sourceMessageId, callMessages: self.callMessages, isSettings: self.isSettings, isMyProfile: self.isMyProfile, hintGroupInCommon: self.hintGroupInCommon, requestsContext: self.requestsContext, profileGiftsContext: self.profileGiftsContext, starsContext: self.starsContext, tonContext: self.tonContext, chatLocation: self.chatLocation, chatLocationContextHolder: self.chatLocationContextHolder, switchToGiftsTarget: self.switchToGiftsTarget, switchToStoryFolder: self.switchToStoryFolder, switchToMediaTarget: self.switchToMediaTarget, initialPaneKey: initialPaneKey, sharedMediaFromForumTopic: self.sharedMediaFromForumTopic)
         self.controllerNode.accountsAndPeers.set(self.accountsAndPeers.get() |> map { $0.1 })
+        self.controllerNode.hiddenAccountsCount.set(self.hiddenAccountsCount.get())
         self.controllerNode.activeSessionsContextAndCount.set(self.activeSessionsContextAndCount.get())
         self.cachedDataPromise.set(self.controllerNode.cachedDataPromise.get())
         self._readyInternal.set(self.controllerNode.ready.get())
