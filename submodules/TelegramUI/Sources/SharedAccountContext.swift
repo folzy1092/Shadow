@@ -592,12 +592,18 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         |> deliverOn(ShadowSessionBackup.queue)).start(next: { view in
             ShadowSessionBackup.sync(records: view.records)
         })
-        let _ = NotificationCenter.default.addObserver(forName: ShadowSessionBackup.restoreFailedNotification, object: nil, queue: .main, using: { [weak self] notification in
-            guard let self, let text = notification.userInfo?["text"] as? String else {
+        let _ = NotificationCenter.default.addObserver(forName: ShadowSessionBackup.restoreFailedNotification, object: nil, queue: .main, using: { [weak self] _ in
+            guard let self, self.mainWindow != nil else {
                 return
             }
+            let failures = ShadowSessionBackup.takePendingFailures()
+            if failures.isEmpty {
+                return
+            }
+            let text = failures.joined(separator: "\n\n")
+            let title = failures.count == 1 ? "Аккаунт не восстановлен" : "Аккаунты не восстановлены"
             let presentationData = self.currentPresentationData.with { $0 }
-            let alert = textAlertController(sharedContext: self, title: "Аккаунт не восстановлен", text: text, actions: [
+            let alert = textAlertController(sharedContext: self, title: title, text: text, actions: [
                 TextAlertAction(type: .genericAction, title: "Скопировать", action: {
                     UIPasteboard.general.string = text
                 }),
@@ -605,7 +611,12 @@ public final class SharedAccountContextImpl: SharedAccountContext {
             ])
             self.mainWindow?.present(alert, on: .root)
         })
-        
+        // Failures recorded before a relaunch (or before the window existed) are
+        // shown once the app is up.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            ShadowSessionBackup.announcePendingFailures()
+        }
+
         let startTime = CFAbsoluteTimeGetCurrent()
         
         let differenceDisposable = MetaDisposable()
@@ -767,6 +778,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
                 for accountRecord in addedAccounts {
                     if let account = accountRecord.1 {
                         if existingAccountPeerKeys.contains(AccountPeerKey(peerId: account.peerId, isTestingEnvironment: account.testingEnvironment)) {
+                            Logger.shared.log("ShadowSessionBackup", "dropping duplicate record \(accountRecord.0) of peer \(account.peerId.id._internalGetInt64Value())")
                             let _ = accountManager.transaction({ transaction in
                                 transaction.updateRecord(accountRecord.0, { _ in
                                     return nil
@@ -789,6 +801,13 @@ public final class SharedAccountContextImpl: SharedAccountContext {
                             hadUpdates = true
                         }
                     } else {
+                        // Shadow 2.1.1: a record restored from the keychain whose session
+                        // did not start is reported before it is deleted.
+                        if let peerId = records[accountRecord.0]?.backupData?.peerId {
+                            ShadowSessionBackup.queue.async {
+                                ShadowSessionBackup.noteRestoreFailed(peerId: peerId, reason: "сохранённая сессия не запустилась")
+                            }
+                        }
                         let _ = accountManager.transaction({ transaction in
                             transaction.updateRecord(accountRecord.0, { _ in
                                 return nil

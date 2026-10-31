@@ -35,17 +35,45 @@ public enum ShadowSessionBackup {
         public var errors: [String]
     }
 
-    // Posted on the main queue with userInfo["text"] when an account restored in
-    // this launch turns out to have a session the server no longer accepts.
+    // Posted on the main queue when restored accounts failed to come back; the
+    // texts are taken with takePendingFailures().
     public static let restoreFailedNotification = Notification.Name("ShadowSessionBackupRestoreFailed")
 
     public static let queue = Queue(name: "org.shadow.sessionBackup")
 
     private static let service: String = (Bundle.main.bundleIdentifier ?? "shadow") + ".shadow.sessions"
-    // How long after a restore a logout is reported as «сессия завершена».
+    // How long after a restore a vanished or logged-out record counts as a failed restore.
     private static let verificationWindow: Double = 600.0
-    private static let pendingLock = NSLock()
-    private static var pendingVerification: [Int64: Double] = [:]
+
+    // 2.1.1: what the restore is waiting for, kept across launches. Telegram deletes
+    // the record of a restored account whose session the server refuses, and the
+    // app may be relaunched before anyone sees why, so the failure is written down
+    // first and shown at the next chance.
+    private struct RestoreState: Codable {
+        var restoredAt: [Int64: Double] = [:]
+        // Restored peers the records have shown at least once.
+        var seen: Set<Int64> = []
+        // Failed restores: their keychain items are kept so the restore can be retried.
+        var failed: Set<Int64> = []
+        // Texts not shown yet.
+        var failures: [String] = []
+    }
+
+    private static let stateKey = "shadow.sessionBackup.restoreState"
+    private static let stateLock = NSLock()
+
+    private static func updateState<T>(_ f: (inout RestoreState) -> T) -> T {
+        stateLock.lock()
+        defer {
+            stateLock.unlock()
+        }
+        var state = UserDefaults.standard.data(forKey: stateKey).flatMap { try? JSONDecoder().decode(RestoreState.self, from: $0) } ?? RestoreState()
+        let result = f(&state)
+        if let data = try? JSONEncoder().encode(state) {
+            UserDefaults.standard.set(data, forKey: stateKey)
+        }
+        return result
+    }
 
     public static func userId(_ peerId: Int64) -> Int64 {
         return PeerId(peerId).id._internalGetInt64Value()
@@ -167,31 +195,75 @@ public enum ShadowSessionBackup {
         for (peerId, data) in latest where stored[peerId]?.data != data {
             write(Entry(version: 1, peerId: peerId, date: Int32(Date().timeIntervalSince1970), data: data))
         }
+        let (failedNow, keep) = checkRestored(live: live, loggedOut: loggedOut)
+        for peerId in failedNow {
+            noteRestoreFailed(peerId: peerId, reason: "сервер не принял сохранённую сессию (скорее всего, её завершили в «Активных сеансах» или она истекла)")
+        }
         // A peer can have an old logged-out record next to a live one (signed in again).
-        for peerId in loggedOut.subtracting(live) {
-            // 2.1.1: an account that fell out right after a restore keeps its item,
-            // so the restore can be tried again.
-            pendingLock.lock()
-            let restoredAt = pendingVerification[peerId]
-            pendingLock.unlock()
-            let recentlyRestored = restoredAt.map { Date().timeIntervalSince1970 - $0 < verificationWindow } ?? false
-            if stored[peerId] != nil && !recentlyRestored {
-                remove(peerId: peerId)
-            }
-            reportIfRestoredRecently(peerId: peerId)
+        // An account that fell out right after a restore keeps its item, so the
+        // restore can be tried again.
+        for peerId in loggedOut.subtracting(live) where stored[peerId] != nil && !keep.contains(peerId) {
+            remove(peerId: peerId)
         }
     }
 
-    private static func reportIfRestoredRecently(peerId: Int64) {
-        pendingLock.lock()
-        let restoredAt = pendingVerification.removeValue(forKey: peerId)
-        pendingLock.unlock()
-        guard let restoredAt = restoredAt, Date().timeIntervalSince1970 - restoredAt < verificationWindow else {
-            return
+    // A restored account that turns logged out, or whose record disappears (Telegram
+    // deletes the record of a session the server refused), within the window has
+    // failed. Returns those and every peer whose item must be kept.
+    private static func checkRestored(live: Set<Int64>, loggedOut: Set<Int64>) -> (failedNow: [Int64], keep: Set<Int64>) {
+        let now = Date().timeIntervalSince1970
+        return updateState { state in
+            var failedNow: [Int64] = []
+            for (peerId, restoredAt) in state.restoredAt {
+                let isRecent = now - restoredAt < verificationWindow
+                if live.contains(peerId) || loggedOut.contains(peerId) {
+                    state.seen.insert(peerId)
+                }
+                if live.contains(peerId) {
+                    state.failed.remove(peerId)
+                } else if isRecent && (loggedOut.contains(peerId) || state.seen.contains(peerId)) {
+                    failedNow.append(peerId)
+                }
+                if !isRecent {
+                    state.restoredAt[peerId] = nil
+                    state.seen.remove(peerId)
+                }
+            }
+            return (failedNow, state.failed.union(state.restoredAt.keys))
         }
-        let text = "Аккаунт \(userId(peerId)): сервер не принял сохранённую сессию. Скорее всего, её завершили в «Активных сеансах» или она истекла. Войди в этот аккаунт по номеру."
+    }
+
+    // Records a failed restore once, keeps its item and tells the app to show it.
+    // Only an account restored within the window counts: other records fail for
+    // reasons of their own.
+    public static func noteRestoreFailed(peerId: Int64, reason: String) {
+        let text = "Аккаунт \(userId(peerId)): \(reason). Войди в этот аккаунт по номеру."
+        let isNew = updateState { state -> Bool in
+            guard state.restoredAt[peerId] != nil, !state.failed.contains(peerId) else {
+                return false
+            }
+            state.failed.insert(peerId)
+            state.failures.append(text)
+            return true
+        }
+        if isNew {
+            Logger.shared.log("ShadowSessionBackup", "restore failed: \(text)")
+            announcePendingFailures()
+        }
+    }
+
+    public static func announcePendingFailures() {
         DispatchQueue.main.async {
-            NotificationCenter.default.post(name: restoreFailedNotification, object: nil, userInfo: ["text": text])
+            NotificationCenter.default.post(name: restoreFailedNotification, object: nil)
+        }
+    }
+
+    // The failures not shown yet; taking them marks them shown.
+    public static func takePendingFailures() -> [String] {
+        return updateState { state in
+            let failures = state.failures
+            state.failures = []
+            return failures
         }
     }
 
@@ -215,47 +287,68 @@ public enum ShadowSessionBackup {
         }
     }
 
-    // Creates a record for every backed-up account that is not in the app. With
-    // `switchToRestored` (the login screen) the first one becomes current and the
-    // pending authorization is dropped, as a finished login does.
+    // Creates a record for every backed-up account that is not in the app, one
+    // transaction per account, one after another (as Swiftgram restores its
+    // backups), so every record is created against the records the previous one
+    // left. With `switchToRestored` (the login screen) the first one becomes
+    // current and the pending authorization is dropped, as a finished login does.
     public static func restoreAll(accountManager: AccountManager<TelegramAccountManagerTypes>, switchToRestored: Bool) -> Signal<RestoreResult, NoError> {
-        return accountManager.transaction { transaction -> RestoreResult in
+        return deferred { () -> Signal<RestoreResult, NoError> in
             let (entries, errors) = loadAll()
+            var signal: Signal<[(Int64, AccountRecordId)], NoError> = .single([])
+            for entry in entries.sorted(by: { $0.peerId < $1.peerId }) {
+                signal = signal
+                |> mapToSignal { restored -> Signal<[(Int64, AccountRecordId)], NoError> in
+                    return restoreOne(entry, accountManager: accountManager)
+                    |> map { id -> [(Int64, AccountRecordId)] in
+                        guard let id = id else {
+                            return restored
+                        }
+                        return restored + [(entry.peerId, id)]
+                    }
+                }
+            }
+            return signal
+            |> mapToSignal { restored -> Signal<RestoreResult, NoError> in
+                let result = RestoreResult(restored: restored.map { $0.0 }, skipped: entries.count - restored.count, errors: errors)
+                guard switchToRestored, let firstId = restored.first?.1 else {
+                    return .single(result)
+                }
+                return accountManager.transaction { transaction -> RestoreResult in
+                    transaction.setCurrentId(firstId)
+                    transaction.removeAuth()
+                    return result
+                }
+            }
+        }
+        |> runOn(queue)
+    }
+
+    private static func restoreOne(_ entry: Entry, accountManager: AccountManager<TelegramAccountManagerTypes>) -> Signal<AccountRecordId?, NoError> {
+        return accountManager.transaction { transaction -> AccountRecordId? in
             let records = transaction.getRecords()
-            let present = presentPeerIds(records)
-            var nextSortOrder = (records.map { record -> Int32 in
+            if presentPeerIds(records).contains(entry.peerId) {
+                return nil
+            }
+            let maxSortOrder = records.map { record -> Int32 in
                 for attribute in record.attributes {
                     if case let .sortOrder(sortOrder) = attribute {
                         return sortOrder.order
                     }
                 }
                 return 0
-            }.max() ?? 0) + 1
-            var restored: [Int64] = []
-            var firstId: AccountRecordId?
-            for entry in entries.sorted(by: { $0.peerId < $1.peerId }) where !present.contains(entry.peerId) {
-                let id = transaction.createRecord([
-                    .environment(AccountEnvironmentAttribute(environment: .production)),
-                    .sortOrder(AccountSortOrderAttribute(order: nextSortOrder)),
-                    .backupData(AccountBackupDataAttribute(data: entry.data))
-                ])
-                nextSortOrder += 1
-                restored.append(entry.peerId)
-                if firstId == nil {
-                    firstId = id
-                }
+            }.max() ?? 0
+            let id = transaction.createRecord([
+                .environment(AccountEnvironmentAttribute(environment: .production)),
+                .sortOrder(AccountSortOrderAttribute(order: maxSortOrder + 1)),
+                .backupData(AccountBackupDataAttribute(data: entry.data))
+            ])
+            updateState { state in
+                state.restoredAt[entry.peerId] = Date().timeIntervalSince1970
+                state.failed.remove(entry.peerId)
+                state.seen.remove(entry.peerId)
             }
-            if switchToRestored, let firstId = firstId {
-                transaction.setCurrentId(firstId)
-                transaction.removeAuth()
-            }
-            let now = Date().timeIntervalSince1970
-            pendingLock.lock()
-            for peerId in restored {
-                pendingVerification[peerId] = now
-            }
-            pendingLock.unlock()
-            return RestoreResult(restored: restored, skipped: entries.count - restored.count, errors: errors)
+            return id
         }
     }
 
