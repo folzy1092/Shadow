@@ -866,6 +866,7 @@ private final class AyuCustomizationArguments {
     let updateCustomProfileBackground: (Bool) -> Void
     let updateCustomProfileBackgroundForOthers: (Bool) -> Void
     let updateCustomProfileBackgroundForSettings: (Bool) -> Void
+    let updateCustomProfileBackgroundFromAvatar: (Bool) -> Void
     let chooseProfileBackground: () -> Void
 
     init(
@@ -900,6 +901,7 @@ private final class AyuCustomizationArguments {
         updateCustomProfileBackground: @escaping (Bool) -> Void,
         updateCustomProfileBackgroundForOthers: @escaping (Bool) -> Void,
         updateCustomProfileBackgroundForSettings: @escaping (Bool) -> Void,
+        updateCustomProfileBackgroundFromAvatar: @escaping (Bool) -> Void,
         chooseProfileBackground: @escaping () -> Void
     ) {
         self.updateShowMessageSeconds = updateShowMessageSeconds
@@ -933,6 +935,7 @@ private final class AyuCustomizationArguments {
         self.updateCustomProfileBackground = updateCustomProfileBackground
         self.updateCustomProfileBackgroundForOthers = updateCustomProfileBackgroundForOthers
         self.updateCustomProfileBackgroundForSettings = updateCustomProfileBackgroundForSettings
+        self.updateCustomProfileBackgroundFromAvatar = updateCustomProfileBackgroundFromAvatar
         self.chooseProfileBackground = chooseProfileBackground
     }
 }
@@ -1069,6 +1072,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
     case customProfileBackground(Bool)
     case customProfileBackgroundForOthers(Bool)
     case customProfileBackgroundForSettings(Bool)
+    case customProfileBackgroundFromAvatar(Bool)
     case profileBackgroundChoose
     case profileBackgroundFooter
 
@@ -1101,7 +1105,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
             return AyuCustomizationSection.githubConfig.rawValue
         case .bannerHeader, .customBanner, .bannerChoose, .bannerFooter:
             return AyuCustomizationSection.banner.rawValue
-        case .profileBackgroundHeader, .customProfileBackground, .customProfileBackgroundForOthers, .customProfileBackgroundForSettings, .profileBackgroundChoose, .profileBackgroundFooter:
+        case .profileBackgroundHeader, .customProfileBackground, .customProfileBackgroundForOthers, .customProfileBackgroundForSettings, .customProfileBackgroundFromAvatar, .profileBackgroundChoose, .profileBackgroundFooter:
             return AyuCustomizationSection.profileBackground.rawValue
         }
     }
@@ -1204,6 +1208,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .customProfileBackground: return 41
         case .customProfileBackgroundForOthers: return 42
         case .customProfileBackgroundForSettings: return 43
+        case .customProfileBackgroundFromAvatar: return 141
         case .profileBackgroundChoose: return 44
         case .profileBackgroundFooter: return 45
         }
@@ -1267,14 +1272,15 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .customProfileBackground: return (29, 9)
         case .customProfileBackgroundForOthers: return (29, 10)
         case .customProfileBackgroundForSettings: return (29, 11)
-        case .profileBackgroundChoose: return (29, 12)
-        case .profileBackgroundFooter: return (29, 13)
-        case .callsHeader: return (29, 14)
-        case .confirmCalls: return (29, 15)
-        case .callsFooter: return (29, 16)
-        case .githubConfigHeader: return (29, 17)
-        case .syncGithub: return (29, 18)
-        case .githubConfigFooter: return (29, 19)
+        case .customProfileBackgroundFromAvatar: return (29, 12)
+        case .profileBackgroundChoose: return (29, 13)
+        case .profileBackgroundFooter: return (29, 14)
+        case .callsHeader: return (29, 15)
+        case .confirmCalls: return (29, 16)
+        case .callsFooter: return (29, 17)
+        case .githubConfigHeader: return (29, 18)
+        case .syncGithub: return (29, 19)
+        case .githubConfigFooter: return (29, 20)
         // Right after the appearance section.
         case .settingsIconsHeader: return (10, 1)
         case .monochromeSettingsIcons: return (10, 2)
@@ -1600,6 +1606,10 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
             return ItemListSwitchItem(presentationData: presentationData, title: "Применять в Settings", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 arguments.updateCustomProfileBackgroundForSettings(value)
             })
+        case let .customProfileBackgroundFromAvatar(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Фон из аватарки", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.updateCustomProfileBackgroundFromAvatar(value)
+            })
         case .profileBackgroundChoose:
             return ItemListActionItem(presentationData: presentationData, title: "Выбрать изображение", kind: .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: {
                 arguments.chooseProfileBackground()
@@ -1740,6 +1750,7 @@ private func ayuCustomizationEntries(settings: AyuGramSettings, chatVoiceSpeedCo
     if settings.customProfileBackgroundEnabled {
         entries.append(.customProfileBackgroundForOthers(settings.customProfileBackgroundForOthers))
         entries.append(.customProfileBackgroundForSettings(settings.customProfileBackgroundForSettings))
+        entries.append(.customProfileBackgroundFromAvatar(settings.customProfileBackgroundFromAvatar))
         entries.append(.profileBackgroundChoose)
     }
     entries.append(.profileBackgroundFooter)
@@ -1909,6 +1920,9 @@ func ayuCustomizationController(context: AccountContext, focus: ShadowSettingsSe
         },
         updateCustomProfileBackgroundForSettings: { value in
             ayuUpdateSettings(context: context) { var s = $0; s.customProfileBackgroundForSettings = value; return s }
+        },
+        updateCustomProfileBackgroundFromAvatar: { value in
+            ayuUpdateSettings(context: context) { var s = $0; s.customProfileBackgroundFromAvatar = value; return s }
         },
         chooseProfileBackground: {
             presentProfileBackgroundImagePickerImpl?()

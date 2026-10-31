@@ -91,6 +91,7 @@ public enum ShadowSettingsTransfer {
         "customProfileBackgroundEnabled": \.customProfileBackgroundEnabled,
         "customProfileBackgroundForOthers": \.customProfileBackgroundForOthers,
         "customProfileBackgroundForSettings": \.customProfileBackgroundForSettings,
+        "customProfileBackgroundFromAvatar": \.customProfileBackgroundFromAvatar,
         "updateChannelBeta": \.updateChannelBeta,
         "unlimitedPinnedChats": \.unlimitedPinnedChats,
         "localVoiceTranscription": \.localVoiceTranscription,

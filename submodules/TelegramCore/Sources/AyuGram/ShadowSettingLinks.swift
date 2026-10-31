@@ -333,6 +333,7 @@ public enum ShadowSettingLinks {
         ShadowSettingLink(screen: "customization", slug: "profile-background", entryId: 41, key: "customProfileBackgroundEnabled", title: "Кастомный фон профиля", icon: "photo"),
         ShadowSettingLink(screen: "customization", slug: "profile-background-all", entryId: 42, key: "customProfileBackgroundForOthers", title: "Фон для всех профилей", parentEntryId: 41),
         ShadowSettingLink(screen: "customization", slug: "profile-background-settings", entryId: 43, key: "customProfileBackgroundForSettings", title: "Фон в настройках", parentEntryId: 41),
+        ShadowSettingLink(screen: "customization", slug: "profile-background-avatar", entryId: 141, key: "customProfileBackgroundFromAvatar", title: "Фон из аватарки", parentEntryId: 41, since: "2.2.0"),
 
         // Скриншоты сообщений (ShadowMessageScreenshotEntry)
         ShadowSettingLink(screen: "screenshot", slug: "button", entryId: 0, key: "screenshotEnabled", title: "Кнопка скриншота при выделении", icon: "camera.viewfinder"),

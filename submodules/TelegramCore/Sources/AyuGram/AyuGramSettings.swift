@@ -430,6 +430,9 @@ public struct AyuGramSettings: Codable, Equatable {
     // Применять кастомный фон профиля в экране Settings (где переключение аккаунтов, сверху мини-профиль).
     // Работает только когда customProfileBackgroundEnabled = true.
     public var customProfileBackgroundForSettings: Bool
+    // Shadow 2.2.0: фон профиля — аватарка того, чей профиль открыт (если у него есть фото);
+    // без фото остаётся выбранное изображение. Работает только когда customProfileBackgroundEnabled = true.
+    public var customProfileBackgroundFromAvatar: Bool
 
     public static var defaultSettings: AyuGramSettings {
         return AyuGramSettings(
@@ -489,7 +492,8 @@ public struct AyuGramSettings: Codable, Equatable {
             customBannerEnabled: false,
             customProfileBackgroundEnabled: false,
             customProfileBackgroundForOthers: false,
-            customProfileBackgroundForSettings: false
+            customProfileBackgroundForSettings: false,
+            customProfileBackgroundFromAvatar: false
         )
     }
 
@@ -712,6 +716,7 @@ public struct AyuGramSettings: Codable, Equatable {
         customProfileBackgroundEnabled: Bool,
         customProfileBackgroundForOthers: Bool,
         customProfileBackgroundForSettings: Bool,
+        customProfileBackgroundFromAvatar: Bool = false,
         bottomBarScrollMode: Int32 = 0,
         ghostLastSeenTimestamp: Int32 = 0,
         chatPrivacyRules: [String: ShadowChatPrivacyRule] = [:],
@@ -780,6 +785,7 @@ public struct AyuGramSettings: Codable, Equatable {
         self.customProfileBackgroundEnabled = customProfileBackgroundEnabled
         self.customProfileBackgroundForOthers = customProfileBackgroundForOthers
         self.customProfileBackgroundForSettings = customProfileBackgroundForSettings
+        self.customProfileBackgroundFromAvatar = customProfileBackgroundFromAvatar
         self.chatPrivacyRules = chatPrivacyRules.filter { !$0.value.isDefault }
         self.messageFilters = messageFilters
         self.messageFilterShowPlaceholder = messageFilterShowPlaceholder
@@ -939,6 +945,7 @@ public struct AyuGramSettings: Codable, Equatable {
         self.customProfileBackgroundEnabled = ((try container.decodeIfPresent(Int32.self, forKey: "customProfileBackgroundEnabled")) ?? 0) != 0
         self.customProfileBackgroundForOthers = ((try container.decodeIfPresent(Int32.self, forKey: "customProfileBackgroundForOthers")) ?? 0) != 0
         self.customProfileBackgroundForSettings = ((try container.decodeIfPresent(Int32.self, forKey: "customProfileBackgroundForSettings")) ?? 0) != 0
+        self.customProfileBackgroundFromAvatar = ((try container.decodeIfPresent(Int32.self, forKey: "customProfileBackgroundFromAvatar")) ?? 0) != 0
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -1077,6 +1084,7 @@ public struct AyuGramSettings: Codable, Equatable {
         try container.encode((self.customProfileBackgroundEnabled ? 1 : 0) as Int32, forKey: "customProfileBackgroundEnabled")
         try container.encode((self.customProfileBackgroundForOthers ? 1 : 0) as Int32, forKey: "customProfileBackgroundForOthers")
         try container.encode((self.customProfileBackgroundForSettings ? 1 : 0) as Int32, forKey: "customProfileBackgroundForSettings")
+        try container.encode((self.customProfileBackgroundFromAvatar ? 1 : 0) as Int32, forKey: "customProfileBackgroundFromAvatar")
     }
 }
 

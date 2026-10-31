@@ -99,6 +99,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     // screen (isMyProfile). Replaces (hides) the official cover when active.
     private var profileBackgroundImageView: UIImageView?
     private var profileBackgroundLoadedSignature: String?
+    private let profileBackgroundAvatarDisposable = MetaDisposable()
     private var ayuSettings: AyuGramSettings
     private var ayuSettingsDisposable: Disposable?
     private var ownServerPresence: ShadowOwnServerPresence = .unavailable
@@ -484,6 +485,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     deinit {
         self.emojiStatusPackDisposable.dispose()
         self.ayuSettingsDisposable?.dispose()
+        self.profileBackgroundAvatarDisposable.dispose()
         self.ownServerPresenceDisposable.dispose()
         self.ownServerPresenceTimer?.invalidate()
     }
@@ -637,14 +639,65 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     
     private var currentPanelStatusData: PeerInfoStatusData?
 
-    // Shadow: build/update/remove the custom "Мой профиль" background layer.
-    // Only active for the account owner's own profile screen (isMyProfile),
-    // when the setting is on and an image is stored — never for Settings, never
-    // for other peers' profiles, never sent anywhere. Returns true when shown,
+    // Shadow: the custom profile background shows when:
+    // 1. it is the account's own profile, or
+    // 2. customProfileBackgroundForOthers applies it to every profile, or
+    // 3. it is Settings and customProfileBackgroundForSettings is on.
+    private var customProfileBackgroundApplies: Bool {
+        return self.ayuSettings.customProfileBackgroundEnabled &&
+            (self.isMyProfile ||
+             self.ayuSettings.customProfileBackgroundForOthers ||
+             (self.isSettings && self.ayuSettings.customProfileBackgroundForSettings))
+    }
+
+    private func makeProfileBackgroundImageView() -> UIImageView {
+        if let current = self.profileBackgroundImageView {
+            return current
+        }
+        let imageView = UIImageView()
+        imageView.isUserInteractionEnabled = false
+        imageView.contentMode = .scaleAspectFill
+        imageView.clipsToBounds = true
+        self.backgroundBannerView.insertSubview(imageView, at: 0)
+        self.profileBackgroundImageView = imageView
+        return imageView
+    }
+
+    // Shadow «Фон из аватарки»: the background is the current avatar of the
+    // peer whose profile is open, so every profile gets its own background.
+    private func updateProfileBackgroundFromAvatar(peer: EnginePeer, representation: TelegramMediaImageRepresentation) {
+        let imageView = self.makeProfileBackgroundImageView()
+        let signature = "avatar_\(peer.id.toInt64())_\(representation.resource.id.stringRepresentation)"
+        if self.profileBackgroundLoadedSignature == signature {
+            return
+        }
+        self.profileBackgroundLoadedSignature = signature
+        imageView.image = nil
+
+        guard let signal = peerAvatarImage(account: self.context.account, peerReference: PeerReference(peer._asPeer()), authorOfMessage: nil, representation: representation, displayDimensions: CGSize(width: 640.0, height: 640.0), clipStyle: .none, synchronousLoad: false) else {
+            self.profileBackgroundAvatarDisposable.set(nil)
+            return
+        }
+        self.profileBackgroundAvatarDisposable.set((signal
+        |> deliverOnMainQueue).startStrict(next: { [weak self, weak imageView] result in
+            guard let self, let imageView, self.profileBackgroundLoadedSignature == signature, let result else {
+                return
+            }
+            imageView.image = result.0
+        }))
+    }
+
+    // Shadow: build/update/remove the custom profile background layer.
+    // Active when the setting is on and `customProfileBackgroundApplies` holds
+    // (own profile, other peers' profiles with "ForOthers", Settings with
+    // "ForSettings"). With "Фон из аватарки" the background is the shown peer's
+    // own current avatar, so every profile gets its own background; otherwise it
+    // is the stored image. Nothing is ever sent anywhere. Returns true when shown,
     // so the caller can hide the official cover to avoid a visual clash.
     @discardableResult
     private func updateProfileBackground(frame: CGRect, transition: ContainedViewLayoutTransition) -> Bool {
         func clear() {
+            self.profileBackgroundAvatarDisposable.set(nil)
             if let imageView = self.profileBackgroundImageView {
                 imageView.removeFromSuperview()
                 self.profileBackgroundImageView = nil
@@ -652,19 +705,19 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             }
         }
 
-        // Показываем кастомный фон если:
-        // 1. Это "Мой профиль" И включён customProfileBackgroundEnabled
-        // 2. ИЛИ включён customProfileBackgroundForOthers (применять для всех профилей)
-        // 3. ИЛИ это Settings И включён customProfileBackgroundForSettings
-        let shouldShowCustomBackground = self.ayuSettings.customProfileBackgroundEnabled &&
-            (self.isMyProfile ||
-             self.ayuSettings.customProfileBackgroundForOthers ||
-             (self.isSettings && self.ayuSettings.customProfileBackgroundForSettings))
-
-        guard shouldShowCustomBackground else {
+        guard self.customProfileBackgroundApplies else {
             clear()
             return false
         }
+
+        if self.ayuSettings.customProfileBackgroundFromAvatar, let peer = self.peer, let representation = peer.profileImageRepresentations.last {
+            self.updateProfileBackgroundFromAvatar(peer: peer, representation: representation)
+            if let imageView = self.profileBackgroundImageView {
+                transition.updateFrame(view: imageView, frame: frame)
+            }
+            return true
+        }
+        self.profileBackgroundAvatarDisposable.set(nil)
 
         let basePath = self.context.account.postbox.mediaBox.basePath
         let path = AyuSavedMedia.profileBackgroundPath(basePath: basePath)
@@ -676,18 +729,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             return false
         }
 
-        let imageView: UIImageView
-        if let current = self.profileBackgroundImageView {
-            imageView = current
-        } else {
-            imageView = UIImageView()
-            imageView.isUserInteractionEnabled = false
-            imageView.contentMode = .scaleAspectFill
-            imageView.clipsToBounds = true
-
-            self.backgroundBannerView.insertSubview(imageView, at: 0)
-            self.profileBackgroundImageView = imageView
-        }
+        let imageView = self.makeProfileBackgroundImageView()
 
         if self.profileBackgroundLoadedSignature != signature {
             if let data = AyuSavedMedia.profileBackgroundData(basePath: basePath), let image = UIImage(data: data) {
@@ -916,10 +958,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
 
         // Shadow: когда кастомный фон профиля активен, игнорируем Premium цвета
         // чтобы не было фиолетовых отблесков от оригинального фона
-        let customBackgroundActive = self.ayuSettings.customProfileBackgroundEnabled &&
-            (self.isMyProfile ||
-             self.ayuSettings.customProfileBackgroundForOthers ||
-             (self.isSettings && self.ayuSettings.customProfileBackgroundForSettings))
+        let customBackgroundActive = self.customProfileBackgroundApplies
 
         if customBackgroundActive {
             // Используем дефолтные цвета темы как будто Premium нет

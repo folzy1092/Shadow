@@ -12,6 +12,7 @@ extension ShadowSettingsTransfer {
         "customProfileBackgroundEnabled": \.customProfileBackgroundEnabled,
         "customProfileBackgroundForOthers": \.customProfileBackgroundForOthers,
         "customProfileBackgroundForSettings": \.customProfileBackgroundForSettings,
+        "customProfileBackgroundFromAvatar": \.customProfileBackgroundFromAvatar,
         "spoofProfileIdEnabled": \.spoofProfileIdEnabled,
         "spoofProfileDcEnabled": \.spoofProfileDcEnabled,
         "spoofProfilePhoneEnabled": \.spoofProfilePhoneEnabled,
