@@ -381,7 +381,7 @@ public func logoutFromAccount(id: AccountRecordId, accountManager: AccountManage
     Logger.shared.log("AccountManager", "logoutFromAccount \(id)")
     return accountManager.transaction { transaction -> Void in
         transaction.updateRecord(id, { current in
-            ShadowAccountLossLog.shared.record(site: "AccountManager.logoutFromAccount", peerId: current.flatMap { shadowLossPeerId($0.attributes) }, accountId: id.int64, reason: "alreadyLoggedOutRemotely=\(alreadyLoggedOutRemotely)")
+            ShadowAccountLossLog.shared.record(site: ShadowAccountLossLog.localLogoutSite, peerId: current.flatMap { shadowLossPeerId($0.attributes) }, accountId: id.int64, reason: "alreadyLoggedOutRemotely=\(alreadyLoggedOutRemotely)")
             if alreadyLoggedOutRemotely {
                 return nil
             } else if let current = current {

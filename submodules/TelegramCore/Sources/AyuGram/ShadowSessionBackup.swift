@@ -60,6 +60,9 @@ public enum ShadowSessionBackup {
         var failed: Set<Int64> = []
         // Texts not shown yet.
         var failures: [String] = []
+        // 2.2.2: peers whose server logout was already shown, until they sign in again.
+        // Optional so a state written by an older build still decodes.
+        var serverLoggedOut: Set<Int64>?
     }
 
     private static let stateKey = "shadow.sessionBackup.restoreState"
@@ -224,6 +227,9 @@ public enum ShadowSessionBackup {
         let now = Date().timeIntervalSince1970
         return updateState { state in
             var failedNow: [Int64] = []
+            if let serverLoggedOut = state.serverLoggedOut {
+                state.serverLoggedOut = serverLoggedOut.subtracting(live)
+            }
             for (peerId, restoredAt) in state.restoredAt {
                 let isRecent = now - restoredAt < verificationWindow
                 if live.contains(peerId) || loggedOut.contains(peerId) {
@@ -258,6 +264,31 @@ public enum ShadowSessionBackup {
         }
         if isNew {
             Logger.shared.log("ShadowSessionBackup", "restore failed: \(text)")
+            announcePendingFailures()
+        }
+    }
+
+    // 2.2.2: the server ended a session of any account. Shown once per sign-in, with
+    // the server's reason. A logout this device made itself (manual, duress, account
+    // deletion) is not news, and a recent restore reports through noteRestoreFailed.
+    public static func noteServerLogout(peerId: Int64, reason: String) {
+        if ShadowAccountLossLog.shared.hasRecentLocalLogout(peerId: peerId) {
+            return
+        }
+        let text = "Аккаунт \(userId(peerId)): сервер завершил сеанс — \(reason). Войди в этот аккаунт по номеру."
+        let now = Date().timeIntervalSince1970
+        let isNew = updateState { state -> Bool in
+            let shown = state.serverLoggedOut ?? []
+            let isRecentRestore = state.restoredAt[peerId].map { now - $0 < verificationWindow } ?? false
+            guard !isRecentRestore, !state.failed.contains(peerId), !shown.contains(peerId) else {
+                return false
+            }
+            state.serverLoggedOut = shown.union([peerId])
+            state.failures.append(text)
+            return true
+        }
+        if isNew {
+            Logger.shared.log("ShadowSessionBackup", "server logout: \(text)")
             announcePendingFailures()
         }
     }

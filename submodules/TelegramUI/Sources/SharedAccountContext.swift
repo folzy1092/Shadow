@@ -601,7 +601,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
                 return
             }
             let text = failures.joined(separator: "\n\n")
-            let title = failures.count == 1 ? "Аккаунт не восстановлен" : "Аккаунты не восстановлены"
+            let title = failures.count == 1 ? "Аккаунт вышел" : "Аккаунты вышли"
             let presentationData = self.currentPresentationData.with { $0 }
             let alert = textAlertController(sharedContext: self, title: title, text: text, actions: [
                 TextAlertAction(type: .genericAction, title: "Скопировать", action: {

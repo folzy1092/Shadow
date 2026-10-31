@@ -50,6 +50,19 @@ struct AccountLossLogTests {
         check(entries.count == ShadowAccountLossLog.maxEntries, "Entries capped")
         check(entries.last?.site == "bulk\(ShadowAccountLossLog.maxEntries + 9)", "Newest kept")
 
+        let localSuite = suite + "-local"
+        let localDefaults = UserDefaults(suiteName: localSuite)!
+        defer { localDefaults.removePersistentDomain(forName: localSuite) }
+        let localLog = ShadowAccountLossLog(defaults: localDefaults)
+        check(!localLog.hasRecentLocalLogout(peerId: 5, now: start), "No local logout yet")
+        localLog.record(site: ShadowAccountLossLog.localLogoutSite, peerId: 5, reason: "manual", now: start, stack: [])
+        localLog.record(site: "network.loggedOut", peerId: 6, reason: "401", now: start, stack: [])
+        check(localLog.hasRecentLocalLogout(peerId: 5, now: start.addingTimeInterval(60)), "Local logout a minute ago counts")
+        check(!localLog.hasRecentLocalLogout(peerId: 5, now: start.addingTimeInterval(120)), "Local logout expires after the window")
+        check(!localLog.hasRecentLocalLogout(peerId: 7, now: start.addingTimeInterval(60)), "Other peer is not affected")
+        check(!localLog.hasRecentLocalLogout(peerId: 6, now: start.addingTimeInterval(60)), "A server logout is not a local one")
+        check(!localLog.hasRecentLocalLogout(peerId: 5, now: start.addingTimeInterval(-1)), "An entry from the future does not count")
+
         print("AccountLossLogTests: \(count) checks passed")
     }
 }

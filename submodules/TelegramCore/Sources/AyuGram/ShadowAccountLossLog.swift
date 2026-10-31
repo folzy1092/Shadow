@@ -90,6 +90,17 @@ public final class ShadowAccountLossLog {
         return "\(reason) (\(entry.site))"
     }
 
+    public static let localLogoutSite = "AccountManager.logoutFromAccount"
+
+    // True when this device itself logged the peer out moments ago (duress, manual logout,
+    // account deletion), so the server's logout that follows is expected, not news.
+    public func hasRecentLocalLogout(peerId: Int64, now: Date = Date(), within: TimeInterval = 120) -> Bool {
+        return self.entries().contains { entry in
+            let age = now.timeIntervalSince(entry.date)
+            return entry.peerId == peerId && entry.site == ShadowAccountLossLog.localLogoutSite && age >= 0 && age < within
+        }
+    }
+
     public func reportText() -> String {
         let entries = self.entries()
         if entries.isEmpty {

@@ -115,9 +115,12 @@ class VersionArchiveContracts(unittest.TestCase):
         one_line = "• Новое меню Shadow • Скрыть приветственный стикер • Исправлено: вылет"
         changelog = json.loads((ROOT / "shadow-changelog.json").read_text(encoding="utf-8"))
         typed = next(entry for entry in changelog["entries"] if entry.get("new") or entry.get("fixed"))
+        # Rebuilt in the order the items list them: the notes may put fixed before new.
+        new_lines = iter([f"НОВОЕ: {item['text']} | {item['where']}" if item.get("where") else f"НОВОЕ: {item['text']}" for item in typed.get("new", [])])
+        fixed_lines = iter([f"ИСПРАВЛЕНО: {item}" for item in typed.get("fixed", [])])
         typed_notes = "\n".join(
-            [f"НОВОЕ: {item['text']} | {item['where']}" if item.get("where") else f"НОВОЕ: {item['text']}" for item in typed.get("new", [])]
-            + [f"ИСПРАВЛЕНО: {item}" for item in typed.get("fixed", [])]
+            next(fixed_lines) if item.startswith("Исправлено: ") else next(new_lines)
+            for item in typed["items"][1:]
         )
         old = {"build": 34777, "date": "2026-10-06", "version": "12.9.2-1.4.0", "items": ["x"], "new": [{"text": "x"}], "fixed": ["y"]}
         other = {"build": 34765, "date": "2026-10-05", "items": ["z"]}

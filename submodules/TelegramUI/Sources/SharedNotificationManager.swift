@@ -373,6 +373,7 @@ public final class SharedNotificationManager {
             if isForcedLogOut {
                 self.clearNotificationsManager?.clearAll()
                 
+                ShadowSessionBackup.noteServerLogout(peerId: account.peerId.toInt64(), reason: "принудительный выход по push-уведомлению сервера")
                 if let accountManager = self.accountManager {
                     let _ = logoutFromAccount(id: account.id, accountManager: accountManager, alreadyLoggedOutRemotely: true).startStandalone()
                 }

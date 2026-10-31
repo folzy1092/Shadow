@@ -1404,6 +1404,7 @@ public class Account {
             Logger.shared.log("Account", "network logged out")
             if let strongSelf = self {
                 ShadowAccountLossLog.shared.record(site: "network.loggedOut", peerId: strongSelf.peerId.toInt64(), accountId: strongSelf.id.int64, reason: strongSelf.network.lastLogoutReason ?? "unknown", isCurrent: nil)
+                ShadowSessionBackup.noteServerLogout(peerId: strongSelf.peerId.toInt64(), reason: strongSelf.network.lastLogoutReason ?? "unknown")
                 strongSelf._loggedOut.set(true)
                 strongSelf.callSessionManager.dropAll()
             }
