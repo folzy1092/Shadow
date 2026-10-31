@@ -731,7 +731,7 @@ final class RustNetworkSession: NetworkEngineSession, RustEngineEventHandler {
             rustEngineImportantLog("\(self.logPrefix) authorization required: 401 \(event.text), \(action)")
             switch action {
             case .logOut:
-                self.delegate?.networkSessionAuthorizationRequired()
+                self.delegate?.networkSessionAuthorizationRequired(reason: "401 \(event.text)")
             case .ignore:
                 break
             }

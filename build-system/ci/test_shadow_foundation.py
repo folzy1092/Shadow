@@ -26,6 +26,7 @@ def main():
         ('chat-lock', ('submodules/TelegramCore/Sources/AyuGram/ShadowChatLock.swift', 'submodules/TelegramCore/Sources/AyuGram/ShadowDisguise.swift'), 'Tests/ShadowSettings/ChatLockTests.swift'),
         ('crash-reports', 'submodules/TelegramCore/Sources/AyuGram/ShadowCrashReports.swift', 'Tests/ShadowSettings/CrashReportsTests.swift'),
         ('online-history', 'submodules/TelegramCore/Sources/AyuGram/ShadowOnlineHistory.swift', 'Tests/ShadowSettings/OnlineHistoryTests.swift'),
+        ('account-loss-log', 'submodules/TelegramCore/Sources/AyuGram/ShadowAccountLossLog.swift', 'Tests/ShadowSettings/AccountLossLogTests.swift'),
         ('intruder-log', ('submodules/TelegramCore/Sources/AyuGram/ShadowIntruderLog.swift', 'submodules/TelegramCore/Sources/AyuGram/ShadowDisguise.swift'), 'Tests/ShadowSettings/IntruderLogTests.swift'),
         ('disguise', 'submodules/TelegramCore/Sources/AyuGram/ShadowDisguise.swift', 'Tests/ShadowSettings/DisguiseTests.swift'),
         ('spaces', ('submodules/TelegramCore/Sources/AyuGram/ShadowSpaces.swift', 'submodules/TelegramCore/Sources/AyuGram/ShadowChatLock.swift', 'submodules/TelegramCore/Sources/AyuGram/ShadowDisguise.swift'), 'Tests/ShadowSettings/SpacesTests.swift'),

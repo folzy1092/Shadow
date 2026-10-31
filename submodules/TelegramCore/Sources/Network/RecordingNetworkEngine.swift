@@ -38,8 +38,8 @@ private final class RecordingSessionDelegate: NetworkEngineSessionDelegate {
         self.telemetry = telemetry
     }
 
-    func networkSessionAuthorizationRequired() {
-        self.delegate?.networkSessionAuthorizationRequired()
+    func networkSessionAuthorizationRequired(reason: String?) {
+        self.delegate?.networkSessionAuthorizationRequired(reason: reason)
     }
 
     func networkSessionSoftAuthReset() {

@@ -779,6 +779,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
                     if let account = accountRecord.1 {
                         if existingAccountPeerKeys.contains(AccountPeerKey(peerId: account.peerId, isTestingEnvironment: account.testingEnvironment)) {
                             Logger.shared.log("ShadowSessionBackup", "dropping duplicate record \(accountRecord.0) of peer \(account.peerId.id._internalGetInt64Value())")
+                            ShadowAccountLossLog.shared.record(site: "SharedAccountContext.duplicateRecord", peerId: account.peerId.id._internalGetInt64Value(), accountId: accountRecord.0.int64, reason: "дубликат записи того же аккаунта")
                             let _ = accountManager.transaction({ transaction in
                                 transaction.updateRecord(accountRecord.0, { _ in
                                     return nil
@@ -803,6 +804,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
                     } else {
                         // Shadow 2.1.1: a record restored from the keychain whose session
                         // did not start is reported before it is deleted.
+                        ShadowAccountLossLog.shared.record(site: "SharedAccountContext.accountDidNotStart", peerId: records[accountRecord.0]?.backupData?.peerId, accountId: accountRecord.0.int64, reason: "сессия аккаунта не запустилась")
                         if let peerId = records[accountRecord.0]?.backupData?.peerId {
                             ShadowSessionBackup.queue.async {
                                 ShadowSessionBackup.noteRestoreFailed(peerId: peerId, reason: "сохранённая сессия не запустилась")
@@ -1237,7 +1239,9 @@ public final class SharedAccountContextImpl: SharedAccountContext {
                         }
                     }
                     attributes.append(.backupData(AccountBackupDataAttribute(data: backupData)))
-                    return AccountRecord(id: record.id, attributes: attributes, temporarySessionId: record.temporarySessionId)
+                    // Shadow 2.2.1: an account with backup data is authorized, so its record is
+                    // permanent. A temporary session id left on it made the next launch purge it.
+                    return AccountRecord(id: record.id, attributes: attributes, temporarySessionId: nil)
                 })
             }
             |> ignoreValues

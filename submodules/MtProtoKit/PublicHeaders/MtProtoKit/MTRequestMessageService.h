@@ -25,6 +25,8 @@
 @property (nonatomic) bool forceBackgroundRequests;
     
 @property (nonatomic, copy) void (^didReceiveSoftAuthResetError)(void);
+// Shadow: the 401 that made this service report requestMessageServiceAuthorizationRequired, as "<code> <text>".
+@property (atomic, copy, readonly) NSString *lastAuthorizationRequiredError;
 
 - (instancetype)initWithContext:(MTContext *)context;
 

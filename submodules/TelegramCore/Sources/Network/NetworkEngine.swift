@@ -206,8 +206,8 @@ public struct NetworkEngineConnectionState: Equatable {
 /// Events of the main session. Worker sessions are created without a delegate.
 public protocol NetworkEngineSessionDelegate: AnyObject {
     /// A `401` other than `SESSION_PASSWORD_NEEDED` and `AUTH_KEY_PERM_EMPTY` on the main session.
-    /// This logs the account out irreversibly.
-    func networkSessionAuthorizationRequired()
+    /// This logs the account out irreversibly. `reason` is the server's error as "<code> <text>", when known.
+    func networkSessionAuthorizationRequired(reason: String?)
     /// Any `406` error.
     func networkSessionSoftAuthReset()
     func networkSessionConnectionStateChanged(_ state: NetworkEngineConnectionState)

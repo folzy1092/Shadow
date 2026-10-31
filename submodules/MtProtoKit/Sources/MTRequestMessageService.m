@@ -871,6 +871,7 @@
                                     [_context updatePasswordInputRequiredForDatacenterWithId:mtProto.datacenterId required:true];
                                 }
                             } else {
+                                _lastAuthorizationRequiredError = [NSString stringWithFormat:@"%d %@", (int)rpcError.errorCode, rpcError.errorDescription];
                                 id<MTRequestMessageServiceDelegate> delegate = _delegate;
                                 if ([delegate respondsToSelector:@selector(requestMessageServiceAuthorizationRequired:)])
                                 {

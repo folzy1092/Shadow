@@ -187,7 +187,7 @@ private final class FakeDelegate: NetworkEngineSessionDelegate {
     private(set) var authorizationRequired = 0
     private(set) var softAuthResets = 0
 
-    func networkSessionAuthorizationRequired() {
+    func networkSessionAuthorizationRequired(reason: String?) {
         self.authorizationRequired += 1
     }
 
@@ -1522,7 +1522,7 @@ final class NetworkTelemetryTests: XCTestCase {
         XCTAssertNotNil(h.fakeMain.delegate, "the session must keep the recording delegate alive; engines hold delegates weakly")
         h.connection(.connecting)
         h.connection(.online)
-        h.fakeMain.delegate?.networkSessionAuthorizationRequired()
+        h.fakeMain.delegate?.networkSessionAuthorizationRequired(reason: nil)
         h.fakeMain.delegate?.networkSessionSoftAuthReset()
         XCTAssertEqual(h.delegate.states, [engineConnectionState(.connecting), engineConnectionState(.online)])
         XCTAssertEqual(h.delegate.authorizationRequired, 1)

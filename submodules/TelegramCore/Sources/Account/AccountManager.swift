@@ -367,10 +367,21 @@ public func currentAccount(allocateIfNotExists: Bool, networkArguments: NetworkI
     }
 }
 
+// Shadow 2.2.1: the account's own peer id, for the account-loss log.
+private func shadowLossPeerId(_ attributes: [TelegramAccountManagerTypes.Attribute]) -> Int64? {
+    for attribute in attributes {
+        if case let .backupData(backupData) = attribute {
+            return backupData.data?.peerId
+        }
+    }
+    return nil
+}
+
 public func logoutFromAccount(id: AccountRecordId, accountManager: AccountManager<TelegramAccountManagerTypes>, alreadyLoggedOutRemotely: Bool) -> Signal<Void, NoError> {
     Logger.shared.log("AccountManager", "logoutFromAccount \(id)")
     return accountManager.transaction { transaction -> Void in
         transaction.updateRecord(id, { current in
+            ShadowAccountLossLog.shared.record(site: "AccountManager.logoutFromAccount", peerId: current.flatMap { shadowLossPeerId($0.attributes) }, accountId: id.int64, reason: "alreadyLoggedOutRemotely=\(alreadyLoggedOutRemotely)")
             if alreadyLoggedOutRemotely {
                 return nil
             } else if let current = current {
@@ -400,9 +411,21 @@ public func managedCleanupAccounts(networkArguments: NetworkInitializationArgume
         let _ = (accountManager.transaction { transaction -> Void in
             for record in transaction.getRecords() {
                 if let temporarySessionId = record.temporarySessionId, temporarySessionId != currentTemporarySessionId {
-                    transaction.updateRecord(record.id, { _ in
-                        return nil
-                    })
+                    // Shadow 2.2.1: a record that already holds an authorized session (it carries
+                    // backupData with a peer id) is kept as a permanent one. Purging it, and then its
+                    // directory, logged the account out locally while its server session stayed alive.
+                    let peerId = shadowLossPeerId(record.attributes)
+                    if peerId != nil {
+                        ShadowAccountLossLog.shared.record(site: "AccountManager.purgeTemporarySession", peerId: peerId, accountId: record.id.int64, reason: "stale temporarySessionId, kept as permanent")
+                        transaction.updateRecord(record.id, { _ in
+                            return AccountRecord(id: record.id, attributes: record.attributes, temporarySessionId: nil)
+                        })
+                    } else {
+                        ShadowAccountLossLog.shared.record(site: "AccountManager.purgeTemporarySession", peerId: nil, accountId: record.id.int64, reason: "stale temporarySessionId, unauthorized record removed")
+                        transaction.updateRecord(record.id, { _ in
+                            return nil
+                        })
+                    }
                 }
             }
         }).start()
@@ -452,7 +475,7 @@ public func managedCleanupAccounts(networkArguments: NetworkInitializationArgume
             
             var validPaths = Set<String>()
             for record in view.records {
-                if let temporarySessionId = record.temporarySessionId, temporarySessionId != currentTemporarySessionId {
+                if let temporarySessionId = record.temporarySessionId, temporarySessionId != currentTemporarySessionId, shadowLossPeerId(record.attributes) == nil {
                     continue
                 }
                 validPaths.insert("\(accountRecordIdPathName(record.id))")
@@ -522,6 +545,7 @@ private func cleanupAccount(networkArguments: NetworkInitializationArguments, ac
                         break
                     }
                     account.shouldBeServiceTaskMaster.set(.single(.never))
+                    ShadowAccountLossLog.shared.record(site: "AccountManager.cleanupAccount", peerId: shadowLossPeerId(attributes), accountId: id.int64, reason: "cleanup after logout")
                     return accountManager.transaction { transaction -> Void in
                         transaction.updateRecord(id, { _ in
                             return nil

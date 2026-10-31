@@ -587,7 +587,7 @@ private final class MtProtoKitSession: NSObject, NetworkEngineSession, MTRequest
     func requestMessageServiceAuthorizationRequired(_ requestMessageService: MTRequestMessageService!) {
         switch self.role {
         case .main:
-            self.delegate?.networkSessionAuthorizationRequired()
+            self.delegate?.networkSessionAuthorizationRequired(reason: requestMessageService.lastAuthorizationRequiredError)
         case .worker:
             self.context.updateAuthTokenForDatacenter(withId: self.datacenterId, authToken: nil)
             self.context.authTokenForDatacenter(withIdRequired: self.datacenterId, authToken:self.mtProto.requiredAuthToken, masterDatacenterId: self.mtProto.authTokenMasterDatacenterId)

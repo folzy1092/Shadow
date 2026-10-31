@@ -27,6 +27,9 @@ public enum ShadowSessionBackup {
         public var peerId: Int64
         public var date: Int32
         public var data: AccountBackupData
+        // Version 2: every attribute the record carried, so a restore recreates the
+        // account as it was (environment, support info) and not a bare production record.
+        public var attributes: [TelegramAccountManagerTypes.Attribute]?
     }
 
     public struct RestoreResult {
@@ -181,6 +184,7 @@ public enum ShadowSessionBackup {
         var live = Set<Int64>()
         var loggedOut = Set<Int64>()
         var latest: [Int64: AccountBackupData] = [:]
+        var latestAttributes: [Int64: [TelegramAccountManagerTypes.Attribute]] = [:]
         for record in records {
             guard let state = recordState(record.attributes) else {
                 continue
@@ -190,19 +194,25 @@ public enum ShadowSessionBackup {
             } else {
                 live.insert(state.data.peerId)
                 latest[state.data.peerId] = state.data
+                latestAttributes[state.data.peerId] = record.attributes
             }
         }
-        for (peerId, data) in latest where stored[peerId]?.data != data {
-            write(Entry(version: 1, peerId: peerId, date: Int32(Date().timeIntervalSince1970), data: data))
+        ShadowAccountLossLog.shared.noteSeen(peerIds: live)
+        for (peerId, data) in latest where stored[peerId]?.data != data || stored[peerId]?.attributes == nil {
+            write(Entry(version: 2, peerId: peerId, date: Int32(Date().timeIntervalSince1970), data: data, attributes: latestAttributes[peerId]))
         }
         let (failedNow, keep) = checkRestored(live: live, loggedOut: loggedOut)
         for peerId in failedNow {
-            noteRestoreFailed(peerId: peerId, reason: "сервер не принял сохранённую сессию (скорее всего, её завершили в «Активных сеансах» или она истекла)")
+            // The reason the network or a removal site recorded, not a guess.
+            let reason = ShadowAccountLossLog.shared.latestReason(peerId: peerId) ?? "причина не записана: аккаунт вышел без ответа сервера (см. журнал потерь в отчёте)"
+            ShadowAccountLossLog.shared.record(site: "ShadowSessionBackup.restoreFailed", peerId: peerId, reason: reason)
+            noteRestoreFailed(peerId: peerId, reason: reason)
         }
         // A peer can have an old logged-out record next to a live one (signed in again).
         // An account that fell out right after a restore keeps its item, so the
         // restore can be tried again.
         for peerId in loggedOut.subtracting(live) where stored[peerId] != nil && !keep.contains(peerId) {
+            ShadowAccountLossLog.shared.record(site: "ShadowSessionBackup.removeLoggedOut", peerId: peerId, reason: ShadowAccountLossLog.shared.latestReason(peerId: peerId) ?? "запись аккаунта помечена loggedOut")
             remove(peerId: peerId)
         }
     }
@@ -338,11 +348,7 @@ public enum ShadowSessionBackup {
                 }
                 return 0
             }.max() ?? 0
-            let id = transaction.createRecord([
-                .environment(AccountEnvironmentAttribute(environment: .production)),
-                .sortOrder(AccountSortOrderAttribute(order: maxSortOrder + 1)),
-                .backupData(AccountBackupDataAttribute(data: entry.data))
-            ])
+            let id = transaction.createRecord(restoredAttributes(entry, sortOrder: maxSortOrder + 1))
             updateState { state in
                 state.restoredAt[entry.peerId] = Date().timeIntervalSince1970
                 state.failed.remove(entry.peerId)
@@ -350,6 +356,31 @@ public enum ShadowSessionBackup {
             }
             return id
         }
+    }
+
+    // Everything the record carried except what is per-device (sort order) or stale
+    // (loggedOut), with the backup data from the entry itself. Version-1 entries have
+    // no attributes and restore as a production account, as before.
+    static func restoredAttributes(_ entry: Entry, sortOrder: Int32) -> [TelegramAccountManagerTypes.Attribute] {
+        let saved = (entry.attributes ?? []).filter { attribute in
+            switch attribute {
+            case .environment, .supportUserInfo:
+                return true
+            default:
+                return false
+            }
+        }
+        let hasEnvironment = saved.contains { attribute in
+            if case .environment = attribute {
+                return true
+            }
+            return false
+        }
+        var result: [TelegramAccountManagerTypes.Attribute] = hasEnvironment ? [] : [.environment(AccountEnvironmentAttribute(environment: .production))]
+        result.append(contentsOf: saved)
+        result.append(.sortOrder(AccountSortOrderAttribute(order: sortOrder)))
+        result.append(.backupData(AccountBackupDataAttribute(data: entry.data)))
+        return result
     }
 
     // The text the «Скопировать» button copies: what happened, for Folzy to forward.
@@ -361,6 +392,8 @@ public enum ShadowSessionBackup {
             lines.append("Ошибки:")
             lines.append(contentsOf: result.errors.map { "• " + $0 })
         }
+        lines.append("")
+        lines.append(ShadowAccountLossLog.shared.reportText())
         return lines.joined(separator: "\n")
     }
 }

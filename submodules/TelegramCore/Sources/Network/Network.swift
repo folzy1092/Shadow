@@ -522,8 +522,8 @@ private final class NetworkMainSessionDelegate: NetworkEngineSessionDelegate {
         }
     }
     
-    func networkSessionAuthorizationRequired() {
-        self.network?.mainSessionAuthorizationRequired()
+    func networkSessionAuthorizationRequired(reason: String?) {
+        self.network?.mainSessionAuthorizationRequired(reason: reason)
     }
     
     func networkSessionSoftAuthReset() {
@@ -992,6 +992,8 @@ public final class Network: NSObject {
     }
     
     var loggedOut: (() -> Void)?
+    /// Shadow: why `loggedOut` last fired ("<code> <text>" of the 401, or the context's auth key check).
+    var lastLogoutReason: String?
     /// The logout check found that the server no longer knows this permanent key of the datacenter (called
     /// on the context queue right before `loggedOut`, with the key still in place). A login replaces the
     /// key instead of logging out.
@@ -1079,6 +1081,7 @@ public final class Network: NSObject {
             _contextProxyId.set(value)
         }, contextLoggedOutUpdated: { [weak self] in
             Logger.shared.log("Network", "contextLoggedOut")
+            self?.lastLogoutReason = "MTContext: auth key check failed (-404)"
             self?.loggedOut?()
         }, contextPermanentKeyUnknown: { [weak self] datacenterId, authKeyId in
             self?.permanentKeyUnknown?(datacenterId, authKeyId)
@@ -1291,8 +1294,9 @@ public final class Network: NSObject {
         })
     }
 
-    fileprivate func mainSessionAuthorizationRequired() {
-        Logger.shared.log("Network", "requestMessageServiceAuthorizationRequired")
+    fileprivate func mainSessionAuthorizationRequired(reason: String?) {
+        Logger.shared.log("Network", "requestMessageServiceAuthorizationRequired: \(reason ?? "no reason")")
+        self.lastLogoutReason = reason ?? "401"
         self.loggedOut?()
     }
     

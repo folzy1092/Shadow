@@ -271,7 +271,7 @@ private final class StateRecorder: NetworkEngineSessionDelegate {
     private let lock = NSLock()
     private var states: [NetworkEngineConnectionState] = []
 
-    func networkSessionAuthorizationRequired() {
+    func networkSessionAuthorizationRequired(reason: String?) {
     }
 
     func networkSessionSoftAuthReset() {

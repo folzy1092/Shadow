@@ -65,9 +65,9 @@ private final class SwitchingSessionDelegate: NetworkEngineSessionDelegate {
         self.generation = generation
     }
 
-    func networkSessionAuthorizationRequired() {
+    func networkSessionAuthorizationRequired(reason: String?) {
         if self.box.isCurrent(self.generation) {
-            self.box.delegate?.networkSessionAuthorizationRequired()
+            self.box.delegate?.networkSessionAuthorizationRequired(reason: reason)
         }
     }
 
