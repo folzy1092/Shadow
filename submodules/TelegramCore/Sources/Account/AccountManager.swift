@@ -382,6 +382,10 @@ public func logoutFromAccount(id: AccountRecordId, accountManager: AccountManage
     return accountManager.transaction { transaction -> Void in
         transaction.updateRecord(id, { current in
             ShadowAccountLossLog.shared.record(site: ShadowAccountLossLog.localLogoutSite, peerId: current.flatMap { shadowLossPeerId($0.attributes) }, accountId: id.int64, reason: "alreadyLoggedOutRemotely=\(alreadyLoggedOutRemotely)")
+            // Shadow 2.2.4: a session the user logged out of here is never offered for restore.
+            if let peerId = current.flatMap({ shadowLossPeerId($0.attributes) }) {
+                ShadowSessionBackup.noteLocalLogout(peerId: peerId)
+            }
             if alreadyLoggedOutRemotely {
                 return nil
             } else if let current = current {

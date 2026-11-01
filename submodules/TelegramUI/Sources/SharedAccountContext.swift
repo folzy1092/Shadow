@@ -159,6 +159,9 @@ private enum AddedAccountsResult {
 
 private var testHasInstance = false
 
+/// Shadow 2.2.4: how long a failed-restore alert waits for an account switch to settle.
+private let shadowFailureAlertDelay: Double = 1.5
+
 public final class SharedAccountContextImpl: SharedAccountContext {
     public let mainWindow: Window1?
     public let applicationBindings: TelegramApplicationBindings
@@ -592,24 +595,30 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         |> deliverOn(ShadowSessionBackup.queue)).start(next: { view in
             ShadowSessionBackup.sync(records: view.records)
         })
+        // Shadow 2.2.4: a failed restore usually coincides with an account switch, which replaces
+        // the window's root controller. An alert on `.root` lives in that root's overlay and was
+        // torn down with it after half a second, so wait for the switch to settle and present on a
+        // level above 3, which the window itself owns and which survives a root change.
         let _ = NotificationCenter.default.addObserver(forName: ShadowSessionBackup.restoreFailedNotification, object: nil, queue: .main, using: { [weak self] _ in
-            guard let self, self.mainWindow != nil else {
-                return
+            DispatchQueue.main.asyncAfter(deadline: .now() + shadowFailureAlertDelay) { [weak self] in
+                guard let self, self.mainWindow != nil else {
+                    return
+                }
+                let failures = ShadowSessionBackup.takePendingFailures()
+                if failures.isEmpty {
+                    return
+                }
+                let text = failures.joined(separator: "\n\n")
+                let title = failures.count == 1 ? "Аккаунт вышел" : "Аккаунты вышли"
+                let presentationData = self.currentPresentationData.with { $0 }
+                let alert = textAlertController(sharedContext: self, title: title, text: text, actions: [
+                    TextAlertAction(type: .genericAction, title: "Скопировать", action: {
+                        UIPasteboard.general.string = text
+                    }),
+                    TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})
+                ])
+                self.mainWindow?.present(alert, on: .update)
             }
-            let failures = ShadowSessionBackup.takePendingFailures()
-            if failures.isEmpty {
-                return
-            }
-            let text = failures.joined(separator: "\n\n")
-            let title = failures.count == 1 ? "Аккаунт вышел" : "Аккаунты вышли"
-            let presentationData = self.currentPresentationData.with { $0 }
-            let alert = textAlertController(sharedContext: self, title: title, text: text, actions: [
-                TextAlertAction(type: .genericAction, title: "Скопировать", action: {
-                    UIPasteboard.general.string = text
-                }),
-                TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})
-            ])
-            self.mainWindow?.present(alert, on: .root)
         })
         // Failures recorded before a relaunch (or before the window existed) are
         // shown once the app is up.
@@ -798,6 +807,9 @@ public final class SharedAccountContextImpl: SharedAccountContext {
                             self.activeAccountsValue!.accounts.append((account.id, context, accountRecord.2))
                             
                             self.managedAccountDisposables.set(self.updateAccountBackupData(account: account).start(), forKey: account.id)
+                            // Shadow 2.2.4: a restored account has no own user in its postbox until
+                            // something fetches it; without it the account shows only as a placeholder.
+                            let _ = shadowFetchSelfUserIfMissing(account: account).start()
                             account.resetStateManagement()
                             hadUpdates = true
                         }

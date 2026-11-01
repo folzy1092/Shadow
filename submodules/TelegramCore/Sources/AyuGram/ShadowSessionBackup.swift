@@ -63,6 +63,9 @@ public enum ShadowSessionBackup {
         // 2.2.2: peers whose server logout was already shown, until they sign in again.
         // Optional so a state written by an older build still decodes.
         var serverLoggedOut: Set<Int64>?
+        // 2.2.4: peers logged out on this device. Their items are deleted and they are
+        // never offered for restore, until they sign in again.
+        var localLoggedOut: Set<Int64>?
     }
 
     private static let stateKey = "shadow.sessionBackup.restoreState"
@@ -113,6 +116,25 @@ public enum ShadowSessionBackup {
 
     static func remove(peerId: Int64) {
         SecItemDelete(query(account: String(peerId)) as CFDictionary)
+    }
+
+    // 2.2.4: a logout made on this device (as Swiftgram deletes the session of a removed
+    // account). Without it the item outlived the record, «Восстановить аккаунты» offered
+    // the account again, and the restore failed at once with «аккаунт вышел».
+    public static func noteLocalLogout(peerId: Int64) {
+        remove(peerId: peerId)
+        updateState { state in
+            state.localLoggedOut = (state.localLoggedOut ?? []).union([peerId])
+            state.restoredAt[peerId] = nil
+            state.failed.remove(peerId)
+            state.seen.remove(peerId)
+        }
+    }
+
+    private static func locallyLoggedOut() -> Set<Int64> {
+        return updateState { state in
+            return state.localLoggedOut ?? []
+        }
     }
 
     public static func removeAll() {
@@ -205,6 +227,9 @@ public enum ShadowSessionBackup {
             write(Entry(version: 2, peerId: peerId, date: Int32(Date().timeIntervalSince1970), data: data, attributes: latestAttributes[peerId]))
         }
         let (failedNow, keep) = checkRestored(live: live, loggedOut: loggedOut)
+        for peerId in locallyLoggedOut() where stored[peerId] != nil {
+            remove(peerId: peerId)
+        }
         for peerId in failedNow {
             // The reason the network or a removal site recorded, not a guess.
             let reason = ShadowAccountLossLog.shared.latestReason(peerId: peerId) ?? "причина не записана: аккаунт вышел без ответа сервера (см. журнал потерь в отчёте)"
@@ -230,6 +255,10 @@ public enum ShadowSessionBackup {
             if let serverLoggedOut = state.serverLoggedOut {
                 state.serverLoggedOut = serverLoggedOut.subtracting(live)
             }
+            if let localLoggedOut = state.localLoggedOut {
+                state.localLoggedOut = localLoggedOut.subtracting(live)
+            }
+            let localLoggedOut = state.localLoggedOut ?? []
             for (peerId, restoredAt) in state.restoredAt {
                 let isRecent = now - restoredAt < verificationWindow
                 if live.contains(peerId) || loggedOut.contains(peerId) {
@@ -237,7 +266,7 @@ public enum ShadowSessionBackup {
                 }
                 if live.contains(peerId) {
                     state.failed.remove(peerId)
-                } else if isRecent && (loggedOut.contains(peerId) || state.seen.contains(peerId)) {
+                } else if isRecent && !localLoggedOut.contains(peerId) && (loggedOut.contains(peerId) || state.seen.contains(peerId)) {
                     failedNow.append(peerId)
                 }
                 if !isRecent {
@@ -253,9 +282,12 @@ public enum ShadowSessionBackup {
     // Only an account restored within the window counts: other records fail for
     // reasons of their own.
     public static func noteRestoreFailed(peerId: Int64, reason: String) {
+        if ShadowAccountLossLog.shared.hasRecentLocalLogout(peerId: peerId) {
+            return
+        }
         let text = "Аккаунт \(userId(peerId)): \(reason). Войди в этот аккаунт по номеру."
         let isNew = updateState { state -> Bool in
-            guard state.restoredAt[peerId] != nil, !state.failed.contains(peerId) else {
+            guard state.restoredAt[peerId] != nil, !state.failed.contains(peerId), !(state.localLoggedOut ?? []).contains(peerId) else {
                 return false
             }
             state.failed.insert(peerId)
@@ -323,8 +355,8 @@ public enum ShadowSessionBackup {
     // How many backed-up accounts are not in the app yet.
     public static func restorableCount(accountManager: AccountManager<TelegramAccountManagerTypes>) -> Signal<Int, NoError> {
         return accountManager.transaction { transaction -> Int in
-            let present = presentPeerIds(transaction.getRecords())
-            return loadAll().entries.filter { !present.contains($0.peerId) }.count
+            let excluded = presentPeerIds(transaction.getRecords()).union(locallyLoggedOut())
+            return loadAll().entries.filter { !excluded.contains($0.peerId) }.count
         }
     }
 
@@ -335,7 +367,9 @@ public enum ShadowSessionBackup {
     // current and the pending authorization is dropped, as a finished login does.
     public static func restoreAll(accountManager: AccountManager<TelegramAccountManagerTypes>, switchToRestored: Bool) -> Signal<RestoreResult, NoError> {
         return deferred { () -> Signal<RestoreResult, NoError> in
-            let (entries, errors) = loadAll()
+            let (allEntries, errors) = loadAll()
+            let localLoggedOut = locallyLoggedOut()
+            let entries = allEntries.filter { !localLoggedOut.contains($0.peerId) }
             var signal: Signal<[(Int64, AccountRecordId)], NoError> = .single([])
             for entry in entries.sorted(by: { $0.peerId < $1.peerId }) {
                 signal = signal
@@ -368,7 +402,7 @@ public enum ShadowSessionBackup {
     private static func restoreOne(_ entry: Entry, accountManager: AccountManager<TelegramAccountManagerTypes>) -> Signal<AccountRecordId?, NoError> {
         return accountManager.transaction { transaction -> AccountRecordId? in
             let records = transaction.getRecords()
-            if presentPeerIds(records).contains(entry.peerId) {
+            if presentPeerIds(records).contains(entry.peerId) || locallyLoggedOut().contains(entry.peerId) {
                 return nil
             }
             let maxSortOrder = records.map { record -> Int32 in

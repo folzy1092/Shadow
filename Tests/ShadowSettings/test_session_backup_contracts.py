@@ -22,9 +22,11 @@ class SessionBackupContracts(unittest.TestCase):
 
     def test_absent_records_never_wipe_the_backup(self):
         sync = self.core[self.core.index("public static func sync("):self.core.index("private static func checkRestored")]
-        # Only a logged-out record removes its item; a fresh install has no records at all.
+        # Only a logged-out record, or a local logout (2.2.4), removes its item;
+        # a fresh install has no records at all.
         self.assertIn("for peerId in loggedOut.subtracting(live)", sync)
-        self.assertEqual(sync.count("remove(peerId:"), 1)
+        self.assertIn("for peerId in locallyLoggedOut() where stored[peerId] != nil", sync)
+        self.assertEqual(sync.count("remove(peerId:"), 2)
         self.assertNotIn("removeAll()", sync)
         # 2.1.1: an account that fell out right after a restore keeps its item.
         self.assertIn("!keep.contains(peerId)", sync)
@@ -62,6 +64,30 @@ class SessionBackupContracts(unittest.TestCase):
         controller = read("AuthorizationUI/Sources/AuthorizationSequencePhoneEntryController.swift")
         self.assertIn("self.shadowOfferSessionRestore()", controller)
 
+
+    def test_local_logout_is_never_offered_for_restore(self):
+        # 2.2.4: logging out locally deletes the keychain item and keeps the peer out of restore.
+        self.assertIn("func noteLocalLogout(", self.core)
+        self.assertIn("localLoggedOut", self.core)
+        manager = read("TelegramCore/Sources/Account/AccountManager.swift")
+        self.assertIn("ShadowSessionBackup.noteLocalLogout(peerId:", manager)
+
+    def test_account_without_own_peer_stays_visible(self):
+        # 2.2.4: a restored account with an empty postbox is listed under a placeholder name.
+        utils = read("AccountUtils/Sources/AccountUtils.swift")
+        self.assertIn("shadowPlaceholderAccountPeer(id: context.account.peerId)", utils)
+        fetch = read("TelegramCore/Sources/AyuGram/ShadowSelfUserFetch.swift")
+        self.assertIn("public func shadowFetchSelfUserIfMissing", fetch)
+        self.assertIn(".inputUserSelf", fetch)
+        shared = read("TelegramUI/Sources/SharedAccountContext.swift")
+        self.assertIn("shadowFetchSelfUserIfMissing(account: account)", shared)
+
+    def test_restore_failure_alert_survives_account_switch(self):
+        # 2.2.4: the .root overlay dies when the root controller changes; the alert flashed for half a second.
+        shared = read("TelegramUI/Sources/SharedAccountContext.swift")
+        self.assertIn("shadowFailureAlertDelay", shared)
+        self.assertIn("present(alert, on: .update)", shared)
+        self.assertNotIn("present(alert, on: .root)", shared)
 
 if __name__ == "__main__":
     unittest.main()

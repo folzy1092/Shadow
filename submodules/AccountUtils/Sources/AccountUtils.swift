@@ -30,7 +30,10 @@ public func activeAccountsAndPeers(context: AccountContext, includePrimary: Bool
                 if let peer = peer {
                     return (context, peer, totalUnreadCount)
                 } else {
-                    return nil
+                    // Shadow 2.2.4: an account restored from a session backup starts with an empty
+                    // postbox. Dropping it here kept a running account out of every list (and a logout
+                    // could switch to it unseen); show it under a placeholder until its own user arrives.
+                    return (context, shadowPlaceholderAccountPeer(id: context.account.peerId), totalUnreadCount)
                 }
             }
         }
@@ -48,4 +51,8 @@ public func activeAccountsAndPeers(context: AccountContext, includePrimary: Bool
             return (primaryRecord, accountRecords)
         }
     }
+}
+
+private func shadowPlaceholderAccountPeer(id: EnginePeer.Id) -> EnginePeer {
+    return .user(TelegramUser(id: id, accessHash: nil, firstName: "Аккаунт \(id.id._internalGetInt64Value())", lastName: nil, username: nil, phone: nil, photo: [], botInfo: nil, restrictionInfo: nil, flags: [], emojiStatus: nil, usernames: [], storiesHidden: nil, nameColor: nil, backgroundEmojiId: nil, profileColor: nil, profileBackgroundEmojiId: nil, subscriberCount: nil, verificationIconFileId: nil))
 }
