@@ -256,11 +256,14 @@ class ShadowPrivacyFeatures(unittest.TestCase):
         load = (ROOT / "submodules/TelegramUI/Sources/Chat/ChatControllerLoadDisplayNode.swift").read_text()
         setup = load.split("setupReplyMessage: {", 1)[1].split("setupEditMessage:", 1)[0]
         self.assertIn("ShadowDeletedReplyQuote.isKeptDeleted", setup)
-        self.assertIn("ShadowDeletedReplyQuote.inputText", setup)
+        self.assertIn("strongSelf.shadowQuoteKeptDeletedMessage(keptDeletedMessage)", setup)
         quote = (ROOT / "submodules/TelegramUI/Sources/ShadowDeletedReplyQuote.swift").read_text()
         self.assertIn('"https://t.me/\\(username)"', quote)
         self.assertIn("ChatTextInputTextMentionAttribute(peerId: author.id)", quote)
         self.assertIn("ChatTextInputTextQuoteAttribute(kind: .quote", quote)
+        self.assertIn("func shadowQuoteKeptDeletedMessage(", quote)
+        self.assertIn("ShadowDeletedReplyQuote.inputText(", quote)
+        self.assertIn("import TelegramUIPreferences", quote)
 
 if __name__ == "__main__":
     unittest.main()
