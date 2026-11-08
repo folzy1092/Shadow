@@ -3685,7 +3685,7 @@ private final class ChatReadReportContextItemNode: ASDisplayNode, ContextMenuCus
         
         var isBubblelessInfoRow = false
         switch item.info {
-        case .sent, .author:
+        case .sent, .author, .deleted:
             // The bubble-free info rows offer no reaction tips.
             isBubblelessInfoRow = true
         case .edited, nil:
