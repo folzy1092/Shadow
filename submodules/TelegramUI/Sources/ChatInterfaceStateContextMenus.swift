@@ -3847,14 +3847,21 @@ private final class ChatReadReportContextItemNode: ASDisplayNode, ContextMenuCus
     func updateLayout(constrainedWidth: CGFloat, constrainedHeight: CGFloat) -> (CGSize, (CGSize, ContainedViewLayoutTransition) -> Void) {
         let sideInset: CGFloat = 18.0
         let verticalInset: CGFloat
-        let rightTextInset: CGFloat
-        
+        var rightTextInset: CGFloat
+
         if chatReadReportRowUsesCompactMetrics(isCloudUserChat: self.item.message.id.peerId.namespace == Namespaces.Peer.CloudUser, isBubblelessInfoRow: self.item.usesInfoRowMetrics) {
             verticalInset = 7.0
             rightTextInset = 8.0
         } else {
             verticalInset = 11.0
             rightTextInset = sideInset + 36.0
+        }
+        // Shadow: the «удалено …» row has no avatars or badge on its right, so its
+        // text takes that room too and wraps to a second line rather than cutting
+        // off the time (it read «удалено сегодня в 16:…»).
+        if case .deleted = self.item.info {
+            rightTextInset = 8.0
+            self.textNode.maximumNumberOfLines = 2
         }
 
         let iconSize: CGSize = self.iconNode.image?.size ?? CGSize(width: 10.0, height: 10.0)
