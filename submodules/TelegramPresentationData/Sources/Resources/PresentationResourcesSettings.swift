@@ -171,6 +171,7 @@ public struct PresentationResourcesSettings {
     public static var proxy: UIImage? { return renderSettingsIcon(name: "Item List/Icons/Proxy", backgroundColors: [colorGreen]) }
     public static var savedMessages: UIImage? { return renderSettingsIcon(name: "Item List/Icons/SavedMessages", backgroundColors: [colorBlue]) }
     public static var recentCalls: UIImage? { return renderSettingsIcon(name: "Item List/Icons/Phone", backgroundColors: [colorGreen]) }
+    public static var contacts: UIImage? { return renderSettingsIcon(name: "Item List/Icons/Members", backgroundColors: [colorViolet]) }
     public static var devices: UIImage? { return renderSettingsIcon(name: "Item List/Icons/Devices", backgroundColors: [colorOrange]) }
     public static var chatFolders: UIImage? { return renderSettingsIcon(name: "Item List/Icons/Folder", backgroundColors: [colorLightBlue]) }
     public static var stickers: UIImage? { return renderSettingsIcon(name: "Item List/Icons/Sticker", backgroundColors: [colorOrange]) }

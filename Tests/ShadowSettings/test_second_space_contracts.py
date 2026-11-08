@@ -52,8 +52,11 @@ class SecondSpaceContracts(unittest.TestCase):
 
     def test_folder_badges_skip_hidden_chats(self):
         tabs = read("ChatListUI/Sources/TabBarChatListFilterController.swift")
-        self.assertIn("for peerId in expand(shadowIncludePeers + data.includePeers.pinnedPeers.filter { !shadowHidden.contains($0) }) {", tabs)
-        self.assertIn("for peerId in expand(shadowExcludePeers) {", tabs)
+        # Telegram 13.2 counts folder corrections in chatListFilterBadgeCorrection;
+        # hidden chats are moved from a folder's included peers to its excluded ones first.
+        self.assertIn("let _ = data.includePeers.removePeer(peerId)", tabs)
+        self.assertIn("data.excludePeers = data.excludePeers + shadowHidden.filter { !data.excludePeers.contains($0) }", tabs)
+        self.assertIn("chatListFilterBadgeCorrection(data: data,", tabs)
         self.assertIn("var additionalPeerIds = shadowHidden", tabs)
 
     def test_second_only_chats_are_muted(self):
