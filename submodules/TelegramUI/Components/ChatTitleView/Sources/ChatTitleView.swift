@@ -793,6 +793,7 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
     
     deinit {
         self.agentSelectionDisposable.dispose()
+        self.shadowNamesDisposable.dispose()
     }
     
     private func observeAgentSelection(peerId: EnginePeer.Id) {
@@ -918,10 +919,6 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
         }))
     }
 
-    deinit {
-        self.shadowNamesDisposable.dispose()
-    }
-    
     required public init?(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }

@@ -637,9 +637,6 @@ public final class ChatTitleComponent: Component {
 
         deinit {
             self.shadowNamesDisposable.dispose()
-        }
-        
-        deinit {
             self.agentSelectionDisposable.dispose()
         }
         
