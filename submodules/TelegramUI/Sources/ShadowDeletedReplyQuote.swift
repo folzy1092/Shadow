@@ -1,5 +1,8 @@
 import Foundation
 import TelegramCore
+import TelegramUIPreferences
+import AccountContext
+import TelegramStringFormatting
 import LocalizedPeerData
 import TelegramPresentationData
 import TextFormat
@@ -56,5 +59,26 @@ enum ShadowDeletedReplyQuote {
         }
         result.append(NSAttributedString(string: "\n"))
         return result
+    }
+}
+
+extension ChatControllerImpl {
+    // Kept out of setupReplyMessage's closure: the interface interaction's
+    // initializer is already near the type checker's limit.
+    func shadowQuoteKeptDeletedMessage(_ message: EngineMessage) {
+        let presentationData = self.presentationData
+        let contentSettings = self.context.currentContentSettings.with { $0 }
+        let mediaDescription: String = descriptionStringForMessage(contentSettings: contentSettings, message: message, strings: presentationData.strings, nameDisplayOrder: presentationData.nameDisplayOrder, dateTimeFormat: presentationData.dateTimeFormat, accountPeerId: self.context.account.peerId).0.string
+        let quote: NSAttributedString = ShadowDeletedReplyQuote.inputText(message: message, author: message.author, mediaDescription: mediaDescription, strings: presentationData.strings, displayOrder: presentationData.nameDisplayOrder)
+        self.interfaceInteraction?.updateTextInputStateAndMode { state, mode in
+            let text = NSMutableAttributedString(attributedString: quote)
+            text.append(state.inputText)
+            return (ChatTextInputState(inputText: text, selectionRange: text.length ..< text.length), mode)
+        }
+        if !self.chatDisplayNode.ensureInputViewFocused() {
+            DispatchQueue.main.async { [weak self] in
+                self?.chatDisplayNode.ensureInputViewFocused()
+            }
+        }
     }
 }
