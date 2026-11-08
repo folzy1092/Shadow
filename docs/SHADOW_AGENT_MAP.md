@@ -321,6 +321,15 @@ UI-проекция настроек выбирается в `TelegramRootContro
     выбирают нужную часть; `shadow://customization` открывает экран целиком.
     Новую секцию кастомизации добавлять в `ShadowCustomizationPart.sections`
     (тест `test_hub_redesign_contracts`). «Шпион» переименован в «Сохранение».
+- **Бета-канал** (правило Folzy, 2026-11-08): рискованные сборки — новая база
+  Telegram, большие переделки, новые функции, которые агент не мог проверить на
+  устройстве, — сначала объявляются в бету:
+  `tools/shadow-announce.py … --channel beta <tgfork> <shadow>` (пишет только
+  объект `beta` в `shadow-update.json`, stable и changelog не трогает). Когда Folzy
+  проверил сборку на телефоне, её объявляют ещё раз без `--channel` — это выпуск в
+  stable со списком изменений. Мелкие исправления и срочные фиксы багов идут сразу
+  в stable. Объявляются только сборки `master`: сборка ветки по `workflow_dispatch`
+  релиза не публикует.
 - `shadow-update.json` поддерживает ветки `stable`/`beta` (плоские поля вверху =
   stable, для старых сборок). `ShadowUpdateCheck.parseManifest`/`parseBetaManifest`;
   тумблер `AyuGramSettings.updateChannelBeta` («Разное» → «Бета-версии»);
