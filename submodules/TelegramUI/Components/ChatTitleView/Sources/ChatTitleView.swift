@@ -192,6 +192,10 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
     private var preferUsernameForBots = false
     private let shadowNamesDisposable = MetaDisposable()
     
+    /// An agent bot's chat shows its model under the title, and follows the composer's model chip.
+    private var agentSelectionPeerId: EnginePeer.Id?
+    private let agentSelectionDisposable = MetaDisposable()
+    
     private var theme: PresentationTheme
     private var strings: PresentationStrings
     private var dateTimeFormat: PresentationDateTimeFormat
@@ -652,6 +656,11 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
                                         
                                         let string = NSAttributedString(string: statusText, font: subtitleFont, textColor: titleTheme.rootController.navigationBar.secondaryTextColor)
                                         state = .info(string, .generic)
+                                    } else if let _ = user.botInfo, isAgentBotPeer(appConfiguration: self.context.currentAppConfiguration.with({ $0 }), peerId: user.id) {
+                                        self.observeAgentSelection(peerId: user.id)
+                                        let statusText = AgentChatPlaceholderOptions.shared.selection(peerId: user.id).model.fullTitle
+                                        let string = NSAttributedString(string: statusText, font: subtitleFont, textColor: titleTheme.rootController.navigationBar.secondaryTextColor)
+                                        state = .info(string, .generic)
                                     } else if let _ = user.botInfo {
                                         let statusText: String
                                         if let subscriberCount = user.subscriberCount {
@@ -782,6 +791,28 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
         }
     }
     
+    deinit {
+        self.agentSelectionDisposable.dispose()
+        self.shadowNamesDisposable.dispose()
+    }
+    
+    private func observeAgentSelection(peerId: EnginePeer.Id) {
+        if self.agentSelectionPeerId == peerId {
+            return
+        }
+        self.agentSelectionPeerId = peerId
+        // The signal delivers the current value at once, inside the status update that subscribes; skip it.
+        var isFirst = true
+        self.agentSelectionDisposable.set((AgentChatPlaceholderOptions.shared.selectionSignal(peerId: peerId)
+        |> deliverOnMainQueue).startStrict(next: { [weak self] _ in
+            if isFirst {
+                isFirst = false
+                return
+            }
+            let _ = self?.updateStatus()
+        }))
+    }
+    
     public init(context: AccountContext, theme: PresentationTheme, strings: PresentationStrings, dateTimeFormat: PresentationDateTimeFormat, nameDisplayOrder: PresentationPersonNameOrder, animationCache: AnimationCache, animationRenderer: MultiAnimationRenderer) {
         self.context = context
         self.theme = theme
@@ -888,10 +919,6 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
         }))
     }
 
-    deinit {
-        self.shadowNamesDisposable.dispose()
-    }
-    
     required public init?(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }

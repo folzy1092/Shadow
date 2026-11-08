@@ -34,7 +34,8 @@ class ShadowBanContracts(unittest.TestCase):
 
     def test_fully_hidden_messages_do_not_keep_the_chat_unread(self):
         node = read("TelegramUI/Sources/ChatHistoryListNode.swift")
-        self.assertIn("if strongSelf.isScrollAtBottomPosition, let lastMessageId", node)
+        read_body = node.split("func updateMaxVisibleReadIncomingMessageIndexFromVisibleItems()", 1)[1].split("\n    }\n", 1)[0]
+        self.assertIn("if self.isScrollAtBottomPosition, let lastMessageId", read_body)
         self.assertIn("!shadowSettings.messageFilterShowPlaceholder) || !shadowSettings.shadowBannedPeerIds.isEmpty", node)
 
 

@@ -22,7 +22,7 @@ class MediaQualityContracts(unittest.TestCase):
     def test_picker(self):
         picker = read("MediaPickerUI/Sources/MediaPickerScreen.swift")
         self.assertIn("|| ayuGramSettingsCurrent.mediaSendQuality == ShadowMediaSendQuality.alwaysHD", picker)
-        self.assertIn("asFile: strongSelf.subject.asFile || strongSelf.shadowSendsAsFileByDefault()", picker)
+        self.assertIn("asFile: strongSelf.subjectIsFile || strongSelf.shadowSendsAsFileByDefault()", picker)
         self.assertIn("editingContext.price(for: item) != nil || editingContext.spoiler(for: item)", picker)
         screen = read("SettingsUI/Sources/AyuGramSettingsController.swift")
         self.assertIn("case .mediaSendQuality: return 130", screen)

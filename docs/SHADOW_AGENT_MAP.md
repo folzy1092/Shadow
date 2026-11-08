@@ -321,6 +321,15 @@ UI-проекция настроек выбирается в `TelegramRootContro
     выбирают нужную часть; `shadow://customization` открывает экран целиком.
     Новую секцию кастомизации добавлять в `ShadowCustomizationPart.sections`
     (тест `test_hub_redesign_contracts`). «Шпион» переименован в «Сохранение».
+- **Бета-канал** (правило Folzy, 2026-11-08): рискованные сборки — новая база
+  Telegram, большие переделки, новые функции, которые агент не мог проверить на
+  устройстве, — сначала объявляются в бету:
+  `tools/shadow-announce.py … --channel beta <tgfork> <shadow>` (пишет только
+  объект `beta` в `shadow-update.json`, stable и changelog не трогает). Когда Folzy
+  проверил сборку на телефоне, её объявляют ещё раз без `--channel` — это выпуск в
+  stable со списком изменений. Мелкие исправления и срочные фиксы багов идут сразу
+  в stable. Объявляются только сборки `master`: сборка ветки по `workflow_dispatch`
+  релиза не публикует.
 - `shadow-update.json` поддерживает ветки `stable`/`beta` (плоские поля вверху =
   stable, для старых сборок). `ShadowUpdateCheck.parseManifest`/`parseBetaManifest`;
   тумблер `AyuGramSettings.updateChannelBeta` («Разное» → «Бета-версии»);
@@ -985,6 +994,31 @@ UI-проекция настроек выбирается в `TelegramRootContro
 - CI: у `workflow_dispatch` есть флаг `keep_going` (все ошибки компиляции за
   один прогон, `--continueOnError`); тестовая сборка ветки не публикует релиз и
   не шлёт уведомления (эти шаги только для `master`).
+
+## 5q. База Telegram 13.2 (2026-11-08, Shadow 2.3.0)
+
+- Мерж тега `release-13.2` в ветке `update-release-13.2`, 28 конфликтов, 5 раундов
+  CI. `versions.json`: `app` 13.2, Xcode по-прежнему 26.6 (апстрим на 27.1).
+- **Анти-удаление переехало.** `AccountStateManagementUtils.swift` удалён: реплей
+  обновлений теперь в `State/Sync/StateReplay+*.swift` (`applyDeleteMessages*`,
+  `applyUpdateMinAvailableMessage`, `applyEditMessage` — в `+Messages`,
+  прочитанное содержимое — в `+ReadStates`), разбор — в `UpdateInterpreter+*.swift`
+  (`applyPeerSettings` — дата регистрации).
+- **Новые пути удаления в 13.2** тоже под анти-удалением:
+  `deleteStoredMessagesAsReceivedDeletion` (`StoredMessageConfirmation.swift` —
+  сверка истории личек и обычных групп при подгрузке и «хвост» после сброса
+  `differenceTooLong`). Сохранённые удалённые не попадают в кандидаты сверки
+  (`historyFillReconciliation`), иначе подгрузка спрашивала бы о них по кругу.
+- Нижняя панель переписана апстримом под системную раскладку iOS 27
+  (`usesSystemLayout`): круглая кнопка «Ленты», компактная панель и скрытый поиск
+  форка работают поверх неё; компактная панель идёт старой раскладкой. Вкладки
+  «Контакты» в апстриме больше нет.
+- Строка «удалено …» в меню — `ChatReadReportContextItem.Info.deleted` (апстрим
+  заменил `isEdit` на `Info`).
+- Подвохи сборки: API iOS 27.1 (`reservedRegions` в `Display/ReservedArea.swift`)
+  только под `#if compiler(>=6.4)`; автомерж оставлял двойные `deinit` и дубли
+  в `deps` BUILD-файлов; фейковые профили CI просрочены с 2026-10-30
+  (`build-system/ci/allow_expired_fake_profiles.py`).
 
 ## 7. Подводные камни
 

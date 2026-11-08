@@ -66,8 +66,11 @@ class DeletedTimeContracts(unittest.TestCase):
     def test_menu_shows_deletion_time(self):
         menu = read("TelegramUI/Sources/ChatInterfaceStateContextMenus.swift")
         self.assertIn("as? DeletedMessageAttribute, deleted.date > 0", menu)
-        self.assertIn("deletedTime: deleted.date, action: nil", menu)
-        self.assertIn('"удалено сегодня в \\(value)"', menu)
+        self.assertIn("info: .deleted(deleted.date)", menu)
+        self.assertIn("case deleted(Int32)", menu)
+        # The row is wide enough for the time (it was cut to «удалено сегодня в 16:…»).
+        self.assertIn("if case .deleted = self.item.info {\n            rightTextInset = 8.0\n            self.textNode.maximumNumberOfLines = 2", menu)
+        self.assertIn('"удалено сегодня в \\($0)"', menu)
         self.assertIn('UIImage(bundleImageName: "Chat/Context Menu/Delete")', menu)
 
 

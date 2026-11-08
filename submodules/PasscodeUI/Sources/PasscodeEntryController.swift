@@ -319,6 +319,7 @@ public final class PasscodeEntryController: ViewController {
                     switch error as? PasscodeError ?? .unavailable {
                     case .invalidCode:
                         self.controllerNode.animateError()
+                        self.controllerNode.announceIncorrectPasscode()
                         self.refreshCredentialCooldown()
                         // Shadow: optional front-camera photo of whoever got the code wrong (spec 7.2).
                         if self.applicationBindings.isMainApp {

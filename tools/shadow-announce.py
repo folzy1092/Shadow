@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Announce a stable Shadow build: shadow-update.json + shadow-changelog.json.
+"""Announce a Shadow build: shadow-update.json + shadow-changelog.json.
 
     python3 tools/shadow-announce.py --build 34762 --version 12.9.2-1.2.0 \
         --title "Shadow 1.2.0: …" --notes notes.txt [--date 2026-10-06] \
@@ -17,6 +17,11 @@ fixes). Both repos get the same files; commit
 tgfork normally and Shadow with [skip ci]. The changelog entry carries
 `version` and `ipa_url`, which "Архив версий" in the app shows (the IPA comes
 from the tgfork release mirror, like shadow-update.json).
+
+`--channel beta` announces to the beta channel only (Shadow → Разное →
+«Бета-версии»): it writes the `beta` object of shadow-update.json and nothing
+else, like the worker's announce action. Stable users and the changelog are
+untouched; announce the build again without `--channel` to promote it.
 """
 
 import argparse
@@ -60,6 +65,7 @@ def main() -> None:
     parser.add_argument("--title", required=True)
     parser.add_argument("--notes", type=Path, required=True)
     parser.add_argument("--date", default=datetime.date.today().isoformat())
+    parser.add_argument("--channel", choices=("stable", "beta"), default="stable")
     parser.add_argument("roots", nargs="+", type=Path)
     args = parser.parse_args()
 
@@ -76,6 +82,13 @@ def main() -> None:
     for root in args.roots:
         path = root / "shadow-update.json"
         update = json.loads(path.read_text(encoding="utf-8"))
+        if args.channel == "beta":
+            update["enabled"] = True
+            update.setdefault("minimum_build", 0)
+            update["beta"] = dict(fields)
+            path.write_text(json.dumps(update, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            print("announced beta", args.build, "in", root)
+            continue
         update.update(fields)
         update.setdefault("stable", {}).update(fields)
         path.write_text(json.dumps(update, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
