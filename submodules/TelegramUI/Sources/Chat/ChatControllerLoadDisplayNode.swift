@@ -1606,7 +1606,25 @@ extension ChatControllerImpl {
                 
                 if canSendMessagesHere {
                     let _ = strongSelf.presentVoiceMessageDiscardAlert(action: {
-                        if let message = strongSelf.chatDisplayNode.historyNode.messageInCurrentHistoryView(messageId)?._asMessage() {
+                        if let message = strongSelf.chatDisplayNode.historyNode.messageInCurrentHistoryView(messageId)?._asMessage(), ShadowDeletedReplyQuote.isKeptDeleted(EngineMessage(message)) {
+                            // Shadow: the server has no such message any more, so
+                            // «Ответить» quotes it in the input instead (author link + text).
+                            let presentationData = strongSelf.presentationData
+                            let engineMessage = EngineMessage(message)
+                            let mediaDescription = descriptionStringForMessage(contentSettings: strongSelf.context.currentContentSettings.with { $0 }, message: engineMessage, strings: presentationData.strings, nameDisplayOrder: presentationData.nameDisplayOrder, dateTimeFormat: presentationData.dateTimeFormat, accountPeerId: strongSelf.context.account.peerId).0.string
+                            let quote = ShadowDeletedReplyQuote.inputText(message: engineMessage, author: engineMessage.author, mediaDescription: mediaDescription, strings: presentationData.strings, displayOrder: presentationData.nameDisplayOrder)
+                            strongSelf.interfaceInteraction?.updateTextInputStateAndMode { state, mode in
+                                let text = NSMutableAttributedString(attributedString: quote)
+                                text.append(state.inputText)
+                                return (ChatTextInputState(inputText: text, selectionRange: text.length ..< text.length), mode)
+                            }
+                            completion(.immediate, {})
+                            if !strongSelf.chatDisplayNode.ensureInputViewFocused() {
+                                DispatchQueue.main.async { [weak strongSelf] in
+                                    strongSelf?.chatDisplayNode.ensureInputViewFocused()
+                                }
+                            }
+                        } else if let message = strongSelf.chatDisplayNode.historyNode.messageInCurrentHistoryView(messageId)?._asMessage() {
                             strongSelf.updateChatPresentationInterfaceState(animated: true, interactive: true, { $0.updatedInterfaceState({
                                 $0.withUpdatedReplyMessageSubject(ChatInterfaceState.ReplyMessageSubject(
                                     messageId: message.id,

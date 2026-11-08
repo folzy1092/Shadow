@@ -833,10 +833,11 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
     let shadowDisguiseFull = ShadowDisguise.shared.isFull
 
     // Shadow: anti-delete keeps a local copy of a message the server already
-    // deleted. Server-side actions on it (reply, pin, edit) can only fail.
+    // deleted. Server-side actions on it (pin, edit) can only fail. Reply stays:
+    // for such a message it quotes the author and text in the input instead
+    // (ShadowDeletedReplyQuote, setupReplyMessage).
     let ayuIsKeptDeleted = messages.contains(where: { $0.attributes.contains(where: { $0 is DeletedMessageAttribute }) })
     if ayuIsKeptDeleted {
-        canReply = false
         canPin = false
     }
     

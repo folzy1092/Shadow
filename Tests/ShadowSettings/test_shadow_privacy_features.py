@@ -245,5 +245,21 @@ class ShadowPrivacyFeatures(unittest.TestCase):
         self.assertIn("DeletedMessageAttribute", reactions)
 
 
+    def test_reply_to_kept_deleted_message_quotes_it(self):
+        menus = (ROOT / "submodules/TelegramUI/Sources/ChatInterfaceStateContextMenus.swift").read_text()
+        kept = menus.split("let ayuIsKeptDeleted", 1)[1].split("canPin = false", 1)[0]
+        self.assertNotIn("canReply = false", kept)
+        bubble = (ROOT / "submodules/TelegramUI/Components/Chat/ChatMessageBubbleItemNode/Sources/ChatMessageBubbleItemNode.swift").read_text()
+        swipe = bubble.split("replyRecognizer.shouldBegin", 1)[1].split("for media in", 1)[0]
+        self.assertNotIn("DeletedMessageAttribute", swipe)
+        load = (ROOT / "submodules/TelegramUI/Sources/Chat/ChatControllerLoadDisplayNode.swift").read_text()
+        setup = load.split("setupReplyMessage: {", 1)[1].split("setupEditMessage:", 1)[0]
+        self.assertIn("ShadowDeletedReplyQuote.isKeptDeleted", setup)
+        self.assertIn("ShadowDeletedReplyQuote.inputText", setup)
+        quote = (ROOT / "submodules/TelegramUI/Sources/ShadowDeletedReplyQuote.swift").read_text()
+        self.assertIn('"https://t.me/\\(username)"', quote)
+        self.assertIn("ChatTextInputTextMentionAttribute(peerId: author.id)", quote)
+        self.assertIn("ChatTextInputTextQuoteAttribute(kind: .quote", quote)
+
 if __name__ == "__main__":
     unittest.main()
