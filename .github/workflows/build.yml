@@ -131,6 +131,8 @@ jobs:
           echo "FORK_VERSION=$(echo $FORK_VERSION)" >> $GITHUB_ENV
 
           python3 build-system/Make/ImportCertificates.py --path build-system/fake-codesigning/certs
+          # The fake profiles expired on 2026-10-30; the IPA is re-signed on install anyway.
+          python3 build-system/ci/allow_expired_fake_profiles.py
 
           # Shadow build progress: a check run on this commit whose title carries
           # Bazel's latest "[done / total]" and whose summary carries build=N.
