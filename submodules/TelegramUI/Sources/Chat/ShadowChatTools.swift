@@ -139,6 +139,9 @@ extension ChatControllerImpl {
             return
         }
         let presentationData = self.presentationData
+        // 2.2.5: unloaded parts of the range are downloaded first, which can
+        // take a few seconds in a long chat.
+        self.present(UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: "Загружаю сообщения диапазона…", timeout: 2.0, customUndoText: nil), elevatedLayout: false, action: { _ in return false }), in: .current)
         let _ = (ShadowRangeSelection.messageIds(account: self.context.account, peerId: peerId, threadId: self.chatLocation.threadId, direction: direction)
         |> deliverOnMainQueue).startStandalone(next: { [weak self] ids in
             guard let self, !ids.isEmpty else {

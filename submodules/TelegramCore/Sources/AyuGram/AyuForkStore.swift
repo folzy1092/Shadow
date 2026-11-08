@@ -112,28 +112,70 @@ public func ayuForkStoreRepair(transaction: Transaction, messages: [Message]) {
     }
 }
 
+// MARK: - Full rescan
+
+// Upper bound of messages scanned per chat and namespace.
+private let ayuForkRescanLimitPerChat = 1_000_000
+
+// The index above is filled only at capture time and by the lazy repair of
+// visible history, and builds before 2.2.0 dropped refs past 5,000. Messages it
+// never saw were invisible to the storage screen: its counts read 0, its clear
+// buttons stayed disabled or deleted nothing, and kept deleted messages stayed in
+// groups. This walks the stored attributes of every chat (Postbox keeps no index
+// for them), repairs the index, and returns everything that is really stored.
+public func ayuForkStoreRescan(transaction: Transaction) -> (kept: [MessageId], edited: [MessageId]) {
+    let store = ayuForkStore(transaction: transaction)
+    var peerIds = Set(transaction.chatListGetAllPeerIds())
+    for ref in store.keptDeleted + store.editHistory {
+        peerIds.insert(PeerId(ref.peer))
+    }
+    var kept: [AyuForkMsgRef] = []
+    var edited: [AyuForkMsgRef] = []
+    for peerId in peerIds {
+        for namespace in [Namespaces.Message.Cloud, Namespaces.Message.SecretIncoming] {
+            transaction.scanMessageAttributes(peerId: peerId, namespace: namespace, limit: ayuForkRescanLimitPerChat) { id, attributes in
+                if attributes.contains(where: { $0 is DeletedMessageAttribute }) {
+                    kept.append(AyuForkMsgRef(id))
+                }
+                if attributes.contains(where: { $0 is SavedMessageEditsAttribute }) {
+                    edited.append(AyuForkMsgRef(id))
+                }
+                // Postbox reads in batches and `false` only ends the current one.
+                return true
+            }
+        }
+    }
+    updateAyuForkStore(transaction: transaction) { current in
+        var current = current
+        appendUnique(&current.keptDeleted, kept)
+        appendUnique(&current.editHistory, edited)
+        return current
+    }
+    let repaired = ayuForkStore(transaction: transaction)
+    return (repaired.keptDeleted.map { $0.messageId }, repaired.editHistory.map { $0.messageId })
+}
+
 // MARK: - Public read / clear for the storage screen
 
 public func ayuForkStoreCounts(postbox: Postbox) -> Signal<(keptDeleted: Int, editHistory: Int), NoError> {
     return postbox.transaction { transaction -> (keptDeleted: Int, editHistory: Int) in
-        let store = ayuForkStore(transaction: transaction)
-        return (store.keptDeleted.count, store.editHistory.count)
+        let found = ayuForkStoreRescan(transaction: transaction)
+        return (found.kept.count, found.edited.count)
     }
 }
 
-// Delete the kept (anti-deleted) messages for real and clear the index.
+// Delete every kept (anti-deleted) message for real, indexed or not, and clear the index.
 public func ayuForkStoreClearKeptDeleted(postbox: Postbox) -> Signal<Never, NoError> {
     return postbox.transaction { transaction -> Void in
-        let store = ayuForkStore(transaction: transaction)
-        let ids = store.keptDeleted.map { $0.messageId }
+        let ids = ayuForkStoreRescan(transaction: transaction).kept
         if !ids.isEmpty {
             _internal_deleteMessages(transaction: transaction, mediaBox: postbox.mediaBox, ids: ids)
             AyuSavedMedia.removeMessageMedia(basePath: postbox.mediaBox.basePath, messageIds: ids)
         }
+        let cleared = Set(ids.map(AyuForkMsgRef.init))
         updateAyuForkStore(transaction: transaction) { current in
             var current = current
             current.keptDeleted = []
-            let cleared = Set(store.keptDeleted)
             current.editHistory.removeAll(where: { cleared.contains($0) })
             return current
         }
@@ -267,26 +309,30 @@ func ayuForkStorePruneEditHistory(transaction: Transaction, mediaBox: MediaBox, 
     return removedVersions
 }
 
-// Strip the stored edit versions from the affected messages and clear the index.
+// Remove a message's stored edit versions and their backed-up media.
+private func ayuForkStripEditHistory(transaction: Transaction, basePath: String, messageId: MessageId) {
+    guard let message = transaction.getMessage(messageId), message.attributes.contains(where: { $0 is SavedMessageEditsAttribute }) else {
+        return
+    }
+    let candidates = Set(message.attributes.compactMap { $0 as? SavedMessageEditsAttribute }.flatMap { $0.versions }.compactMap { $0.mediaFileName })
+    let keeping = Set([AyuSavedMedia.principalFileName(peerId: messageId.peerId, messageId: messageId, mediaList: message.media)].compactMap { $0 })
+    AyuSavedMedia.removeEditHistoryMedia(basePath: basePath, candidates: candidates, keeping: keeping)
+    transaction.updateMessage(messageId, update: { currentMessage in
+        var attributes = currentMessage.attributes
+        attributes.removeAll(where: { $0 is SavedMessageEditsAttribute })
+        var storeForwardInfo: StoreMessageForwardInfo?
+        if let forwardInfo = currentMessage.forwardInfo {
+            storeForwardInfo = StoreMessageForwardInfo(authorId: forwardInfo.author?.id, sourceId: forwardInfo.source?.id, sourceMessageId: forwardInfo.sourceMessageId, date: forwardInfo.date, authorSignature: forwardInfo.authorSignature, psaType: forwardInfo.psaType, flags: forwardInfo.flags)
+        }
+        return .update(StoreMessage(id: currentMessage.id, customStableId: nil, globallyUniqueId: currentMessage.globallyUniqueId, groupingKey: currentMessage.groupingKey, threadId: currentMessage.threadId, timestamp: currentMessage.timestamp, flags: StoreMessageFlags(currentMessage.flags), tags: currentMessage.tags, globalTags: currentMessage.globalTags, localTags: currentMessage.localTags, forwardInfo: storeForwardInfo, authorId: currentMessage.author?.id, text: currentMessage.text, attributes: attributes, media: currentMessage.media))
+    })
+}
+
+// Strip the stored edit versions from every affected message, indexed or not, and clear the index.
 public func ayuForkStoreClearEditHistory(postbox: Postbox) -> Signal<Never, NoError> {
     return postbox.transaction { transaction -> Void in
-        let store = ayuForkStore(transaction: transaction)
-        for ref in store.editHistory {
-            let messageId = ref.messageId
-            if let message = transaction.getMessage(messageId), message.attributes.contains(where: { $0 is SavedMessageEditsAttribute }) {
-                let candidates = Set(message.attributes.compactMap { $0 as? SavedMessageEditsAttribute }.flatMap { $0.versions }.compactMap { $0.mediaFileName })
-                let keeping = Set([AyuSavedMedia.principalFileName(peerId: messageId.peerId, messageId: messageId, mediaList: message.media)].compactMap { $0 })
-                AyuSavedMedia.removeEditHistoryMedia(basePath: postbox.mediaBox.basePath, candidates: candidates, keeping: keeping)
-                transaction.updateMessage(messageId, update: { currentMessage in
-                    var attributes = currentMessage.attributes
-                    attributes.removeAll(where: { $0 is SavedMessageEditsAttribute })
-                    var storeForwardInfo: StoreMessageForwardInfo?
-                    if let forwardInfo = currentMessage.forwardInfo {
-                        storeForwardInfo = StoreMessageForwardInfo(authorId: forwardInfo.author?.id, sourceId: forwardInfo.source?.id, sourceMessageId: forwardInfo.sourceMessageId, date: forwardInfo.date, authorSignature: forwardInfo.authorSignature, psaType: forwardInfo.psaType, flags: forwardInfo.flags)
-                    }
-                    return .update(StoreMessage(id: currentMessage.id, customStableId: nil, globallyUniqueId: currentMessage.globallyUniqueId, groupingKey: currentMessage.groupingKey, threadId: currentMessage.threadId, timestamp: currentMessage.timestamp, flags: StoreMessageFlags(currentMessage.flags), tags: currentMessage.tags, globalTags: currentMessage.globalTags, localTags: currentMessage.localTags, forwardInfo: storeForwardInfo, authorId: currentMessage.author?.id, text: currentMessage.text, attributes: attributes, media: currentMessage.media))
-                })
-            }
+        for messageId in ayuForkStoreRescan(transaction: transaction).edited {
+            ayuForkStripEditHistory(transaction: transaction, basePath: postbox.mediaBox.basePath, messageId: messageId)
         }
         updateAyuForkStore(transaction: transaction) { current in
             var current = current

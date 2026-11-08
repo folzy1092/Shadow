@@ -373,6 +373,9 @@ public func ayuForkStorageController(context: AccountContext) -> ViewController 
                 }
 
                 let formatting = DataSizeStringFormatting(presentationData: presentationData)
+                // Repair the index from the stored messages first, so the counts and the
+                // per-chat lists include messages it never saw (2.2.5).
+                let _ = ayuForkStoreRescan(transaction: transaction)
                 let store = ayuForkStore(transaction: transaction)
                 var deletedByPeer: [Int64: Int] = [:]
                 for ref in store.keptDeleted {

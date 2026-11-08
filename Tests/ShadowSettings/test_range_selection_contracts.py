@@ -35,6 +35,18 @@ class RangeSelectionContracts(unittest.TestCase):
         self.assertIn('"До начала переписки"', selection)
         self.assertIn("withUpdatedSelectedMessages(ids)", selection)
 
+    def test_range_loads_missing_messages_first(self):
+        # 2.2.5: a range over 41 comments selected only the 16 stored ones; the
+        # range's holes (thread holes for comments) are fetched before reading.
+        core = read("TelegramCore/Sources/AyuGram/ShadowRangeSelection.swift")
+        self.assertIn("static func fillHoles(account: Account, peerId: PeerId, threadId: Int64?", core)
+        self.assertIn("transaction.getThreadIndexHoles(peerId: peerId, threadId: threadId", core)
+        self.assertIn("fetchMessageHistoryHole(", core)
+        self.assertIn("peerInput: .direct(peerId: peerId, threadId: threadId)", core)
+        self.assertIn("static let maxFillRequests = 50", core)
+        tools = read("TelegramUI/Sources/Chat/ShadowChatTools.swift")
+        self.assertIn("Загружаю сообщения диапазона…", tools)
+
     def test_core_sends_in_chunks_of_100(self):
         # No client cap on the selection: forwards and deletes are split by the core.
         pending = read("TelegramCore/Sources/State/PendingMessageManager.swift")
