@@ -1,4 +1,4 @@
-# Спек: плитка камеры в галерее сломалась после перехода на 13.2
+# Спек: камера в галерее и кружок из галереи сломались после перехода на 13.2
 
 Дата: 2026-11-10. Автор: сессия-диагност (без устройства и без сборки — только чтение кода).
 Для: сессия, которая чинит. Версия форка на момент поломки — Shadow 2.3.0 (база Telegram 13.2),
@@ -12,6 +12,8 @@
 2. **Плитка камеры стала большой и игнорирует настройку** (раньше была компактной по настройке
    «Компактная плитка камеры»; теперь всегда в две ячейки высотой).
 3. **Нажимаю на плитку → открывается камера → через ~0,5 с камера зависает.**
+4. **Пропала кнопка «отправить кружком»** (иконка кружка над кнопкой звука при просмотре видео из галереи) —
+   см. §1.5.
 
 Всё началось с Shadow 2.3.0 (мерж `release-13.2`, коммит `c2ccc388`). До этого (2.2.x, база 13.1.2) работало.
 
@@ -110,9 +112,47 @@
 - Неясно, зависание ли это камеры (сессия не идёт) или UI (главный поток). Это разные баги. Различить: трогается
   ли кнопка закрытия, идёт ли таймер/вспышка, есть ли в `Logger` последние записи `CameraContext`.
 
+### 1.5. Симптом 4 (пропала кнопка «кружок из галереи») — причина найдена, уверенность высокая
+
+- Фича форка (агент-карта §5e) живёт целиком в **старой** галерее LegacyComponents:
+  кнопка `_roundButton` — `submodules/LegacyComponents/Sources/TGMediaPickerGalleryInterfaceView.m:270`
+  (иконка `shadowRoundVideoIcon:` там же, `:1682`), флаг — пресет `VideoMessage` в `TGVideoEditAdjustments`
+  (`isRoundVideo`), превью-маска — `TGMediaPickerGalleryVideoItemView.m`, конвертация перед отправкой —
+  `LegacyMediaPickers.swift:816-835` (`roundVideoAdjustmentsWithDuration:`, флаг `.instantRoundVideo`).
+- В 13.2 тап по медиа в чатовой скрепке ведёт в **новый** редактор: `MediaPickerScreen.swift:1797`
+  `openChatMediaGallery` → `chatMediaGalleryRoute(galleryOn: routesToChatMediaEditorV2(.pickerGallery), …)`
+  (`ChatMediaSend/Sources/ChatMediaGalleryRouting.swift:9`) → `.chat` → `ChatMediaEditorScreen`
+  (`submodules/TelegramUI/Components/ChatMediaEditorScreen`). В нём нет ни кнопки, ни слова `isRoundVideo` /
+  `instantRoundVideo` / `VideoMessage` (grep пустой). Старая галерея открывается теперь только при `.legacy`
+  (файлы без filePicker, custom selection, explicit multiple selection, или флаг editor V2 выключен).
+- Тот же корень, что у симптомов 1 и 3: `usesChatMediaEditorV2` по умолчанию включён.
+- Отправка в новом пути разделена: элементы с legacy-правками (`hasLegacyAdjustments`,
+  `MediaPickerChatMediaSend.swift:98`) идут через `mediaPickerChatMediaSendLegacyMedia` →
+  `legacyAssetPickerEnqueueMessages` → `LegacyMediaPickers` (там конвертация в кружок **есть**); правки нового
+  редактора — это `MediaEditorValues`, они идут через `ChatMediaSend` (там конвертации **нет**). Нужно проверить, какой
+  путь выберется для видео, у которого в `TGMediaEditingContext` лежат `TGVideoEditAdjustments` с пресетом
+  `VideoMessage`, а в новом редакторе правок нет.
+
+Варианты починки:
+- (A, предпочтительно) Кнопка в `ChatMediaEditorScreen` рядом с кнопкой звука (`ChatMediaEditorScreenMute.swift`,
+  `chatMediaEditorMuteButtonFrame`; видна для видео в галерее, не для GIF/анимаций, не при `asFile`, не в платном посте).
+  Переключение пишет/снимает пресет `VideoMessage` в `TGMediaEditingContext` через адаптер в духе
+  `ChatMediaEditorLegacy*Adapter` (`ChatMediaEditorLegacyGallery.swift`), чтобы отправка пошла через уже готовую
+  конвертацию в `LegacyMediaPickers`. Превью: круглая маска поверх квадрата по центру, как в старой галерее.
+  Подводный камень: если на том же видео есть правки нового редактора (обрезка, рисование), элемент может уйти в
+  `ChatMediaSend`, и кружок молча потеряется. Решить явно: либо в `ChatMediaSend` тоже ставить квадрат + 60 с +
+  `.instantRoundVideo`, либо при включённом кружке переводить правки в legacy (проверить, что не теряются).
+- (B) Нативно в `ChatMediaSend` (квадратный кроп + обрезка 60 с + `TelegramMediaVideoFlags.instantRoundVideo`, без
+  подписи и альбома) — чище для будущих мержей, но дублирует логику из `LegacyMediaPickers`.
+- (C, временно) Форковый переключатель «старая галерея» на `routesToChatMediaEditorV2(.pickerGallery)` — кнопка
+  вернётся сразу, но теряем новый редактор 13.2. Годится как экстренная мера, не как решение.
+
+Проверка: `chatMediaEditorLegacy` в Debug Settings должен вернуть кнопку (старая галерея) — это подтверждает
+диагноз за минуту.
+
 ## 2. Критическая оценка (честно)
 
-- Три симптома, скорее всего, **один корень**: форк подключил свои настройки к старому пути, а 13.2 включил новый путь
+- Симптомы 1, 3 и 4 (а 2 — через MediaGrid v2), скорее всего, **один корень**: форк подключил свои настройки к старому пути, а 13.2 включил новый путь
   по умолчанию. Это ожидаемая цена мержа апстримовой переписанной галереи, не случайность.
 - Но «зависание камеры» — НЕ доказано, что тот же корень. Не объявлять причиной v2/editor V2, пока тумблеры отладки
   не подтвердят (§3). Ставка: `chatMediaEditorLegacy` лечит симптом 3, `mediaGridLegacy` — симптом 2.
@@ -129,7 +169,8 @@
    `AGENTS.md`, «Visual features and animations»).
 2. Debug Settings (`DebugController.swift`): по очереди
    - «Media picker: legacy grid» (`mediaGridLegacy`) → пропал ли симптом 2 (ожидаем: да);
-   - Chat media editor legacy (`chatMediaEditorLegacy`) → пропали ли 1 и 3 (ожидаем: 1 и 3 уходят, т.к. ветка вернётся к `TGAttachmentCameraView`);
+   - Chat media editor legacy (`chatMediaEditorLegacy`) → пропали ли 1 и 3 и вернулась ли кнопка кружка (ожидаем:
+     да для всех трёх: камера вернётся к `TGAttachmentCameraView`, тап по медиа — в старую галерею);
    - оба сразу — эталон «как в 2.2.x».
    Записать таблицу «флаги × симптомы» прямо в этот файл.
 3. Снять лог: `CameraContext startCapture/stopCapture` + `ShadowApplog`/`Logger` вокруг нажатия на плитку;
@@ -159,6 +200,8 @@
 - Нажатие на плитку открывает камеру, камера не зависает минимум 30 с, фото и видео снимаются, возврат в галерею
   восстанавливает плитку без чёрного кадра.
 - `showCameraTile = false` по-прежнему убирает плитку целиком (все ветки).
+- В новом редакторе для видео из галереи есть кнопка кружка; отправленное приходит кружком (квадрат, ≤ 60 с, без
+  подписи), в том числе если видео ещё и обрезано/отредактировано; для фото, GIF, «как файл» кнопки нет.
 - Debug-флаги `mediaGridLegacy` / `chatMediaEditorLegacy` не требуются для нормальной работы.
 - `python3 build-system/Make/Make.py ... test --target //submodules/MediaPickerUI:MediaPickerGridCellDecorationsTests`
   и целевые тесты MediaGrid зелёные.
