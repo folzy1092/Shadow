@@ -100,6 +100,9 @@ struct DocumentTests {
         check((try? ShadowSettingsDocument.decode(ShadowSettingsDocument(settings: ["inputToolbarButtons": .text(String(repeating: "b,", count: 150))]).encoded())) == nil, "Oversized button list refused")
         let favorites = try ShadowSettingsDocument.decode(ShadowSettingsDocument(settings: ["unlimitedFavorites": .bool(false)]).encoded())
         check(favorites.settings["unlimitedFavorites"] == .bool(false), "Unlimited favourites toggle is portable")
+        // 2.3.1: the gallery camera tile's 13.2 camera.
+        let newCamera = try ShadowSettingsDocument.decode(ShadowSettingsDocument(settings: ["cameraTileNewCamera": .bool(true), "cameraTileCompact": .bool(true)]).encoded())
+        check(newCamera.settings["cameraTileNewCamera"] == .bool(true) && newCamera.settings["cameraTileCompact"] == .bool(true), "Camera tile toggles are portable")
         let quality = try ShadowSettingsDocument.decode(ShadowSettingsDocument(settings: ["mediaSendQuality": .integer(2)]).encoded())
         check(quality.settings["mediaSendQuality"] == .integer(2), "Media send quality is portable")
         expectFailure("Unsupported media send quality") { _ = try ShadowSettingsDocument(settings: ["mediaSendQuality": .integer(3)]) }

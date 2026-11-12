@@ -395,6 +395,34 @@ final class MediaGridViewTests: XCTestCase {
         XCTAssertNil(view.index(at: CGPoint(x: camera.frame.midX, y: camera.frame.midY)))
     }
 
+    // Shadow: «Компактная плитка камеры» — a one-row camera cell; the second row starts in column 0 again.
+    func testCompactCameraTakesOneSlot() {
+        let (view, _) = self.makeView(count: 100)
+        let camera = UIView()
+        view.cameraView = camera
+        view.cameraSlotRows = 1
+        view.layoutIfNeeded()
+        guard let layout = view.currentLayout else {
+            XCTFail("no layout")
+            return
+        }
+        XCTAssertEqual(camera.frame, layout.reservedFrame([MediaGridSlot(row: 0, column: 0)]))
+        XCTAssertEqual(camera.frame.height, layout.itemSize.height, accuracy: 1e-6)
+        XCTAssertEqual(layout.frame(at: 0).minX, layout.itemSize.width + 1.0, accuracy: 1e-6)
+        XCTAssertEqual(layout.frame(at: 2).minX, 0.0, accuracy: 1e-6)
+        XCTAssertEqual(layout.frame(at: 2).minY, layout.itemSize.height + 1.0, accuracy: 1e-6)
+        XCTAssertNotNil(view.index(at: CGPoint(x: camera.frame.midX, y: layout.frame(at: 2).midY)))
+
+        view.cameraSlotRows = 2
+        view.layoutIfNeeded()
+        guard let tallLayout = view.currentLayout else {
+            XCTFail("no layout")
+            return
+        }
+        XCTAssertEqual(camera.frame.height, 2.0 * tallLayout.itemSize.height + 1.0, accuracy: 1e-6)
+        XCTAssertEqual(tallLayout.frame(at: 2).minX, tallLayout.itemSize.width + 1.0, accuracy: 1e-6)
+    }
+
     func testNoCameraSlotsAtFifteen() {
         let (view, _) = self.makeView(count: 100)
         let camera = UIView()

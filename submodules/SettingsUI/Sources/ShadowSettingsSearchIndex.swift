@@ -68,6 +68,7 @@ enum ShadowSettingsSearchIndex {
         ShadowSettingsSearchItem(destination: .customization, entryId: 27, title: "Камера в галерее", description: "Показывать плитку камеры во вложениях", keywords: "camera gallery"),
         ShadowSettingsSearchItem(destination: .customization, entryId: 28, title: "Живой предпросмотр камеры", description: "Видео в плитке камеры", keywords: "live camera preview"),
         ShadowSettingsSearchItem(destination: .customization, entryId: 115, title: "Компактная плитка камеры", description: "Плитка камеры в галерее занимает одну ячейку вместо двух", keywords: "camera tile compact small gallery камера плитка компакт маленькая ячейка"),
+        ShadowSettingsSearchItem(destination: .customization, entryId: 142, title: "Новая камера в галерее", description: "Камера Telegram 13.2 из плитки в галерее вместо прежней", keywords: "camera tile new gallery 13.2 камера плитка новая зависает"),
         ShadowSettingsSearchItem(destination: .customization, entryId: 31, title: "Подтверждение звонков", description: "Защита от случайного звонка", keywords: "confirm calls"),
         ShadowSettingsSearchItem(destination: .customization, entryId: 37, title: "Кастомный баннер", description: "Фон верхней части списка чатов", keywords: "custom banner background"),
         ShadowSettingsSearchItem(destination: .customization, entryId: 38, title: "Выбрать изображение баннера", description: "После включения кастомного баннера", keywords: "banner image photo", parentEntryId: 37),

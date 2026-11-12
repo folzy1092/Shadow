@@ -909,8 +909,10 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
             // turn off the in-grid camera tile entirely from Кастомизация. Gates
             // every camera cell branch (legacy grid tile, chat camera, sticker/avatar camera).
             let shadowShowsCameraTile = ayuGramSettingsCurrent.showCameraTile
+            // Shadow (2.3.1): «Новая камера в галерее» (off by default) — 13.2's handoff of the tile's
+            // running camera to the new chat camera froze it; off keeps the 2.2.x tile and camera.
             let stockCameraCellBranch = mediaPickerCameraCellBranch(
-                flagOn: controller.context.routesToChatMediaEditorV2(.inlineCameraCell) && controller.preparedCompletion != nil && controller.opensChatCameraWithHolder,
+                flagOn: controller.context.routesToChatMediaEditorV2(.inlineCameraCell) && controller.preparedCompletion != nil && controller.opensChatCameraWithHolder && ayuGramSettingsCurrent.cameraTileNewCamera,
                 subject: cameraCellSubject,
                 isIpad: isIpad,
                 isSimulator: isSimulator
@@ -2074,6 +2076,8 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                 isPasteboard = true
             }
             let legacyContext = MediaPickerChatMediaSendLegacyContext(selectionContext: interaction.selectionState, editingContext: interaction.editingState, isPasteboard: isPasteboard)
+            // Shadow: «кружок» marked in the gallery editor becomes the VideoMessage preset for LegacyMediaPickers.
+            shadowApplyRoundVideoAdjustments(legacyContext: legacyContext, editingContext: interaction.editingState, store: store)
             if let fallback = mediaPickerChatMediaSendFallback(selection: legacyContext, editing: legacyContext, store: store, assetFor: { legacyContext.source(for: $0, thumbnail: nil) }) {
                 Logger.shared.log("MediaPicker", "chat media send falls back to legacy: \(fallback)")
                 return false
@@ -5229,8 +5233,13 @@ extension MediaPickerScreenImpl {
             return false
         }
         if let selectionContext = self.interaction?.selectionState, let editingContext = self.interaction?.editingState {
+            let roundVideoIds = self.chatMediaEditorItemStore?.shadowRoundVideoIds ?? []
             for case let item as TGMediaEditableItem in selectionContext.selectedItems() {
                 if editingContext.price(for: item) != nil || editingContext.spoiler(for: item) {
+                    return false
+                }
+                // A video marked «кружок» in the gallery editor goes out as a round video, not a file.
+                if let uniqueId = item.uniqueIdentifier, roundVideoIds.contains(uniqueId) {
                     return false
                 }
             }

@@ -258,4 +258,14 @@ final class MediaPickerGridCellDecorationsTests: XCTestCase {
         XCTAssertTrue(decorations.showsSpoilerOverlay)
         XCTAssertNil(mediaPickerGridMediaDecorations(isCompact: false, isSelectable: false, selection: selection, edit: MediaPickerGridEditInfo()).check)
     }
+
+    // Shadow: «Компактная плитка камеры» — the layer grid reserves as many rows as the screen's cutout spans.
+    func testCameraSlotRowsFollowTheCutout() {
+        let item: CGFloat = 130.0
+        let spacing: CGFloat = 1.0
+        XCTAssertEqual(mediaPickerGridCameraSlotRows(cameraHeight: item, itemHeight: item, itemSpacing: spacing), 1)
+        XCTAssertEqual(mediaPickerGridCameraSlotRows(cameraHeight: item * 2.0 + spacing, itemHeight: item, itemSpacing: spacing), 2)
+        XCTAssertEqual(mediaPickerGridCameraSlotRows(cameraHeight: item * 2.0 + spacing, itemHeight: 0.0, itemSpacing: spacing), 2)
+        XCTAssertEqual(mediaPickerGridCameraSlotRows(cameraHeight: 0.0, itemHeight: item, itemSpacing: spacing), 1)
+    }
 }

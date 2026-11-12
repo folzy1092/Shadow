@@ -356,6 +356,10 @@ public struct AyuGramSettings: Codable, Equatable {
     // Shadow: the camera tile takes one grid cell instead of a cell-wide,
     // two-row column (more media visible at once).
     public var cameraTileCompact: Bool
+    // Shadow (2.3.1): the gallery camera tile hands its running camera to Telegram 13.2's new chat
+    // camera. Off (default): the 2.2.x tile and camera (TGAttachmentCameraView), which the
+    // tile settings above were made for; 13.2's handoff froze the camera.
+    public var cameraTileNewCamera: Bool
 
     // Ask for confirmation before placing an outgoing audio/video call.
     // Protects against accidental taps; never affects incoming calls.
@@ -470,6 +474,7 @@ public struct AyuGramSettings: Codable, Equatable {
             showCameraTile: true,
             cameraTileLivePreview: true,
             cameraTileCompact: false,
+            cameraTileNewCamera: false,
             confirmCalls: false,
             saveDestructingMedia: true,
             saveAllIncomingMedia: false,
@@ -693,6 +698,7 @@ public struct AyuGramSettings: Codable, Equatable {
         showCameraTile: Bool,
         cameraTileLivePreview: Bool,
         cameraTileCompact: Bool,
+        cameraTileNewCamera: Bool,
         confirmCalls: Bool,
         saveDestructingMedia: Bool,
         saveAllIncomingMedia: Bool,
@@ -762,6 +768,7 @@ public struct AyuGramSettings: Codable, Equatable {
         self.showCameraTile = showCameraTile
         self.cameraTileLivePreview = cameraTileLivePreview
         self.cameraTileCompact = cameraTileCompact
+        self.cameraTileNewCamera = cameraTileNewCamera
         self.confirmCalls = confirmCalls
         self.saveDestructingMedia = saveDestructingMedia
         self.saveAllIncomingMedia = saveAllIncomingMedia
@@ -922,6 +929,7 @@ public struct AyuGramSettings: Codable, Equatable {
         self.showCameraTile = ((try container.decodeIfPresent(Int32.self, forKey: "showCameraTile")) ?? 1) != 0
         self.cameraTileLivePreview = ((try container.decodeIfPresent(Int32.self, forKey: "cameraTileLivePreview")) ?? 1) != 0
         self.cameraTileCompact = ((try container.decodeIfPresent(Int32.self, forKey: "cameraTileCompact")) ?? 0) != 0
+        self.cameraTileNewCamera = ((try container.decodeIfPresent(Int32.self, forKey: "cameraTileNewCamera")) ?? 0) != 0
         self.confirmCalls = ((try container.decodeIfPresent(Int32.self, forKey: "confirmCalls")) ?? 0) != 0
         self.saveDestructingMedia = ((try container.decodeIfPresent(Int32.self, forKey: "saveDestructingMedia")) ?? 1) != 0
         self.saveAllIncomingMedia = ((try container.decodeIfPresent(Int32.self, forKey: "saveAllIncomingMedia")) ?? 0) != 0
@@ -1061,6 +1069,7 @@ public struct AyuGramSettings: Codable, Equatable {
         try container.encode((self.showCameraTile ? 1 : 0) as Int32, forKey: "showCameraTile")
         try container.encode((self.cameraTileLivePreview ? 1 : 0) as Int32, forKey: "cameraTileLivePreview")
         try container.encode((self.cameraTileCompact ? 1 : 0) as Int32, forKey: "cameraTileCompact")
+        try container.encode((self.cameraTileNewCamera ? 1 : 0) as Int32, forKey: "cameraTileNewCamera")
         try container.encode((self.confirmCalls ? 1 : 0) as Int32, forKey: "confirmCalls")
         try container.encode((self.saveDestructingMedia ? 1 : 0) as Int32, forKey: "saveDestructingMedia")
         try container.encode((self.saveAllIncomingMedia ? 1 : 0) as Int32, forKey: "saveAllIncomingMedia")

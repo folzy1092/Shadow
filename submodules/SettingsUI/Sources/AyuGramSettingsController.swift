@@ -1049,6 +1049,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
     case showCameraTile(Bool)
     case cameraTileLivePreview(Bool)
     case cameraTileCompact(Bool)
+    case cameraTileNewCamera(Bool)
     case mediaFooter
 
     case customRoundVideosHeader
@@ -1095,7 +1096,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
             return AyuCustomizationSection.bottomBar.rawValue
         case .profilesHeader, .showProfileId, .showProfileDC, .showRegistrationDate, .showChatStreak, .hideOwnPhoneNumber, .profilesFooter:
             return AyuCustomizationSection.profiles.rawValue
-        case .mediaHeader, .roundVideoBackCamera, .showCameraTile, .cameraTileLivePreview, .cameraTileCompact, .localVoiceTranscription, .voiceTimeFormat, .voiceTimeRoundVideos, .voiceTimeInPlayer, .replyTimecode, .replyTimecodeMode, .chatVoiceSpeed, .chatVoiceSpeedList, .mediaSendQuality, .mediaFooter:
+        case .mediaHeader, .roundVideoBackCamera, .showCameraTile, .cameraTileLivePreview, .cameraTileCompact, .cameraTileNewCamera, .localVoiceTranscription, .voiceTimeFormat, .voiceTimeRoundVideos, .voiceTimeInPlayer, .replyTimecode, .replyTimecodeMode, .chatVoiceSpeed, .chatVoiceSpeedList, .mediaSendQuality, .mediaFooter:
             return AyuCustomizationSection.media.rawValue
         case .customRoundVideosHeader, .customVideoMessageSpeed, .customRoundVideosFooter:
             return AyuCustomizationSection.customRoundVideos.rawValue
@@ -1190,6 +1191,7 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .showCameraTile: return 27
         case .cameraTileLivePreview: return 28
         case .cameraTileCompact: return 115
+        case .cameraTileNewCamera: return 142
         case .mediaFooter: return 29
         case .customRoundVideosHeader: return 96
         case .customVideoMessageSpeed: return 97
@@ -1251,15 +1253,16 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
         case .businessBotPinnedCompact: return (13, 5)
         case .businessBotFooter: return (13, 6)
         case .cameraTileCompact: return (28, 1)
-        case .localVoiceTranscription: return (28, 2)
-        case .voiceTimeFormat: return (28, 3)
-        case .voiceTimeRoundVideos: return (28, 4)
-        case .voiceTimeInPlayer: return (28, 5)
-        case .replyTimecode: return (28, 6)
-        case .replyTimecodeMode: return (28, 7)
-        case .chatVoiceSpeed: return (28, 8)
-        case .chatVoiceSpeedList: return (28, 9)
-        case .mediaSendQuality: return (28, 10)
+        case .cameraTileNewCamera: return (28, 2)
+        case .localVoiceTranscription: return (28, 3)
+        case .voiceTimeFormat: return (28, 4)
+        case .voiceTimeRoundVideos: return (28, 5)
+        case .voiceTimeInPlayer: return (28, 6)
+        case .replyTimecode: return (28, 7)
+        case .replyTimecodeMode: return (28, 8)
+        case .chatVoiceSpeed: return (28, 9)
+        case .chatVoiceSpeedList: return (28, 10)
+        case .mediaSendQuality: return (28, 11)
         // After the media section (mediaFooter = 29), in display order.
         case .customRoundVideosHeader: return (29, 1)
         case .customVideoMessageSpeed: return (29, 2)
@@ -1554,8 +1557,12 @@ private enum AyuCustomizationEntry: ItemListNodeEntry {
             return ItemListSwitchItem(presentationData: presentationData, title: "Компактная плитка камеры", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 arguments.updateSetting { $0.cameraTileCompact = value }
             })
+        case let .cameraTileNewCamera(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Новая камера в галерее", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                arguments.updateSetting { $0.cameraTileNewCamera = value }
+            })
         case .mediaFooter:
-            return ItemListTextItem(presentationData: presentationData, text: .plain("Начинать запись видеосообщений («кружков») с задней камеры. Во время записи можно переключиться на фронтальную. «Камера в галерее» показывает плитку камеры первой ячейкой в галерее вложений. «Живой предпросмотр камеры» запускает в этой плитке видео с камеры вживую вместо статичной иконки. «Компактная плитка камеры» занимает одну ячейку вместо двух — в первом ряду видно больше медиа. «Расшифровка голосовых на устройстве» без Premium распознаёт речь прямо на телефоне — аудио никуда не отправляется. «Время на голосовых» меняет время под голосовым во время прослушивания: сколько осталось (как в Telegram), сколько прошло, «прошло / всего», «-осталось / всего» или процент; пока голосовое не играет, видна его длина. «Также на кружках» применяет тот же формат к видеосообщениям, «Время в верхнем плеере» добавляет его в полоску плеера над чатом. «Тайм-код в ответах»: ответ текстом на недослушанное голосовое или кружок начинается с момента, где вы остановились, например «0:53 текст»; собеседник нажимает на 0:53 и слушает с этого места. Режим «Спрашивать» показывает окно при отправке, ответ в нём можно запомнить для чата на 30 минут. «Своя скорость для чатов»: кнопка скорости в полоске плеера меняет скорость голосовых только того чата, откуда играет голосовое, общая скорость остаётся прежней. «Качество фото»: «Всегда HD» открывает галерею сразу в HD, «Без сжатия» отправляет фото и видео файлом (кроме спойлеров, платных и секретных чатов)."), sectionId: self.section)
+            return ItemListTextItem(presentationData: presentationData, text: .plain("Начинать запись видеосообщений («кружков») с задней камеры. Во время записи можно переключиться на фронтальную. «Камера в галерее» показывает плитку камеры первой ячейкой в галерее вложений. «Живой предпросмотр камеры» запускает в этой плитке видео с камеры вживую вместо статичной иконки. «Компактная плитка камеры» занимает одну ячейку вместо двух — в первом ряду видно больше медиа. «Новая камера в галерее» открывает из плитки камеру Telegram 13.2; выключено — прежняя камера, как до 2.3.0. «Расшифровка голосовых на устройстве» без Premium распознаёт речь прямо на телефоне — аудио никуда не отправляется. «Время на голосовых» меняет время под голосовым во время прослушивания: сколько осталось (как в Telegram), сколько прошло, «прошло / всего», «-осталось / всего» или процент; пока голосовое не играет, видна его длина. «Также на кружках» применяет тот же формат к видеосообщениям, «Время в верхнем плеере» добавляет его в полоску плеера над чатом. «Тайм-код в ответах»: ответ текстом на недослушанное голосовое или кружок начинается с момента, где вы остановились, например «0:53 текст»; собеседник нажимает на 0:53 и слушает с этого места. Режим «Спрашивать» показывает окно при отправке, ответ в нём можно запомнить для чата на 30 минут. «Своя скорость для чатов»: кнопка скорости в полоске плеера меняет скорость голосовых только того чата, откуда играет голосовое, общая скорость остаётся прежней. «Качество фото»: «Всегда HD» открывает галерею сразу в HD, «Без сжатия» отправляет фото и видео файлом (кроме спойлеров, платных и секретных чатов)."), sectionId: self.section)
         case .customRoundVideosHeader:
             return ItemListSectionHeaderItem(presentationData: presentationData, text: "КАСТОМНЫЕ КРУЖКИ", sectionId: self.section)
         case let .customVideoMessageSpeed(value):
@@ -1719,6 +1726,7 @@ private func ayuCustomizationEntries(settings: AyuGramSettings, chatVoiceSpeedCo
     entries.append(.showCameraTile(settings.showCameraTile))
     entries.append(.cameraTileLivePreview(settings.cameraTileLivePreview))
     entries.append(.cameraTileCompact(settings.cameraTileCompact))
+    entries.append(.cameraTileNewCamera(settings.cameraTileNewCamera))
     entries.append(.localVoiceTranscription(settings.localVoiceTranscription))
     entries.append(.voiceTimeFormat(settings.voiceTimeFormat))
     entries.append(.voiceTimeRoundVideos(settings.voiceTimeRoundVideos))

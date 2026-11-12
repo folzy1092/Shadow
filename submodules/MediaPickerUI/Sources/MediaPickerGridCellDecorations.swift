@@ -291,3 +291,13 @@ func mediaPickerGridInitialLevelColumns(carriedColumns: Int?, isLandscape: Bool)
     }
     return isLandscape ? 5 : 3
 }
+
+// Shadow: «Компактная плитка камеры». The screen's camera cutout is one cell (compact) or two cells and
+// a gap tall; the layer grid reserves the same number of rows for it.
+func mediaPickerGridCameraSlotRows(cameraHeight: CGFloat, itemHeight: CGFloat, itemSpacing: CGFloat) -> Int {
+    guard itemHeight > 0.0 else {
+        return 2
+    }
+    let rows = Int(((cameraHeight + itemSpacing) / (itemHeight + itemSpacing)).rounded())
+    return rows <= 1 ? 1 : 2
+}

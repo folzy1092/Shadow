@@ -172,6 +172,7 @@
 | `shadow://customization/camera-tile` | Камера в галерее |
 | `shadow://customization/camera-live` | Живой предпросмотр камеры |
 | `shadow://customization/camera-compact` | Компактная плитка камеры |
+| `shadow://customization/camera-new` | Новая камера в галерее (с 2.3.1) |
 | `shadow://customization/round-speed` | Кастомная скорость кружков |
 | `shadow://customization/confirm-calls` | Подтверждение звонков |
 | `shadow://customization/banner` | Кастомный баннер |

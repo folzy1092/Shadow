@@ -118,6 +118,8 @@ extension ChatMediaEditorScreen.Node {
     }
 
     func dismissMuteTooltip() {
+        // Shadow: the «кружок» tooltip goes wherever the mute one does (tool opened, sending, page change).
+        self.shadowDismissRoundTooltip()
         if let tooltipController = self.muteTooltipController {
             self.muteTooltipController = nil
             tooltipController.dismiss()

@@ -530,6 +530,8 @@ final class MediaPickerMediaGridHost: MediaPickerGridHost, MediaPickerGridCellSt
     private weak var levelInitializedGrid: MediaGridView?
 
     private var layoutState: (size: CGSize, insets: UIEdgeInsets, isLandscape: Bool, hasCamera: Bool)?
+    // Shadow: rows of the camera cell, from the screen's camera cutout («Компактная плитка камеры»).
+    private var cameraSlotRows: Int = 2
     private var fitBackgrounds: [String: UIImage] = [:]
     private var pendingFitBackgrounds = Set<String>()
     private var downloadDisposables: [String: Disposable] = [:]
@@ -716,6 +718,9 @@ final class MediaPickerMediaGridHost: MediaPickerGridHost, MediaPickerGridCellSt
         let contentWidth = size.width - insets.left - insets.right
         let columns = itemSize.width > 0.0 ? Int(((contentWidth + itemSpacing) / (itemSize.width + itemSpacing)).rounded()) : 3
         self.layoutState = (size, insets, columns >= MediaGridLevel.five.columns, hasCamera)
+        if hasCamera, let cameraCutout = cutouts.first {
+            self.cameraSlotRows = mediaPickerGridCameraSlotRows(cameraHeight: cameraCutout.height, itemHeight: itemSize.height, itemSpacing: itemSpacing)
+        }
         var duration: TimeInterval = 0.0
         if case let .animated(value, _) = transition {
             duration = value
@@ -735,6 +740,9 @@ final class MediaPickerMediaGridHost: MediaPickerGridHost, MediaPickerGridCellSt
         let cameraView: UIView? = layoutState.hasCamera ? self.cameraContainerView : nil
         if gridView.cameraView !== cameraView {
             gridView.cameraView = cameraView
+        }
+        if gridView.cameraSlotRows != self.cameraSlotRows {
+            gridView.cameraSlotRows = self.cameraSlotRows
         }
         gridView.headerHeight = headerHeight
         self.headerNode.bounds = CGRect(origin: CGPoint(x: 0.0, y: -headerHeight), size: CGSize(width: layoutState.size.width, height: headerHeight))

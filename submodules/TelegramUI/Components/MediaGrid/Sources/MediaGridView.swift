@@ -300,10 +300,22 @@ public final class MediaGridView: UIView {
     private let pinchDelegate = MediaGridPinchDelegate()
     private let touchFilter = MediaGridTouchFilter()
 
-    private static let cameraSlots: Set<MediaGridSlot> = [MediaGridSlot(row: 0, column: 0), MediaGridSlot(row: 1, column: 0)]
+    // Shadow: «Компактная плитка камеры» — the camera cell is one row tall instead of two.
+    public var cameraSlotRows: Int = 2 {
+        didSet {
+            if self.cameraSlotRows != oldValue {
+                self.endInteraction()
+                self.invalidateGridLayout()
+            }
+        }
+    }
+
+    private var cameraSlotSet: Set<MediaGridSlot> {
+        return mediaGridCameraSlots(rows: self.cameraSlotRows)
+    }
 
     private func cameraSlots(for level: MediaGridLevel) -> Set<MediaGridSlot> {
-        return self.cameraLevels.contains(level) && self.cameraView != nil ? MediaGridView.cameraSlots : []
+        return self.cameraLevels.contains(level) && self.cameraView != nil ? self.cameraSlotSet : []
     }
 
     private func accessorySlots(for level: MediaGridLevel) -> Set<MediaGridSlot> {
@@ -1838,7 +1850,7 @@ public final class MediaGridView: UIView {
             return
         }
         cameraView.layer.transform = CATransform3DIdentity
-        if !self.cameraSlots(for: self.layoutLevel).isEmpty, let frame = (layout as? MediaGridUniformLayout)?.reservedFrame(MediaGridView.cameraSlots) {
+        if !self.cameraSlots(for: self.layoutLevel).isEmpty, let frame = (layout as? MediaGridUniformLayout)?.reservedFrame(self.cameraSlotSet) {
             cameraView.isHidden = false
             cameraView.alpha = 1.0
             cameraView.frame = frame
@@ -2336,4 +2348,12 @@ private final class MediaGridPinchDelegate: NSObject, UIGestureRecognizerDelegat
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
         return self.recognizesSimultaneously(otherGestureRecognizer)
     }
+}
+
+// Shadow: the camera cell's slots, one or two rows of the first column.
+public func mediaGridCameraSlots(rows: Int) -> Set<MediaGridSlot> {
+    if rows <= 1 {
+        return [MediaGridSlot(row: 0, column: 0)]
+    }
+    return [MediaGridSlot(row: 0, column: 0), MediaGridSlot(row: 1, column: 0)]
 }

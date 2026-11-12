@@ -56,6 +56,8 @@ public final class ChatMediaEditorItemStore {
 
     private var entries: [String: Entry] = [:]
     private var qualityPresetBaselines: [String: MediaQualityPreset] = [:]
+    // Shadow: items marked «отправить кружком» in the gallery editor (ShadowRoundVideo.swift).
+    public var shadowRoundVideoIds = Set<String>()
 
     public init() {
     }

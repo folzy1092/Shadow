@@ -108,6 +108,10 @@ public func mediaPickerChatMediaSendLegacyOnlyReason(uniqueId: String, source: M
     if store.entry(for: uniqueId) == nil && editing.hasLegacyAdjustments(for: uniqueId) {
         return .legacyAdjustments
     }
+    // Shadow: a round video («кружок») is converted by LegacyMediaPickers (ShadowRoundVideo.swift).
+    if shadowRoundVideoIsActive(uniqueId: uniqueId, source: source, editing: editing, store: store) {
+        return .legacyAdjustments
+    }
     return nil
 }
 
@@ -148,12 +152,15 @@ public func mediaPickerChatMediaSendItems(selection: MediaPickerChatMediaSendSel
                 timer = nil
             }
             let legacy = legacyMedia[uniqueId]
+            // Shadow: a round video has no caption and is never part of an album.
+            let isRoundVideo = shadowRoundVideoIsActive(uniqueId: uniqueId, source: resolvedSource, editing: editing, store: store)
             let options = ChatMediaSendItemOptions(
-                caption: editing.caption(for: uniqueId),
+                caption: isRoundVideo ? nil : editing.caption(for: uniqueId),
                 timer: timer,
                 spoiler: editing.spoiler(for: uniqueId),
                 price: editing.price(for: uniqueId),
-                isAnimation: legacy?.isAnimation ?? false
+                isAnimation: legacy?.isAnimation ?? false,
+                excludedFromGrouping: isRoundVideo
             )
             items.append(ChatMediaSendItem(uniqueId: uniqueId, source: .prebuilt(media: legacy?.media), stickers: legacy?.stickers ?? [], options: options))
             continue

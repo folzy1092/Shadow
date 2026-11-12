@@ -373,6 +373,17 @@ UI-проекция настроек выбирается в `TelegramRootContro
   превью — квадрат по центру + круглая маска (`TGMediaPickerGalleryVideoItemView`).
   Квадрат и лимит 60 с применяет `roundVideoAdjustmentsWithDuration:` перед
   отправкой (`LegacyMediaPickers.swift`: флаг `.instantRoundVideo`, без подписи и альбома).
+- **Кружок в новом редакторе 13.2 (2.3.1).** С 13.2 тап по медиа в скрепке открывает
+  `ChatMediaEditorScreen`, а не старую галерею. Кнопка — `ChatMediaEditorScreenShadowRound.swift`
+  (над кнопкой звука, видна/скрыта вместе с ней; превью — круглая маска на `previewContainerView`;
+  при включении снимает «без звука» и показывает подсказку). Флаг — `ChatMediaEditorItemStore.shadowRoundVideoIds`,
+  **не** пресет в `TGMediaEditingContext`: редактор стирает legacy-правки элемента, когда пишет его
+  миниатюру (`ChatMediaEditorLegacyThumbnailWriter.write` → `clearAdjustments`). Перед отправкой
+  `shadowApplyRoundVideoAdjustments` (`MediaPickerUI/ShadowRoundVideoSend.swift`) ставит пресет
+  `VideoMessage` с обрезкой нового редактора и простым кадрированием; `mediaPickerChatMediaSendLegacyOnlyReason`
+  отправляет такой элемент через `LegacyMediaPickers` (там конвертация), без подписи и вне альбома.
+  Рисунки, фильтры и поворот в кружок не переносятся (подсказка об этом говорит). Решения — чистые функции
+  `ChatMediaSend/ShadowRoundVideo.swift`, тесты `ShadowRoundVideoTests` (`//submodules/TelegramUI/Components/ChatMediaSend:ChatMediaSendTests`).
 - Синхронизация настроек между аккаунтами: список — `ShadowSettingsSync.swift`
   (UserDefaults, id пользователей), раздача изменений — `TelegramUI/ShadowSettingsSyncManager.swift`
   (ставится в `SharedAccountContextImpl`), экран — `shadowSettingsSyncController`
@@ -482,6 +493,14 @@ UI-проекция настроек выбирается в `TelegramRootContro
   `cameraTileCompact`, ссылка `shadow://customization/camera-compact`, строка
   115 в «Кастомизации») — в `MediaPickerScreen` плитка камеры высотой в одну
   ячейку вместо двух. Живой предпросмотр — прежний `cameraTileLivePreview`.
+  С 13.2 (сетка MediaGrid v2) высоту плитки задаёт `MediaGridView.cameraSlotRows` (1 или 2):
+  хост `MediaPickerMediaGridHost` берёт число строк из выреза камеры экрана
+  (`mediaPickerGridCameraSlotRows`), так что источник один — `cameraHeight` в `MediaPickerScreen`.
+- «Новая камера в галерее» (2.3.1): `AyuGramSettings.cameraTileNewCamera` (по умолчанию **выкл.**,
+  ссылка `shadow://customization/camera-new`, строка 142). Выкл. — плитка ветки `.legacyAttachmentCamera`
+  (`TGAttachmentCameraView` и прежняя камера, как в 2.2.x); вкл. — ветка 13.2 `.chatCamera`
+  с передачей работающей камеры (`CameraHolder`) в новый экран камеры, на которой камера зависала
+  (причина не найдена, устройство не проверялось). Кнопка камеры в меню скрепки от тумблера не зависит.
 
 ## 5h. Дата регистрации в профиле (1.4.2)
 
@@ -1015,6 +1034,10 @@ UI-проекция настроек выбирается в `TelegramRootContro
   «Контакты» в апстриме больше нет.
 - Строка «удалено …» в меню — `ChatReadReportContextItem.Info.deleted` (апстрим
   заменил `isEdit` на `Info`).
+- **Галерея 13.2 и настройки форка** (2.3.1, спек `docs/specs/2026-11-10-shadow-camera-tile-regression-13.2.md`):
+  сетка v2, новая камера в плитке и новый редактор включены апстримом по умолчанию, а компактная плитка,
+  живой предпросмотр и кружок были подключены только к старым путям. Починено в §5e (кружок) и §5g
+  (компактная плитка, «Новая камера в галерее»). Правки в апстримных файлах помечены `Shadow`.
 - Подвохи сборки: API iOS 27.1 (`reservedRegions` в `Display/ReservedArea.swift`)
   только под `#if compiler(>=6.4)`; автомерж оставлял двойные `deinit` и дубли
   в `deps` BUILD-файлов; фейковые профили CI просрочены с 2026-10-30

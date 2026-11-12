@@ -52,6 +52,7 @@ public enum ShadowSettingsTransfer {
         "showCameraTile": \.showCameraTile,
         "cameraTileLivePreview": \.cameraTileLivePreview,
         "cameraTileCompact": \.cameraTileCompact,
+        "cameraTileNewCamera": \.cameraTileNewCamera,
         "confirmCalls": \.confirmCalls,
         "saveDestructingMedia": \.saveDestructingMedia,
         "saveAllIncomingMedia": \.saveAllIncomingMedia,
