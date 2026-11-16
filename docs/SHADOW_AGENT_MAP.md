@@ -375,7 +375,8 @@ UI-проекция настроек выбирается в `TelegramRootContro
   отправкой (`LegacyMediaPickers.swift`: флаг `.instantRoundVideo`, без подписи и альбома).
 - **Кружок в новом редакторе 13.2 (2.3.1).** С 13.2 тап по медиа в скрепке открывает
   `ChatMediaEditorScreen`, а не старую галерею. Кнопка — `ChatMediaEditorScreenShadowRound.swift`
-  (над кнопкой звука, видна/скрыта вместе с ней; превью — круглая маска на `previewContainerView`;
+  (с 2.3.2 — в ряду кнопки звука, слева от счётчика выбранных «1», как в старой галерее; в ландшафте — над
+  кнопкой звука; видна/скрыта вместе с кнопкой звука; превью — круглая маска на `previewContainerView`;
   при включении снимает «без звука» и показывает подсказку). Флаг — `ChatMediaEditorItemStore.shadowRoundVideoIds`,
   **не** пресет в `TGMediaEditingContext`: редактор стирает legacy-правки элемента, когда пишет его
   миниатюру (`ChatMediaEditorLegacyThumbnailWriter.write` → `clearAdjustments`). Перед отправкой

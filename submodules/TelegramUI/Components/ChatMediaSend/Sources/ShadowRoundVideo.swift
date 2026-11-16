@@ -108,3 +108,11 @@ public func shadowRoundVideoDropsEdits(_ values: MediaEditorValues) -> Bool {
     }
     return !shadowRoundVideoIsPlainCrop(values)
 }
+
+/// The «кружок» button in the gallery editor: in the selected counter's row, its right edge `spacing` left of
+/// the counter's circle, vertically centered on the circle.
+public func shadowRoundVideoButtonFrame(counterFrame: CGRect, counterCircleFrame: CGRect, buttonSize: CGFloat, spacing: CGFloat) -> CGRect {
+    let circleMinX = counterFrame.minX + counterCircleFrame.minX
+    let circleMidY = counterFrame.minY + counterCircleFrame.midY
+    return CGRect(x: circleMinX - spacing - buttonSize, y: circleMidY - buttonSize / 2.0, width: buttonSize, height: buttonSize)
+}

@@ -627,7 +627,7 @@ public final class ChatMediaEditorScreen: ViewController, ChatMediaGalleryContro
             self.updateCameraButtonLayout(layout: layout, safeInsets: safeInsets, toolbarFrame: editorLayout.toolbarFrame, keyboardHeight: keyboardHeight, transition: transition)
             self.updateScrubber(layout: layout, safeInsets: safeInsets, transition: ComponentTransition(transition))
             self.updateMuteButton(layout: layout, safeInsets: safeInsets, transition: transition)
-            self.shadowUpdateRoundVideo(transition: transition)
+            self.shadowUpdateRoundVideo(layout: layout, safeInsets: safeInsets, toolbarFrame: editorLayout.toolbarFrame, transition: transition)
             self.updateCoverLayout(layout: layout, safeInsets: safeInsets, transition: transition)
             self.updateLivePhotoLayout(layout: layout, safeInsets: safeInsets, transition: transition)
             self.updateCropLayout(layout: layout, transition: transition)

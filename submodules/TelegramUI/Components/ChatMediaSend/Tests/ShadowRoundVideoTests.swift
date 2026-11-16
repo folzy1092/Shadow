@@ -141,4 +141,13 @@ final class ShadowRoundVideoTests: XCTestCase {
         XCTAssertEqual(shadowRoundVideoPreviewCircle(in: CGRect(x: 0.0, y: 0.0, width: 300.0, height: 500.0)), CGRect(x: 0.0, y: 100.0, width: 300.0, height: 300.0))
         XCTAssertEqual(shadowRoundVideoPreviewCircle(in: CGRect(x: 0.0, y: 0.0, width: 400.0, height: 200.0)), CGRect(x: 100.0, y: 0.0, width: 200.0, height: 200.0))
     }
+
+    func testButtonSitsLeftOfTheSelectedCounter() {
+        let counterFrame = CGRect(x: 311.0, y: 600.0, width: 64.0, height: 38.0)
+        let circle = CGRect(x: 16.0, y: 1.0, width: 31.0, height: 31.0)
+        let frame = shadowRoundVideoButtonFrame(counterFrame: counterFrame, counterCircleFrame: circle, buttonSize: 40.0, spacing: 8.0)
+        XCTAssertEqual(frame.maxX, counterFrame.minX + circle.minX - 8.0, accuracy: 1e-9)
+        XCTAssertEqual(frame.midY, counterFrame.minY + circle.midY, accuracy: 1e-9)
+        XCTAssertEqual(frame.size, CGSize(width: 40.0, height: 40.0))
+    }
 }

@@ -11,7 +11,7 @@ import ChatMediaSend
 // sent. The mark lives in `ChatMediaEditorItemStore.shadowRoundVideoIds`; the picker turns it into the
 // VideoMessage preset when sending (MediaPickerUI `shadowApplyRoundVideoAdjustments`).
 
-private let shadowRoundButtonSpacing: CGFloat = 10.0
+private let shadowRoundButtonSpacing: CGFloat = 8.0
 
 private func shadowRoundVideoIcon(active: Bool) -> UIImage? {
     return generateImage(CGSize(width: 24.0, height: 24.0), rotatedContext: { size, context in
@@ -50,18 +50,30 @@ extension ChatMediaEditorScreen.Node {
         return store.shadowIsRoundVideo(self.pageModel.currentItem.uniqueId)
     }
 
-    /// Called right after `updateMuteButton`: the round button sits above the mute button and is shown
-    /// and hidden with it.
-    func shadowUpdateRoundVideo(transition: ContainedViewLayoutTransition) {
+    /// Called right after `updateMuteButton`. Portrait: in the mute button's row, just left of the selected
+    /// counter «1» (where the old gallery had it); landscape: above the mute button. Shown and hidden with the
+    /// mute button (scrubber shown, no tool open, no caption editing or keyboard, not sending).
+    func shadowUpdateRoundVideo(layout: ContainerViewLayout, safeInsets: UIEdgeInsets, toolbarFrame: CGRect, transition: ContainedViewLayoutTransition) {
         self.shadowUpdateRoundMask()
 
-        guard self.shadowIsRoundButtonVisible, let muteButton = self.muteButton else {
+        guard self.shadowIsRoundButtonVisible else {
             self.shadowRoundButton?.removeFromSuperview()
             self.shadowRoundButton = nil
             self.shadowDismissRoundTooltip()
             return
         }
-        let frame = muteButton.frame.offsetBy(dx: 0.0, dy: -(muteButton.frame.height + shadowRoundButtonSpacing))
+        let toolbarSide = self.toolbarSide(layout: layout)
+        let frame: CGRect
+        if toolbarSide == nil {
+            let counterFrame = chatMediaEditorCounterButtonFrame(size: layout.size, safeInsets: safeInsets, reservedCorners: layout.reservedCorners, toolbarMinY: toolbarFrame.minY, captionBaseHeight: self.captionPanelView?.baseHeight() ?? 0.0, hasVideoHeader: self.subject.isVideo, toolbarSide: nil)
+            frame = shadowRoundVideoButtonFrame(counterFrame: counterFrame, counterCircleFrame: chatMediaEditorCounterCircleFrame, buttonSize: chatMediaEditorMuteButtonSize, spacing: shadowRoundButtonSpacing)
+        } else if let muteButton = self.muteButton {
+            frame = muteButton.frame.offsetBy(dx: 0.0, dy: -(muteButton.frame.height + shadowRoundButtonSpacing))
+        } else {
+            self.shadowRoundButton?.removeFromSuperview()
+            self.shadowRoundButton = nil
+            return
+        }
         let button: UIButton
         if let current = self.shadowRoundButton {
             button = current
@@ -79,8 +91,7 @@ extension ChatMediaEditorScreen.Node {
         button.setImage(isRound ? shadowRoundVideoIconOn : shadowRoundVideoIconOff, for: .normal)
         button.accessibilityTraits = isRound ? [.button, .selected] : .button
         transition.updateFrame(view: button, frame: frame)
-        // Hidden exactly when the mute button is (scrubber not shown, a tool open, caption editing, keyboard, sending).
-        let isHidden = !muteButton.isUserInteractionEnabled
+        let isHidden = !self.isVideoScrubberShown || self.activeTool != nil || self.isInterfaceHiddenBySwipe || self.isEditingCaption || (layout.inputHeight ?? 0.0) > 0.0 || self.isSending
         transition.updateAlpha(layer: button.layer, alpha: isHidden ? 0.0 : 1.0)
         button.isUserInteractionEnabled = !isHidden
         if isHidden {

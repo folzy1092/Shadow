@@ -75,9 +75,11 @@ class RoundVideoInNewGalleryContracts(unittest.TestCase):
 
     def test_editor_button_and_preview(self):
         screen = read("TelegramUI/Components/ChatMediaEditorScreen/Sources/ChatMediaEditorScreen.swift")
-        self.assertIn("self.updateMuteButton(layout: layout, safeInsets: safeInsets, transition: transition)\n            self.shadowUpdateRoundVideo(transition: transition)", screen)
+        self.assertIn("self.updateMuteButton(layout: layout, safeInsets: safeInsets, transition: transition)\n            self.shadowUpdateRoundVideo(layout: layout, safeInsets: safeInsets, toolbarFrame: editorLayout.toolbarFrame, transition: transition)", screen)
         round_ui = read("TelegramUI/Components/ChatMediaEditorScreen/Sources/ChatMediaEditorScreenShadowRound.swift")
         self.assertIn("store.shadowSetRoundVideo(isRound, for: uniqueId)", round_ui)
+        # In the mute row, left of the selected counter «1», as in the old gallery.
+        self.assertIn("frame = shadowRoundVideoButtonFrame(counterFrame: counterFrame, counterCircleFrame: chatMediaEditorCounterCircleFrame", round_ui)
         self.assertIn("self.previewContainerView.layer.mask = mask", round_ui)
         self.assertIn("self.shadowDismissRoundTooltip()", read("TelegramUI/Components/ChatMediaEditorScreen/Sources/ChatMediaEditorScreenMute.swift"))
         self.assertIn("final class ShadowRoundVideoTests", read("TelegramUI/Components/ChatMediaSend/Tests/ShadowRoundVideoTests.swift"))
